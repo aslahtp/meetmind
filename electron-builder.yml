@@ -1,0 +1,40 @@
+appId: com.meetmind.app
+productName: MeetMind
+copyright: Copyright © 2025 MeetMind
+
+directories:
+  output: dist-electron
+  buildResources: assets
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icons/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: assets/icons/icon.ico
+  uninstallerIcon: assets/icons/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: MeetMind
+
+extraResources:
+  - from: assets/ffmpeg/
+    to: ffmpeg/
+    filter:
+      - "**/*"
+
+asar: true
+
+files:
+  - dist/renderer/**
+  - electron/**
+  - package.json
+  - "!node_modules/**"
+  - "!assets/ffmpeg/**"
+
+electronVersion: "33.2.1"
