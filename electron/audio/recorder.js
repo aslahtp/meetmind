@@ -5,7 +5,15 @@ const { app } = require('electron');
 const { EventEmitter } = require('events');
 
 const { getFfmpegPath, validateFfmpegExists } = require('./ffmpeg-path');
-const { buildAmixFilter, parseDeviceList, detectSystemLoopback, detectMicrophone } = require('./mixer');
+const {
+  buildAmixFilter,
+  parseDeviceList,
+  detectSystemLoopback,
+  detectDshowLoopback,
+  detectMicrophone,
+  WASAPI_LOOPBACK_ID,
+  WASAPI_LOOPBACK_LABEL,
+} = require('./mixer');
 const { getConfig, setConfig } = require('../utils/config');
 const logger = require('../utils/logger');
 
@@ -28,26 +36,44 @@ async function listAudioDevices() {
   return new Promise((resolve) => {
     let output = '';
     const proc = spawn(ffmpegPath, [
+      '-hide_banner', '-loglevel', 'info',
       '-list_devices', 'true',
       '-f', 'dshow',
       '-i', 'dummy',
     ]);
 
-    // FFmpeg outputs device list to stderr
     proc.stderr.on('data', (data) => { output += data.toString(); });
     proc.stdout.on('data', (data) => { output += data.toString(); });
 
-    proc.on('close', () => {
-      const allDevices = parseDeviceList(output);
-      const systemLoopback = detectSystemLoopback(allDevices);
-      const micDevice = detectMicrophone(allDevices);
+    proc.on('close', (code) => {
+      const dshowDevices = parseDeviceList(output);
+      const micDevice = detectMicrophone(dshowDevices);
+      const dshowLoopback = detectDshowLoopback(dshowDevices);
 
-      logger.info('Audio devices enumerated', { allDevices, systemLoopback, micDevice });
+      if (dshowDevices.length === 0) {
+        logger.warn('FFmpeg device list parse returned empty.', {
+          outputLength: output.length,
+          code,
+          sample: output.slice(-1200),
+        });
+      }
+
+      // Build unified device list: WASAPI Loopback first, then all dshow devices
+      const wasapiEntry = { id: WASAPI_LOOPBACK_ID, label: WASAPI_LOOPBACK_LABEL };
+      const allDevices = [wasapiEntry, ...dshowDevices.map((d) => ({ id: d, label: d }))];
+      const systemLoopback = WASAPI_LOOPBACK_ID; // always prefer WASAPI
+
+      logger.info('Audio devices enumerated', {
+        wasapiLoopback: WASAPI_LOOPBACK_ID,
+        dshowDevices,
+        dshowLoopback,
+        mic: micDevice,
+      });
 
       // Auto-save detected devices to config if not already set
       const config = getConfig();
-      if (!config.systemAudioDevice && systemLoopback) {
-        setConfig('systemAudioDevice', systemLoopback);
+      if (!config.systemAudioDevice) {
+        setConfig('systemAudioDevice', WASAPI_LOOPBACK_ID);
       }
       if (!config.micDevice && micDevice) {
         setConfig('micDevice', micDevice);
@@ -61,10 +87,10 @@ async function listAudioDevices() {
       resolve({ system: null, mic: null, error: err.message });
     });
 
-    // FFmpeg exits with code 1 for device listing — that's expected
+    // FFmpeg often exits with code 1 after listing devices (dummy is invalid); allow up to 8s
     setTimeout(() => {
-      if (!proc.killed) proc.kill();
-    }, 5000);
+      if (!proc.killed) proc.kill('SIGTERM');
+    }, 8000);
   });
 }
 
@@ -91,8 +117,8 @@ async function startRecording(sessionId) {
 
   if (!systemDevice && !micDevice) {
     throw new Error(
-      'No audio input devices found. Please enable "Stereo Mix" in Windows Sound settings ' +
-      'or configure audio devices in Settings.'
+      'No audio input devices found. In Settings → Audio: click "Detect devices". ' +
+      'If none appear, add FFmpeg (ffmpeg.exe) to assets/ffmpeg/, enable "Stereo Mix" in Windows Sound → Recording, or use a virtual cable (e.g. VB-Audio).'
     );
   }
 
@@ -114,12 +140,15 @@ async function startRecording(sessionId) {
   const { inputs, filterParts, outputArgs } = buildAmixFilter(systemDevice, micDevice);
 
   const ffmpegArgs = [
+    '-hide_banner',
     ...inputs,
     ...filterParts,
     ...outputArgs,
     '-y', // overwrite if exists
     currentOutputPath,
   ];
+
+  logger.info('FFmpeg command', { cmd: [ffmpegPath, ...ffmpegArgs].join(' ') });
 
   return new Promise((resolve, reject) => {
     ffmpegProcess = spawn(ffmpegPath, ffmpegArgs);
@@ -134,13 +163,15 @@ async function startRecording(sessionId) {
 
       if (!started && (text.includes('Press [q]') || text.includes('size='))) {
         started = true;
-        logger.info('FFmpeg recording started');
+        // Log the first few lines to help debug device selection
+        const preview = startupOutput.split('\n').slice(0, 10).join('\n');
+        logger.info('FFmpeg recording started', { preview });
         recorder.emit('recording:started', { sessionId, outputPath: currentOutputPath });
         resolve(currentOutputPath);
       }
 
-      // Log FFmpeg errors
-      if (text.toLowerCase().includes('error') || text.toLowerCase().includes('no such filter')) {
+      // Log meaningful FFmpeg messages
+      if (text.toLowerCase().includes('error') || text.toLowerCase().includes('no such filter') || text.includes('Warning')) {
         logger.warn('FFmpeg stderr', { text: text.trim() });
       }
     });

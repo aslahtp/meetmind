@@ -8,7 +8,8 @@
  * - Manage extension badge state
  */
 
-const WS_PORT = 39842;
+const WS_PORT_START = 39842;
+const WS_PORT_RANGE = 11;   // try 39842–39852 (desktop app uses first free port)
 const HEARTBEAT_INTERVAL_MS = 10000;
 const RECONNECT_DELAY_MS = 5000;
 
@@ -17,6 +18,7 @@ let wsConnected = false;
 let reconnectTimer = null;
 let heartbeatTimer = null;
 let activeMeetingTabId = null;
+let currentPort = WS_PORT_START;
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
@@ -24,9 +26,9 @@ function connectWebSocket() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
   try {
-    ws = new WebSocket(`ws://localhost:${WS_PORT}`);
+    ws = new WebSocket(`ws://localhost:${currentPort}`);
   } catch {
-    scheduleReconnect();
+    tryNextPort();
     return;
   }
 
@@ -57,6 +59,7 @@ function connectWebSocket() {
   };
 
   ws.onclose = () => {
+    const wasConnected = wsConnected;
     wsConnected = false;
     stopHeartbeat();
     updateBadge('disconnected');
@@ -65,8 +68,24 @@ function connectWebSocket() {
       sendToContentScript(activeMeetingTabId, { type: 'APP_OFFLINE' });
     }
 
-    scheduleReconnect();
+    if (wasConnected) {
+      currentPort = WS_PORT_START;
+      scheduleReconnect();
+    } else {
+      tryNextPort();
+    }
   };
+}
+
+function tryNextPort() {
+  const nextPort = currentPort + 1;
+  if (nextPort < WS_PORT_START + WS_PORT_RANGE) {
+    currentPort = nextPort;
+    connectWebSocket();
+  } else {
+    currentPort = WS_PORT_START;
+    scheduleReconnect();
+  }
 }
 
 function scheduleReconnect() {

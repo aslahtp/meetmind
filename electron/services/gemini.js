@@ -2,10 +2,10 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const logger = require('../utils/logger');
 
 const AVAILABLE_MODELS = [
-  { id: 'gemini-2.0-flash',                  label: 'Gemini 2.0 Flash (Fast)'             },
-  { id: 'gemini-1.5-flash',                  label: 'Gemini 1.5 Flash (Balanced)'         },
-  { id: 'gemini-1.5-pro',                    label: 'Gemini 1.5 Pro (Best)'               },
-  { id: 'gemini-2.0-flash-thinking-exp',     label: 'Gemini 2.0 Thinking (Experimental)'  },
+  { id: 'gemini-3.1-flash-lite-preview',label: 'Gemini 3.1 Flash Lite (Fast)'},
+  { id: 'gemini-3-flash-preview',label: 'Gemini 3 Flash (Balanced)'},
+  { id: 'gemini-3-pro-preview',label: 'Gemini 3 Pro (pro)'},
+  { id: 'gemini-3.1-pro-preview',label: 'Gemini 3.1 Pro (Experimental)'},
 ];
 
 const SYSTEM_PROMPT = `You are an expert meeting notes assistant inspired by Notion AI.
@@ -68,7 +68,7 @@ function formatTime(seconds) {
 async function generateMeetingNotes(transcript, modelId, apiKey) {
   if (!apiKey) throw new Error('Gemini API key is required');
 
-  const selectedModel = modelId || 'gemini-1.5-flash';
+  const selectedModel = modelId || AVAILABLE_MODELS[0].id;
   const transcriptText = transcriptToText(transcript);
 
   logger.info('Generating meeting notes', { modelId: selectedModel, transcriptLength: transcriptText.length });
@@ -117,10 +117,11 @@ async function generateMeetingNotes(transcript, modelId, apiKey) {
   }
 }
 
-async function testGeminiConnection(apiKey) {
+async function testGeminiConnection(apiKey, modelId) {
   if (!apiKey) throw new Error('Gemini API key is required');
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const modelToUse = modelId || AVAILABLE_MODELS[0].id;
+  const model = genAI.getGenerativeModel({ model: modelToUse });
   const result = await model.generateContent('Reply with "OK" only.');
   const text = result.response.text();
   if (!text) throw new Error('No response from Gemini API');

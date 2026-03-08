@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 
 const { getConfig, setConfig, setMultipleConfig, isFirstRun } = require('./utils/config');
 const logger = require('./utils/logger');
@@ -14,6 +15,17 @@ const { testGeminiConnection } = require('./services/gemini');
 const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
+
+// Must be called before app.whenReady() to allow media playback from meetmind-audio://
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'meetmind-audio',
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    stream: true,
+  },
+}]);
 
 let mainWindow = null;
 let tray = null;
@@ -49,6 +61,8 @@ function createMainWindow() {
     : `file://${path.join(__dirname, '../dist/renderer/index.html')}`;
 
   mainWindow.loadURL(rendererUrl);
+  mainWindow.setTitle('MeetMind');
+  mainWindow.on('page-title-updated', (e) => e.preventDefault());
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -185,6 +199,12 @@ async function handleStopRecording() {
     return { success: true, sessionId: currentSessionId };
   } catch (err) {
     logger.error('Failed to stop recording', { error: err.message });
+    if (currentSessionId) {
+      db.updateSession(currentSessionId, {
+        status: 'error',
+        ended_at: new Date().toISOString(),
+      });
+    }
     return { success: false, error: err.message };
   }
 }
@@ -202,6 +222,17 @@ async function runProcessingPipeline(sessionId, audioPath) {
 
     const onTranscriptionProgress = (pct) => sendProgress('transcribing', Math.round(pct * 0.6));
     const transcript = await transcribeAudio(audioPath, config.googleApiKey, onTranscriptionProgress);
+
+    // transcribeAudio throws for silent files; if we get here but with empty results,
+    // treat it the same way (STT may return empty for near-silence)
+    if (!transcript || transcript.length === 0) {
+      throw new Error(
+        'No speech detected in the recording. ' +
+        'Stereo Mix only captures audio playing through your speakers. ' +
+        'To test capture: play a video or music while recording. ' +
+        'To capture your voice: select your microphone in Settings → Audio.'
+      );
+    }
 
     db.updateSession(sessionId, { transcript: JSON.stringify(transcript), status: 'generating' });
     sendProgress('generating', 60);
@@ -315,9 +346,9 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('api:test-gemini', async (_e, apiKey) => {
+  ipcMain.handle('api:test-gemini', async (_e, apiKey, modelId) => {
     try {
-      await testGeminiConnection(apiKey);
+      await testGeminiConnection(apiKey, modelId);
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
@@ -367,16 +398,33 @@ function registerIpcHandlers() {
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   logger.info('MeetMind starting up');
 
-  db.initialize();
+  await db.initialize();
+  db.markStaleRecordingSessionsAsError();
   registerIpcHandlers();
+
+  // Serve session audio for renderer playback (meetmind-audio://<sessionId>)
+  protocol.handle('meetmind-audio', (request) => {
+    try {
+      const sessionId = new URL(request.url).hostname || '';
+      const session = db.getSession(sessionId);
+      if (!session?.audio_path || !fs.existsSync(session.audio_path)) {
+        return new Response(null, { status: 404 });
+      }
+      return net.fetch(pathToFileURL(session.audio_path).toString());
+    } catch (err) {
+      logger.error('meetmind-audio protocol error', err);
+      return new Response(null, { status: 500 });
+    }
+  });
+
   createMainWindow();
   createTray();
 
   const config = getConfig();
-  startWebSocketServer(config.websocketPort, {
+  await startWebSocketServer(config.websocketPort, {
     onStartRecording: (data) => handleStartRecording(null, data.meetingUrl, data.meetingTitle),
     onStopRecording: () => handleStopRecording(),
     onStatusRequest: () => ({

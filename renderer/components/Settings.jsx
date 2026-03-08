@@ -137,7 +137,7 @@ export default function Settings({ onSave }) {
     geminiApiKey:      '',
     notionToken:       '',
     notionDatabaseId:  '',
-    selectedModel:     'gemini-1.5-flash',
+    selectedModel:     'gemini-3.1-flash-lite-preview',
     systemAudioDevice: '',
     micDevice:         '',
     autoLaunch:        true,
@@ -155,7 +155,7 @@ export default function Settings({ onSave }) {
         geminiApiKey:      config.geminiApiKey      || '',
         notionToken:       config.notionToken       || '',
         notionDatabaseId:  config.notionDatabaseId  || '',
-        selectedModel:     config.selectedModel     || 'gemini-1.5-flash',
+        selectedModel:     config.selectedModel     || 'gemini-3.1-flash-lite-preview',
         systemAudioDevice: config.systemAudioDevice || '',
         micDevice:         config.micDevice         || '',
         autoLaunch:        config.autoLaunch !== false,
@@ -172,13 +172,16 @@ export default function Settings({ onSave }) {
     setForm((prev) => ({ ...prev, [key]: val }));
   };
 
+  const WASAPI_ID = '__wasapi_loopback__';
+
   const loadDevices = async () => {
     setLoadingDevices(true);
     try {
       const d = await window.meetmind.recording.listDevices();
       setDevices(d);
-      if (d.system && !form.systemAudioDevice) setForm((p) => ({ ...p, systemAudioDevice: d.system }));
-      if (d.mic    && !form.micDevice)          setForm((p) => ({ ...p, micDevice: d.mic }));
+      // Always auto-select WASAPI Loopback as the system device
+      if (d.system) setForm((p) => ({ ...p, systemAudioDevice: d.system }));
+      if (d.mic && !form.micDevice) setForm((p) => ({ ...p, micDevice: d.mic }));
     } catch (err) {
       console.error('Failed to list devices:', err);
     } finally {
@@ -275,7 +278,7 @@ export default function Settings({ onSave }) {
             />
             <TestButton
               onTest={async () => {
-                const r = await window.meetmind.api.testGemini(form.geminiApiKey);
+                const r = await window.meetmind.api.testGemini(form.geminiApiKey, form.selectedModel);
                 if (!r.success) throw new Error(r.error);
               }}
             />
@@ -348,23 +351,31 @@ export default function Settings({ onSave }) {
             </button>
           </div>
 
-          <div className="p-3 bg-[#1d1d1d] border border-[#2a2a2a] rounded-lg text-xs text-[#666] space-y-1">
-            <p><strong className="text-[#888]">System Audio:</strong> Requires "Stereo Mix" enabled in Windows Sound settings.</p>
-            <p>Right-click speaker → Sound → Recording tab → right-click empty area → Show Disabled Devices → Enable Stereo Mix</p>
+          <div className="p-3 bg-[#1d1d1d] border border-[#333] rounded-lg text-xs space-y-1.5">
+            <p className="text-[#a0a0a0] font-medium">
+              <span className="text-green-400">●</span> WASAPI Loopback captures all system audio — YouTube, Spotify, calls — even through headphones. No setup required.
+            </p>
+            <p className="text-[#555]">
+              Stereo Mix (legacy) only works with built-in Realtek speakers and requires manual enabling in Windows Sound settings.
+            </p>
           </div>
 
-          <Field label="System Audio Device (loopback)">
+          <Field label="System Audio Device">
             <select
               value={form.systemAudioDevice}
               onChange={update('systemAudioDevice')}
               className="input"
             >
-              <option value="">— Select or detect devices —</option>
-              {devices.all?.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-              {form.systemAudioDevice && !devices.all?.includes(form.systemAudioDevice) && (
-                <option value={form.systemAudioDevice}>{form.systemAudioDevice}</option>
+              <option value="">— Detect devices first —</option>
+              {devices.all?.map((d) => {
+                const id = d?.id ?? d;
+                const label = d?.label ?? d;
+                return <option key={id} value={id}>{label}</option>;
+              })}
+              {form.systemAudioDevice && !devices.all?.some((d) => (d?.id ?? d) === form.systemAudioDevice) && (
+                <option value={form.systemAudioDevice}>
+                  {form.systemAudioDevice === WASAPI_ID ? 'WASAPI Loopback (All system audio — recommended)' : form.systemAudioDevice}
+                </option>
               )}
             </select>
           </Field>
@@ -375,11 +386,13 @@ export default function Settings({ onSave }) {
               onChange={update('micDevice')}
               className="input"
             >
-              <option value="">— Select or detect devices —</option>
-              {devices.all?.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-              {form.micDevice && !devices.all?.includes(form.micDevice) && (
+              <option value="">— None / detect devices —</option>
+              {devices.all?.filter((d) => (d?.id ?? d) !== WASAPI_ID).map((d) => {
+                const id = d?.id ?? d;
+                const label = d?.label ?? d;
+                return <option key={id} value={id}>{label}</option>;
+              })}
+              {form.micDevice && !devices.all?.some((d) => (d?.id ?? d) === form.micDevice) && (
                 <option value={form.micDevice}>{form.micDevice}</option>
               )}
             </select>

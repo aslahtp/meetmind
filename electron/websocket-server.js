@@ -3,25 +3,34 @@ const logger = require('./utils/logger');
 
 let wss = null;
 let extensionSocket = null;
+const PORT_RANGE = 11; // try port, port+1, ... port+10
 
 /**
- * Start the WebSocket server that bridges the Chrome extension to Electron.
+ * Try to listen on a single port. Resolves with (server, port) when listening, rejects on error.
  */
-function startWebSocketServer(port, handlers) {
-  wss = new WebSocketServer({ port });
+function tryListen(port, handlers) {
+  return new Promise((resolve, reject) => {
+    const server = new WebSocketServer({ port });
 
-  wss.on('listening', () => {
-    logger.info(`WebSocket server listening on ws://localhost:${port}`);
+    server.once('listening', () => {
+      logger.info(`WebSocket server listening on ws://localhost:${port}`);
+      resolve(server);
+    });
+
+    server.once('error', (err) => {
+      server.close();
+      reject(err);
+    });
   });
+}
 
-  wss.on('error', (err) => {
-    logger.error('WebSocket server error', { error: err.message });
-  });
-
-  wss.on('connection', (ws, req) => {
+/**
+ * Attach connection handler and message logic to the server.
+ */
+function attachHandlers(server, port, handlers) {
+  server.on('connection', (ws, req) => {
     const origin = req.headers.origin || '';
 
-    // Only allow connections from the Chrome extension
     if (!origin.startsWith('chrome-extension://')) {
       logger.warn('Rejected WebSocket connection from unknown origin', { origin });
       ws.close(4001, 'Forbidden');
@@ -31,7 +40,6 @@ function startWebSocketServer(port, handlers) {
     logger.info('Chrome extension connected', { origin });
     extensionSocket = ws;
 
-    // Notify renderer that extension connected
     handlers.mainWindow?.webContents.send('ws:extension-connected', { origin });
 
     ws.on('message', (data) => {
@@ -52,7 +60,6 @@ function startWebSocketServer(port, handlers) {
       logger.error('WebSocket client error', { error: err.message });
     });
 
-    // Send current app status on connect
     const status = handlers.onStatusRequest();
     ws.send(JSON.stringify({
       type: 'APP_STATUS',
@@ -60,8 +67,36 @@ function startWebSocketServer(port, handlers) {
       sessionId: status.sessionId,
     }));
   });
+}
 
-  return wss;
+/**
+ * Start the WebSocket server. Tries port, then port+1, ... port+10 until one is free.
+ */
+async function startWebSocketServer(port, handlers) {
+  let lastErr = null;
+
+  for (let i = 0; i < PORT_RANGE; i++) {
+    const tryPort = port + i;
+    try {
+      wss = await tryListen(tryPort, handlers);
+      attachHandlers(wss, tryPort, handlers);
+      return wss;
+    } catch (err) {
+      lastErr = err;
+      if (err.code === 'EADDRINUSE') {
+        logger.warn(`Port ${tryPort} in use, trying next...`);
+        continue;
+      }
+      logger.error('WebSocket server error', { error: err.message });
+      throw err;
+    }
+  }
+
+  logger.error('WebSocket server failed: all ports in use', {
+    ports: `${port}–${port + PORT_RANGE - 1}`,
+    hint: 'Close other MeetMind instances or free one of these ports.',
+  });
+  throw lastErr || new Error('Could not bind WebSocket server');
 }
 
 function handleExtensionMessage(message, ws, handlers) {
@@ -73,7 +108,6 @@ function handleExtensionMessage(message, ws, handlers) {
         meetingUrl:   message.meetingUrl   || '',
         meetingTitle: message.meetingTitle || 'Untitled Meeting',
       });
-      // Notify renderer so it can react
       handlers.mainWindow?.webContents.send('ws:recording-requested', {
         meetingUrl:   message.meetingUrl,
         meetingTitle: message.meetingTitle,
@@ -85,7 +119,6 @@ function handleExtensionMessage(message, ws, handlers) {
       break;
 
     case 'APP_STATUS':
-      // Heartbeat — respond with current status
       const status = handlers.onStatusRequest();
       ws.send(JSON.stringify({
         type: 'APP_STATUS',
@@ -99,11 +132,8 @@ function handleExtensionMessage(message, ws, handlers) {
   }
 }
 
-/**
- * Send a message to the connected Chrome extension.
- */
 function broadcastToExtension(message) {
-  if (!extensionSocket || extensionSocket.readyState !== 1 /* OPEN */) return;
+  if (!extensionSocket || extensionSocket.readyState !== 1) return;
   try {
     extensionSocket.send(JSON.stringify(message));
   } catch (err) {

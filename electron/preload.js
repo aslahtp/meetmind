@@ -36,7 +36,7 @@ contextBridge.exposeInMainWorld('meetmind', {
   // API Tests
   api: {
     testGoogle: (apiKey) => ipcRenderer.invoke('api:test-google', apiKey),
-    testGemini: (apiKey) => ipcRenderer.invoke('api:test-gemini', apiKey),
+    testGemini: (apiKey, modelId) => ipcRenderer.invoke('api:test-gemini', apiKey, modelId),
   },
 
   // Processing

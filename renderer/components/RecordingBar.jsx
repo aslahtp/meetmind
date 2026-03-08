@@ -41,20 +41,21 @@ export default function RecordingBar({ sessionId, onStop }) {
         <button
           onClick={handleStop}
           disabled={stopping}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600
-                     text-white text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Stop recording"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500
+                     text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {stopping ? (
             <>
-              <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="spinner w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
               </svg>
               Stopping…
             </>
           ) : (
             <>
-              <span className="w-2.5 h-2.5 bg-white rounded-sm" />
-              Stop
+              <span className="w-3 h-3 bg-white rounded-sm flex-shrink-0" aria-hidden />
+              Stop recording
             </>
           )}
         </button>

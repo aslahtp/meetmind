@@ -28,13 +28,15 @@ function App() {
   const [processingState, setProcessingState] = useState(null);  // { stage, percent } | null
   const [showOnboarding, setShowOnboarding] = useState(false);
 
+  const keysNotSet = !config?.googleApiKey?.trim() || !config?.geminiApiKey?.trim();
+
   // Load config and sessions on mount
   useEffect(() => {
     async function init() {
       if (!window.meetmind) return;
       const cfg = await window.meetmind.config.get();
       setConfigState(cfg);
-      if (!cfg.onboardingComplete) setShowOnboarding(true);
+      if (!cfg?.googleApiKey?.trim() || !cfg?.geminiApiKey?.trim()) setShowOnboarding(true);
 
       const list = await window.meetmind.sessions.list();
       setSessions(list);
@@ -72,8 +74,18 @@ function App() {
       }
     });
 
-    const unsubError = window.meetmind.on('processing:error', () => {
+    const unsubError = window.meetmind.on('processing:error', async ({ sessionId, error }) => {
       setProcessingState(null);
+      const updated = await window.meetmind.sessions.list();
+      setSessions(updated);
+      if (sessionId) {
+        const session = await window.meetmind.sessions.get(sessionId);
+        if (session) {
+          // Attach the error message directly on the session object so NoteViewer can display it
+          setSelectedSession({ ...session, _processingError: error });
+          setView('session');
+        }
+      }
     });
 
     return () => {
@@ -134,8 +146,8 @@ function App() {
         {/* Sidebar */}
         <Sidebar />
 
-        {/* Main content */}
-        <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Main content — top padding clears the title bar overlay (window controls) */}
+        <main className="flex-1 flex flex-col overflow-hidden pt-10">
           {isRecording && (
             <RecordingBar
               sessionId={recordingSessionId}
@@ -177,9 +189,13 @@ function App() {
         />
       )}
 
-      {/* First-run onboarding redirect */}
-      {showOnboarding && view !== 'settings' && (
-        <OnboardingBanner onSetup={() => setView('settings')} />
+      {/* Onboarding: only when API keys not set; close button dismisses for this session */}
+      {keysNotSet && showOnboarding && view !== 'settings' && !isRecording && (
+        <OnboardingBanner
+          onSetup={() => { setView('settings'); setShowOnboarding(false); }}
+          onClose={() => setShowOnboarding(false)}
+          hasSessions={sessions.length > 0}
+        />
       )}
     </AppContext.Provider>
   );
@@ -192,26 +208,23 @@ function Sidebar() {
 
   return (
     <aside className="w-56 flex-shrink-0 flex flex-col bg-[#161616] border-r border-[#2a2a2a]">
-      {/* App title / drag region */}
+      {/* Drag region: single app name */}
       <div className="titlebar-drag h-8 flex items-center px-4">
-        <span className="text-xs text-[#666] font-medium select-none">MeetMind</span>
+        <span className="text-xs text-[#555] font-medium select-none">MeetMind</span>
       </div>
 
-      {/* Logo */}
-      <div className="px-4 pb-4 pt-2 titlebar-no-drag">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/>
-            </svg>
-          </div>
-          <span className="font-semibold text-sm">MeetMind</span>
+      {/* Logo + nav in one block (no duplicate name) */}
+      <div className="px-4 pt-2 pb-3 titlebar-no-drag flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center flex-shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/>
+          </svg>
         </div>
+        <span className="font-semibold text-sm truncate">MeetMind</span>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-2 space-y-1 titlebar-no-drag">
+      <nav className="flex-1 px-2 space-y-0.5 titlebar-no-drag">
         <button
           className={`sidebar-item w-full ${view === 'dashboard' ? 'active' : ''}`}
           onClick={() => setView('dashboard')}
@@ -222,7 +235,6 @@ function Sidebar() {
           </svg>
           Sessions
         </button>
-
         <button
           className={`sidebar-item w-full ${view === 'settings' ? 'active' : ''}`}
           onClick={() => setView('settings')}
@@ -235,7 +247,7 @@ function Sidebar() {
         </button>
       </nav>
 
-      {/* Record button */}
+      {/* Bottom: one recording state (when not recording, show New Recording; when recording, minimal pill — main state is in top bar) */}
       <div className="p-3 titlebar-no-drag border-t border-[#2a2a2a]">
         {!isRecording ? (
           <button onClick={startRecording} className="btn-primary w-full justify-center text-xs">
@@ -243,9 +255,9 @@ function Sidebar() {
             New Recording
           </button>
         ) : (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-950 border border-red-800">
-            <span className="recording-dot w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
-            <span className="text-red-400 text-xs font-medium">Recording...</span>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1a1a1a] border border-[#333]">
+            <span className="recording-dot w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+            <span className="text-[#888] text-xs">Recording in progress</span>
           </div>
         )}
       </div>
@@ -255,13 +267,29 @@ function Sidebar() {
 
 // ── Onboarding Banner ─────────────────────────────────────────────────────────
 
-function OnboardingBanner({ onSetup }) {
+function OnboardingBanner({ onSetup, onClose, hasSessions }) {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-[#212121] border border-[#404040] rounded-xl p-4 shadow-2xl fade-in">
-      <h3 className="font-semibold text-sm mb-1">Welcome to MeetMind</h3>
-      <p className="text-[#a0a0a0] text-xs mb-3">
-        Set up your API keys to get started with transcription and Notion upload.
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-sm mb-1">Welcome to MeetMind</h3>
+          <p className="text-[#a0a0a0] text-xs mb-3">
+            {hasSessions
+              ? 'Add API keys to transcribe and summarize your recordings, and upload to Notion.'
+              : 'Set up your API keys to get started with transcription and Notion upload.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-shrink-0 p-1 rounded text-[#888] hover:text-[#ccc] hover:bg-[#333] transition-colors"
+          aria-label="Close"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
       <button onClick={onSetup} className="btn-primary text-xs">
         Configure API Keys →
       </button>

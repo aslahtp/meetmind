@@ -64,11 +64,72 @@ function httpsGet(url) {
 
 // ── WAV chunking ──────────────────────────────────────────────────────────────
 
+function parseWavHeader(buffer) {
+  if (buffer.length < 12 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WAVE') {
+    return null;
+  }
+  let dataSize = 0;
+  let sampleRate = SAMPLE_RATE;
+  let numChannels = 1;
+  let bytesPerSample = BYTES_PER_SAMPLE;
+  let pos = 12;
+  while (pos + 8 <= buffer.length) {
+    const chunkId = buffer.toString('ascii', pos, pos + 4);
+    const chunkSize = buffer.readUInt32LE(pos + 4);
+    if (chunkId === 'fmt ') {
+      if (chunkSize >= 16 && pos + 8 + chunkSize <= buffer.length) {
+        numChannels = buffer.readUInt16LE(pos + 10);
+        sampleRate = buffer.readUInt32LE(pos + 12);
+        const bitsPerSample = buffer.readUInt16LE(pos + 22);
+        bytesPerSample = Math.max(2, bitsPerSample / 8);
+      }
+    } else if (chunkId === 'data') {
+      dataSize = chunkSize;
+      break;
+    }
+    pos += 8 + chunkSize;
+  }
+  const totalBytes = dataSize;
+  const durationSec = totalBytes / (sampleRate * numChannels * bytesPerSample);
+  return { dataSize, sampleRate, numChannels, bytesPerSample, durationSec };
+}
+
 function getWavDurationSeconds(filePath) {
   const buffer = fs.readFileSync(filePath);
-  // Read from WAV header: data chunk size at byte 40
-  const dataSize = buffer.readUInt32LE(40);
-  return dataSize / (SAMPLE_RATE * BYTES_PER_SAMPLE);
+  const parsed = parseWavHeader(buffer);
+  if (!parsed) return 0;
+  return parsed.durationSec;
+}
+
+/**
+ * Scan up to ~2 seconds of WAV samples (skipping the header) and return the
+ * peak absolute amplitude (0–32767 for 16-bit PCM).  Returns 0 for an
+ * unreadable or zero-byte data section.
+ */
+function getWavPeakAmplitude(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  const parsed = parseWavHeader(buffer);
+  if (!parsed || parsed.dataSize === 0) return 0;
+
+  // Find the data chunk start
+  let dataStart = WAV_HEADER_BYTES; // fallback
+  let pos = 12;
+  while (pos + 8 <= buffer.length) {
+    const chunkId = buffer.toString('ascii', pos, pos + 4);
+    if (chunkId === 'data') { dataStart = pos + 8; break; }
+    pos += 8 + buffer.readUInt32LE(pos + 4);
+  }
+
+  // Sample the first 2 seconds worth of 16-bit samples
+  const samplesToCheck = parsed.sampleRate * parsed.numChannels * 2; // 2 seconds
+  const endByte = Math.min(dataStart + samplesToCheck * 2, buffer.length);
+
+  let peak = 0;
+  for (let i = dataStart; i + 1 < endByte; i += 2) {
+    const sample = Math.abs(buffer.readInt16LE(i));
+    if (sample > peak) peak = sample;
+  }
+  return peak;
 }
 
 function extractWavChunk(filePath, startSec, endSec) {
@@ -253,8 +314,31 @@ async function transcribeAudio(wavFilePath, apiKey, onProgress) {
   if (!apiKey) throw new Error('Google API key is required for transcription');
   if (!fs.existsSync(wavFilePath)) throw new Error(`Audio file not found: ${wavFilePath}`);
 
+  const stat = fs.statSync(wavFilePath);
   const durationSeconds = getWavDurationSeconds(wavFilePath);
-  logger.info('Starting transcription', { wavFilePath, durationSeconds });
+  const peakAmplitude = getWavPeakAmplitude(wavFilePath);
+  // 32767 = max for 16-bit PCM; values below ~200 indicate near-silence
+  const isSilent = peakAmplitude < 200;
+
+  logger.info('Starting transcription', { wavFilePath, durationSeconds, fileSizeBytes: stat.size, peakAmplitude });
+
+  if (isSilent) {
+    logger.warn('Recording is silent (peak amplitude below threshold)', {
+      peakAmplitude,
+      hint: [
+        'Stereo Mix only captures audio going out to your speakers — it will be silent if nothing is playing (no call, no music).',
+        'For your own voice: make sure the microphone is selected in Settings → Audio.',
+        'Test by playing a YouTube video or audio file and recording for a few seconds.',
+        'If using a headset/headphones: Stereo Mix must be enabled on the same sound card as your headphones.',
+      ],
+    });
+    throw new Error(
+      'The recording is completely silent (peak=' + peakAmplitude + '). ' +
+      'Stereo Mix only captures audio playing through your speakers — it will be silent if no audio is playing. ' +
+      'To test: play a YouTube video or music, then record. ' +
+      'To capture your voice: select your microphone in Settings → Audio.'
+    );
+  }
 
   onProgress?.(0);
 

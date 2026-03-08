@@ -186,35 +186,47 @@ async function appendBlocks(notion, pageId, blocks) {
 }
 
 // ── Notion database page properties ──────────────────────────────────────────
+// Only set properties that exist in the database schema (user DBs vary).
 
-function buildPageProperties(notes) {
-  const attendees = (notes.attendees || []).map((name) => ({ name: name.slice(0, 100) }));
-  const sentiment = notes.sentiment || 'neutral';
+function buildPageProperties(notes, schema) {
+  const names = schema.names || [];
+  const titleKey = schema.titlePropertyName || 'Name';
+  const has = (name) => names.includes(name);
+  const props = {};
 
   const dateStr = notes.date
     ? new Date(notes.date).toISOString().slice(0, 10)
     : new Date().toISOString().slice(0, 10);
+  const titleText = `${notes.title || 'Meeting Notes'} — ${dateStr}`;
 
-  return {
-    Name: {
-      title: [{ text: { content: `${notes.title || 'Meeting Notes'} — ${dateStr}` } }],
-    },
-    Date: {
-      date: { start: dateStr },
-    },
-    Attendees: {
-      multi_select: attendees.slice(0, 10),
-    },
-    Sentiment: {
-      select: { name: sentiment },
-    },
-    Duration: {
-      rich_text: [{ text: { content: notes.duration || '' } }],
-    },
-    Status: {
-      select: { name: 'Completed' },
-    },
-  };
+  props[titleKey] = { title: [{ text: { content: titleText.slice(0, 2000) } }] };
+  if (has('Date')) props['Date'] = { date: { start: dateStr } };
+  if (has('Attendees')) {
+    const attendees = (notes.attendees || []).map((name) => ({ name: String(name).slice(0, 100) })).slice(0, 10);
+    props['Attendees'] = { multi_select: attendees };
+  }
+  if (has('Sentiment')) props['Sentiment'] = { select: { name: String(notes.sentiment || 'neutral').slice(0, 100) } };
+  if (has('Duration')) props['Duration'] = { rich_text: [{ text: { content: String(notes.duration || '').slice(0, 2000) } }] };
+  const statusProp = schema.properties?.['Status'];
+  if (statusProp) {
+    if (statusProp.type === 'status') {
+      props['Status'] = { status: { name: 'Completed' } };
+    } else if (statusProp.type === 'select') {
+      props['Status'] = { select: { name: 'Completed' } };
+    }
+  }
+
+  return props;
+}
+
+function getDatabaseSchema(notion, databaseId) {
+  return notion.databases.retrieve({ database_id: databaseId }).then((db) => {
+    const properties = db.properties || {};
+    const names = Object.keys(properties);
+    const titleEntry = Object.entries(properties).find(([, p]) => p.type === 'title');
+    const titlePropertyName = titleEntry ? titleEntry[0] : 'Name';
+    return { names, titlePropertyName, properties };
+  });
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -227,10 +239,12 @@ async function uploadToNotion(notes, transcript, databaseId, notionToken) {
 
   logger.info('Uploading to Notion', { databaseId, title: notes.title });
 
-  // Create the page
+  const schema = await getDatabaseSchema(notion, databaseId);
+  const properties = buildPageProperties(notes, schema);
+
   const page = await notion.pages.create({
     parent: { database_id: databaseId },
-    properties: buildPageProperties(notes),
+    properties,
   });
 
   const pageId = page.id;

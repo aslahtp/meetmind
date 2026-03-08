@@ -4,25 +4,39 @@ const { app } = require('electron');
 const logger = require('../utils/logger');
 
 let db = null;
+let SQL = null;
 
 function getDbPath() {
   const userData = app.getPath('userData');
   return path.join(userData, 'meetmind.db');
 }
 
-function initialize() {
-  const Database = require('better-sqlite3');
+function persist() {
+  if (!db) return;
+  try {
+    const data = db.export();
+    const buf = Buffer.from(data);
+    fs.writeFileSync(getDbPath(), buf);
+  } catch (err) {
+    logger.error('Failed to persist database', { error: err.message });
+  }
+}
+
+async function initialize() {
+  const initSqlJs = require('sql.js');
+  SQL = await initSqlJs();
   const dbPath = getDbPath();
 
   logger.info('Initializing SQLite database', { dbPath });
 
-  db = new Database(dbPath);
+  if (fs.existsSync(dbPath)) {
+    const buf = fs.readFileSync(dbPath);
+    db = new SQL.Database(buf);
+  } else {
+    db = new SQL.Database();
+  }
 
-  // Enable WAL mode for better concurrent performance
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS sessions (
       id                TEXT PRIMARY KEY,
       title             TEXT NOT NULL DEFAULT 'Untitled Meeting',
@@ -35,11 +49,11 @@ function initialize() {
       notes             TEXT,
       notion_page_url   TEXT,
       status            TEXT NOT NULL DEFAULT 'recording'
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+    )
   `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
+  persist();
 
   logger.info('Database initialized');
   return db;
@@ -50,64 +64,100 @@ function ensureDb() {
   return db;
 }
 
+// ── Row helper: sql.js returns {columns, values} for exec; we need row objects ───
+
+function rowToObject(columns, values) {
+  const row = {};
+  columns.forEach((col, i) => { row[col] = values[i]; });
+  return row;
+}
+
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
 function createSession(session) {
   const d = ensureDb();
-  const stmt = d.prepare(`
-    INSERT INTO sessions (id, title, meeting_url, started_at, audio_path, status)
-    VALUES (@id, @title, @meeting_url, @started_at, @audio_path, @status)
-  `);
-  stmt.run({
-    id:          session.id,
-    title:       session.title       || 'Untitled Meeting',
-    meeting_url: session.meeting_url || null,
-    started_at:  session.started_at  || new Date().toISOString(),
-    audio_path:  session.audio_path  || null,
-    status:      session.status      || 'recording',
-  });
+  d.run(
+    `INSERT INTO sessions (id, title, meeting_url, started_at, audio_path, status)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      session.id,
+      session.title       || 'Untitled Meeting',
+      session.meeting_url || null,
+      session.started_at  || new Date().toISOString(),
+      session.audio_path  || null,
+      session.status      || 'recording',
+    ]
+  );
+  persist();
   return getSession(session.id);
 }
 
 function updateSession(id, updates) {
   const d = ensureDb();
-  const fields = Object.keys(updates)
-    .filter((k) => k !== 'id')
-    .map((k) => `${k} = @${k}`)
-    .join(', ');
+  const allowed = ['title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status'];
+  const keys = Object.keys(updates).filter((k) => allowed.includes(k));
+  if (keys.length === 0) return;
 
-  if (!fields) return;
-
-  const stmt = d.prepare(`UPDATE sessions SET ${fields} WHERE id = @id`);
-  stmt.run({ ...updates, id });
+  const setClause = keys.map((k) => `${k} = ?`).join(', ');
+  const values = keys.map((k) => updates[k]);
+  values.push(id);
+  d.run(`UPDATE sessions SET ${setClause} WHERE id = ?`, values);
+  persist();
 }
 
 function getSession(id) {
   const d = ensureDb();
-  const row = d.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
-  return row ? deserializeSession(row) : null;
+  const stmt = d.prepare('SELECT * FROM sessions WHERE id = ?');
+  stmt.bind([id]);
+  if (!stmt.step()) {
+    stmt.free();
+    return null;
+  }
+  const row = stmt.getAsObject();
+  stmt.free();
+  return deserializeSession(row);
 }
 
 function listSessions({ limit = 50, offset = 0 } = {}) {
   const d = ensureDb();
-  const rows = d
-    .prepare('SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?')
-    .all(limit, offset);
+  const stmt = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?');
+  stmt.bind([limit, offset]);
+  const rows = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject());
+  }
+  stmt.free();
   return rows.map(deserializeSession);
 }
 
 function deleteSession(id) {
   const d = ensureDb();
-  d.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+  d.run('DELETE FROM sessions WHERE id = ?', [id]);
+  persist();
 }
 
 function getSessionCount() {
   const d = ensureDb();
-  return d.prepare('SELECT COUNT(*) as count FROM sessions').get().count;
+  const stmt = d.prepare('SELECT COUNT(*) as count FROM sessions');
+  stmt.step();
+  const count = stmt.get()[0];
+  stmt.free();
+  return count;
 }
 
 function getRecentSessions(limit = 5) {
   return listSessions({ limit });
+}
+
+/**
+ * Mark sessions stuck in 'recording' (e.g. app crashed or stop failed) as 'error'
+ * if they started more than 2 hours ago.
+ */
+function markStaleRecordingSessionsAsError() {
+  const d = ensureDb();
+  const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  d.run(`UPDATE sessions SET status = 'error' WHERE status = 'recording' AND started_at < ?`, [cutoff]);
+  persist();
 }
 
 // ── Deserialization ───────────────────────────────────────────────────────────
@@ -148,5 +198,6 @@ module.exports = {
   deleteSession,
   getSessionCount,
   getRecentSessions,
+  markStaleRecordingSessionsAsError,
   computeDuration,
 };

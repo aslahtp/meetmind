@@ -130,10 +130,11 @@ function Section({ title, children }) {
 // ── Main NoteViewer ───────────────────────────────────────────────────────────
 
 export default function NoteViewer({ session, onBack, onRefresh }) {
-  const [showTranscript, setShowTranscript] = useState(false);
+  const [activeTab, setActiveTab] = useState('summary'); // 'summary' | 'notes' | 'transcript' | 'audio'
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [uploadError, setUploadError] = useState(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   const notes = session.notes;
   const transcript = session.transcript;
@@ -141,6 +142,20 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const sentiment = notes?.sentiment;
   const sentimentStyle = SENTIMENT_STYLES[sentiment] || null;
   const duration = formatDurationSeconds(session.duration_seconds);
+
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    setUploadError(null);
+    try {
+      const result = await window.meetmind.processing.retry(session.id, 'notes');
+      if (result?.success) onRefresh?.();
+      else if (result?.error) setUploadError(result.error);
+    } catch (err) {
+      setUploadError(err.message);
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const handleUploadToNotion = async () => {
     setUploading(true);
@@ -162,16 +177,76 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   };
 
   if (!notes) {
+    const isError = session.status === 'error';
+    const noSpeech = isError && !transcript?.length;
+    const processingError = session._processingError || null;
+
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-[#666] mb-4">Notes not yet generated for this session.</p>
-          <button
-            onClick={() => window.meetmind.processing.run(session.id)}
-            className="btn-primary"
-          >
-            Generate Notes
+      <div className="h-full flex flex-col">
+        {/* Back header */}
+        <div className="flex-shrink-0 px-6 py-4 border-b border-[#2a2a2a] flex items-center gap-3">
+          <button onClick={onBack} className="btn-ghost p-1.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
           </button>
+          <h1 className="font-semibold text-lg flex-1 truncate">{session.title || 'Meeting'}</h1>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center px-8">
+          <div className="text-center max-w-md">
+            {noSpeech ? (
+              <>
+                <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
+                  </svg>
+                </div>
+                <h2 className="font-semibold text-base mb-2">No speech detected</h2>
+                {processingError && (
+                  <p className="text-yellow-400/80 text-xs font-mono bg-[#1a1a1a] rounded px-3 py-2 mb-3 text-left leading-relaxed">
+                    {processingError}
+                  </p>
+                )}
+                <p className="text-[#888] text-sm leading-relaxed mb-2">
+                  The recording was saved but contained only silence.
+                </p>
+                <div className="text-left bg-[#1a1a1a] border border-[#333] rounded-lg p-4 mb-5 text-xs text-[#a0a0a0] space-y-1.5">
+                  <p className="font-medium text-[#ccc]">How to fix:</p>
+                  <p>1. Open <strong className="text-white">Windows Sound → Recording</strong> and enable <strong className="text-white">Stereo Mix</strong> (right-click → Enable if hidden).</p>
+                  <p>2. In MeetMind <strong className="text-white">Settings → Audio</strong>, click <strong className="text-white">Detect Devices</strong> and select Stereo Mix as the system device.</p>
+                  <p>3. Make sure no other app has <em>exclusive control</em> of the device (Sound settings → Properties → Advanced).</p>
+                </div>
+                <div className="flex gap-2 justify-center flex-wrap">
+                  {session.audio_path && (
+                    <button
+                      onClick={() => setActiveTab('audio')}
+                      className="btn-ghost text-xs"
+                    >
+                      Check Audio Tab
+                    </button>
+                  )}
+                  <button
+                    onClick={() => window.meetmind.processing.retry(session.id, 'all')}
+                    className="btn-primary text-sm"
+                  >
+                    Retry with correct device →
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-[#666] mb-4">{isError ? 'Processing failed for this session.' : 'Notes not yet generated for this session.'}</p>
+                <button
+                  onClick={() => window.meetmind.processing.run(session.id)}
+                  className="btn-primary"
+                >
+                  Generate Notes
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -219,61 +294,158 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
             <span className={sentimentStyle.cls}>{sentimentStyle.label}</span>
           )}
         </div>
+
+        {/* Tabs: Summary | Notes | Transcript (pill-style) */}
+        <div className="flex gap-2 mt-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab('summary')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'summary'
+                ? 'bg-[#2a2a2a] text-white'
+                : 'text-[#888] hover:text-[#b0b0b0] hover:bg-[#1f1f1f]'
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+            </svg>
+            Summary
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('notes')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'notes'
+                ? 'bg-[#2a2a2a] text-white'
+                : 'text-[#888] hover:text-[#b0b0b0] hover:bg-[#1f1f1f]'
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              <path d="M12 18v-6"/><path d="M9 15h6"/>
+            </svg>
+            Notes
+          </button>
+          {transcript?.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('transcript')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'transcript'
+                  ? 'bg-[#2a2a2a] text-white'
+                  : 'text-[#888] hover:text-[#b0b0b0] hover:bg-[#1f1f1f]'
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+              </svg>
+              Transcript
+            </button>
+          )}
+          {session.audio_path && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('audio')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'audio'
+                  ? 'bg-[#2a2a2a] text-white'
+                  : 'text-[#888] hover:text-[#b0b0b0] hover:bg-[#1f1f1f]'
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              </svg>
+              Audio
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
-
-        {/* Action Items */}
-        <Section title="✅ Action Items">
-          <ActionItemsTable items={notes.action_items} />
-        </Section>
-
-        {/* Key Points */}
-        <Section title="📌 Key Points">
-          <KeyPointsAccordion points={notes.key_points} />
-        </Section>
-
-        {/* Decisions */}
-        <Section title="🔑 Decisions">
-          <BulletList items={notes.decisions} empty="No decisions recorded." />
-        </Section>
-
-        {/* Open Questions */}
-        <Section title="❓ Open Questions">
-          <BulletList items={notes.questions_unresolved} empty="No open questions." />
-        </Section>
-
-        {/* Next Meeting */}
-        {notes.next_meeting && (
-          <Section title="📅 Next Meeting">
-            <p className="text-[#a0a0a0] text-sm">{notes.next_meeting}</p>
-          </Section>
+      <div className="flex-1 overflow-y-auto px-6 py-5">
+        {activeTab === 'summary' && (
+          <div className="space-y-8">
+            <Section title="✅ Action Items">
+              <ActionItemsTable items={notes.action_items} />
+            </Section>
+            <Section title="📌 Key Points">
+              <KeyPointsAccordion points={notes.key_points} />
+            </Section>
+            <Section title="🔑 Decisions">
+              <BulletList items={notes.decisions} empty="No decisions recorded." />
+            </Section>
+            <Section title="❓ Open Questions">
+              <BulletList items={notes.questions_unresolved} empty="No open questions." />
+            </Section>
+            {notes.next_meeting && (
+              <Section title="📅 Next Meeting">
+                <p className="text-[#a0a0a0] text-sm">{notes.next_meeting}</p>
+              </Section>
+            )}
+          </div>
         )}
 
-        {/* Transcript toggle */}
-        {transcript?.length > 0 && (
-          <div className="border-t border-[#2a2a2a] pt-6">
-            <button
-              className="flex items-center gap-2 text-sm text-[#888] hover:text-white transition-colors mb-4"
-              onClick={() => setShowTranscript((v) => !v)}
+        {activeTab === 'notes' && (
+          <div className="space-y-6 text-sm text-[#c0c0c0]">
+            {notes.key_points?.length > 0 && (
+              <div>
+                <h3 className="text-[#888] text-xs font-medium uppercase tracking-wider mb-2">Key points</h3>
+                <ul className="space-y-1.5">
+                  {notes.key_points.map((p, i) => (
+                    <li key={i}>• {p.heading} — {p.summary}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {notes.action_items?.length > 0 && (
+              <div>
+                <h3 className="text-[#888] text-xs font-medium uppercase tracking-wider mb-2">Action items</h3>
+                <ul className="space-y-1.5">
+                  {notes.action_items.map((item, i) => (
+                    <li key={i}>• {item.task}{item.owner ? ` (${item.owner})` : ''}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {notes.decisions?.length > 0 && (
+              <div>
+                <h3 className="text-[#888] text-xs font-medium uppercase tracking-wider mb-2">Decisions</h3>
+                <ul className="space-y-1.5">
+                  {notes.decisions.map((d, i) => (
+                    <li key={i}>• {d}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {(!notes.key_points?.length && !notes.action_items?.length && !notes.decisions?.length) && (
+              <p className="text-[#555] italic">No notes to show.</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'transcript' && transcript?.length > 0 && (
+          <TranscriptViewer transcript={transcript} />
+        )}
+
+        {activeTab === 'audio' && session.audio_path && (
+          <div className="space-y-4">
+            <p className="text-[#888] text-sm">Recorded audio for this session.</p>
+            <audio
+              key={session.id}
+              controls
+              className="w-full max-w-lg"
+              src={`meetmind-audio://${session.id}`}
+              preload="metadata"
             >
-              <svg
-                className={`w-4 h-4 transition-transform ${showTranscript ? 'rotate-90' : ''}`}
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              >
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
-              {showTranscript ? 'Hide Transcript' : 'View Transcript'}
-              <span className="text-[#555]">({transcript.length} segments)</span>
-            </button>
-            {showTranscript && <TranscriptViewer transcript={transcript} />}
+              Your browser does not support the audio element.
+            </audio>
           </div>
         )}
       </div>
 
-      {/* Footer — Notion upload */}
-      <div className="flex-shrink-0 px-6 py-4 border-t border-[#2a2a2a] flex items-center justify-between gap-3">
+      {/* Footer — Regenerate + Notion upload */}
+      <div className="flex-shrink-0 px-6 py-4 border-t border-[#2a2a2a] flex items-center justify-between gap-3 flex-wrap">
         <div className="flex-1 min-w-0">
           {session.notion_page_url && !uploadResult && (
             <a
@@ -300,38 +472,64 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
           )}
         </div>
 
-        {!uploadResult && !session.notion_page_url && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={handleUploadToNotion}
-            disabled={uploading}
-            className="btn-outline text-xs disabled:opacity-50"
+            onClick={handleRegenerate}
+            disabled={regenerating || uploading}
+            className="btn-ghost text-xs disabled:opacity-50"
+            title="Regenerate notes from transcript with current model"
           >
-            {uploading ? (
+            {regenerating ? (
               <>
                 <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                 </svg>
-                Uploading…
+                Regenerating…
               </>
             ) : (
               <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v16H4V4z"/></svg>
-                Upload to Notion
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Regenerate
               </>
             )}
           </button>
-        )}
 
-        {(uploadResult || session.notion_page_url) && (
-          <button
-            onClick={handleUploadToNotion}
-            disabled={uploading}
-            className="btn-ghost text-xs disabled:opacity-50"
-            title="Re-upload"
-          >
-            Re-upload
-          </button>
-        )}
+          {!uploadResult && !session.notion_page_url && (
+            <button
+              onClick={handleUploadToNotion}
+              disabled={uploading}
+              className="btn-outline text-xs disabled:opacity-50"
+            >
+              {uploading ? (
+                <>
+                  <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v16H4V4z"/></svg>
+                  Upload to Notion
+                </>
+              )}
+            </button>
+          )}
+
+          {(uploadResult || session.notion_page_url) && (
+            <button
+              onClick={handleUploadToNotion}
+              disabled={uploading}
+              className="btn-ghost text-xs disabled:opacity-50"
+              title="Re-upload"
+            >
+              Re-upload
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

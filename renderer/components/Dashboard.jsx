@@ -23,12 +23,29 @@ function formatDate(isoString) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function formatStartTime(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 function formatDurationSeconds(secs) {
-  if (!secs) return null;
+  if (secs == null) return null;
   const m = Math.floor(secs / 60);
-  const s = secs % 60;
+  const s = Math.floor(secs % 60);
   if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
-  return `${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function getSessionDuration(session) {
+  if (session.duration_seconds != null) return session.duration_seconds;
+  if (session.started_at && session.ended_at) {
+    const start = new Date(session.started_at).getTime();
+    const end = new Date(session.ended_at).getTime();
+    return Math.round((end - start) / 1000);
+  }
+  return null;
 }
 
 function EmptyState({ onRecord }) {
@@ -52,12 +69,23 @@ function EmptyState({ onRecord }) {
   );
 }
 
+function sessionDisplayTitle(session) {
+  const title = session.title?.trim();
+  if (title && title !== 'Untitled Meeting') return title;
+  const d = session.started_at ? new Date(session.started_at) : null;
+  if (d) return `Meeting — ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  return 'Untitled Meeting';
+}
+
 function SessionCard({ session, onClick }) {
   const notes = session.notes;
   const sentimentClass = SENTIMENT_BADGE[notes?.sentiment] || 'badge-gray';
   const statusInfo = STATUS_BADGE[session.status] || { cls: 'badge-gray', label: session.status };
-  const duration = formatDurationSeconds(session.duration_seconds);
+  const durationSecs = getSessionDuration(session);
+  const duration = formatDurationSeconds(durationSecs);
+  const startTime = formatStartTime(session.started_at);
   const actionCount = notes?.action_items?.length || 0;
+  const isError = session.status === 'error';
 
   return (
     <button
@@ -67,11 +95,17 @@ function SessionCard({ session, onClick }) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-medium text-sm text-white truncate group-hover:text-green-400 transition-colors">
-            {session.title || 'Untitled Meeting'}
+            {sessionDisplayTitle(session)}
           </h3>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className="text-[#666] text-xs">{formatDate(session.started_at)}</span>
-            {duration && (
+            {startTime && (
+              <>
+                <span className="text-[#444] text-xs">·</span>
+                <span className="text-[#666] text-xs">{startTime}</span>
+              </>
+            )}
+            {duration != null && (
               <>
                 <span className="text-[#444] text-xs">·</span>
                 <span className="text-[#666] text-xs">{duration}</span>
@@ -97,6 +131,10 @@ function SessionCard({ session, onClick }) {
           )}
         </div>
       </div>
+
+      {isError && (
+        <p className="mt-2 text-[#888] text-xs">Open to view details or retry transcription</p>
+      )}
 
       {session.status === 'complete' && (
         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-[#2a2a2a]">
@@ -144,7 +182,10 @@ export default function Dashboard({ onOpenSession }) {
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] flex-shrink-0">
         <div>
           <h1 className="text-lg font-semibold">Sessions</h1>
-          <p className="text-[#666] text-xs mt-0.5">{sessions.length} meeting{sessions.length !== 1 ? 's' : ''} recorded</p>
+          <p className="text-[#666] text-xs mt-0.5">
+            {sessions.length} session{sessions.length !== 1 ? 's' : ''}
+            {sessions.some((s) => s.status === 'error') && ' · Some need attention'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
