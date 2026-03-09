@@ -345,7 +345,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto px-6 py-5 pb-24">
         {activeTab === 'summary' && (
           <div className="space-y-8">
             {/* Action Items & Next Steps */}

@@ -222,14 +222,14 @@ function App() {
         <Sidebar />
 
         {/* Main content — top padding clears the title bar overlay (window controls) */}
-        <main className="flex-1 flex flex-col overflow-hidden pt-10">
+        <main className="flex-1 flex flex-col overflow-hidden pt-10 pb-6">
           {isRecording && (
             <RecordingBar
               sessionId={recordingSessionId}
               onStop={stopRecording}
             />
           )}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden min-h-0">
             {view === 'dashboard' && (
               <Dashboard onOpenSession={openSession} />
             )}
@@ -274,7 +274,7 @@ function Sidebar() {
   const { view, setView, isRecording, startRecording } = useApp();
 
   return (
-    <aside className="w-56 flex-shrink-0 flex flex-col bg-[rgb(var(--color-background))] border-r border-[rgb(var(--color-border))]">
+    <aside className="w-56 flex-shrink-0 flex flex-col bg-[rgb(var(--color-background))] border-r border-[rgb(var(--color-border))] pb-6">
       {/* Drag region: single app name */}
       <div className="titlebar-drag h-8 flex items-center px-4">
         <span className="text-xs text-[#555] font-medium select-none">MeetMind</span>

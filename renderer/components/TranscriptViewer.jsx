@@ -117,7 +117,7 @@ export default function TranscriptViewer({ transcript }) {
       )}
 
       {/* Transcript segments */}
-      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+      <div className="space-y-2 pr-1">
         {segments.map((seg, i) => (
           <div key={i} className="flex gap-3 group">
             <span className="text-[#555] text-xs font-mono mt-0.5 flex-shrink-0 w-10 text-right">
