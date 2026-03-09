@@ -1,0 +1,10 @@
+## Learned User Preferences
+
+## Learned Workspace Facts
+
+- MeetMind renderer uses React + Tailwind; theming is driven by CSS variables in `renderer/styles/globals.css` and Tailwind `darkMode: 'class'` with `<html class="dark">` in `renderer/index.html`.
+- Prefer using CSS variables (`--color-*`) with Tailwind arbitrary values like `bg-[rgb(var(--color-background))]` instead of hardcoded hex colors for consistent theming.
+- Electron packaging must include `dist/renderer/**` in `package.json` `build.files`; otherwise the installed app can open a blank window because `dist` is gitignored.
+- Prevent duplicate running instances/tray icons by using `app.requestSingleInstanceLock()` in `electron/main.js` and focusing the existing window on `second-instance`.
+- Don’t commit bundled FFmpeg `.exe` binaries over GitHub’s 100MB limit; keep them ignored or manage them via Git LFS / external download.
+
