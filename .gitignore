@@ -7,3 +7,5 @@ dist
 ffmpeg.exe
 ffprobe.exe
 ffplay.exe
+
+.cursor

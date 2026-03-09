@@ -217,7 +217,7 @@ function App() {
 
   return (
     <AppContext.Provider value={ctx}>
-      <div className="flex h-screen overflow-hidden bg-[#1a1a1a] text-white">
+      <div className="flex h-screen overflow-hidden bg-[rgb(var(--color-background))] text-[rgb(var(--color-foreground))]">
         {/* Sidebar */}
         <Sidebar />
 
@@ -274,7 +274,7 @@ function Sidebar() {
   const { view, setView, isRecording, startRecording } = useApp();
 
   return (
-    <aside className="w-56 flex-shrink-0 flex flex-col bg-[#161616] border-r border-[#2a2a2a]">
+    <aside className="w-56 flex-shrink-0 flex flex-col bg-[rgb(var(--color-background))] border-r border-[rgb(var(--color-border))]">
       {/* Drag region: single app name */}
       <div className="titlebar-drag h-8 flex items-center px-4">
         <span className="text-xs text-[#555] font-medium select-none">MeetMind</span>
@@ -282,7 +282,7 @@ function Sidebar() {
 
       {/* Logo + nav in one block (no duplicate name) */}
       <div className="px-4 pt-2 pb-3 titlebar-no-drag flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center flex-shrink-0">
+        <div className="w-8 h-8 rounded-lg bg-[rgb(var(--color-success))] flex items-center justify-center flex-shrink-0">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
             <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/>
@@ -315,16 +315,16 @@ function Sidebar() {
       </nav>
 
       {/* Bottom: one recording state (when not recording, show New Recording; when recording, minimal pill — main state is in top bar) */}
-      <div className="p-3 titlebar-no-drag border-t border-[#2a2a2a]">
+      <div className="p-3 titlebar-no-drag border-t border-[rgb(var(--color-border))]">
         {!isRecording ? (
           <button onClick={startRecording} className="btn-primary w-full justify-center text-xs">
             <span className="w-2 h-2 rounded-full bg-white"></span>
             New Recording
           </button>
         ) : (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1a1a1a] border border-[#333]">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgb(var(--color-background-tertiary))] border border-[rgb(var(--color-border))]">
             <span className="recording-dot w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
-            <span className="text-[#888] text-xs">Recording in progress</span>
+            <span className="text-[rgb(var(--color-foreground-muted))] text-xs">Recording in progress</span>
           </div>
         )}
       </div>
@@ -336,11 +336,11 @@ function Sidebar() {
 
 function OnboardingBanner({ onSetup, onClose, hasSessions }) {
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-[#212121] border border-[#404040] rounded-xl p-4 shadow-2xl fade-in">
+    <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-[rgb(var(--color-background-secondary))] border border-[rgb(var(--color-border))] rounded-xl p-4 shadow-2xl fade-in">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="font-semibold text-sm mb-1">Welcome to MeetMind</h3>
-          <p className="text-[#a0a0a0] text-xs mb-3">
+          <p className="text-[rgb(var(--color-foreground-muted))] text-xs mb-3">
             {hasSessions
               ? 'Add API keys to transcribe and summarize your recordings, and upload to Notion.'
               : 'Set up your API keys to get started with transcription and Notion upload.'}
@@ -349,7 +349,7 @@ function OnboardingBanner({ onSetup, onClose, hasSessions }) {
         <button
           type="button"
           onClick={onClose}
-          className="flex-shrink-0 p-1 rounded text-[#888] hover:text-[#ccc] hover:bg-[#333] transition-colors"
+          className="flex-shrink-0 p-1 rounded text-[rgb(var(--color-foreground-subtle))] hover:text-[rgb(var(--color-foreground-muted))] hover:bg-[rgb(var(--color-background-tertiary))] transition-colors"
           aria-label="Close"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

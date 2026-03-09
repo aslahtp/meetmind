@@ -1,14 +1,34 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:           rgba(20, 20, 20, 0.96);
-  --bg-elevated:  rgba(30, 30, 30, 0.98);
-  --border:       rgba(255,255,255,0.08);
-  --text:         #f0f0f0;
-  --text-muted:   #888;
-  --green:        #22c55e;
-  --red:          #ef4444;
-  --yellow:       #eab308;
+  /* Core dark theme palette for overlay (same as app) */
+  --color-background:           20 18 11;
+  --color-background-secondary: 29 27 21;
+  --color-background-tertiary:  38 36 30;
+  --color-foreground:           255 255 255;
+  --color-foreground-muted:     160 160 160;
+  --color-foreground-subtle:    102 102 102;
+  --color-border:               46 42 34;
+  --color-border-muted:         35 31 24;
+  --color-accent:               255 255 255;
+  --color-accent-hover:         224 224 224;
+  --color-accent-muted:         136 136 136;
+  --color-success:              74 222 128;
+  --color-success-muted:        34 197 94;
+  --color-warning:              251 191 36;
+  --color-warning-muted:        245 158 11;
+  --color-error:                248 113 113;
+  --color-error-muted:          239 68 68;
+
+  /* Overlay-specific derived tokens */
+  --bg:           rgba(20, 18, 11, 0.96);
+  --bg-elevated:  rgba(29, 27, 21, 0.98);
+  --border:       rgba(255, 255, 255, 0.08);
+  --text:         rgb(var(--color-foreground));
+  --text-muted:   rgb(var(--color-foreground-subtle));
+  --green:        rgb(var(--color-success));
+  --red:          rgb(var(--color-error));
+  --yellow:       rgb(var(--color-warning));
   --radius:       16px;
 }
 

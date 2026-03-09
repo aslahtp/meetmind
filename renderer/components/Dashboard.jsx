@@ -90,7 +90,7 @@ function SessionCard({ session, onClick, onDelete }) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left card hover:border-[#444] hover:bg-[#252525] transition-all duration-150 group"
+      className="w-full text-left card bg-[rgb(var(--color-secondary))] border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-background-tertiary))] hover:border-[rgb(var(--color-border))] transition-all duration-150 group"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">

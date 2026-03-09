@@ -289,7 +289,7 @@ export default function Settings({ onSave }) {
                   </svg>
                 </button>
                 {activeOnboardingStep === step.id && (
-                  <div className="px-4 pb-4 bg-[#1d1d1d]">
+                  <div className="px-4 pb-4 bg-[rgb(var(--color-secondary))]">
                     <ol className="space-y-1.5 mb-3">
                       {step.steps.map((s, i) => (
                         <li key={i} className="text-sm text-[#a0a0a0] flex gap-2">
@@ -451,7 +451,7 @@ export default function Settings({ onSave }) {
             </button>
           </div>
 
-          <div className="p-3 bg-[#1d1d1d] border border-[#333] rounded-lg text-xs space-y-2.5">
+          <div className="p-3 bg-[rgb(var(--color-secondary))] border border-[#333] rounded-lg text-xs space-y-2.5">
             <p className="text-[#a0a0a0] font-medium">
               <span className="text-green-400">●</span> WASAPI Loopback captures all system audio — YouTube, Spotify, calls — even through headphones. No setup required.
             </p>
