@@ -3,3 +3,7 @@ node_modules
 dist
 
 .env
+
+ffmpeg.exe
+ffprobe.exe
+ffplay.exe

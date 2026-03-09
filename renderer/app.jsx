@@ -5,7 +5,6 @@ import './styles/globals.css';
 import Dashboard from './components/Dashboard.jsx';
 import NoteViewer from './components/NoteViewer.jsx';
 import Settings from './components/Settings.jsx';
-import ProcessingOverlay from './components/ProcessingOverlay.jsx';
 import RecordingBar from './components/RecordingBar.jsx';
 
 // ── App Context ───────────────────────────────────────────────────────────────
@@ -25,10 +24,94 @@ function App() {
   const [config, setConfigState] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSessionId, setRecordingSessionId] = useState(null);
-  const [processingState, setProcessingState] = useState(null);  // { stage, percent } | null
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   const keysNotSet = !config?.googleApiKey?.trim() || !config?.geminiApiKey?.trim();
+
+  // Request microphone access at startup so Windows adds this app to the
+  // Privacy → Microphone list and allows FFmpeg (a desktop app) to capture audio.
+  useEffect(() => {
+    if (!navigator.mediaDevices?.getUserMedia) return;
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((stream) => { stream.getTracks().forEach((t) => t.stop()); })
+      .catch(() => { /* permission denied — user will see guidance in Settings */ });
+  }, []);
+
+  // ── Renderer-based audio capture (system loopback + mic via Web Audio) ─────
+  // The main process sends capture:start / capture:stop commands. We capture
+  // system audio through Electron's display-media loopback (WASAPI internally)
+  // and the microphone through getUserMedia, mix them, record as webm, and send
+  // the result back.
+  useEffect(() => {
+    if (!window.meetmind?.capture) return;
+
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let streams = [];
+    let ctx = null;
+
+    window.meetmind.capture.onStart(async () => {
+      try {
+        const sysStream = await navigator.mediaDevices.getDisplayMedia({
+          audio: true,
+          video: true,
+        });
+        sysStream.getVideoTracks().forEach((t) => t.stop());
+
+        let micStream = null;
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch { /* mic unavailable — system audio only */ }
+
+        streams = [sysStream, micStream].filter(Boolean);
+
+        ctx = new AudioContext();
+        const dest = ctx.createMediaStreamDestination();
+        ctx.createMediaStreamSource(sysStream).connect(dest);
+        if (micStream) ctx.createMediaStreamSource(micStream).connect(dest);
+
+        audioChunks = [];
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm';
+        mediaRecorder = new MediaRecorder(dest.stream, { mimeType });
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+        mediaRecorder.start(1000);
+
+        window.meetmind.capture.sendStarted();
+      } catch (err) {
+        console.error('Renderer audio capture failed:', err);
+        window.meetmind.capture.sendFailed(err.message);
+      }
+    });
+
+    window.meetmind.capture.onStop(async () => {
+      try {
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+          window.meetmind.capture.sendAudioData(new ArrayBuffer(0));
+          return;
+        }
+
+        await new Promise((resolve) => {
+          mediaRecorder.onstop = resolve;
+          mediaRecorder.stop();
+        });
+
+        streams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
+        streams = [];
+        if (ctx) { ctx.close().catch(() => {}); ctx = null; }
+
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        const buffer = await blob.arrayBuffer();
+        window.meetmind.capture.sendAudioData(buffer);
+      } catch (err) {
+        console.error('Renderer capture stop failed:', err);
+        window.meetmind.capture.sendAudioData(new ArrayBuffer(0));
+      }
+    });
+  }, []);
 
   // Load config and sessions on mount
   useEffect(() => {
@@ -57,12 +140,7 @@ function App() {
       setIsRecording(false);
     });
 
-    const unsubProgress = window.meetmind.on('processing:progress', ({ stage, percent }) => {
-      setProcessingState({ stage, percent });
-    });
-
     const unsubComplete = window.meetmind.on('processing:complete', async ({ sessionId }) => {
-      setProcessingState(null);
       const updated = await window.meetmind.sessions.list();
       setSessions(updated);
       if (sessionId) {
@@ -75,7 +153,6 @@ function App() {
     });
 
     const unsubError = window.meetmind.on('processing:error', async ({ sessionId, error }) => {
-      setProcessingState(null);
       const updated = await window.meetmind.sessions.list();
       setSessions(updated);
       if (sessionId) {
@@ -91,7 +168,6 @@ function App() {
     return () => {
       unsubRecordingStarted?.();
       unsubRecordingStopped?.();
-      unsubProgress?.();
       unsubComplete?.();
       unsubError?.();
     };
@@ -125,7 +201,6 @@ function App() {
     const result = await window.meetmind.recording.stop();
     if (result?.success) {
       setIsRecording(false);
-      setProcessingState({ stage: 'transcribing', percent: 0 });
     }
     return result;
   };
@@ -180,14 +255,6 @@ function App() {
           </div>
         </main>
       </div>
-
-      {/* Processing overlay */}
-      {processingState && (
-        <ProcessingOverlay
-          stage={processingState.stage}
-          percent={processingState.percent}
-        />
-      )}
 
       {/* Onboarding: only when API keys not set; close button dismisses for this session */}
       {keysNotSet && showOnboarding && view !== 'settings' && !isRecording && (

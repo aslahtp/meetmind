@@ -93,6 +93,44 @@ function TestButton({ onTest, label }) {
   );
 }
 
+function DeviceProbeButton({ device, probing, result, onProbe }) {
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <button
+        onClick={onProbe}
+        disabled={probing}
+        className="btn-outline text-xs px-3 py-1.5 disabled:opacity-50"
+      >
+        {probing ? (
+          <>
+            <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+            Testing (3 s)…
+          </>
+        ) : 'Test Device'}
+      </button>
+      {result && !probing && (
+        result.isSilent ? (
+          <span className="text-red-400 text-xs flex items-center gap-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            Silent (peak {result.peak ?? 0}) — check levels &amp; privacy settings
+          </span>
+        ) : (
+          <span className="text-green-500 text-xs flex items-center gap-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Audio detected (peak {result.peak})
+          </span>
+        )
+      )}
+    </div>
+  );
+}
+
 const ONBOARDING_STEPS = [
   {
     id: 'google',
@@ -133,28 +171,38 @@ const ONBOARDING_STEPS = [
 export default function Settings({ onSave }) {
   const { config } = useApp();
   const [form, setForm] = useState({
-    googleApiKey:      '',
-    geminiApiKey:      '',
-    notionToken:       '',
-    notionDatabaseId:  '',
-    selectedModel:     'gemini-3.1-flash-lite-preview',
-    systemAudioDevice: '',
-    micDevice:         '',
-    autoLaunch:        true,
+    googleApiKey:              '',
+    googleCloudProjectId:      '',
+    googleCloudStorageBucket:  '',
+    googleCloudStorageKeyPath: '',
+    geminiApiKey:              '',
+    notionToken:           '',
+    notionDatabaseId:      '',
+    notionPageId:          '',
+        selectedModel:     'gemini-3.1-flash-lite-preview',
+        systemAudioDevice: '',
+        micDevice:         '',
+        autoLaunch:        true,
   });
   const [models, setModels] = useState([]);
   const [devices, setDevices] = useState({ all: [], system: null, mic: null });
   const [loadingDevices, setLoadingDevices] = useState(false);
+  const [probeResults, setProbeResults] = useState({});
+  const [probingDevice, setProbingDevice] = useState(null);
   const [saved, setSaved] = useState(false);
   const [activeOnboardingStep, setActiveOnboardingStep] = useState(null);
 
   useEffect(() => {
     if (config) {
       setForm({
-        googleApiKey:      config.googleApiKey      || '',
-        geminiApiKey:      config.geminiApiKey      || '',
-        notionToken:       config.notionToken       || '',
-        notionDatabaseId:  config.notionDatabaseId  || '',
+        googleApiKey:          config.googleApiKey          || '',
+        googleCloudProjectId:      config.googleCloudProjectId      || '',
+        googleCloudStorageBucket:  config.googleCloudStorageBucket  || '',
+        googleCloudStorageKeyPath: config.googleCloudStorageKeyPath || '',
+        geminiApiKey:              config.geminiApiKey              || '',
+        notionToken:           config.notionToken           || '',
+        notionDatabaseId:      config.notionDatabaseId      || '',
+        notionPageId:         config.notionPageId          || '',
         selectedModel:     config.selectedModel     || 'gemini-3.1-flash-lite-preview',
         systemAudioDevice: config.systemAudioDevice || '',
         micDevice:         config.micDevice         || '',
@@ -173,6 +221,19 @@ export default function Settings({ onSave }) {
   };
 
   const WASAPI_ID = '__wasapi_loopback__';
+
+  const handleProbeDevice = async (device, label) => {
+    if (!device || device === WASAPI_ID) return;
+    setProbingDevice(device);
+    try {
+      const result = await window.meetmind.recording.probeDevice(device);
+      setProbeResults((prev) => ({ ...prev, [device]: result }));
+    } catch (err) {
+      setProbeResults((prev) => ({ ...prev, [device]: { isSilent: true, error: err.message } }));
+    } finally {
+      setProbingDevice(null);
+    }
+  };
 
   const loadDevices = async () => {
     setLoadingDevices(true);
@@ -261,9 +322,48 @@ export default function Settings({ onSave }) {
             />
             <TestButton
               onTest={async () => {
-                const r = await window.meetmind.api.testGoogle(form.googleApiKey);
+                const r = await window.meetmind.api.testGoogle(form.googleApiKey, form.googleCloudProjectId);
                 if (!r.success) throw new Error(r.error);
               }}
+            />
+          </Field>
+
+          <Field
+            label="Google Cloud Project ID"
+            hint="Required for Speech-to-Text v2. Your GCP project ID from Cloud Console."
+          >
+            <input
+              type="text"
+              value={form.googleCloudProjectId}
+              onChange={update('googleCloudProjectId')}
+              placeholder="my-project-id"
+              className="input"
+            />
+          </Field>
+
+          <Field
+            label="GCS bucket (optional)"
+            hint="For v2 BatchRecognize: upload WAV here, then transcribe. See docs/GCS-SETUP.md for bucket + service account setup."
+          >
+            <input
+              type="text"
+              value={form.googleCloudStorageBucket}
+              onChange={update('googleCloudStorageBucket')}
+              placeholder="my-meetmind-bucket"
+              className="input"
+            />
+          </Field>
+
+          <Field
+            label="Service account key path (optional)"
+            hint="Path to service account JSON key (needs Storage Object Admin on bucket). Or set GOOGLE_APPLICATION_CREDENTIALS."
+          >
+            <input
+              type="text"
+              value={form.googleCloudStorageKeyPath}
+              onChange={update('googleCloudStorageKeyPath')}
+              placeholder="C:\path\to\key.json"
+              className="input"
             />
           </Field>
 
@@ -296,19 +396,19 @@ export default function Settings({ onSave }) {
           </Field>
 
           <Field
-            label="Notion Database ID"
-            hint="Found in your database URL: notion.so/workspace/{ID}?v=…"
+            label="Notion Parent Page / Database ID"
+            hint="Open the target page or database in Notion → share with your integration → copy the 32-char ID from the URL"
           >
             <input
               type="text"
-              value={form.notionDatabaseId}
-              onChange={update('notionDatabaseId')}
-              placeholder="32-character ID…"
+              value={form.notionPageId}
+              onChange={update('notionPageId')}
+              placeholder="32-character page ID…"
               className="input"
             />
             <TestButton
               onTest={async () => {
-                const r = await window.meetmind.notion.testConnection(form.notionToken, form.notionDatabaseId);
+                const r = await window.meetmind.notion.testConnection(form.notionToken, form.notionPageId);
                 if (!r.success) throw new Error(r.error);
               }}
             />
@@ -351,13 +451,25 @@ export default function Settings({ onSave }) {
             </button>
           </div>
 
-          <div className="p-3 bg-[#1d1d1d] border border-[#333] rounded-lg text-xs space-y-1.5">
+          <div className="p-3 bg-[#1d1d1d] border border-[#333] rounded-lg text-xs space-y-2.5">
             <p className="text-[#a0a0a0] font-medium">
               <span className="text-green-400">●</span> WASAPI Loopback captures all system audio — YouTube, Spotify, calls — even through headphones. No setup required.
             </p>
             <p className="text-[#555]">
               Stereo Mix (legacy) only works with built-in Realtek speakers and requires manual enabling in Windows Sound settings.
             </p>
+            <div className="border-t border-[#2a2a2a] pt-2 space-y-1">
+              <p className="text-yellow-400/80 font-medium">If recordings are silent:</p>
+              <p className="text-[#666]">
+                1. Open <strong className="text-[#999]">Windows Settings → Privacy &amp; security → Microphone</strong>
+              </p>
+              <p className="text-[#666]">
+                2. Enable <strong className="text-[#999]">"Let desktop apps access your microphone"</strong> (covers FFmpeg and recording tools)
+              </p>
+              <p className="text-[#666]">
+                3. In <strong className="text-[#999]">Windows Sound → Recording</strong>, right-click each device → Properties → Levels → set to 80–100
+              </p>
+            </div>
           </div>
 
           <Field label="System Audio Device">
@@ -378,6 +490,14 @@ export default function Settings({ onSave }) {
                 </option>
               )}
             </select>
+            {form.systemAudioDevice && form.systemAudioDevice !== WASAPI_ID && (
+              <DeviceProbeButton
+                device={form.systemAudioDevice}
+                probing={probingDevice === form.systemAudioDevice}
+                result={probeResults[form.systemAudioDevice]}
+                onProbe={() => handleProbeDevice(form.systemAudioDevice)}
+              />
+            )}
           </Field>
 
           <Field label="Microphone Device">
@@ -396,6 +516,14 @@ export default function Settings({ onSave }) {
                 <option value={form.micDevice}>{form.micDevice}</option>
               )}
             </select>
+            {form.micDevice && (
+              <DeviceProbeButton
+                device={form.micDevice}
+                probing={probingDevice === form.micDevice}
+                result={probeResults[form.micDevice]}
+                onProbe={() => handleProbeDevice(form.micDevice)}
+              />
+            )}
           </Field>
         </section>
 

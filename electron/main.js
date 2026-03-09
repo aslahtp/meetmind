@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, net, desktopCapturer, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -6,8 +6,8 @@ const { pathToFileURL } = require('url');
 const { getConfig, setConfig, setMultipleConfig, isFirstRun } = require('./utils/config');
 const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
-const { startRecording, stopRecording, listAudioDevices } = require('./audio/recorder');
-const { transcribeAudio } = require('./services/transcription');
+const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav } = require('./audio/recorder');
+const { transcribeAudio, getWavDurationSeconds } = require('./services/transcription');
 const { generateMeetingNotes, getAvailableModels } = require('./services/gemini');
 const { uploadToNotion, testNotionConnection } = require('./services/notion');
 const { testGoogleSTT } = require('./services/transcription');
@@ -51,6 +51,7 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
     show: false,
     icon: getAppIconPath(),
@@ -74,6 +75,16 @@ function createMainWindow() {
       mainWindow.hide();
     }
   });
+
+  // Auto-approve system audio loopback capture (no picker dialog).
+  // Electron's loopback mode captures all system audio via Chromium's WASAPI
+  // layer — works with speakers, headphones, USB, and Bluetooth output.
+  mainWindow.webContents.session.setDisplayMediaRequestHandler((_request, callback) => {
+    desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+      if (sources.length === 0) { callback(); return; }
+      callback({ video: sources[0], audio: 'loopback' });
+    });
+  }, { useSystemPicker: false });
 
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -143,6 +154,50 @@ function updateTrayMenu() {
 // ── Recording helpers ────────────────────────────────────────────────────────
 
 let currentSessionId = null;
+let captureMode = 'none'; // 'none' | 'renderer' | 'ffmpeg'
+
+// ── Renderer capture IPC helpers ─────────────────────────────────────────────
+
+function requestRendererCaptureStart() {
+  return new Promise((resolve) => {
+    if (!mainWindow?.webContents) { resolve(false); return; }
+
+    function onStarted() { cleanup(); resolve(true); }
+    function onFailed() { cleanup(); resolve(false); }
+    function cleanup() {
+      clearTimeout(timer);
+      ipcMain.removeListener('capture:started', onStarted);
+      ipcMain.removeListener('capture:failed', onFailed);
+    }
+
+    ipcMain.once('capture:started', onStarted);
+    ipcMain.once('capture:failed', onFailed);
+    mainWindow.webContents.send('capture:start');
+
+    const timer = setTimeout(() => { cleanup(); resolve(false); }, 6000);
+  });
+}
+
+function requestRendererCaptureStop() {
+  return new Promise((resolve, reject) => {
+    if (!mainWindow?.webContents) { reject(new Error('No window')); return; }
+
+    function onData(_e, buffer) {
+      clearTimeout(timer);
+      resolve(Buffer.from(buffer));
+    }
+
+    ipcMain.once('capture:audio-data', onData);
+    mainWindow.webContents.send('capture:stop');
+
+    const timer = setTimeout(() => {
+      ipcMain.removeListener('capture:audio-data', onData);
+      reject(new Error('Renderer capture stop timed out'));
+    }, 15000);
+  });
+}
+
+// ── Start / Stop recording ───────────────────────────────────────────────────
 
 async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
   if (isRecording) return { success: false, error: 'Already recording' };
@@ -159,15 +214,32 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
   });
 
   try {
+    // Primary: renderer captures system audio (Electron loopback) + mic via Web Audio
+    const rendererOk = await requestRendererCaptureStart();
+
+    if (rendererOk) {
+      captureMode = 'renderer';
+      isRecording = true;
+      updateTrayMenu();
+      mainWindow?.webContents.send('recording:started', { sessionId: currentSessionId });
+      broadcastToExtension({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
+      logger.info('Recording started (renderer capture)', { sessionId: currentSessionId });
+      return { success: true, sessionId: currentSessionId };
+    }
+
+    // Fallback: FFmpeg dshow recording (mic + Stereo Mix if available)
+    logger.info('Renderer capture unavailable, falling back to FFmpeg');
+    captureMode = 'ffmpeg';
     await startRecording(currentSessionId);
     isRecording = true;
     updateTrayMenu();
     mainWindow?.webContents.send('recording:started', { sessionId: currentSessionId });
     broadcastToExtension({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
-    logger.info('Recording started', { sessionId: currentSessionId });
+    logger.info('Recording started (FFmpeg fallback)', { sessionId: currentSessionId });
     return { success: true, sessionId: currentSessionId };
   } catch (err) {
     logger.error('Failed to start recording', { error: err.message });
+    captureMode = 'none';
     db.updateSession(currentSessionId, { status: 'error' });
     mainWindow?.webContents.send('recording:error', { error: err.message });
     return { success: false, error: err.message };
@@ -178,13 +250,50 @@ async function handleStopRecording() {
   if (!isRecording) return { success: false, error: 'Not recording' };
 
   try {
-    const audioPath = await stopRecording();
-    isRecording = false;
+    let audioPath;
     const endedAt = new Date().toISOString();
+    const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+    if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
+
+    if (captureMode === 'renderer') {
+      const audioBuffer = await requestRendererCaptureStop();
+      const webmPath = path.join(recordingsDir, `${currentSessionId}.webm`);
+      const wavPath = path.join(recordingsDir, `${currentSessionId}.wav`);
+
+      fs.writeFileSync(webmPath, audioBuffer);
+      logger.info('Renderer audio saved, converting to WAV', { webmBytes: audioBuffer.length });
+
+      await convertWebmToWav(webmPath, wavPath);
+      try { fs.unlinkSync(webmPath); } catch { /* ignore */ }
+
+      audioPath = wavPath;
+    } else {
+      audioPath = await stopRecording();
+    }
+
+    captureMode = 'none';
+    isRecording = false;
+
+    let durationSeconds = null;
+    try {
+      if (audioPath) {
+        durationSeconds = Math.round(getWavDurationSeconds(audioPath));
+        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+          durationSeconds = null;
+        }
+      }
+    } catch (err) {
+      logger.warn('Failed to compute audio duration from file', {
+        sessionId: currentSessionId,
+        audioPath,
+        error: err.message,
+      });
+    }
 
     db.updateSession(currentSessionId, {
       ended_at: endedAt,
       audio_path: audioPath,
+      duration_seconds: durationSeconds,
       status: 'transcribing',
     });
 
@@ -193,12 +302,12 @@ async function handleStopRecording() {
     broadcastToExtension({ type: 'RECORDING_STOPPED' });
     logger.info('Recording stopped', { sessionId: currentSessionId, audioPath });
 
-    // Kick off async processing pipeline
     runProcessingPipeline(currentSessionId, audioPath);
 
     return { success: true, sessionId: currentSessionId };
   } catch (err) {
     logger.error('Failed to stop recording', { error: err.message });
+    captureMode = 'none';
     if (currentSessionId) {
       db.updateSession(currentSessionId, {
         status: 'error',
@@ -221,7 +330,14 @@ async function runProcessingPipeline(sessionId, audioPath) {
     const config = getConfig();
 
     const onTranscriptionProgress = (pct) => sendProgress('transcribing', Math.round(pct * 0.6));
-    const transcript = await transcribeAudio(audioPath, config.googleApiKey, onTranscriptionProgress);
+    const transcript = await transcribeAudio(
+      audioPath,
+      config.googleApiKey,
+      onTranscriptionProgress,
+      config.googleCloudProjectId,
+      config.googleCloudStorageBucket,
+      config.googleCloudStorageKeyPath
+    );
 
     // transcribeAudio throws for silent files; if we get here but with empty results,
     // treat it the same way (STT may return empty for near-silence)
@@ -248,10 +364,10 @@ async function runProcessingPipeline(sessionId, audioPath) {
 
     // Stage 3: Notion upload (85–100%) — optional, only if configured
     let notionUrl = null;
-    if (config.notionToken && config.notionDatabaseId) {
+    if (config.notionToken && config.notionPageId) {
       sendProgress('uploading', 85);
       db.updateSession(sessionId, { status: 'uploading' });
-      notionUrl = await uploadToNotion(notes, transcript, config.notionDatabaseId, config.notionToken);
+      notionUrl = await uploadToNotion(notes, transcript, config.notionPageId, config.notionToken);
       db.updateSession(sessionId, { notion_page_url: notionUrl, status: 'complete' });
       sendProgress('complete', 100);
     }
@@ -296,6 +412,77 @@ function registerIpcHandlers() {
 
   ipcMain.handle('audio:list-devices', () => listAudioDevices());
 
+  ipcMain.handle('audio:probe-device', (_e, device) => probeAudioDevice(device));
+
+  ipcMain.handle('audio:import-file', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow || undefined, {
+      title: 'Select audio file',
+      properties: ['openFile'],
+      filters: [
+        {
+          name: 'Audio/Video files',
+          extensions: ['wav', 'mp3', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'webm', 'mp4', 'mkv', 'mov'],
+        },
+      ],
+    });
+
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return { success: false, cancelled: true };
+    }
+
+    const srcPath = filePaths[0];
+
+    try {
+      const { v4: uuidv4 } = require('uuid');
+      const sessionId = uuidv4();
+
+      const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+      if (!fs.existsSync(recordingsDir)) {
+        fs.mkdirSync(recordingsDir, { recursive: true });
+      }
+
+      const ext = path.extname(srcPath).toLowerCase();
+      const destPath = path.join(recordingsDir, `${sessionId}.wav`);
+
+      if (ext === '.wav') {
+        fs.copyFileSync(srcPath, destPath);
+      } else {
+        await convertFileToWav(srcPath, destPath);
+      }
+
+      let durationSeconds = null;
+      try {
+        durationSeconds = Math.round(getWavDurationSeconds(destPath));
+        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+          durationSeconds = null;
+        }
+      } catch (err) {
+        logger.warn('Failed to compute duration for imported audio', {
+          srcPath,
+          destPath,
+          error: err.message,
+        });
+      }
+
+      db.createSession({
+        id: sessionId,
+        title: path.basename(srcPath, ext) || 'Imported audio',
+        meeting_url: '',
+        started_at: new Date().toISOString(),
+        audio_path: destPath,
+        duration_seconds: durationSeconds,
+        status: 'transcribing',
+      });
+
+      runProcessingPipeline(sessionId, destPath);
+
+      return { success: true, sessionId };
+    } catch (err) {
+      logger.error('Audio import failed', { error: err.message });
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('sessions:list', () => db.listSessions());
 
   ipcMain.handle('session:get', (_e, id) => db.getSession(id));
@@ -310,14 +497,20 @@ function registerIpcHandlers() {
     if (!session) return { success: false, error: 'Session not found' };
 
     const config = getConfig();
-    if (!config.notionToken || !config.notionDatabaseId) {
-      return { success: false, error: 'Notion not configured' };
+    if (!config.notionToken || !config.notionPageId) {
+      return { success: false, error: 'Notion not configured — add your token and parent page ID in Settings.' };
     }
 
     try {
-      const notes = JSON.parse(session.notes || '{}');
-      const transcript = JSON.parse(session.transcript || '[]');
-      const url = await uploadToNotion(notes, transcript, config.notionDatabaseId, config.notionToken);
+      const notes =
+        typeof session.notes === 'string'
+          ? JSON.parse(session.notes || '{}')
+          : (session.notes || {});
+      const transcript =
+        typeof session.transcript === 'string'
+          ? JSON.parse(session.transcript || '[]')
+          : (session.transcript || []);
+      const url = await uploadToNotion(notes, transcript, config.notionPageId, config.notionToken);
       db.updateSession(sessionId, { notion_page_url: url });
       return { success: true, url };
     } catch (err) {
@@ -326,9 +519,9 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('notion:test', async (_e, token, dbId) => {
+  ipcMain.handle('notion:test', async (_e, token, pageId) => {
     try {
-      await testNotionConnection(token, dbId);
+      await testNotionConnection(pageId, token);
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
@@ -337,7 +530,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('models:list', () => getAvailableModels());
 
-  ipcMain.handle('api:test-google', async (_e, apiKey) => {
+  ipcMain.handle('api:test-google', async (_e, apiKey, _projectId) => {
     try {
       await testGoogleSTT(apiKey);
       return { success: true };
@@ -371,20 +564,36 @@ function registerIpcHandlers() {
     const config = getConfig();
     try {
       if (stage === 'transcription' || stage === 'all') {
-        const transcript = await transcribeAudio(session.audio_path, config.googleApiKey);
+        const transcript = await transcribeAudio(
+          session.audio_path,
+          config.googleApiKey,
+          undefined,
+          config.googleCloudProjectId,
+          config.googleCloudStorageBucket,
+          config.googleCloudStorageKeyPath
+        );
         db.updateSession(sessionId, { transcript: JSON.stringify(transcript) });
       }
       if (stage === 'notes' || stage === 'all') {
         const session2 = db.getSession(sessionId);
-        const transcript = JSON.parse(session2.transcript || '[]');
+        const transcript =
+          typeof session2.transcript === 'string'
+            ? JSON.parse(session2.transcript || '[]')
+            : (session2.transcript || []);
         const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey);
         db.updateSession(sessionId, { notes: JSON.stringify(notes), title: notes.title });
       }
       if (stage === 'notion') {
         const session3 = db.getSession(sessionId);
-        const notes = JSON.parse(session3.notes || '{}');
-        const transcript = JSON.parse(session3.transcript || '[]');
-        const url = await uploadToNotion(notes, transcript, config.notionDatabaseId, config.notionToken);
+        const notes =
+          typeof session3.notes === 'string'
+            ? JSON.parse(session3.notes || '{}')
+            : (session3.notes || {});
+        const transcript =
+          typeof session3.transcript === 'string'
+            ? JSON.parse(session3.transcript || '[]')
+            : (session3.transcript || []);
+        const url = await uploadToNotion(notes, transcript, config.notionPageId, config.notionToken);
         db.updateSession(sessionId, { notion_page_url: url, status: 'complete' });
         return { success: true, url };
       }
@@ -410,10 +619,37 @@ app.whenReady().then(async () => {
     try {
       const sessionId = new URL(request.url).hostname || '';
       const session = db.getSession(sessionId);
-      if (!session?.audio_path || !fs.existsSync(session.audio_path)) {
+      if (!session) {
+        logger.warn('meetmind-audio request for unknown session', { sessionId });
         return new Response(null, { status: 404 });
       }
-      return net.fetch(pathToFileURL(session.audio_path).toString());
+
+      let audioPath = session.audio_path;
+
+      // Fallback: if audio_path is missing or the file was moved, try to locate
+      // a recording file by sessionId in the standard recordings directory.
+      if (!audioPath || !fs.existsSync(audioPath)) {
+        const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+        const wavPath = path.join(recordingsDir, `${sessionId}.wav`);
+        const webmPath = path.join(recordingsDir, `${sessionId}.webm`);
+
+        if (fs.existsSync(wavPath)) {
+          audioPath = wavPath;
+        } else if (fs.existsSync(webmPath)) {
+          audioPath = webmPath;
+        }
+      }
+
+      if (!audioPath || !fs.existsSync(audioPath)) {
+        logger.warn('meetmind-audio file not found', {
+          sessionId,
+          audioPath: session.audio_path,
+        });
+        return new Response(null, { status: 404 });
+      }
+
+      logger.info('meetmind-audio streaming file', { sessionId, audioPath });
+      return net.fetch(pathToFileURL(audioPath).toString());
     } catch (err) {
       logger.error('meetmind-audio protocol error', err);
       return new Response(null, { status: 500 });

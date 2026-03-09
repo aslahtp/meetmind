@@ -123,6 +123,16 @@ The app will prompt you to enter your API keys in Settings. Fill in:
 5. Copy the **Database ID** from the URL: `notion.so/workspace/{DATABASE_ID}?v=…`
 6. Paste both into MeetMind Settings
 
+### GCS credentials for v2 BatchRecognize (optional)
+
+To use Speech-to-Text v2 **BatchRecognize** (long audio without chunking), audio must be in Google Cloud Storage. You need:
+
+- **Bucket** — MeetMind uploads the WAV here; Speech-to-Text reads it.
+- **Service account** — With **Storage Object Admin** (or Creator + Deleter) on that bucket; download its JSON key.
+- **Speech-to-Text service agent** — Must have **Storage Object Viewer** on the bucket (automatic when the bucket is in the same project).
+
+**Step-by-step:** See **[docs/GCS-SETUP.md](docs/GCS-SETUP.md)** for bucket creation, IAM roles, key download, and MeetMind Settings.
+
 ### System Audio (Stereo Mix)
 
 For system audio capture, Windows requires "Stereo Mix" to be enabled:

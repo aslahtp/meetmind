@@ -3,18 +3,18 @@ import { useApp } from '../app.jsx';
 
 const SENTIMENT_BADGE = {
   positive: 'badge-green',
-  neutral:  'badge-gray',
-  mixed:    'badge-yellow',
-  tense:    'badge-red',
+  neutral: 'badge-gray',
+  mixed: 'badge-yellow',
+  tense: 'badge-red',
 };
 
 const STATUS_BADGE = {
-  complete:     { cls: 'badge-green',  label: 'Complete'    },
-  recording:    { cls: 'badge-red',    label: 'Recording'   },
-  transcribing: { cls: 'badge-blue',   label: 'Transcribing'},
-  generating:   { cls: 'badge-blue',   label: 'Generating'  },
-  uploading:    { cls: 'badge-yellow', label: 'Uploading'   },
-  error:        { cls: 'badge-red',    label: 'Error'       },
+  complete: { cls: 'badge-green', label: 'Complete' },
+  recording: { cls: 'badge-red', label: 'Recording' },
+  transcribing: { cls: 'badge-blue', label: 'Transcribing' },
+  generating: { cls: 'badge-blue', label: 'Generating' },
+  uploading: { cls: 'badge-yellow', label: 'Uploading' },
+  error: { cls: 'badge-red', label: 'Error' },
 };
 
 function formatDate(isoString) {
@@ -53,8 +53,8 @@ function EmptyState({ onRecord }) {
     <div className="flex flex-col items-center justify-center h-full text-center px-8">
       <div className="w-16 h-16 rounded-2xl bg-[#212121] border border-[#333] flex items-center justify-center mb-5">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="1.5">
-          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/>
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8" />
         </svg>
       </div>
       <h2 className="text-lg font-semibold mb-2">No meetings yet</h2>
@@ -77,7 +77,7 @@ function sessionDisplayTitle(session) {
   return 'Untitled Meeting';
 }
 
-function SessionCard({ session, onClick }) {
+function SessionCard({ session, onClick, onDelete }) {
   const notes = session.notes;
   const sentimentClass = SENTIMENT_BADGE[notes?.sentiment] || 'badge-gray';
   const statusInfo = STATUS_BADGE[session.status] || { cls: 'badge-gray', label: session.status };
@@ -129,6 +129,19 @@ function SessionCard({ session, onClick }) {
           {session.status !== 'complete' && (
             <span className={statusInfo.cls}>{statusInfo.label}</span>
           )}
+          <div
+            role="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(session);
+            }}
+            className="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 text-[#666] hover:text-red-500 ml-1"
+            title="Delete session"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -141,7 +154,7 @@ function SessionCard({ session, onClick }) {
           {actionCount > 0 && (
             <span className="text-[#888] text-xs flex items-center gap-1">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                <polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
               </svg>
               {actionCount} action item{actionCount !== 1 ? 's' : ''}
             </span>
@@ -149,7 +162,7 @@ function SessionCard({ session, onClick }) {
           {session.notion_page_url && (
             <span className="text-green-700 text-xs flex items-center gap-1">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M4 4h16v16H4V4z"/>
+                <path d="M4 4h16v16H4V4z" />
               </svg>
               Synced to Notion
             </span>
@@ -167,6 +180,30 @@ function SessionCard({ session, onClick }) {
 
 export default function Dashboard({ onOpenSession }) {
   const { sessions, refreshSessions, startRecording, isRecording } = useApp();
+
+  const handleDelete = async (session) => {
+    if (window.confirm('Are you sure you want to delete this session? This cannot be undone.')) {
+      try {
+        await window.meetmind.sessions.delete(session.id);
+        refreshSessions();
+      } catch (err) {
+        window.alert('Failed to delete session: ' + err.message);
+      }
+    }
+  };
+
+  const handleUploadAudio = async () => {
+    try {
+      const result = await window.meetmind.recording.uploadFile();
+      if (result?.success) {
+        await refreshSessions();
+      } else if (result?.error && !result.cancelled) {
+        window.alert(result.error);
+      }
+    } catch (err) {
+      window.alert(err.message || 'Failed to import audio file.');
+    }
+  };
 
   useEffect(() => {
     refreshSessions();
@@ -194,9 +231,15 @@ export default function Dashboard({ onOpenSession }) {
             title="Refresh"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
+          </button>
+          <button
+            onClick={handleUploadAudio}
+            className="btn-ghost text-xs px-3 py-1.5"
+          >
+            Upload Audio
           </button>
           {!isRecording && (
             <button onClick={startRecording} className="btn-primary text-xs">
@@ -214,6 +257,7 @@ export default function Dashboard({ onOpenSession }) {
             key={session.id}
             session={session}
             onClick={() => onOpenSession(session)}
+            onDelete={handleDelete}
           />
         ))}
       </div>

@@ -8,43 +8,38 @@ const AVAILABLE_MODELS = [
   { id: 'gemini-3.1-pro-preview',label: 'Gemini 3.1 Pro (Experimental)'},
 ];
 
-const SYSTEM_PROMPT = `You are an expert meeting notes assistant inspired by Notion AI.
+const SYSTEM_PROMPT = `You are an expert meeting notes assistant.
 
-Given a meeting transcript (possibly with speaker labels), generate structured meeting notes in JSON format.
+Given a meeting transcript (possibly with speaker labels), generate structured meeting notes in JSON format that will be rendered as:
+- A top section called "Action Items & Next Steps" in todo/checklist form
+- Below that, several section headings (Key discussion areas) with bullet points under each heading
 
-Return ONLY valid JSON with this exact schema:
+Return ONLY valid JSON with this exact schema (no extra text, no markdown, no emojis):
 {
   "title": "Meeting title inferred from context",
-  "date": "ISO date string",
-  "duration": "estimated duration string",
-  "attendees": ["name or Speaker 1", "..."],
   "action_items": [
     {
-      "task": "Clear, specific task description",
-      "owner": "Person responsible (or 'Team' if unclear)",
-      "due": "Due date if mentioned, else null",
-      "priority": "high | medium | low"
+      "task": "todo-style task description with no emojis or markdown with mentioning of the task owner if possible",
     }
   ],
   "key_points": [
     {
-      "heading": "Short topic heading",
-      "summary": "2-3 sentence summary of what was discussed"
+      "heading": "Short, descriptive topic heading (no emojis)",
+      "summary": "Bullet-style lines describing this topic. Use plain text only, no emojis or markdown. To express multiple bullets under this heading, separate each bullet with a newline character (\\n)."
     }
   ],
-  "decisions": ["Decision made, stated clearly"],
-  "questions_unresolved": ["Open question that was not resolved"],
-  "next_meeting": "Next meeting info if mentioned, else null",
-  "sentiment": "positive | neutral | mixed | tense"
 }
 
 Rules:
-- Action items MUST come from explicit commitments, not inferences
-- Prioritize action_items by urgency — high if deadline mentioned
-- key_points should cover all major topics in order discussed
-- Be concise but complete — every important point must appear
-- If a speaker label is available, use it for owner attribution
-- Return ONLY the JSON object, no markdown, no explanation`;
+- Don't use speaker labels like "Speaker 1", "Speaker 2", etc. Instead, if you can find the speaker's name in the transcript, use it for owner attribution.
+- If a speaker's actual name is not available, use "Team" as the owner.
+- Action items MUST come from explicit commitments, not guesses.
+- Make action_items.task concise, and never include emojis, checkboxes, or markdown.
+- key_points.heading should be concise, human-readable section titles that can be used as headings in the UI and Notion.
+- key_points.summary should be written so that splitting on newlines (\\n) yields individual bullet lines. Each line must stand alone as a readable point. Do NOT include bullet characters (-, *, •) or emojis; just plain sentences.
+- Never include emojis anywhere in the JSON.
+- Be concise but complete — every important point must appear.
+- Return ONLY the JSON object, no markdown, no explanation.`;
 
 function transcriptToText(transcript) {
   if (!Array.isArray(transcript) || transcript.length === 0) {

@@ -32,6 +32,7 @@ function buildAmixFilter(systemDevice, micDevice) {
     '-f', 'dshow',
     '-thread_queue_size', '512',
     '-rtbufsize', '30485760',
+    '-audio_buffer_size', '80',
     '-i', `audio=${device}`,
   ];
 
@@ -40,8 +41,18 @@ function buildAmixFilter(systemDevice, micDevice) {
   if (systemDevice && micDevice) {
     inputs.push(...sysInput(systemDevice));
     inputs.push(...dshowInput(micDevice));
-    // normalize=0: keep each input at full volume (default normalize=1 halves each input)
-    filterParts.push('-filter_complex', 'amix=inputs=2:duration=shortest:normalize=0');
+    // asetpts=PTS-STARTPTS resets each input's timestamps to start at zero.
+    // Without this, dshow devices often have different start timestamps (e.g.
+    // 0.5 s apart) which can cause amix to output silence while waiting for
+    // alignment.
+    // duration=longest ensures output includes all audio even if one input stops.
+    // dropout_transition=0 prevents fade-out when one input ends before the other.
+    filterParts.push(
+      '-filter_complex',
+      '[0:a]asetpts=PTS-STARTPTS[s];[1:a]asetpts=PTS-STARTPTS[m];' +
+      '[s][m]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,volume=4[aout]',
+      '-map', '[aout]',
+    );
   } else if (systemDevice) {
     inputs.push(...sysInput(systemDevice));
   } else if (micDevice) {
@@ -50,8 +61,9 @@ function buildAmixFilter(systemDevice, micDevice) {
     throw new Error('No audio device specified');
   }
 
-  // loudnorm ensures consistent, audible output level regardless of input volume
-  const outputArgs = ['-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le'];
+  // Simple volume boost for single-input paths (no filter_complex conflict).
+  const afArgs = filterParts.length === 0 ? ['-af', 'volume=4'] : [];
+  const outputArgs = [...afArgs, '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le'];
 
   return { inputs, filterParts, outputArgs };
 }
@@ -176,12 +188,28 @@ function detectMicrophone(devices) {
   return devices.find((d) => !d.toLowerCase().includes('loopback') && !d.toLowerCase().includes('stereo mix')) || null;
 }
 
+/**
+ * Build FFmpeg args for recording a single device (used for device probing).
+ */
+function buildSingleDeviceArgs(device) {
+  const inputs = isWasapiLoopback(device)
+    ? ['-f', 'wasapi', '-thread_queue_size', '512', '-loopback', '-i', '']
+    : ['-f', 'dshow', '-thread_queue_size', '512', '-rtbufsize', '30485760',
+       '-audio_buffer_size', '80', '-i', `audio=${device}`];
+  return {
+    inputs,
+    outputArgs: ['-af', 'volume=1', '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le'],
+  };
+}
+
 module.exports = {
   buildAmixFilter,
+  buildSingleDeviceArgs,
   parseDeviceList,
   detectSystemLoopback,
   detectDshowLoopback,
   detectMicrophone,
+  isWasapiLoopback,
   WASAPI_LOOPBACK_ID,
   WASAPI_LOOPBACK_LABEL,
 };

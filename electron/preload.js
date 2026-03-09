@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('meetmind', {
     start: (sessionId) => ipcRenderer.invoke('recording:start', sessionId),
     stop: () => ipcRenderer.invoke('recording:stop'),
     listDevices: () => ipcRenderer.invoke('audio:list-devices'),
+    probeDevice: (device) => ipcRenderer.invoke('audio:probe-device', device),
+    uploadFile: () => ipcRenderer.invoke('audio:import-file'),
   },
 
   // Sessions
@@ -35,7 +37,7 @@ contextBridge.exposeInMainWorld('meetmind', {
 
   // API Tests
   api: {
-    testGoogle: (apiKey) => ipcRenderer.invoke('api:test-google', apiKey),
+    testGoogle: (apiKey, projectId) => ipcRenderer.invoke('api:test-google', apiKey, projectId),
     testGemini: (apiKey, modelId) => ipcRenderer.invoke('api:test-gemini', apiKey, modelId),
   },
 
@@ -43,6 +45,15 @@ contextBridge.exposeInMainWorld('meetmind', {
   processing: {
     run: (sessionId) => ipcRenderer.invoke('processing:run', sessionId),
     retry: (sessionId, stage) => ipcRenderer.invoke('processing:retry', sessionId, stage),
+  },
+
+  // System audio capture (main ↔ renderer)
+  capture: {
+    onStart: (callback) => { ipcRenderer.on('capture:start', () => callback()); },
+    onStop: (callback) => { ipcRenderer.on('capture:stop', () => callback()); },
+    sendStarted: () => ipcRenderer.send('capture:started'),
+    sendFailed: (error) => ipcRenderer.send('capture:failed', error),
+    sendAudioData: (buffer) => ipcRenderer.send('capture:audio-data', buffer),
   },
 
   // Event listeners

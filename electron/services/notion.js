@@ -10,10 +10,10 @@ function richText(text, options = {}) {
     type: 'text',
     text: { content: text.slice(0, 2000) },
     annotations: {
-      bold:          options.bold    || false,
-      italic:        options.italic  || false,
-      code:          options.code    || false,
-      color:         options.color   || 'default',
+      bold: options.bold || false,
+      italic: options.italic || false,
+      code: options.code || false,
+      color: options.color || 'default',
     },
   }];
 }
@@ -36,6 +36,17 @@ function bulletedBlock(text) {
 
 function todoBlock(text, checked = false) {
   return { object: 'block', type: 'to_do', to_do: { rich_text: richText(text), checked } };
+}
+
+function quoteBlock(text, options = {}) {
+  return {
+    object: 'block',
+    type: 'quote',
+    quote: {
+      rich_text: richText(text, options),
+      color: 'default',
+    },
+  };
 }
 
 function dividerBlock() {
@@ -82,93 +93,121 @@ function priorityBadge(priority) {
   return badges[priority] || '';
 }
 
-// ── Build full block list from notes ─────────────────────────────────────────
+// ── Duration helpers ────────────────────────────────────────────────────────────
+
+function getTranscriptDurationSeconds(transcript) {
+  if (!Array.isArray(transcript) || transcript.length === 0) return null;
+  let maxEnd = 0;
+  for (const seg of transcript) {
+    if (typeof seg?.endTime === 'number' && seg.endTime > maxEnd) {
+      maxEnd = seg.endTime;
+    }
+  }
+  return maxEnd || null;
+}
+
+function formatDuration(seconds) {
+  if (!seconds || !Number.isFinite(seconds)) return null;
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remMin = minutes % 60;
+    if (remMin > 0 && secs > 0) return `${hours}h ${remMin}min ${secs}s`;
+    if (remMin > 0) return `${hours}h ${remMin}min`;
+    if (secs > 0) return `${hours}h ${secs}s`;
+    return `${hours}h`;
+  }
+
+  if (minutes > 0 && secs > 0) return `${minutes}min ${secs}s`;
+  if (minutes > 0) return `${minutes}min`;
+  return `${secs}s`;
+}
+
+// ── Build page content ────────────────────────────────────────────────────────
 
 function buildBlocks(notes, transcript) {
   const blocks = [];
 
-  // ── Action Items ──────────────────────────────────────────────────────────
-  blocks.push(heading2Block('✅ Action Items'));
+  // ── Summary heading ───────────────────────────────────────────────────────
+  blocks.push(heading2Block('Summary'));
 
+  // Optional: quoted duration block directly under Summary heading
+  const durationSeconds =
+    (typeof notes?.duration_seconds === 'number' && notes.duration_seconds > 0)
+      ? notes.duration_seconds
+      : getTranscriptDurationSeconds(transcript);
+  const durationLabel = formatDuration(durationSeconds);
+  if (durationLabel) {
+    blocks.push(quoteBlock(`Duration: ${durationLabel}`, { bold: true, italic: true }));
+  }
+
+  // Action Items & Next Steps as todo (checklist) blocks
+  blocks.push(heading3Block('Action Items & Next Steps'));
   if (notes.action_items?.length > 0) {
     for (const item of notes.action_items) {
-      const badge = priorityBadge(item.priority);
-      const due   = item.due ? ` | Due: ${item.due}` : '';
+      const due = item.due ? ` (Due: ${item.due})` : '';
       const owner = item.owner ? ` — ${item.owner}` : '';
-      const label = `${item.task}${owner}${due} ${badge}`.trim();
-      blocks.push(todoBlock(label, false));
+      const label = `${item.task || ''}${owner}${due}`.trim();
+      if (label) blocks.push(todoBlock(label, false));
     }
   } else {
     blocks.push(paragraphBlock('No action items identified.'));
   }
 
-  blocks.push(dividerBlock());
-
-  // ── Key Points ─────────────────────────────────────────────────────────────
-  blocks.push(heading2Block('📌 Key Points'));
-
+  // Key points: each becomes a sub-heading with bullet lines beneath it
   if (notes.key_points?.length > 0) {
     for (const point of notes.key_points) {
-      blocks.push(toggleBlock(point.heading, [paragraphBlock(point.summary || '')]));
+      if (!point?.heading && !point?.summary) continue;
+      blocks.push(heading3Block(point.heading || 'Notes'));
+      const lines = (point.summary || '')
+        .split(/\r?\n+/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      for (const line of lines) {
+        blocks.push(bulletedBlock(line));
+      }
     }
-  } else {
-    blocks.push(paragraphBlock('No key points recorded.'));
   }
 
+  if (!notes.action_items?.length && !notes.key_points?.length) {
+    blocks.push(paragraphBlock('No summary available.'));
+  }
+
+  // ── Transcript heading (Toggle H2) ──────────────────────────────────────────
   blocks.push(dividerBlock());
 
-  // ── Decisions ──────────────────────────────────────────────────────────────
-  blocks.push(heading2Block('🔑 Decisions'));
-
-  if (notes.decisions?.length > 0) {
-    for (const d of notes.decisions) {
-      blocks.push(bulletedBlock(d));
-    }
-  } else {
-    blocks.push(paragraphBlock('No decisions recorded.'));
-  }
-
-  blocks.push(dividerBlock());
-
-  // ── Open Questions ─────────────────────────────────────────────────────────
-  blocks.push(heading2Block('❓ Open Questions'));
-
-  if (notes.questions_unresolved?.length > 0) {
-    for (const q of notes.questions_unresolved) {
-      blocks.push(bulletedBlock(q));
-    }
-  } else {
-    blocks.push(paragraphBlock('No open questions.'));
-  }
-
-  // ── Next Meeting ───────────────────────────────────────────────────────────
-  if (notes.next_meeting) {
-    blocks.push(dividerBlock());
-    blocks.push(calloutBlock(notes.next_meeting, '📅'));
-  }
-
-  // ── Transcript ─────────────────────────────────────────────────────────────
+  const transcriptBlocks = [];
   if (transcript?.length > 0) {
-    blocks.push(dividerBlock());
+    let currentChunk = '';
+    for (const seg of transcript) {
+      const line = `${seg.speaker || 'Speaker'}: ${seg.text}`;
 
-    const transcriptText = transcript
-      .map((seg) => {
-        const m = Math.floor((seg.startTime || 0) / 60).toString().padStart(2, '0');
-        const s = Math.floor((seg.startTime || 0) % 60).toString().padStart(2, '0');
-        return `[${m}:${s}] ${seg.speaker || 'Speaker'}: ${seg.text}`;
-      })
-      .join('\n');
-
-    // Split transcript into 2000-char chunks for code blocks
-    const transcriptChunks = [];
-    for (let i = 0; i < transcriptText.length; i += 1900) {
-      transcriptChunks.push(transcriptText.slice(i, i + 1900));
+      if (currentChunk.length + line.length > 1900) {
+        if (currentChunk) transcriptBlocks.push(paragraphBlock(currentChunk.trim()));
+        currentChunk = line + '\n';
+      } else {
+        currentChunk += line + '\n';
+      }
     }
-
-    const transcriptChildren = transcriptChunks.map((chunk) => codeBlock(chunk));
-
-    blocks.push(toggleBlock('📝 Full Transcript (click to expand)', transcriptChildren));
+    if (currentChunk) {
+      transcriptBlocks.push(paragraphBlock(currentChunk.trim()));
+    }
+  } else {
+    transcriptBlocks.push(paragraphBlock('No transcript available.'));
   }
+
+  blocks.push({
+    object: 'block',
+    type: 'heading_2',
+    heading_2: {
+      rich_text: richText('Transcript'),
+      is_toggleable: true,
+      children: transcriptBlocks.slice(0, NOTION_BLOCK_LIMIT),
+    },
+  });
 
   return blocks;
 }
@@ -185,88 +224,114 @@ async function appendBlocks(notion, pageId, blocks) {
   }
 }
 
-// ── Notion database page properties ──────────────────────────────────────────
-// Only set properties that exist in the database schema (user DBs vary).
+// ── Detect whether an ID belongs to a page or a database ─────────────────────
 
-function buildPageProperties(notes, schema) {
-  const names = schema.names || [];
-  const titleKey = schema.titlePropertyName || 'Name';
-  const has = (name) => names.includes(name);
-  const props = {};
-
-  const dateStr = notes.date
-    ? new Date(notes.date).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
-  const titleText = `${notes.title || 'Meeting Notes'} — ${dateStr}`;
-
-  props[titleKey] = { title: [{ text: { content: titleText.slice(0, 2000) } }] };
-  if (has('Date')) props['Date'] = { date: { start: dateStr } };
-  if (has('Attendees')) {
-    const attendees = (notes.attendees || []).map((name) => ({ name: String(name).slice(0, 100) })).slice(0, 10);
-    props['Attendees'] = { multi_select: attendees };
-  }
-  if (has('Sentiment')) props['Sentiment'] = { select: { name: String(notes.sentiment || 'neutral').slice(0, 100) } };
-  if (has('Duration')) props['Duration'] = { rich_text: [{ text: { content: String(notes.duration || '').slice(0, 2000) } }] };
-  const statusProp = schema.properties?.['Status'];
-  if (statusProp) {
-    if (statusProp.type === 'status') {
-      props['Status'] = { status: { name: 'Completed' } };
-    } else if (statusProp.type === 'select') {
-      props['Status'] = { select: { name: 'Completed' } };
+async function detectParentType(notion, id) {
+  // Try page first; if Notion says it's a database, fall back to databases.retrieve
+  try {
+    await notion.pages.retrieve({ page_id: id });
+    return 'page';
+  } catch (err) {
+    const msg = err?.message || '';
+    if (msg.includes('database') || err?.code === 'object_not_found') {
+      try {
+        await notion.databases.retrieve({ database_id: id });
+        return 'database';
+      } catch {
+        // rethrow original error so the user sees a useful message
+      }
     }
+    throw err;
   }
-
-  return props;
 }
 
-function getDatabaseSchema(notion, databaseId) {
-  return notion.databases.retrieve({ database_id: databaseId }).then((db) => {
-    const properties = db.properties || {};
-    const names = Object.keys(properties);
-    const titleEntry = Object.entries(properties).find(([, p]) => p.type === 'title');
-    const titlePropertyName = titleEntry ? titleEntry[0] : 'Name';
-    return { names, titlePropertyName, properties };
-  });
+// Find the title property key in a database schema (varies by database)
+async function getDatabaseTitleKey(notion, databaseId) {
+  const db = await notion.databases.retrieve({ database_id: databaseId });
+  for (const [key, prop] of Object.entries(db.properties || {})) {
+    if (prop.type === 'title') return key;
+  }
+  return 'Name'; // sensible default
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-async function uploadToNotion(notes, transcript, databaseId, notionToken) {
+async function uploadToNotion(notes, transcript, parentId, notionToken) {
   if (!notionToken) throw new Error('Notion token is required');
-  if (!databaseId) throw new Error('Notion database ID is required');
+  if (!parentId) throw new Error('Notion parent page/database ID is required. Paste it from the Notion URL into Settings.');
 
   const notion = new Client({ auth: notionToken });
 
-  logger.info('Uploading to Notion', { databaseId, title: notes.title });
+  const meetingTitle = (notes.title || 'Meeting Notes').slice(0, 1990);
 
-  const schema = await getDatabaseSchema(notion, databaseId);
-  const properties = buildPageProperties(notes, schema);
+  // Store the current time as a timezone-aware ISO string so Notion renders
+  // it as a live relative date mention ("Today at 3:30 PM" → "Yesterday" →
+  // "Mar 9") every time the page is viewed — not frozen at upload time.
+  const now = new Date();
+  const tzOffset = -now.getTimezoneOffset();
+  const tzSign = tzOffset >= 0 ? '+' : '-';
+  const tzHH = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0');
+  const tzMM = String(Math.abs(tzOffset) % 60).padStart(2, '0');
+  const pad = (n) => String(n).padStart(2, '0');
+  const localIso =
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+    `T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}` +
+    `${tzSign}${tzHH}:${tzMM}`;
 
-  const page = await notion.pages.create({
-    parent: { database_id: databaseId },
-    properties,
-  });
+  const titleRichText = [
+    {
+      type: 'mention',
+      mention: {
+        type: 'date',
+        date: { start: localIso },
+      },
+    },
+    {
+      type: 'text',
+      text: { content: ` — ${meetingTitle}` },
+    },
+  ];
 
+  logger.info('Uploading to Notion', { parentId, title: meetingTitle });
+
+  const parentType = await detectParentType(notion, parentId);
+  logger.info('Notion parent type detected', { parentType });
+
+  let pagePayload;
+  if (parentType === 'database') {
+    const titleKey = await getDatabaseTitleKey(notion, parentId);
+    pagePayload = {
+      parent: { database_id: parentId },
+      properties: {
+        [titleKey]: { title: titleRichText },
+      },
+    };
+  } else {
+    pagePayload = {
+      parent: { page_id: parentId },
+      properties: {
+        title: titleRichText,
+      },
+    };
+  }
+
+  const page = await notion.pages.create(pagePayload);
   const pageId = page.id;
   logger.info('Notion page created', { pageId, url: page.url });
 
-  // Build and append content blocks
   const blocks = buildBlocks(notes, transcript);
   await appendBlocks(notion, pageId, blocks);
 
   logger.info('Notion upload complete', { pageId, blockCount: blocks.length });
-
   return page.url;
 }
 
-async function testNotionConnection(notionToken, databaseId) {
+async function testNotionConnection(parentId, notionToken) {
   if (!notionToken) throw new Error('Notion token is required');
-
   const notion = new Client({ auth: notionToken });
-
-  // Try to retrieve the database to verify access
-  if (databaseId) {
-    await notion.databases.retrieve({ database_id: databaseId });
+  if (parentId) {
+    const type = await detectParentType(notion, parentId);
+    logger.info('Notion connection test passed', { parentId, type });
   } else {
     await notion.users.me();
   }

@@ -5,6 +5,18 @@ const schema = {
     type: 'string',
     default: '',
   },
+  googleCloudProjectId: {
+    type: 'string',
+    default: '',
+  },
+  googleCloudStorageBucket: {
+    type: 'string',
+    default: '',
+  },
+  googleCloudStorageKeyPath: {
+    type: 'string',
+    default: '',
+  },
   geminiApiKey: {
     type: 'string',
     default: '',
@@ -14,6 +26,10 @@ const schema = {
     default: '',
   },
   notionDatabaseId: {
+    type: 'string',
+    default: '',
+  },
+  notionPageId: {
     type: 'string',
     default: '',
   },
@@ -59,11 +75,20 @@ function getConfig() {
     store.set('selectedModel', selectedModel);
   }
 
+  // Migration: if systemAudioDevice was saved as the WASAPI virtual ID but this
+  // FFmpeg build doesn't support it, recorder.js will fall back automatically on
+  // the next startRecording call and persist the real device. No action needed here
+  // — the value is just returned as-is so the fallback path can run.
+
   return {
-    googleApiKey:     store.get('googleApiKey'),
-    geminiApiKey:     store.get('geminiApiKey'),
+    googleApiKey:          store.get('googleApiKey'),
+    googleCloudProjectId:     store.get('googleCloudProjectId') || '',
+    googleCloudStorageBucket:  store.get('googleCloudStorageBucket') || '',
+    googleCloudStorageKeyPath: store.get('googleCloudStorageKeyPath') || '',
+    geminiApiKey:              store.get('geminiApiKey'),
     notionToken:      store.get('notionToken'),
-    notionDatabaseId: store.get('notionDatabaseId'),
+    notionDatabaseId: store.get('notionDatabaseId'), // kept for migration
+    notionPageId:     store.get('notionPageId') || store.get('notionDatabaseId') || '',
     selectedModel:    selectedModel || DEFAULT_GEMINI_MODEL,
     systemAudioDevice: store.get('systemAudioDevice'),
     micDevice:        store.get('micDevice'),
