@@ -38,6 +38,12 @@
     "vite": "^6.0.5"
   },
   "build": {
-    "extends": null
+    "extends": null,
+    "files": [
+      "electron/**",
+      "dist/renderer/**",
+      "assets/**",
+      "package.json"
+    ]
   }
 }

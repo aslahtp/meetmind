@@ -16,6 +16,20 @@ const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// Ensure a single running instance (prevents duplicate windows/tray icons)
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 // Must be called before app.whenReady() to allow media playback from meetmind-audio://
 protocol.registerSchemesAsPrivileged([{
   scheme: 'meetmind-audio',

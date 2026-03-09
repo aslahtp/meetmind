@@ -1,8 +1,6 @@
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
-const { spawn } = require('child_process');
-const { validateFfmpegExists } = require('../audio/ffmpeg-path');
 const logger = require('../utils/logger');
 
 const SAMPLE_RATE = 16000;
@@ -10,6 +8,9 @@ const SAMPLE_RATE = 16000;
 const V2_MAX_SYNC_SECONDS = 60;
 const CHUNK_DURATION_SECONDS = 55;
 const OVERLAP_SECONDS = 5;
+// v1 longrunningrecognize inline limit: ~10 MB request body.
+// 160 s * 16000 Hz * 2 bytes = 5.12 MB raw → ~6.8 MB base64 — safely under the limit.
+const V1_MAX_INLINE_SECONDS = 160;
 const BYTES_PER_SAMPLE = 2; // 16-bit PCM
 const WAV_HEADER_BYTES = 44;
 const GCS_TEMP_PREFIX = 'meetmind-temp/';
@@ -214,13 +215,12 @@ async function recognizeChunkV2(base64Audio, apiKey, projectId) {
 
   const body = {
     config: {
-      explicitDecodingConfig: {
-        encoding: 'LINEAR16',
-        sampleRateHertz: SAMPLE_RATE,
-        audioChannelCount: 1,
-      },
+      // Each chunk is a full WAV file (with RIFF/fmt/data headers), so
+      // autoDecodingConfig correctly reads the format instead of relying on
+      // hardcoded values that could mismatch and cause hallucinations.
+      autoDecodingConfig: {},
       model: 'chirp_3',
-      languageCodes: ['en-US'],
+      languageCodes: ['en-US', 'ml-IN'],
       features: {
         enableWordTimeOffsets: true,
         enableAutomaticPunctuation: true,
@@ -247,74 +247,25 @@ function normalizeKeyPath(keyFilePath) {
   return s ? path.resolve(s) : null;
 }
 
-async function convertWavToFlac(wavPath) {
-  const ffmpegPath = validateFfmpegExists();
-  const dir = path.dirname(wavPath);
-  const base = path.basename(wavPath, path.extname(wavPath));
-  const flacPath = path.join(dir, `${base}.flac`);
-
-  return new Promise((resolve, reject) => {
-    const args = [
-      '-hide_banner',
-      '-y',
-      '-i',
-      wavPath,
-      '-vn',
-      '-acodec',
-      'flac',
-      flacPath,
-    ];
-
-    logger.info('Converting wav to flac for GCS', { wavPath, flacPath });
-    const proc = spawn(ffmpegPath, args);
-    let stderr = '';
-    proc.stderr.on('data', (d) => {
-      stderr += d.toString();
-    });
-    proc.on('close', (code) => {
-      if (code === 0 && fs.existsSync(flacPath)) {
-        logger.info('Wav→flac conversion complete', { flacPath });
-        resolve(flacPath);
-      } else {
-        reject(
-          new Error(
-            `FFmpeg wav→flac failed (code ${code}): ${stderr.slice(-500)}`
-          )
-        );
-      }
-    });
-    proc.on('error', (err) => reject(err));
-    setTimeout(() => {
-      if (!proc.killed) proc.kill();
-    }, 120000);
-  });
-}
-
 async function uploadWavToGcs(wavFilePath, bucketName, keyFilePath) {
   const { Storage } = require('@google-cloud/storage');
   const keyPath = normalizeKeyPath(keyFilePath);
   const options = keyPath ? { keyFilename: keyPath } : {};
   const storage = new Storage(options);
   const bucket = storage.bucket(bucketName.trim());
-  const objectName = `${GCS_TEMP_PREFIX}transcribe-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.flac`;
+  const objectName = `${GCS_TEMP_PREFIX}transcribe-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.wav`;
   const gsUri = `gs://${bucketName.trim()}/${objectName}`;
-  const flacPath = await convertWavToFlac(wavFilePath);
 
-  logger.info('GCS upload started', {
+  logger.info('GCS upload started (WAV/LINEAR16)', {
     bucket: bucketName.trim(),
     objectName,
     wavFilePath,
-    flacPath,
   });
-  try {
-    await bucket.upload(flacPath, {
-      destination: objectName,
-      metadata: { contentType: 'audio/flac' },
-    });
-    logger.info('GCS upload completed', { gsUri });
-  } finally {
-    fs.unlink(flacPath, () => { });
-  }
+  await bucket.upload(wavFilePath, {
+    destination: objectName,
+    metadata: { contentType: 'audio/wav' },
+  });
+  logger.info('GCS upload completed', { gsUri });
   return gsUri;
 }
 
@@ -347,16 +298,17 @@ async function batchRecognizeV2(projectId, accessToken, gcsUri) {
 
   const body = {
     config: {
+      // WAV is a self-describing container (headers carry sample rate, channels,
+      // encoding). autoDecodingConfig lets the API read the WAV headers directly
+      // rather than trusting a hardcoded declaration, which avoids hallucinations
+      // caused by any mismatch between declared and actual audio properties.
       autoDecodingConfig: {},
       model: 'chirp_3',
-      languageCodes: ['en-US'],
+      languageCodes: ['en-US', 'ml-IN'],
       features: {
-        enableWordTimeOffsets: false, // Disabling because it enforces a 20-minute max on BatchRecognize
+        enableWordTimeOffsets: false, // word timestamps enforce a 20-min cap on BatchRecognize
         enableAutomaticPunctuation: true,
-        diarizationConfig: {
-          minSpeakerCount: 2,
-          maxSpeakerCount: 6,
-        },
+        // diarizationConfig is not supported by chirp_3 BatchRecognize
       },
     },
     files: [{ uri: gcsUri }],
@@ -375,7 +327,7 @@ async function batchRecognizeV2(projectId, accessToken, gcsUri) {
   return response.name;
 }
 
-async function pollOperationV2(operationName, accessToken, maxAttempts = 120) {
+async function pollOperationV2(operationName, accessToken, maxAttempts = 300) {
   const pollUrl = `${STT_V2_ENDPOINT}/v2/${operationName}`;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await sleep(3000);
@@ -389,7 +341,7 @@ async function pollOperationV2(operationName, accessToken, maxAttempts = 120) {
     }
     logger.debug('BatchRecognize operation still running', { attempt, operationName });
   }
-  throw new Error('BatchRecognize operation timed out');
+  throw new Error('BatchRecognize operation timed out after 15 minutes');
 }
 
 // ── Speech-to-Text v1 (long-running, fallback when no project ID) ──────────────
@@ -402,7 +354,8 @@ async function recognizeChunkV1(base64Audio, apiKey) {
       encoding: 'LINEAR16',
       sampleRateHertz: SAMPLE_RATE,
       languageCode: 'en-US',
-      enableWordTimeOffsets: true,
+      alternativeLanguageCodes: ['ml-IN'],
+      enableWordTimeOffsets: false,
       enableAutomaticPunctuation: true,
       model: 'latest_long',
       diarizationConfig: {
@@ -428,7 +381,7 @@ async function recognizeChunkV1(base64Audio, apiKey) {
   return pollOperation(operationName, apiKey);
 }
 
-async function pollOperation(operationName, apiKey, maxAttempts = 60) {
+async function pollOperation(operationName, apiKey, maxAttempts = 180) {
   const pollUrl = `https://speech.googleapis.com/v1/operations/${operationName}?key=${apiKey}`;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -447,7 +400,7 @@ async function pollOperation(operationName, apiKey, maxAttempts = 60) {
     logger.debug('STT operation still running', { attempt, operationName });
   }
 
-  throw new Error('STT operation timed out after 5 minutes');
+  throw new Error('STT operation timed out after 15 minutes');
 }
 
 // ── Parse STT response → structured transcript ────────────────────────────────
@@ -629,9 +582,11 @@ async function transcribeAudio(wavFilePath, apiKey, onProgress, projectId, gcsBu
     ? (base64) => recognizeChunkV2(base64, apiKey, projectId.trim())
     : (base64) => recognizeChunkV1(base64, apiKey);
 
-  const singleRequest =
-    !useV2 ||
-    durationSeconds <= V2_MAX_SYNC_SECONDS;
+  // v1 inline limit: ~10 MB request body (~160 s of 16 kHz mono 16-bit WAV).
+  // v2 sync limit: 60 s per request.
+  // Both paths chunk when the audio exceeds the respective limit.
+  const maxSingleSecs = useV2 ? V2_MAX_SYNC_SECONDS : V1_MAX_INLINE_SECONDS;
+  const singleRequest = durationSeconds <= maxSingleSecs;
 
   if (singleRequest) {
     const base64 = fs.readFileSync(wavFilePath).toString('base64');
@@ -640,7 +595,8 @@ async function transcribeAudio(wavFilePath, apiKey, onProgress, projectId, gcsBu
     return parseTranscriptResponse(response);
   }
 
-  // v2 only (no bucket): audio > 1 min — chunk (sync recognize limit)
+  // Both v1 and v2 (no bucket): chunk into CHUNK_DURATION_SECONDS slices.
+  // v1 uses longrunningrecognize per chunk; v2 uses chirp_3 sync recognize per chunk.
   const chunks = [];
   let start = 0;
   while (start < durationSeconds) {
@@ -649,7 +605,7 @@ async function transcribeAudio(wavFilePath, apiKey, onProgress, projectId, gcsBu
     start += CHUNK_DURATION_SECONDS - OVERLAP_SECONDS;
   }
 
-  logger.info('Splitting audio into chunks (v2 sync limit)', { chunkCount: chunks.length });
+  logger.info('Splitting audio into chunks', { chunkCount: chunks.length, useV2 });
 
   const segmentGroups = [];
   for (let i = 0; i < chunks.length; i++) {
