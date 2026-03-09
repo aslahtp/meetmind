@@ -292,7 +292,10 @@ async function deleteGcsObject(gsUri, keyFilePath) {
 const STT_V2_LOCATION = 'us';
 const STT_V2_ENDPOINT = `https://${STT_V2_LOCATION}-speech.googleapis.com`;
 
-async function batchRecognizeV2(projectId, accessToken, gcsUri) {
+// BatchRecognize enforces a 20-minute limit when enableWordTimeOffsets is true.
+const BATCH_WORD_OFFSET_MAX_SECONDS = 20 * 60;
+
+async function batchRecognizeV2(projectId, accessToken, gcsUri, enableWordOffsets) {
   const recognizer = `projects/${encodeURIComponent(projectId)}/locations/${STT_V2_LOCATION}/recognizers/_`;
   const url = `${STT_V2_ENDPOINT}/v2/${recognizer}:batchRecognize`;
 
@@ -306,7 +309,10 @@ async function batchRecognizeV2(projectId, accessToken, gcsUri) {
       model: 'chirp_3',
       languageCodes: ['en-US', 'ml-IN'],
       features: {
-        enableWordTimeOffsets: false, // word timestamps enforce a 20-min cap on BatchRecognize
+        // Word offsets allow proper speaker-turn segmentation but enforce a
+        // 20-minute file limit. For longer recordings we disable them and rely
+        // on the sentence-splitter in parseTranscriptResponse instead.
+        enableWordTimeOffsets: enableWordOffsets,
         enableAutomaticPunctuation: true,
         // diarizationConfig is not supported by chirp_3 BatchRecognize
       },
@@ -406,6 +412,55 @@ async function pollOperation(operationName, apiKey, maxAttempts = 180) {
 // ── Parse STT response → structured transcript ────────────────────────────────
 // Supports both v1 (startTime/endTime, speakerTag) and v2 (startOffset/endOffset, speakerLabel).
 
+/**
+ * When a result has no word-level timestamps (e.g. BatchRecognize returned a
+ * plain transcript blob), split the text into sentence-sized segments and
+ * distribute timestamps proportionally to character count.
+ * Handles both Latin punctuation (. ? !) and the Indic danda (।).
+ */
+function splitTextIntoSegments(text, startTime, endTime) {
+  const MAX_CHARS = 280;
+  if (!text) return [];
+  if (text.length <= MAX_CHARS) {
+    return [{ speaker: 'Speaker 1', text, startTime, endTime }];
+  }
+
+  const secPerChar = (endTime - startTime) / Math.max(text.length, 1);
+  // Split after sentence-ending punctuation followed by whitespace
+  const sentences = text.split(/(?<=[.?!।])\s+/u).filter(Boolean);
+
+  const segments = [];
+  let buffer = '';
+  let bufferCharStart = 0;
+  let charPos = 0;
+
+  for (const sentence of sentences) {
+    const candidate = buffer ? `${buffer} ${sentence}` : sentence;
+    if (buffer && candidate.length > MAX_CHARS) {
+      segments.push({
+        speaker: 'Speaker 1',
+        text: buffer.trim(),
+        startTime: startTime + bufferCharStart * secPerChar,
+        endTime: startTime + charPos * secPerChar,
+      });
+      bufferCharStart = charPos;
+      buffer = sentence;
+    } else {
+      buffer = candidate;
+    }
+    charPos += sentence.length + 1; // +1 for the space/split char
+  }
+  if (buffer) {
+    segments.push({
+      speaker: 'Speaker 1',
+      text: buffer.trim(),
+      startTime: startTime + bufferCharStart * secPerChar,
+      endTime,
+    });
+  }
+  return segments.length ? segments : [{ speaker: 'Speaker 1', text, startTime, endTime }];
+}
+
 function parseTranscriptResponse(response, timeOffsetSeconds = 0) {
   const results = response?.results || [];
   const segments = [];
@@ -416,12 +471,10 @@ function parseTranscriptResponse(response, timeOffsetSeconds = 0) {
 
     const words = alternative.words || [];
     if (words.length === 0) {
-      segments.push({
-        speaker: 'Speaker 1',
-        text: alternative.transcript || '',
-        startTime: timeOffsetSeconds,
-        endTime: timeOffsetSeconds,
-      });
+      // No word timestamps — split by sentence so the transcript viewer shows
+      // multiple readable segments instead of one giant blob.
+      const text = alternative.transcript || '';
+      segments.push(...splitTextIntoSegments(text, timeOffsetSeconds, timeOffsetSeconds));
       continue;
     }
 
@@ -553,9 +606,14 @@ async function transcribeAudio(wavFilePath, apiKey, onProgress, projectId, gcsBu
     if (!keyPath) throw new Error('A service account key file is required for v2 BatchRecognize (API keys are not supported by Speech-to-Text v2). Set "Service account key path" in Settings.');
     const accessToken = await getServiceAccountAccessToken(keyPath);
     const gcsUri = await uploadWavToGcs(wavFilePath, gcsBucket, gcsKeyPath);
+
+    // Word-level timestamps are only supported by BatchRecognize for files ≤ 20 min.
+    // For longer recordings we disable them and the sentence-splitter handles display.
+    const enableWordOffsets = durationSeconds <= BATCH_WORD_OFFSET_MAX_SECONDS;
+    logger.info('BatchRecognize started', { gcsUri, enableWordOffsets, durationSeconds: Math.round(durationSeconds) });
+
     try {
-      logger.info('BatchRecognize started', { gcsUri });
-      const operationName = await batchRecognizeV2(projectId.trim(), accessToken, gcsUri);
+      const operationName = await batchRecognizeV2(projectId.trim(), accessToken, gcsUri, enableWordOffsets);
       logger.info('BatchRecognize accepted, polling operation', { operationName });
       onProgress?.(0.2);
       const batchResponse = await pollOperationV2(operationName, accessToken);
@@ -564,7 +622,13 @@ async function transcribeAudio(wavFilePath, apiKey, onProgress, projectId, gcsBu
       const resultsMap = batchResponse?.results || {};
       const firstUri = Object.keys(resultsMap)[0];
       const fileResult = firstUri ? resultsMap[firstUri] : null;
-      const transcript = fileResult?.inlineResult?.transcript;
+
+      // Surface per-file errors returned inside the results map
+      if (fileResult?.error) {
+        throw new Error(`BatchRecognize file error: ${fileResult.error.message}`);
+      }
+
+      const transcript = fileResult?.inlineResult?.transcript ?? fileResult?.transcript;
       if (!transcript || !transcript.results) {
         throw new Error('BatchRecognize returned no transcript');
       }

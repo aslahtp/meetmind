@@ -14,6 +14,8 @@ Given a meeting transcript (possibly with speaker labels), generate structured m
 - A top section called "Action Items & Next Steps" in todo/checklist form
 - Below that, several section headings (Key discussion areas) with bullet points under each heading
 
+The transcript may contain a mix of English and Malayalam (or other languages). Understand all languages present and generate the output entirely in English regardless of the transcript language.
+
 Return ONLY valid JSON with this exact schema (no extra text, no markdown, no emojis):
 {
   "title": "Meeting title inferred from context",
@@ -31,6 +33,7 @@ Return ONLY valid JSON with this exact schema (no extra text, no markdown, no em
 }
 
 Rules:
+- The transcript may be in Malayalam, English, or a mix of both. Always generate the JSON output in English.
 - Don't use speaker labels like "Speaker 1", "Speaker 2", etc. Instead, if you can find the speaker's name in the transcript, use it for owner attribution.
 - If a speaker's actual name is not available, use "Team" as the owner.
 - Action items MUST come from explicit commitments, not guesses.
