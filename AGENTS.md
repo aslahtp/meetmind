@@ -7,4 +7,5 @@
 - Electron packaging must include `dist/renderer/**` in `package.json` `build.files`; otherwise the installed app can open a blank window because `dist` is gitignored.
 - Prevent duplicate running instances/tray icons by using `app.requestSingleInstanceLock()` in `electron/main.js` and focusing the existing window on `second-instance`.
 - Don’t commit bundled FFmpeg `.exe` binaries over GitHub’s 100MB limit; keep them ignored or manage them via Git LFS / external download.
+- Meetings commonly include both English and Malayalam, so transcription and language models should support code-switching between these languages.
 

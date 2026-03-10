@@ -7,10 +7,9 @@ const { getConfig, setConfig, setMultipleConfig, isFirstRun } = require('./utils
 const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
 const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav } = require('./audio/recorder');
-const { transcribeAudio, getWavDurationSeconds } = require('./services/transcription');
+const { transcribeAudio, getWavDurationSeconds, testGoogleSTT, testAssemblyAI } = require('./services/transcription');
 const { generateMeetingNotes, getAvailableModels } = require('./services/gemini');
 const { uploadToNotion, testNotionConnection } = require('./services/notion');
-const { testGoogleSTT } = require('./services/transcription');
 const { testGeminiConnection } = require('./services/gemini');
 const db = require('./db/sessions');
 
@@ -350,7 +349,10 @@ async function runProcessingPipeline(sessionId, audioPath) {
       onTranscriptionProgress,
       config.googleCloudProjectId,
       config.googleCloudStorageBucket,
-      config.googleCloudStorageKeyPath
+      config.googleCloudStorageKeyPath,
+      config.sttService,
+      config.assemblyAiApiKey,
+      config.assemblyAiPrompt
     );
 
     // transcribeAudio throws for silent files; if we get here but with empty results,
@@ -553,6 +555,15 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('api:test-assemblyai', async (_e, apiKey) => {
+    try {
+      await testAssemblyAI(apiKey);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('api:test-gemini', async (_e, apiKey, modelId) => {
     try {
       await testGeminiConnection(apiKey, modelId);
@@ -584,7 +595,10 @@ function registerIpcHandlers() {
           undefined,
           config.googleCloudProjectId,
           config.googleCloudStorageBucket,
-          config.googleCloudStorageKeyPath
+          config.googleCloudStorageKeyPath,
+          config.sttService,
+          config.assemblyAiApiKey,
+          config.assemblyAiPrompt
         );
         db.updateSession(sessionId, { transcript: JSON.stringify(transcript) });
       }

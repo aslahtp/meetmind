@@ -145,6 +145,18 @@ const ONBOARDING_STEPS = [
     link: 'https://console.cloud.google.com/apis/library/speech.googleapis.com',
   },
   {
+    id: 'assemblyai',
+    title: 'AssemblyAI',
+    description: 'Alternative STT with strong multilingual and code-switching support.',
+    steps: [
+      'Go to dashboard.assemblyai.com',
+      'Create an account or sign in',
+      'Copy your API key from the dashboard',
+      'Paste it into the AssemblyAI API Key field in Settings',
+    ],
+    link: 'https://www.assemblyai.com',
+  },
+  {
     id: 'gemini',
     title: 'Google Gemini API',
     description: 'Powers AI note generation. Free tier available.',
@@ -179,10 +191,13 @@ export default function Settings({ onSave }) {
     notionToken:           '',
     notionDatabaseId:      '',
     notionPageId:          '',
-        selectedModel:     'gemini-3.1-flash-lite-preview',
-        systemAudioDevice: '',
-        micDevice:         '',
-        autoLaunch:        true,
+    selectedModel:     'gemini-3.1-flash-lite-preview',
+    systemAudioDevice: '',
+    micDevice:         '',
+    autoLaunch:        true,
+    sttService:        'google',
+    assemblyAiApiKey:  '',
+    assemblyAiPrompt:  '',
   });
   const [models, setModels] = useState([]);
   const [devices, setDevices] = useState({ all: [], system: null, mic: null });
@@ -202,11 +217,14 @@ export default function Settings({ onSave }) {
         geminiApiKey:              config.geminiApiKey              || '',
         notionToken:           config.notionToken           || '',
         notionDatabaseId:      config.notionDatabaseId      || '',
-        notionPageId:         config.notionPageId          || '',
-        selectedModel:     config.selectedModel     || 'gemini-3.1-flash-lite-preview',
-        systemAudioDevice: config.systemAudioDevice || '',
-        micDevice:         config.micDevice         || '',
-        autoLaunch:        config.autoLaunch !== false,
+        notionPageId:          config.notionPageId          || '',
+        selectedModel:         config.selectedModel         || 'gemini-3.1-flash-lite-preview',
+        systemAudioDevice:     config.systemAudioDevice     || '',
+        micDevice:             config.micDevice             || '',
+        autoLaunch:            config.autoLaunch !== false,
+        sttService:            config.sttService || 'google',
+        assemblyAiApiKey:      config.assemblyAiApiKey || '',
+        assemblyAiPrompt:      config.assemblyAiPrompt || '',
       });
     }
   }, [config]);
@@ -312,60 +330,135 @@ export default function Settings({ onSave }) {
           </div>
 
           <Field
-            label="Google Cloud API Key"
-            hint="Used for Speech-to-Text transcription"
+            label="Transcription Service"
+            hint="Choose which Speech-to-Text provider to use for transcription."
           >
-            <PasswordInput
-              value={form.googleApiKey}
-              onChange={update('googleApiKey')}
-              placeholder="AIzaSy…"
-            />
-            <TestButton
-              onTest={async () => {
-                const r = await window.meetmind.api.testGoogle(form.googleApiKey, form.googleCloudProjectId);
-                if (!r.success) throw new Error(r.error);
-              }}
-            />
+            <select
+              value={form.sttService}
+              onChange={update('sttService')}
+              className="input"
+            >
+              <option value="google">Google Speech-to-Text</option>
+              <option value="assemblyai">AssemblyAI</option>
+            </select>
           </Field>
 
-          <Field
-            label="Google Cloud Project ID"
-            hint="Required for Speech-to-Text v2. Your GCP project ID from Cloud Console."
-          >
-            <input
-              type="text"
-              value={form.googleCloudProjectId}
-              onChange={update('googleCloudProjectId')}
-              placeholder="my-project-id"
-              className="input"
-            />
-          </Field>
+          {form.sttService === 'google' && (
+            <div className="space-y-4 p-3 rounded-lg border border-[#333] bg-[rgb(var(--color-tertiary))]">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-[#d0d0d0]">Google Speech-to-Text settings</p>
+                <p className="text-xs text-[#aaa]">
+                  Uses Google Cloud Speech-to-Text with support for long meetings and English/Malayalam recognition.
+                  Configure API key, project, and optional GCS bucket for BatchRecognize.
+                </p>
+              </div>
 
-          <Field
-            label="GCS bucket (optional)"
-            hint="For v2 BatchRecognize: upload WAV here, then transcribe. See docs/GCS-SETUP.md for bucket + service account setup."
-          >
-            <input
-              type="text"
-              value={form.googleCloudStorageBucket}
-              onChange={update('googleCloudStorageBucket')}
-              placeholder="my-meetmind-bucket"
-              className="input"
-            />
-          </Field>
+              <Field
+                label="Google Cloud API Key"
+                hint="Used for Speech-to-Text transcription."
+              >
+                <PasswordInput
+                  value={form.googleApiKey}
+                  onChange={update('googleApiKey')}
+                  placeholder="AIzaSy…"
+                />
+                <TestButton
+                  onTest={async () => {
+                    const r = await window.meetmind.api.testGoogle(form.googleApiKey, form.googleCloudProjectId);
+                    if (!r.success) throw new Error(r.error);
+                  }}
+                />
+              </Field>
 
-          <Field
-            label="Service account key path (optional)"
-            hint="Path to service account JSON key (needs Storage Object Admin on bucket). Or set GOOGLE_APPLICATION_CREDENTIALS."
-          >
-            <input
-              type="text"
-              value={form.googleCloudStorageKeyPath}
-              onChange={update('googleCloudStorageKeyPath')}
-              placeholder="C:\path\to\key.json"
-              className="input"
-            />
-          </Field>
+              <Field
+                label="Google Cloud Project ID"
+                hint="Required for Speech-to-Text v2. Your GCP project ID from Cloud Console."
+              >
+                <input
+                  type="text"
+                  value={form.googleCloudProjectId}
+                  onChange={update('googleCloudProjectId')}
+                  placeholder="my-project-id"
+                  className="input"
+                />
+              </Field>
+
+              <Field
+                label="GCS bucket (optional)"
+                hint="For v2 BatchRecognize: upload WAV here, then transcribe. See docs/GCS-SETUP.md for bucket + service account setup."
+              >
+                <input
+                  type="text"
+                  value={form.googleCloudStorageBucket}
+                  onChange={update('googleCloudStorageBucket')}
+                  placeholder="my-meetmind-bucket"
+                  className="input"
+                />
+              </Field>
+
+              <Field
+                label="Service account key path (optional)"
+                hint="Path to service account JSON key (needs Storage Object Admin on bucket). Or set GOOGLE_APPLICATION_CREDENTIALS."
+              >
+                <input
+                  type="text"
+                  value={form.googleCloudStorageKeyPath}
+                  onChange={update('googleCloudStorageKeyPath')}
+                  placeholder="C:\\path\\to\\key.json"
+                  className="input"
+                />
+              </Field>
+            </div>
+          )}
+
+          {form.sttService === 'assemblyai' && (
+            <div className="space-y-4 p-3 rounded-lg border border-[#333] bg-[rgb(var(--color-tertiary))]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-[#d0d0d0]">
+                    AssemblyAI settings
+                    <span className="ml-2 inline-flex items-center rounded-full border border-yellow-500/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-400/90">
+                      Beta
+                    </span>
+                  </p>
+                  <p className="text-xs text-[#aaa]">
+                    Uses AssemblyAI&apos;s multilingual model with native code-switching between English and Malayalam.
+                    The optional prompt lets you nudge transcription style for your team.
+                  </p>
+                </div>
+              </div>
+
+              <Field
+                label="AssemblyAI API Key"
+                hint="Required. Get an API key from your AssemblyAI dashboard."
+              >
+                <PasswordInput
+                  value={form.assemblyAiApiKey}
+                  onChange={update('assemblyAiApiKey')}
+                  placeholder="aai_..."
+                />
+                <TestButton
+                  onTest={async () => {
+                    const r = await window.meetmind.api.testAssemblyAi(form.assemblyAiApiKey);
+                    if (!r.success) throw new Error(r.error);
+                  }}
+                />
+              </Field>
+
+              <Field
+                label="AssemblyAI Prompt (optional)"
+                hint="Short instruction to fine-tune transcription behavior. Leave empty to use the default model behavior."
+              >
+                <textarea
+                  value={form.assemblyAiPrompt}
+                  onChange={update('assemblyAiPrompt')}
+                  placeholder="Example: Audio is in English and Malayalam. Transcribe exactly what is spoken in the original language, preserving natural code-switching without translation."
+                  rows={3}
+                  className="input resize-none"
+                />
+              </Field>
+            </div>
+          )}
 
           <Field
             label="Gemini API Key"
@@ -467,7 +560,7 @@ export default function Settings({ onSave }) {
                 2. Enable <strong className="text-[#999]">"Let desktop apps access your microphone"</strong> (covers FFmpeg and recording tools)
               </p>
               <p className="text-[#666]">
-                3. In <strong className="text-[#999]">Windows Sound → Recording</strong>, right-click each device → Properties → Levels → set to 80–100
+                3. In <strong className="text-[#999]">Windows Sound → Recording</strong>, right-click your Microphone → Properties → Levels → set to 80–100 and unmute
               </p>
             </div>
           </div>

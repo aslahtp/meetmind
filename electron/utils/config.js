@@ -61,6 +61,18 @@ const schema = {
     type: 'boolean',
     default: false,
   },
+  sttService: {
+    type: 'string',
+    default: 'google',
+  },
+  assemblyAiApiKey: {
+    type: 'string',
+    default: '',
+  },
+  assemblyAiPrompt: {
+    type: 'string',
+    default: '',
+  },
 };
 
 const store = new Store({ schema, name: 'meetmind-config' });
@@ -96,6 +108,9 @@ function getConfig() {
     theme:            store.get('theme'),
     websocketPort:    store.get('websocketPort'),
     onboardingComplete: store.get('onboardingComplete'),
+    sttService:       store.get('sttService') || 'google',
+    assemblyAiApiKey: store.get('assemblyAiApiKey') || '',
+    assemblyAiPrompt: store.get('assemblyAiPrompt') || '',
   };
 }
 
