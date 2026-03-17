@@ -1,18 +1,19 @@
 # MeetMind
 
-AI-powered meeting notes for Windows. Records system audio + microphone, transcribes with Google Speech-to-Text, generates structured notes with Gemini, and uploads to Notion — automatically triggered from Google Meet or Zoom via a Chrome extension.
+AI-powered meeting notes for Windows. Records system audio + microphone, transcribes with **Google Speech-to-Text (v1/v2)** or **AssemblyAI**, generates structured notes with Gemini, and uploads to Notion — automatically triggered from Google Meet or Zoom via a Chrome extension.
 
 ---
 
 ## Features
 
-- **Dual audio capture** — System audio (loopback) + microphone merged via FFmpeg
-- **Speaker diarization** — Google STT identifies who said what
+- **Dual audio capture** — System audio (loopback) + microphone (renderer capture, with FFmpeg fallback)
+- **Speaker diarization** — Supported (Google STT where available, or AssemblyAI speaker labels)
 - **AI-structured notes** — Gemini generates action items, key points, decisions, and open questions
-- **Notion sync** — Full block hierarchy uploaded directly to your Notion database
+- **Notion sync** — Full block hierarchy uploaded to a Notion **database or parent page** (auto-detected)
 - **Chrome extension** — Floating overlay in Google Meet and Zoom with one-click recording
-- **Session history** — SQLite-backed local storage of all sessions, transcripts, and notes
-- **System tray** — Runs in the background, always accessible
+- **Session history** — SQLite-backed local storage of all sessions, transcripts, and notes (persisted via `sql.js`; includes session deletion)
+- **System tray / Single-instance** — Runs in the background (always accessible) and strictly prevents duplicate running instances/tray icons
+- **Bilingual code-switching** — Transcription and AI natively support mixed English & Malayalam meetings
 
 ---
 
@@ -22,13 +23,14 @@ AI-powered meeting notes for Windows. Records system audio + microphone, transcr
 Chrome Extension (MV3)
     ↕ WebSocket ws://localhost:39842
 Electron Main Process
-    ├── FFmpeg  →  WAV file
-    ├── Google STT  →  transcript JSON
+    ├── Renderer capture (loopback+mic) → webm → FFmpeg convert → WAV
+    ├── (fallback) FFmpeg dshow/WASAPI  →  WAV file
+    ├── Google STT / AssemblyAI  →  transcript JSON
     ├── Gemini API  →  notes JSON
-    ├── Notion API  →  page URL
-    └── SQLite  →  local session store
+    ├── Notion API  →  page URL (created under a parent page or database)
+    └── SQLite  →  local session store (sql.js → `meetmind.db` in app userData)
          ↕ IPC (contextBridge)
-React Renderer (Vite)
+React Renderer (Vite + Tailwind CSS config with CSS var theming)
 ```
 
 ---
@@ -41,7 +43,8 @@ React Renderer (Vite)
 | Windows 10/11 x64        | Required for WASAPI/dshow audio capture                            |
 | Node.js 20+              | [nodejs.org](https://nodejs.org)                                   |
 | FFmpeg for Windows       | See [setup instructions](#ffmpeg-setup)                            |
-| Google Cloud API key     | Speech-to-Text enabled                                             |
+| Google Cloud API key     | Required only if using Google Speech-to-Text                       |
+| AssemblyAI API key       | Optional alternative to Google STT                                 |
 | Gemini API key           | [aistudio.google.com](https://aistudio.google.com/app/apikey)      |
 | Notion integration token | [notion.so/my-integrations](https://www.notion.so/my-integrations) |
 
@@ -91,10 +94,12 @@ This starts the Vite dev server (port 5173) and Electron simultaneously.
 
 The app will prompt you to enter your API keys in Settings. Fill in:
 
-- Google Cloud API Key (Speech-to-Text)
+- Speech-to-Text provider (Google STT or AssemblyAI)
+- Google Cloud API Key (if using Google STT)
+- AssemblyAI API Key (if using AssemblyAI)
 - Gemini API Key
 - Notion Integration Token
-- Notion Database ID
+- Notion parent **Page ID or Database ID**
 
 ---
 
@@ -135,7 +140,7 @@ To use Speech-to-Text v2 **BatchRecognize** (long audio without chunking), audio
 
 ### System Audio (Stereo Mix)
 
-For system audio capture, Windows requires "Stereo Mix" to be enabled:
+For system audio capture, MeetMind prefers **WASAPI loopback** (works with speakers, headphones, USB, and Bluetooth). If FFmpeg loopback isn’t available on your system, you can fall back to "Stereo Mix":
 
 1. Right-click the speaker icon in the taskbar → **Sound settings**
 2. Scroll to **More sound settings** → **Recording** tab
@@ -163,7 +168,7 @@ meetmind/
 │   │   ├── gemini.js           # Gemini LLM, model selector, system prompt
 │   │   └── notion.js           # Notion block builder, batched upload
 │   ├── db/
-│   │   └── sessions.js         # SQLite session store (better-sqlite3)
+│   │   └── sessions.js         # SQLite session store (sql.js persisted to disk)
 │   └── utils/
 │       ├── config.js           # electron-store configuration
 │       └── logger.js           # Structured file + console logger
@@ -226,6 +231,9 @@ npm run build
 
 Output: `dist-electron/MeetMind Setup 1.0.0.exe`
 
+> [!CAUTION]
+> Ensure `dist/renderer/**` is included in `package.json` `build.files` before building. Otherwise, the installed app will open a blank window because the `dist` folder is in `.gitignore`. Note: Never commit downloaded FFmpeg `.exe` files, as they exceed GitHub's 100MB file size limit and are ignored by default.
+
 ### Package the Chrome extension
 
 ```powershell
@@ -269,12 +277,12 @@ Security: only connections from `chrome-extension://` origins are accepted.
 ## Gemini Models
 
 
-| Model ID                        | Label                              | Best for               |
-| ------------------------------- | ---------------------------------- | ---------------------- |
-| `gemini-2.0-flash`              | Gemini 2.0 Flash (Fast)            | Quick summaries        |
-| `gemini-3.1-flash-lite-preview` | Gemini 3.1 Flash Lite (Fast)       | Default                 |
-| `gemini-1.5-pro`                | Gemini 1.5 Pro (Best)              | Long, complex meetings |
-| `gemini-2.0-flash-thinking-exp` | Gemini 2.0 Thinking (Experimental) | Deep reasoning         |
+| Model ID                        | Label                              | Best for                 |
+| ------------------------------- | ---------------------------------- | ------------------------ |
+| `gemini-3.1-flash-lite-preview` | Gemini 3.1 Flash Lite (Fast)       | Default, quick summaries |
+| `gemini-3-flash-preview`        | Gemini 3 Flash (Balanced)          | Standard meetings        |
+| `gemini-3-pro-preview`          | Gemini 3 Pro (pro)                 | Long, complex meetings   |
+| `gemini-3.1-pro-preview`        | Gemini 3.1 Pro (Experimental)      | Deep reasoning           |
 
 
 ---
