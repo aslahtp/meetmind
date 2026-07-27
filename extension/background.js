@@ -116,15 +116,70 @@ function sendToDesktop(message) {
   return false;
 }
 
-function launchDesktopApp() {
-  chrome.tabs.create({ url: 'meetmind://open', active: false }, (tab) => {
-    if (tab?.id) {
-      setTimeout(() => {
-        chrome.tabs.remove(tab.id).catch(() => {});
-      }, 1500);
+let pendingOpenAppTabId = null;
+let launchRetryTimer = null;
+
+async function tryHttpOpenApp() {
+  for (let i = 0; i < WS_PORT_RANGE; i++) {
+    const port = WS_PORT_START + i;
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/open`, { method: 'GET' });
+      if (res.ok) {
+        currentPort = port;
+        return true;
+      }
+    } catch {
+      // App not listening on this port
+    }
+  }
+  return false;
+}
+
+function openProtocolBridgeTab() {
+  const openPage = chrome.runtime.getURL('open-app.html');
+
+  chrome.tabs.create({ url: openPage, active: true }, (tab) => {
+    if (chrome.runtime.lastError) {
+      console.warn('[MeetMind] Failed to open app bridge tab:', chrome.runtime.lastError.message);
+      return;
+    }
+    if (tab?.id != null) {
+      pendingOpenAppTabId = tab.id;
     }
   });
-  connectWebSocket();
+}
+
+async function launchDesktopApp() {
+  // 1) If the desktop app is already running (tray), raise it over HTTP.
+  const raised = await tryHttpOpenApp();
+  if (raised) {
+    console.log('[MeetMind] Raised desktop app via HTTP /open');
+    connectWebSocket();
+    return;
+  }
+
+  // 2) Otherwise hand off via meetmind:// (Chrome blocks this in chrome.tabs.create).
+  openProtocolBridgeTab();
+
+  // App may take a moment to start — keep trying the WebSocket.
+  let attempts = 0;
+  clearInterval(launchRetryTimer);
+  launchRetryTimer = setInterval(() => {
+    attempts += 1;
+    if (wsConnected || attempts >= 24) {
+      clearInterval(launchRetryTimer);
+      launchRetryTimer = null;
+      return;
+    }
+    connectWebSocket();
+  }, 500);
+}
+
+function closeOpenAppTab() {
+  if (pendingOpenAppTabId == null) return;
+  const tabId = pendingOpenAppTabId;
+  pendingOpenAppTabId = null;
+  chrome.tabs.remove(tabId).catch(() => {});
 }
 
 // ── Handle messages from desktop app ─────────────────────────────────────────
@@ -310,10 +365,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'OPEN_APP': {
       if (wsConnected) {
-        sendToDesktop({ type: 'SHOW_WINDOW' });
+        const sent = sendToDesktop({ type: 'SHOW_WINDOW' });
+        // Also try protocol in case the socket is stale / window is hard to raise.
+        if (!sent) launchDesktopApp();
       } else {
         launchDesktopApp();
       }
+      sendResponse({ success: true });
+      break;
+    }
+
+    case 'CLOSE_OPEN_APP_TAB': {
+      closeOpenAppTab();
       sendResponse({ success: true });
       break;
     }

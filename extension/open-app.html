@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Opening MeetMind…</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #0e0e12;
+      color: #e8e8ed;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+    a {
+      color: #34d399;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
+    .muted { color: #9a9aab; font-size: 13px; max-width: 320px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <p id="status">Opening MeetMind…</p>
+  <p class="muted" id="hint" hidden>
+    If nothing happens, make sure the MeetMind desktop app is installed, then click below.
+  </p>
+  <a id="launch" href="meetmind://open">Open MeetMind App</a>
+  <script src="open-app.js"></script>
+</body>
+</html>

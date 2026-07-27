@@ -1,26 +1,61 @@
+const http = require('http');
 const { WebSocketServer } = require('ws');
 const logger = require('./utils/logger');
 
 let wss = null;
+let httpServer = null;
 let extensionSocket = null;
 const PORT_RANGE = 11; // try port, port+1, ... port+10
 
 /**
- * Try to listen on a single port. Resolves with (server, port) when listening, rejects on error.
+ * Try to listen on a single port. Resolves with { wss, httpServer, port } when ready.
  */
 function tryListen(port, handlers) {
   return new Promise((resolve, reject) => {
-    const server = new WebSocketServer({ port });
+    const server = http.createServer((req, res) => {
+      const url = req.url || '/';
+      // Allow the extension to raise the window even when the WebSocket is down.
+      if (req.method === 'GET' && (url === '/open' || url.startsWith('/open?'))) {
+        try {
+          handlers.onShowWindow?.();
+        } catch (err) {
+          logger.error('Failed to show window via /open', { error: err.message });
+        }
+        res.writeHead(200, {
+          'Content-Type': 'text/plain',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end('ok');
+        return;
+      }
+
+      if (req.method === 'GET' && (url === '/health' || url.startsWith('/health?'))) {
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(JSON.stringify({ ok: true, app: 'MeetMind' }));
+        return;
+      }
+
+      res.writeHead(404, { 'Access-Control-Allow-Origin': '*' });
+      res.end('Not found');
+    });
+
+    const socketServer = new WebSocketServer({ server });
 
     server.once('listening', () => {
       logger.info(`WebSocket server listening on ws://localhost:${port}`);
-      resolve(server);
+      resolve({ wss: socketServer, httpServer: server, port });
     });
 
     server.once('error', (err) => {
-      server.close();
+      try { socketServer.close(); } catch (_) { /* ignore */ }
+      try { server.close(); } catch (_) { /* ignore */ }
       reject(err);
     });
+
+    server.listen(port, '127.0.0.1');
   });
 }
 
@@ -78,7 +113,9 @@ async function startWebSocketServer(port, handlers) {
   for (let i = 0; i < PORT_RANGE; i++) {
     const tryPort = port + i;
     try {
-      wss = await tryListen(tryPort, handlers);
+      const started = await tryListen(tryPort, handlers);
+      wss = started.wss;
+      httpServer = started.httpServer;
       attachHandlers(wss, tryPort, handlers);
       return wss;
     } catch (err) {
@@ -118,7 +155,7 @@ function handleExtensionMessage(message, ws, handlers) {
       handlers.onStopRecording();
       break;
 
-    case 'APP_STATUS':
+    case 'APP_STATUS': {
       const status = handlers.onStatusRequest();
       ws.send(JSON.stringify({
         type: 'APP_STATUS',
@@ -126,6 +163,7 @@ function handleExtensionMessage(message, ws, handlers) {
         sessionId: status.sessionId,
       }));
       break;
+    }
 
     case 'SHOW_WINDOW':
       handlers.onShowWindow?.();
@@ -147,10 +185,14 @@ function broadcastToExtension(message) {
 
 function stopWebSocketServer() {
   if (wss) {
-    wss.close();
+    try { wss.close(); } catch (_) { /* ignore */ }
     wss = null;
-    logger.info('WebSocket server stopped');
   }
+  if (httpServer) {
+    try { httpServer.close(); } catch (_) { /* ignore */ }
+    httpServer = null;
+  }
+  logger.info('WebSocket server stopped');
 }
 
 module.exports = { startWebSocketServer, stopWebSocketServer, broadcastToExtension };

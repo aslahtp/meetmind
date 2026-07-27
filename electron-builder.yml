@@ -11,12 +11,15 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: icons/icon256.png
+  icon: icons/icon.ico
   signAndEditExecutable: false
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  installerIcon: icons/icon.ico
+  uninstallerIcon: icons/icon.ico
+  installerHeaderIcon: icons/icon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: MeetMind
@@ -37,8 +40,8 @@ asar: true
 files:
   - dist/renderer/**
   - electron/**
+  - assets/icons/**
   - package.json
-  - "!node_modules/**"
   - "!assets/ffmpeg/**"
 
 electronVersion: "33.2.1"

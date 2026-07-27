@@ -27,8 +27,10 @@ if (!gotSingleInstanceLock) {
   });
 }
 
-if (process.platform === 'win32' && process.defaultApp) {
-  app.setAsDefaultProtocolClient('meetmind', process.execPath, [path.resolve(process.argv[1])]);
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('meetmind', process.execPath, [path.resolve(process.argv[1])]);
+  }
 } else {
   app.setAsDefaultProtocolClient('meetmind');
 }
@@ -120,27 +122,60 @@ function createMainWindow() {
   return mainWindow;
 }
 
+function resolveIconPath(...candidates) {
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 function getAppIconPath() {
-  const iconPath = isDev
-    ? path.join(__dirname, '../assets/icons/icon.ico')
-    : path.join(__dirname, '../assets/icons/icon.ico');
-  return fs.existsSync(iconPath) ? iconPath : undefined;
+  // Prefer .ico on Windows for taskbar / window chrome; fall back to PNG.
+  return resolveIconPath(
+    path.join(__dirname, '../assets/icons/icon.ico'),
+    path.join(__dirname, '../assets/icons/icon256.png'),
+    path.join(__dirname, '../assets/icons/icon128.png'),
+  );
+}
+
+function getTrayIcon() {
+  // Windows tray looks crisp at 16/32; avoid empty/placeholder images.
+  const trayPath = resolveIconPath(
+    path.join(__dirname, '../assets/icons/icon32.png'),
+    path.join(__dirname, '../assets/icons/icon16.png'),
+    path.join(__dirname, '../assets/icons/icon.ico'),
+  );
+
+  if (!trayPath) return nativeImage.createEmpty();
+
+  let image = nativeImage.createFromPath(trayPath);
+  if (image.isEmpty()) return nativeImage.createEmpty();
+
+  // Keep tray icon small; Windows scales poorly from large sources.
+  const { width } = image.getSize();
+  if (width > 32) {
+    image = image.resize({ width: 32, height: 32, quality: 'best' });
+  }
+  return image;
 }
 
 // ── Tray ─────────────────────────────────────────────────────────────────────
 
 function createTray() {
-  const trayIconPath = isDev
-    ? path.join(__dirname, '../assets/icons/icon16.png')
-    : path.join(__dirname, '../assets/icons/icon16.png');
-
-  const icon = fs.existsSync(trayIconPath)
-    ? nativeImage.createFromPath(trayIconPath)
-    : nativeImage.createEmpty();
-
+  const icon = getTrayIcon();
   tray = new Tray(icon);
   tray.setToolTip('MeetMind');
   updateTrayMenu();
+
+  tray.on('click', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isVisible()) {
+      mainWindow.focus();
+    } else {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
 
   tray.on('double-click', () => {
     mainWindow?.show();
@@ -784,6 +819,10 @@ async function recoverOrphanedWebmFiles() {
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.meetmind.app');
+}
+
 app.whenReady().then(async () => {
   logger.info('MeetMind starting up');
 
@@ -836,6 +875,15 @@ app.whenReady().then(async () => {
 
   createMainWindow();
   createTray();
+
+  // Windows cold-start via meetmind:// puts the URL on process.argv
+  const startupProtocolUrl = process.argv.find(
+    (arg) => typeof arg === 'string' && arg.startsWith('meetmind://'),
+  );
+  if (startupProtocolUrl) {
+    logger.info('Started via protocol', { startupProtocolUrl });
+    focusMainWindow();
+  }
 
   const config = getConfig();
   await startWebSocketServer(config.websocketPort, {

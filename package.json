@@ -35,19 +35,15 @@
     "cross-env": "^7.0.3",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
+    "png-to-ico": "^3.0.2",
     "postcss": "^8.4.49",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "sharp": "^0.35.3",
     "tailwindcss": "^3.4.17",
     "vite": "^6.0.5"
   },
   "build": {
-    "extends": "./electron-builder.yml",
-    "files": [
-      "electron/**",
-      "dist/renderer/**",
-      "assets/**",
-      "package.json"
-    ]
+    "extends": "./electron-builder.yml"
   }
 }
