@@ -10,20 +10,20 @@
 
 # MeetMind
 
-AI-powered meeting notes for Windows. Records system audio + microphone, transcribes with **Google Speech-to-Text (v1/v2)** or **AssemblyAI**, generates structured notes with Gemini, and uploads to Notion — automatically triggered from Google Meet or Zoom via a Chrome extension.
+AI-powered meeting notes for Windows. Records system audio + microphone, transcribes with **Google Speech-to-Text (v1/v2)**, **AssemblyAI**, or **Sarvam AI**, generates structured notes with Gemini, and uploads to Notion — automatically triggered from Google Meet or Zoom via a Chrome extension.
 
 ---
 
 ## Features
 
 - **Dual audio capture** — System audio (loopback) + microphone (renderer capture, with FFmpeg fallback)
-- **Speaker diarization** — Supported (Google STT where available, or AssemblyAI speaker labels)
+- **Speaker diarization** — Supported (Google STT where available, AssemblyAI speaker labels, or Sarvam AI diarization)
 - **AI-structured notes** — Gemini generates action items, key points, decisions, and open questions
 - **Notion sync** — Full block hierarchy uploaded to a Notion **database or parent page** (auto-detected)
 - **Chrome extension** — Floating overlay in Google Meet and Zoom with one-click recording
 - **Session history** — SQLite-backed local storage of all sessions, transcripts, and notes (persisted via `sql.js`; includes session deletion)
 - **System tray / Single-instance** — Runs in the background (always accessible) and strictly prevents duplicate running instances/tray icons
-- **Bilingual code-switching** — Transcription and AI natively support mixed English & Malayalam meetings
+- **Bilingual code-switching** — Transcription and AI support mixed English & Malayalam meetings (Sarvam AI is optimized for this)
 
 ---
 
@@ -35,7 +35,7 @@ Chrome Extension (MV3)
 Electron Main Process
     ├── Renderer capture (loopback+mic) → webm → FFmpeg convert → WAV
     ├── (fallback) FFmpeg dshow/WASAPI  →  WAV file
-    ├── Google STT / AssemblyAI  →  transcript JSON
+    ├── Google STT / AssemblyAI / Sarvam AI  →  transcript JSON
     ├── Gemini API  →  notes JSON
     ├── Notion API  →  page URL (created under a parent page or database)
     └── SQLite  →  local session store (sql.js → `meetmind.db` in app userData)
@@ -54,6 +54,7 @@ React Renderer (Vite + Tailwind CSS config with CSS var theming)
 | FFmpeg for Windows       | See [setup instructions](#ffmpeg-setup)                            |
 | Google Cloud API key     | Required only if using Google Speech-to-Text                       |
 | AssemblyAI API key       | Optional alternative to Google STT                                 |
+| Sarvam AI API key        | Optional STT provider; strong Malayalam–English code-switching     |
 | Gemini API key           | [aistudio.google.com](https://aistudio.google.com/app/apikey)      |
 | Notion integration token | [notion.so/my-integrations](https://www.notion.so/my-integrations) |
 
@@ -102,9 +103,10 @@ This starts the Vite dev server (port 5173) and Electron simultaneously.
 
 The app will prompt you to enter your API keys in Settings. Fill in:
 
-- Speech-to-Text provider (Google STT or AssemblyAI)
+- Speech-to-Text provider (Google STT, AssemblyAI, or Sarvam AI)
 - Google Cloud API Key (if using Google STT)
 - AssemblyAI API Key (if using AssemblyAI)
+- Sarvam AI API Key (if using Sarvam AI)
 - Gemini API Key
 - Notion Integration Token
 - Notion parent **Page ID or Database ID**
@@ -121,11 +123,22 @@ The app will prompt you to enter your API keys in Settings. Fill in:
 4. Go to **Credentials** → **Create credentials** → **API key**
 5. Paste the key into MeetMind Settings
 
+### Sarvam AI
+
+Indian STT with native Malayalam–English code-switching. MeetMind uses the **saaras:v3** model in **codemix** mode with automatic language detection and speaker diarization.
+
+1. Go to [dashboard.sarvam.ai](https://dashboard.sarvam.ai)
+2. Create an account or sign in
+3. Generate an API key from the **API Keys** section
+4. In MeetMind Settings, choose **Sarvam AI** as the Speech-to-Text provider
+5. Paste the key into the **Sarvam AI API Key** field
+
 ### Gemini API
 
 1. Go to [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 2. Click **Create API key**
 3. Paste into MeetMind Settings
+4. Choose a Gemini model in Settings (default: **Gemini 3.5 Flash Lite**)
 
 ### Notion Integration
 
@@ -172,7 +185,7 @@ meetmind/
 │   │   ├── mixer.js            # FFmpeg filter graph construction
 │   │   └── ffmpeg-path.js      # Dev/packaged FFmpeg path resolution
 │   ├── services/
-│   │   ├── transcription.js    # Google STT REST, chunking, polling
+│   │   ├── transcription.js    # Google STT, AssemblyAI, and Sarvam AI transcription
 │   │   ├── gemini.js           # Gemini LLM, model selector, system prompt
 │   │   └── notion.js           # Notion block builder, batched upload
 │   ├── db/
@@ -204,6 +217,7 @@ meetmind/
 │   ├── ffmpeg/                 # Place ffmpeg.exe + ffprobe.exe here
 │   └── icons/                  # App icons (icon.svg + generated PNGs)
 ├── scripts/
+│   ├── build-extension.js      # Package extension zip (Extension/ folder)
 │   └── generate-icons.js       # Icon generation script
 ├── package.json
 ├── vite.config.js
@@ -215,14 +229,14 @@ meetmind/
 
 ## Available Scripts
 
-| Script                   | Description                                               |
-| ------------------------ | --------------------------------------------------------- |
-| `npm run dev`            | Start Electron + Vite dev server concurrently             |
-| `npm run build`          | Build renderer, extension zip, and Windows NSIS installer |
-| `npm run build:renderer` | Build renderer only (Vite)                                |
-| `npm run build:electron` | Package Electron app only                                 |
-| `npm run build:ext`      | Zip Chrome extension into `dist/meetmind-extension.zip`   |
-| `npm run generate-icons` | Generate PNG icons from `assets/icons/icon.svg`           |
+| Script                   | Description                                                                        |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| `npm run dev`            | Start Electron + Vite dev server concurrently                                      |
+| `npm run build`          | Build renderer, extension zip, and Windows NSIS installer                          |
+| `npm run build:renderer` | Build renderer only (Vite)                                                         |
+| `npm run build:electron` | Package Electron app only                                                          |
+| `npm run build:ext`      | Zip Chrome extension into `dist/meetmind-extension.zip` (`Extension/` root folder) |
+| `npm run generate-icons` | Generate PNG icons from `assets/icons/icon.svg`                                    |
 
 ---
 
@@ -238,7 +252,7 @@ npm run build
 Output:
 
 - `dist/desktop/MeetMind Setup 1.0.0.exe`
-- `dist/meetmind-extension.zip`
+- `dist/meetmind-extension.zip` — contains an `Extension/` folder with the unpacked Chrome extension
 
 > [!CAUTION]
 > Ensure `dist/renderer/**` is included in `package.json` `build.files` before building. Otherwise, the installed app will open a blank window because the `dist` folder is in `.gitignore`. Note: Never commit downloaded FFmpeg `.exe` files, as they exceed GitHub's 100MB file size limit and are ignored by default.
@@ -248,6 +262,8 @@ To build only the Chrome extension:
 ```powershell
 npm run build:ext
 ```
+
+Extract the zip and load the inner `Extension/` folder in Chrome (**Load unpacked**), or continue using the repo's `extension/` folder during development.
 
 ---
 
@@ -280,12 +296,15 @@ Security: only connections from `chrome-extension://` origins are accepted.
 
 ## Gemini Models
 
-| Model ID                        | Label                         | Best for                 |
-| ------------------------------- | ----------------------------- | ------------------------ |
-| `gemini-3.1-flash-lite-preview` | Gemini 3.1 Flash Lite (Fast)  | Default, quick summaries |
-| `gemini-3-flash-preview`        | Gemini 3 Flash (Balanced)     | Standard meetings        |
-| `gemini-3-pro-preview`          | Gemini 3 Pro (pro)            | Long, complex meetings   |
-| `gemini-3.1-pro-preview`        | Gemini 3.1 Pro (Experimental) | Deep reasoning           |
+| Model ID                 | Label                         | Best for                       |
+| ------------------------ | ----------------------------- | ------------------------------ |
+| `gemini-3.5-flash-lite`  | Gemini 3.5 Flash Lite         | Default — fast, cost-effective |
+| `gemini-3.5-flash`       | Gemini 3.5 Flash              | Balanced quality and speed     |
+| `gemini-3.6-flash`       | Gemini 3.6 Flash              | Latest flash model             |
+| `gemini-3.1-flash-lite`  | Gemini 3.1 Flash Lite         | Lightweight summaries          |
+| `gemini-3.1-pro-preview` | Gemini 3.1 Pro (Experimental) | Long or complex meetings       |
+
+Older model IDs saved in settings are migrated automatically (for example, `gemini-3-flash-preview` → `gemini-3.6-flash`).
 
 ---
 
@@ -294,7 +313,7 @@ Security: only connections from `chrome-extension://` origins are accepted.
 | Status         | Meaning                           |
 | -------------- | --------------------------------- |
 | `recording`    | Audio is being captured           |
-| `transcribing` | Google STT running                |
+| `transcribing` | Speech-to-text running            |
 | `generating`   | Gemini generating notes           |
 | `uploading`    | Uploading to Notion               |
 | `complete`     | All done                          |
