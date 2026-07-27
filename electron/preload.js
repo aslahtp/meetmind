@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('meetmind', {
     onStop: (callback) => { ipcRenderer.on('capture:stop', () => callback()); },
     sendStarted: () => ipcRenderer.send('capture:started'),
     sendFailed: (error) => ipcRenderer.send('capture:failed', error),
+    sendChunk: (buffer) => ipcRenderer.send('capture:chunk', buffer),
     sendAudioData: (buffer) => ipcRenderer.send('capture:audio-data', buffer),
   },
 

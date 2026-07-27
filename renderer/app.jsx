@@ -40,13 +40,13 @@ function App() {
   // ── Renderer-based audio capture (system loopback + mic via Web Audio) ─────
   // The main process sends capture:start / capture:stop commands. We capture
   // system audio through Electron's display-media loopback (WASAPI internally)
-  // and the microphone through getUserMedia, mix them, record as webm, and send
-  // the result back.
+  // and the microphone through getUserMedia, mix them, record as webm, and
+  // stream chunks to the main process immediately as they are recorded (every 1s).
+  // This makes recordings crash-safe — audio is on disk immediately.
   useEffect(() => {
     if (!window.meetmind?.capture) return;
 
     let mediaRecorder = null;
-    let audioChunks = [];
     let streams = [];
     let ctx = null;
 
@@ -70,14 +70,22 @@ function App() {
         ctx.createMediaStreamSource(sysStream).connect(dest);
         if (micStream) ctx.createMediaStreamSource(micStream).connect(dest);
 
-        audioChunks = [];
         const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
           ? 'audio/webm;codecs=opus'
           : 'audio/webm';
         mediaRecorder = new MediaRecorder(dest.stream, { mimeType });
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunks.push(e.data);
+          if (e.data && e.data.size > 0) {
+            e.data.arrayBuffer().then((buffer) => {
+              if (buffer.byteLength > 0) {
+                window.meetmind.capture.sendChunk(buffer);
+              }
+            }).catch((err) => {
+              console.error('Failed to send audio chunk:', err);
+            });
+          }
         };
+        // Emit chunks every 1 second (1000ms) for real-time disk streaming
         mediaRecorder.start(1000);
 
         window.meetmind.capture.sendStarted();
@@ -103,9 +111,11 @@ function App() {
         streams = [];
         if (ctx) { ctx.close().catch(() => {}); ctx = null; }
 
-        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-        const buffer = await blob.arrayBuffer();
-        window.meetmind.capture.sendAudioData(buffer);
+        // Short timeout to allow pending arrayBuffer microtasks to send
+        await new Promise((r) => setTimeout(r, 150));
+
+        // Send zero-length sentinel to signal "recording complete"
+        window.meetmind.capture.sendAudioData(new ArrayBuffer(0));
       } catch (err) {
         console.error('Renderer capture stop failed:', err);
         window.meetmind.capture.sendAudioData(new ArrayBuffer(0));

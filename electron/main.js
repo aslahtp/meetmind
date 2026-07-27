@@ -168,6 +168,10 @@ function updateTrayMenu() {
 
 let currentSessionId = null;
 let captureMode = 'none'; // 'none' | 'renderer' | 'ffmpeg'
+let rendererWriteStream = null; // WriteStream for incremental renderer capture
+let rendererWebmPath = null;    // Path to the in-progress .webm file
+let rendererChunkCount = 0;     // Number of chunks flushed to disk
+let rendererBytesWritten = 0;   // Total bytes flushed to disk
 
 // ── Renderer capture IPC helpers ─────────────────────────────────────────────
 
@@ -191,21 +195,29 @@ function requestRendererCaptureStart() {
   });
 }
 
+/**
+ * Tell the renderer to stop recording. The renderer will flush any remaining
+ * chunks via capture:chunk, then send a zero-length capture:audio-data as a
+ * "done" sentinel. We wait for that sentinel here.
+ */
 function requestRendererCaptureStop() {
   return new Promise((resolve, reject) => {
     if (!mainWindow?.webContents) { reject(new Error('No window')); return; }
 
-    function onData(_e, buffer) {
+    function onDone(_e, buffer) {
       clearTimeout(timer);
-      resolve(Buffer.from(buffer));
+      // Sentinel received — all chunks have been flushed to disk already
+      resolve();
     }
 
-    ipcMain.once('capture:audio-data', onData);
+    ipcMain.once('capture:audio-data', onDone);
     mainWindow.webContents.send('capture:stop');
 
     const timer = setTimeout(() => {
-      ipcMain.removeListener('capture:audio-data', onData);
-      reject(new Error('Renderer capture stop timed out'));
+      ipcMain.removeListener('capture:audio-data', onDone);
+      // Even on timeout, the webm file on disk is still usable
+      logger.warn('Renderer capture stop timed out, proceeding with partial file');
+      resolve();
     }, 15000);
   });
 }
@@ -233,6 +245,15 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
     if (rendererOk) {
       captureMode = 'renderer';
       isRecording = true;
+
+      // Open write stream so incoming chunks are appended to disk immediately
+      const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+      if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
+      rendererWebmPath = path.join(recordingsDir, `${currentSessionId}.webm`);
+      rendererWriteStream = fs.createWriteStream(rendererWebmPath, { flags: 'w' });
+      rendererChunkCount = 0;
+      rendererBytesWritten = 0;
+
       updateTrayMenu();
       mainWindow?.webContents.send('recording:started', { sessionId: currentSessionId });
       broadcastToExtension({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
@@ -269,17 +290,38 @@ async function handleStopRecording() {
     if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
 
     if (captureMode === 'renderer') {
-      const audioBuffer = await requestRendererCaptureStop();
-      const webmPath = path.join(recordingsDir, `${currentSessionId}.webm`);
+      // Signal the renderer to stop and flush remaining chunks
+      await requestRendererCaptureStop();
+
+      // Close the write stream that has been accumulating chunks
+      if (rendererWriteStream) {
+        await new Promise((res) => rendererWriteStream.end(res));
+        rendererWriteStream = null;
+      }
+
+      const webmPath = rendererWebmPath || path.join(recordingsDir, `${currentSessionId}.webm`);
       const wavPath = path.join(recordingsDir, `${currentSessionId}.wav`);
 
-      fs.writeFileSync(webmPath, audioBuffer);
-      logger.info('Renderer audio saved, converting to WAV', { webmBytes: audioBuffer.length });
+      logger.info('Renderer audio saved incrementally, converting to WAV', {
+        webmPath,
+        chunks: rendererChunkCount,
+        bytesWritten: rendererBytesWritten,
+      });
 
-      await convertWebmToWav(webmPath, wavPath);
-      try { fs.unlinkSync(webmPath); } catch { /* ignore */ }
+      if (fs.existsSync(webmPath) && fs.statSync(webmPath).size > 0) {
+        await convertWebmToWav(webmPath, wavPath);
+        try { fs.unlinkSync(webmPath); } catch { /* ignore */ }
+        audioPath = wavPath;
+      } else {
+        logger.warn('Renderer webm file is empty or missing', { webmPath });
+        if (webmPath && fs.existsSync(webmPath)) {
+          try { fs.unlinkSync(webmPath); } catch { /* ignore */ }
+        }
+      }
 
-      audioPath = wavPath;
+      rendererWebmPath = null;
+      rendererChunkCount = 0;
+      rendererBytesWritten = 0;
     } else {
       audioPath = await stopRecording();
     }
@@ -320,7 +362,15 @@ async function handleStopRecording() {
     return { success: true, sessionId: currentSessionId };
   } catch (err) {
     logger.error('Failed to stop recording', { error: err.message });
+    if (rendererWriteStream) {
+      try { rendererWriteStream.end(); } catch { /* ignore */ }
+      rendererWriteStream = null;
+    }
+    rendererWebmPath = null;
+    rendererChunkCount = 0;
+    rendererBytesWritten = 0;
     captureMode = 'none';
+    isRecording = false;
     if (currentSessionId) {
       db.updateSession(currentSessionId, {
         status: 'error',
@@ -425,6 +475,22 @@ function registerIpcHandlers() {
   );
 
   ipcMain.handle('recording:stop', () => handleStopRecording());
+
+  // Incremental audio chunk from renderer capture — append to disk
+  ipcMain.on('capture:chunk', (_e, buffer) => {
+    if (!rendererWriteStream) {
+      logger.warn('Received capture:chunk but no write stream is open');
+      return;
+    }
+    try {
+      const chunk = Buffer.from(buffer);
+      rendererWriteStream.write(chunk);
+      rendererChunkCount++;
+      rendererBytesWritten += chunk.length;
+    } catch (err) {
+      logger.error('Failed to write audio chunk to disk', { error: err.message });
+    }
+  });
 
   ipcMain.handle('audio:list-devices', () => listAudioDevices());
 
@@ -633,6 +699,75 @@ function registerIpcHandlers() {
   });
 }
 
+// ── Crash recovery ───────────────────────────────────────────────────────────
+
+/**
+ * Scan the recordings directory for orphaned .webm files left by crashed
+ * renderer-capture sessions. For each one, try to convert it to .wav and
+ * update the matching database session so the user can still access the audio.
+ */
+async function recoverOrphanedWebmFiles() {
+  const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+  if (!fs.existsSync(recordingsDir)) return;
+
+  const webmFiles = fs.readdirSync(recordingsDir).filter((f) => f.endsWith('.webm'));
+  if (webmFiles.length === 0) return;
+
+  logger.info('Found orphaned webm files from crashed recordings', { count: webmFiles.length });
+
+  for (const file of webmFiles) {
+    const sessionId = path.basename(file, '.webm');
+    const webmPath = path.join(recordingsDir, file);
+    const wavPath = path.join(recordingsDir, `${sessionId}.wav`);
+
+    try {
+      const stat = fs.statSync(webmPath);
+      if (stat.size === 0) {
+        logger.warn('Orphaned webm is empty, removing', { sessionId });
+        fs.unlinkSync(webmPath);
+        continue;
+      }
+
+      // Only recover if a .wav doesn't already exist for this session
+      if (fs.existsSync(wavPath)) {
+        logger.info('WAV already exists for orphaned webm, cleaning up', { sessionId });
+        try { fs.unlinkSync(webmPath); } catch { /* ignore */ }
+        continue;
+      }
+
+      logger.info('Recovering crashed recording', { sessionId, webmBytes: stat.size });
+      await convertWebmToWav(webmPath, wavPath);
+
+      // Update the database session if it exists
+      const session = db.getSession(sessionId);
+      if (session && !session.audio_path) {
+        let durationSeconds = null;
+        try {
+          durationSeconds = Math.round(getWavDurationSeconds(wavPath));
+          if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) durationSeconds = null;
+        } catch { /* ignore */ }
+
+        db.updateSession(sessionId, {
+          audio_path: wavPath,
+          ended_at: session.ended_at || new Date(stat.mtimeMs).toISOString(),
+          duration_seconds: durationSeconds,
+          status: 'recorded',
+        });
+        logger.info('Crashed recording recovered successfully', {
+          sessionId,
+          durationSeconds,
+        });
+      }
+
+      // Clean up the webm now that we have the wav
+      try { fs.unlinkSync(webmPath); } catch { /* ignore */ }
+    } catch (err) {
+      logger.error('Failed to recover orphaned webm', { sessionId, error: err.message });
+      // Leave the webm in place for manual recovery
+    }
+  }
+}
+
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
@@ -640,6 +775,7 @@ app.whenReady().then(async () => {
 
   await db.initialize();
   db.markStaleRecordingSessionsAsError();
+  await recoverOrphanedWebmFiles();
   registerIpcHandlers();
 
   // Serve session audio for renderer playback (meetmind-audio://<sessionId>)
