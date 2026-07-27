@@ -7,6 +7,25 @@
 let overlayFrame = null;
 let currentMeetingUrl = window.location.href;
 let currentMeetingTitle = document.title;
+let overlayCollapsed = false;
+
+const EXPANDED_STYLE = {
+  bottom: '100px',
+  right: '16px',
+  left: 'auto',
+  top: 'auto',
+  transform: 'none',
+  borderRadius: '16px',
+};
+
+const COLLAPSED_STYLE = {
+  bottom: 'auto',
+  left: 'auto',
+  right: '0',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  borderRadius: '16px 0 0 16px',
+};
 
 // ── Overlay management ────────────────────────────────────────────────────────
 
@@ -20,18 +39,18 @@ function injectOverlay(config = {}) {
   overlayFrame.allowFullscreen = false;
 
   Object.assign(overlayFrame.style, {
-    position:    'fixed',
-    bottom:      '24px',
-    right:       '24px',
-    width:       '320px',
-    height:      '80px',
-    border:      'none',
-    borderRadius: '16px',
-    zIndex:      '2147483647',
-    background:  'transparent',
-    boxShadow:   '0 8px 32px rgba(0,0,0,0.4)',
-    transition:  'height 0.3s ease',
+    position:      'fixed',
+    width:         '360px',
+    height:        '64px',
+    border:        'none',
+    zIndex:        '2147483647',
+    background:    'transparent',
+    boxShadow:     'none',
+    overflow:      'hidden',
+    transition:    'height 0.25s cubic-bezier(0.22, 1, 0.36, 1), width 0.25s ease, top 0.25s ease, bottom 0.25s ease, left 0.25s ease, right 0.25s ease, transform 0.25s ease, border-radius 0.2s ease',
     pointerEvents: 'auto',
+    colorScheme:   'dark',
+    ...EXPANDED_STYLE,
   });
 
   document.body.appendChild(overlayFrame);
@@ -51,6 +70,7 @@ function removeOverlay() {
   if (overlayFrame) {
     overlayFrame.remove();
     overlayFrame = null;
+    overlayCollapsed = false;
   }
 }
 
@@ -59,8 +79,25 @@ function sendToOverlay(message) {
   overlayFrame.contentWindow.postMessage(message, '*');
 }
 
-function resizeOverlay(height) {
-  if (overlayFrame) overlayFrame.style.height = `${height}px`;
+function applyDockPosition(collapsed) {
+  if (!overlayFrame) return;
+  overlayCollapsed = !!collapsed;
+
+  // Reset all anchor props so collapsed ↔ expanded never leave stale values
+  overlayFrame.style.top = 'auto';
+  overlayFrame.style.bottom = 'auto';
+  overlayFrame.style.left = 'auto';
+  overlayFrame.style.right = 'auto';
+  overlayFrame.style.transform = 'none';
+
+  Object.assign(overlayFrame.style, overlayCollapsed ? COLLAPSED_STYLE : EXPANDED_STYLE);
+}
+
+function resizeOverlay(height, width, collapsed) {
+  if (!overlayFrame) return;
+  if (typeof collapsed === 'boolean') applyDockPosition(collapsed);
+  overlayFrame.style.height = `${Math.max(overlayCollapsed ? 52 : 56, height)}px`;
+  if (width) overlayFrame.style.width = `${width}px`;
 }
 
 // ── Messages from background service worker ───────────────────────────────────
@@ -81,11 +118,6 @@ chrome.runtime.onMessage.addListener((message) => {
 
     case 'UPDATE_OVERLAY':
       sendToOverlay(message);
-      if (message.state === 'PROCESSING' || message.state === 'COMPLETE') {
-        resizeOverlay(message.state === 'COMPLETE' ? 120 : 140);
-      } else {
-        resizeOverlay(80);
-      }
       break;
 
     case 'WS_CONNECTED':
@@ -128,7 +160,7 @@ window.addEventListener('message', (event) => {
       break;
 
     case 'OVERLAY_RESIZE':
-      resizeOverlay(msg.height);
+      resizeOverlay(msg.height, msg.width, msg.collapsed);
       break;
 
     case 'OVERLAY_DISMISS':

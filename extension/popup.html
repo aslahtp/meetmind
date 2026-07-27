@@ -6,118 +6,195 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 260px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      width: 290px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
       font-size: 13px;
-      background: #1a1a1a;
-      color: #f0f0f0;
+      background: #0e0e12;
+      color: #f5f5fa;
       -webkit-font-smoothing: antialiased;
     }
 
     .header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 12px 14px;
-      border-bottom: 1px solid #2a2a2a;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: #15151b;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     .logo {
-      width: 24px; height: 24px;
-      background: #22c55e;
-      border-radius: 6px;
-      display: flex; align-items: center; justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
     }
 
-    .title { font-weight: 600; font-size: 14px; }
-    .subtitle { font-size: 11px; color: #666; }
+    .title { font-weight: 700; font-size: 14px; letter-spacing: -0.01em; color: #fff; }
+    .subtitle { font-size: 11px; color: #10b981; font-weight: 500; }
 
-    .body { padding: 12px 14px; }
+    .version-badge {
+      font-size: 10px;
+      font-family: monospace;
+      padding: 2px 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      color: #888;
+    }
 
-    .status-row {
+    .body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+    .status-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: #191922;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+    }
+
+    .status-left {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 10px;
-      background: #212121;
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
-      margin-bottom: 10px;
     }
 
     .dot {
-      width: 8px; height: 8px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
       flex-shrink: 0;
     }
-    .dot.connected   { background: #22c55e; }
-    .dot.disconnected { background: #6b7280; }
-    .dot.recording   { background: #ef4444; animation: pulse 1.2s infinite; }
+    .dot.connected {
+      background: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    }
+    .dot.disconnected {
+      background: #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+    }
+    .dot.recording {
+      background: #ef4444;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
 
     @keyframes pulse {
-      0%,100% { opacity:1; transform:scale(1); }
-      50%      { opacity:0.4; transform:scale(0.75); }
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.5; transform: scale(0.8); }
     }
 
-    .status-text { font-size: 12px; }
+    .status-text { font-size: 12px; font-weight: 500; color: #d0d0dc; }
 
     .btn {
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-      width: 100%; padding: 8px;
-      border: none; border-radius: 8px;
-      font-size: 12px; font-weight: 500; cursor: pointer;
-      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 9px 12px;
+      border: none;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      outline: none;
     }
 
-    .btn-primary { background: #22c55e; color: #fff; }
-    .btn-primary:hover { background: #16a34a; }
-    .btn-ghost { background: #212121; color: #888; border: 1px solid #2a2a2a; }
-    .btn-ghost:hover { background: #252525; color: #f0f0f0; }
+    .btn-primary {
+      background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+      color: #09090b;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.2);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #34d399 0%, #2dd4bf 100%);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: #191922;
+      color: #a0a0b0;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .btn-ghost:hover {
+      background: #22222f;
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
 
     .footer {
-      padding: 8px 14px;
-      border-top: 1px solid #2a2a2a;
+      padding: 10px 16px;
+      background: #111116;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
       font-size: 11px;
-      color: #444;
-      text-align: center;
+      color: #666;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
-    .footer a { color: #22c55e; text-decoration: none; }
+    .footer a { color: #10b981; text-decoration: none; font-weight: 500; }
+    .footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="logo">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>
-      </svg>
+    <div class="brand">
+      <div class="logo">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#09090b" stroke-width="2.5">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>
+        </svg>
+      </div>
+      <div>
+        <div class="title">MeetMind</div>
+        <div class="subtitle">AI Meeting Companion</div>
+      </div>
     </div>
-    <div>
-      <div class="title">MeetMind</div>
-      <div class="subtitle">AI Meeting Notes</div>
-    </div>
+    <span class="version-badge">v0.1</span>
   </div>
 
   <div class="body">
-    <div class="status-row">
-      <div class="dot disconnected" id="status-dot"></div>
-      <span class="status-text" id="status-text">Checking app status…</span>
+    <div class="status-card">
+      <div class="status-left">
+        <div class="dot disconnected" id="status-dot"></div>
+        <span class="status-text" id="status-text">Checking desktop app…</span>
+      </div>
     </div>
 
-    <button class="btn btn-primary" id="open-app-btn" style="margin-bottom:8px">
-      Open MeetMind
+    <button class="btn btn-primary" id="open-app-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+      </svg>
+      Open Desktop App
     </button>
 
     <button class="btn btn-ghost" id="go-to-meet-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+      </svg>
       Open Google Meet
     </button>
   </div>
 
   <div class="footer">
-    Detects Meet & Zoom automatically •
-    <a href="https://github.com/meetmind/meetmind" target="_blank">Docs</a>
+    <span>Detects Meet & Zoom</span>
+    <a href="https://github.com/meetmind/meetmind" target="_blank">Docs ↗</a>
   </div>
 
   <script src="popup.js"></script>

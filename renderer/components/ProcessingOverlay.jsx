@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 
 const STAGES = [
-  { id: 'transcribing', label: 'Transcribing audio…',            icon: '🎙️', range: [0, 60]  },
-  { id: 'generating',   label: 'Generating notes with Gemini…', icon: '🧠', range: [60, 85] },
-  { id: 'uploading',    label: 'Uploading to Notion…',          icon: '📤', range: [85, 100] },
+  { id: 'transcribing', label: 'Transcribing audio speech…',     icon: '🎙️', range: [0, 60]  },
+  { id: 'generating',   label: 'Generating notes with AI…',      icon: '🧠', range: [60, 85] },
+  { id: 'uploading',    label: 'Uploading page to Notion…',      icon: '📤', range: [85, 100] },
 ];
 
 function getStageIndex(stageId) {
@@ -39,60 +39,63 @@ export default function ProcessingOverlay({ stage, percent }) {
   const roundedPercent = Math.round(displayPercent);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#212121] border border-[#333] rounded-2xl p-8 w-full max-w-md shadow-2xl fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md fade-in">
+      <div className="relative w-full max-w-md p-8 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden backdrop-blur-xl">
+        {/* Glow backdrop behind modal icon */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl glow-orb pointer-events-none" />
+
         {/* Icon + title */}
-        <div className="text-center mb-8">
-          <div className="text-5xl mb-4">
+        <div className="text-center mb-8 relative z-10">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl shadow-inner">
             {STAGES[Math.max(0, currentStageIndex)]?.icon || '⚙️'}
           </div>
-          <h2 className="text-lg font-semibold">Processing Meeting</h2>
-          <p className="text-[#666] text-sm mt-1">
+          <h2 className="text-xl font-bold tracking-tight text-white">Processing Meeting</h2>
+          <p className="text-zinc-400 text-sm mt-1">
             {STAGES[Math.max(0, currentStageIndex)]?.label || 'Please wait…'}
           </p>
         </div>
 
         {/* Progress bar */}
-        <div className="mb-6">
-          <div className="flex justify-between mb-2">
-            <span className="text-xs text-[#666]">Progress</span>
-            <span className="text-xs text-[#888] font-mono">{roundedPercent}%</span>
+        <div className="mb-7 relative z-10">
+          <div className="flex justify-between mb-2 text-xs">
+            <span className="text-zinc-400 font-medium">Pipeline Progress</span>
+            <span className="text-emerald-400 font-mono font-semibold">{roundedPercent}%</span>
           </div>
-          <div className="h-2 bg-[#2a2a2a] rounded-full overflow-hidden">
+          <div className="h-2.5 bg-zinc-800/80 rounded-full overflow-hidden p-0.5 border border-zinc-700/50">
             <div
-              className="h-full bg-green-500 rounded-full transition-all duration-300 ease-out"
+              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300 ease-out shadow-sm shadow-emerald-500/50"
               style={{ width: `${Math.min(100, roundedPercent)}%` }}
             />
           </div>
         </div>
 
         {/* Stage checklist */}
-        <div className="space-y-3">
+        <div className="space-y-3 relative z-10">
           {STAGES.map((s, i) => {
             const isComplete = currentStageIndex > i || (stage === 'complete');
             const isCurrent  = currentStageIndex === i;
 
             return (
-              <div key={s.id} className="flex items-center gap-3">
+              <div key={s.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-zinc-950/40 border border-zinc-800/40">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-                  isComplete ? 'bg-green-600' :
-                  isCurrent  ? 'bg-green-900 border-2 border-green-600' :
-                               'bg-[#2a2a2a] border border-[#333]'
+                  isComplete ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
+                  isCurrent  ? 'bg-emerald-500/10 border-2 border-emerald-400' :
+                               'bg-zinc-800/60 border border-zinc-700/50'
                 }`}>
                   {isComplete ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                       <polyline points="20 6 9 17 4 12"/>
                     </svg>
                   ) : isCurrent ? (
-                    <div className="w-2 h-2 rounded-full bg-green-400 spinner" />
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 spinner" />
                   ) : (
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#555]" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
                   )}
                 </div>
-                <span className={`text-sm transition-colors ${
-                  isComplete ? 'text-green-400' :
+                <span className={`text-sm font-medium transition-colors ${
+                  isComplete ? 'text-emerald-400' :
                   isCurrent  ? 'text-white' :
-                               'text-[#555]'
+                               'text-zinc-500'
                 }`}>
                   {s.icon} {s.label}
                 </span>
@@ -101,8 +104,8 @@ export default function ProcessingOverlay({ stage, percent }) {
           })}
         </div>
 
-        <p className="text-center text-[#444] text-xs mt-8">
-          This may take a few minutes depending on the meeting length
+        <p className="text-center text-zinc-500 text-xs mt-7 relative z-10">
+          Auto-saving results to your MeetMind database
         </p>
       </div>
     </div>

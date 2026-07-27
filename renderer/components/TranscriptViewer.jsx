@@ -7,22 +7,21 @@ function formatTime(seconds) {
   return `${m}:${s}`;
 }
 
-const SPEAKER_COLORS = [
-  'text-blue-400',
-  'text-purple-400',
-  'text-yellow-400',
-  'text-pink-400',
-  'text-cyan-400',
-  'text-orange-400',
+const SPEAKER_STYLES = [
+  'text-emerald-400 border-emerald-500/20 bg-emerald-500/10',
+  'text-sky-400 border-sky-500/20 bg-sky-500/10',
+  'text-amber-400 border-amber-500/20 bg-amber-500/10',
+  'text-purple-400 border-purple-500/20 bg-purple-500/10',
+  'text-rose-400 border-rose-500/20 bg-rose-500/10',
+  'text-teal-400 border-teal-500/20 bg-teal-500/10',
 ];
 
-function getSpeakerColor(speaker) {
-  // Consistent color per speaker name
+function getSpeakerStyle(speaker) {
   let hash = 0;
   for (let i = 0; i < (speaker || '').length; i++) {
     hash = speaker.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return SPEAKER_COLORS[Math.abs(hash) % SPEAKER_COLORS.length];
+  return SPEAKER_STYLES[Math.abs(hash) % SPEAKER_STYLES.length];
 }
 
 function HighlightedText({ text, query }) {
@@ -33,7 +32,7 @@ function HighlightedText({ text, query }) {
     <span>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={i} className="bg-yellow-500 text-black rounded px-0.5">{part}</mark>
+          <mark key={i} className="bg-amber-400/30 text-amber-200 border border-amber-400/40 rounded px-1">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
         )
@@ -57,7 +56,7 @@ export default function TranscriptViewer({ transcript }) {
 
   const copyAll = async () => {
     const text = transcript
-      .map((seg) => `[${formatTime(seg.startTime)}] ${seg.speaker}: ${seg.text}`)
+      .map((seg) => `[${formatTime(seg.startTime)}] ${seg.speaker || 'Speaker'}: ${seg.text}`)
       .join('\n');
     await navigator.clipboard.writeText(text);
     setCopied(true);
@@ -66,31 +65,31 @@ export default function TranscriptViewer({ transcript }) {
 
   if (!transcript?.length) {
     return (
-      <div className="py-8 text-center text-[#555] text-sm">
-        No transcript available.
+      <div className="py-12 text-center text-zinc-500 text-sm">
+        No transcript entries found for this session.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 max-w-4xl">
       {/* Search + copy bar */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <div className="relative flex-1">
-          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#555] w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
           <input
             type="text"
-            placeholder="Search transcript…"
+            placeholder="Search transcript text or speakers…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="input pl-8 text-xs h-8"
+            className="input pl-9 text-xs h-9"
           />
         </div>
         <button
           onClick={copyAll}
-          className="btn-outline text-xs px-3 py-1.5 h-8"
+          className="btn-outline text-xs px-3.5 py-2 h-9"
         >
           {copied ? (
             <>
@@ -104,35 +103,38 @@ export default function TranscriptViewer({ transcript }) {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
-              Copy
+              Copy Full Transcript
             </>
           )}
         </button>
       </div>
 
       {searchQuery && (
-        <p className="text-[#666] text-xs">
-          {segments.length} result{segments.length !== 1 ? 's' : ''} for "{searchQuery}"
+        <p className="text-zinc-400 text-xs px-1">
+          Showing {segments.length} matching segment{segments.length !== 1 ? 's' : ''} for "{searchQuery}"
         </p>
       )}
 
       {/* Transcript segments */}
-      <div className="space-y-2 pr-1">
-        {segments.map((seg, i) => (
-          <div key={i} className="flex gap-3 group">
-            <span className="text-[#555] text-xs font-mono mt-0.5 flex-shrink-0 w-10 text-right">
-              {formatTime(seg.startTime)}
-            </span>
-            <div className="flex-1 min-w-0">
-              <span className={`text-xs font-semibold ${getSpeakerColor(seg.speaker)} mr-1.5`}>
-                {seg.speaker || 'Speaker'}:
+      <div className="space-y-2.5">
+        {segments.map((seg, i) => {
+          const speakerStyle = getSpeakerStyle(seg.speaker);
+          return (
+            <div key={i} className="flex gap-3 p-3 rounded-xl bg-zinc-900/40 border border-zinc-800/60 hover:border-zinc-700/80 transition-all group">
+              <span className="text-zinc-500 text-xs font-mono mt-0.5 flex-shrink-0 w-12 text-right">
+                {formatTime(seg.startTime)}
               </span>
-              <span className="text-[#c0c0c0] text-sm">
-                <HighlightedText text={seg.text || ''} query={searchQuery} />
-              </span>
+              <div className="flex-1 min-w-0">
+                <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded border mb-1 ${speakerStyle}`}>
+                  {seg.speaker || 'Speaker'}
+                </span>
+                <p className="text-zinc-200 text-sm leading-relaxed">
+                  <HighlightedText text={seg.text || ''} query={searchQuery} />
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

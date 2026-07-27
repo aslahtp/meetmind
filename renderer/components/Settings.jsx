@@ -4,9 +4,9 @@ import { useApp } from '../app.jsx';
 function Field({ label, hint, children }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-medium text-[#d0d0d0]">{label}</label>
+      <label className="text-xs font-semibold uppercase tracking-wider text-zinc-300">{label}</label>
       {children}
-      {hint && <p className="text-xs text-[#555]">{hint}</p>}
+      {hint && <p className="text-xs text-zinc-500">{hint}</p>}
     </div>
   );
 }
@@ -21,11 +21,11 @@ function PasswordInput({ value, onChange, placeholder, ...props }) {
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="input pr-10"
+        className="input pr-10 font-mono text-xs"
       />
       <button
         type="button"
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#555] hover:text-[#888]"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
         onClick={() => setShow(!show)}
         tabIndex={-1}
       >
@@ -63,7 +63,7 @@ function TestButton({ onTest, label }) {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2.5">
       <button
         onClick={handleTest}
         disabled={status === 'testing'}
@@ -74,20 +74,20 @@ function TestButton({ onTest, label }) {
             <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
-            Testing…
+            Testing Connection…
           </>
         ) : 'Test Connection'}
       </button>
       {status === 'ok' && (
-        <span className="text-green-500 text-xs flex items-center gap-1">
+        <span className="text-emerald-400 text-xs font-semibold flex items-center gap-1">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
-          Connected
+          Connected Successfully
         </span>
       )}
       {status === 'error' && (
-        <span className="text-red-400 text-xs">{error}</span>
+        <span className="text-rose-400 text-xs font-medium">{error}</span>
       )}
     </div>
   );
@@ -95,7 +95,7 @@ function TestButton({ onTest, label }) {
 
 function DeviceProbeButton({ device, probing, result, onProbe }) {
   return (
-    <div className="flex items-center gap-2 mt-1">
+    <div className="flex items-center gap-2.5 mt-1.5">
       <button
         onClick={onProbe}
         disabled={probing}
@@ -106,24 +106,24 @@ function DeviceProbeButton({ device, probing, result, onProbe }) {
             <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
-            Testing (3 s)…
+            Probing Audio (3s)…
           </>
-        ) : 'Test Device'}
+        ) : 'Probe Level'}
       </button>
       {result && !probing && (
         result.isSilent ? (
-          <span className="text-red-400 text-xs flex items-center gap-1">
+          <span className="text-rose-400 text-xs flex items-center gap-1">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
             </svg>
-            Silent (peak {result.peak ?? 0}) — check levels &amp; privacy settings
+            Silent (peak {result.peak ?? 0}) — check levels &amp; privacy
           </span>
         ) : (
-          <span className="text-green-500 text-xs flex items-center gap-1">
+          <span className="text-emerald-400 text-xs font-semibold flex items-center gap-1">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <polyline points="20 6 9 17 4 12"/>
             </svg>
-            Audio detected (peak {result.peak})
+            Signal Detected (Peak {result.peak})
           </span>
         )
       )}
