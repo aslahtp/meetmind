@@ -127,6 +127,10 @@ function handleExtensionMessage(message, ws, handlers) {
       }));
       break;
 
+    case 'SHOW_WINDOW':
+      handlers.onShowWindow?.();
+      break;
+
     default:
       logger.warn('Unknown WebSocket message type', { type: message.type });
   }

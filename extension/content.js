@@ -8,24 +8,55 @@ let overlayFrame = null;
 let currentMeetingUrl = window.location.href;
 let currentMeetingTitle = document.title;
 let overlayCollapsed = false;
+let overlayWidth = 160;
+let overlayHeight = 52;
 
-const EXPANDED_STYLE = {
-  bottom: '100px',
-  right: '16px',
-  left: 'auto',
-  top: 'auto',
-  transform: 'none',
-  borderRadius: '16px',
-};
+// Shared baseline above Meet's bottom toolbar — both expanded pill and
+// minimized dock anchor to this so they share the same Y position.
+const BOTTOM_OFFSET = 88;
+const BAR_HEIGHT = 52;
+const COLLAPSED_RADIUS = '14px 0 0 14px';
 
-const COLLAPSED_STYLE = {
-  bottom: 'auto',
-  left: 'auto',
-  right: '0',
-  top: '50%',
-  transform: 'translateY(-50%)',
-  borderRadius: '16px 0 0 16px',
-};
+function important(prop, value) {
+  if (!overlayFrame) return;
+  overlayFrame.style.setProperty(prop, value, 'important');
+}
+
+function applyOverlayBox() {
+  if (!overlayFrame) return;
+
+  const left = Math.max(0, window.innerWidth - overlayWidth);
+
+  important('position', 'fixed');
+  important('top', 'auto');
+  important('bottom', `${BOTTOM_OFFSET}px`);
+  important('left', `${left}px`);
+  important('right', 'auto');
+  important('width', `${overlayWidth}px`);
+  important('height', `${overlayHeight}px`);
+  important('max-width', `${overlayWidth}px`);
+  important('min-width', `${overlayWidth}px`);
+  important('max-height', `${overlayHeight}px`);
+  important('min-height', `${overlayHeight}px`);
+  important('border-radius', overlayCollapsed ? COLLAPSED_RADIUS : '0');
+  important('margin', '0');
+  important('padding', '0');
+  important('border', '0');
+  important('outline', 'none');
+  important('box-shadow', 'none');
+  important('background', 'transparent');
+  important('background-color', 'transparent');
+  important('overflow', 'hidden');
+  important('z-index', '2147483647');
+  important('pointer-events', 'auto');
+  important('transform', 'none');
+  important(
+    'transition',
+    'width 0.2s ease, max-width 0.2s ease, min-width 0.2s ease, left 0.2s ease, height 0.2s ease',
+  );
+}
+
+window.addEventListener('resize', applyOverlayBox);
 
 // ── Overlay management ────────────────────────────────────────────────────────
 
@@ -37,23 +68,14 @@ function injectOverlay(config = {}) {
   overlayFrame.src = chrome.runtime.getURL('overlay/overlay.html');
   overlayFrame.allow = '';
   overlayFrame.allowFullscreen = false;
+  overlayFrame.style.colorScheme = 'dark';
 
-  Object.assign(overlayFrame.style, {
-    position:      'fixed',
-    width:         '360px',
-    height:        '64px',
-    border:        'none',
-    zIndex:        '2147483647',
-    background:    'transparent',
-    boxShadow:     'none',
-    overflow:      'hidden',
-    transition:    'height 0.25s cubic-bezier(0.22, 1, 0.36, 1), width 0.25s ease, top 0.25s ease, bottom 0.25s ease, left 0.25s ease, right 0.25s ease, transform 0.25s ease, border-radius 0.2s ease',
-    pointerEvents: 'auto',
-    colorScheme:   'dark',
-    ...EXPANDED_STYLE,
-  });
+  overlayWidth = 160;
+  overlayHeight = BAR_HEIGHT;
+  overlayCollapsed = false;
 
-  document.body.appendChild(overlayFrame);
+  (document.documentElement || document.body).appendChild(overlayFrame);
+  applyOverlayBox();
 
   // Once loaded, send initial state
   overlayFrame.addEventListener('load', () => {
@@ -79,25 +101,20 @@ function sendToOverlay(message) {
   overlayFrame.contentWindow.postMessage(message, '*');
 }
 
-function applyDockPosition(collapsed) {
-  if (!overlayFrame) return;
-  overlayCollapsed = !!collapsed;
-
-  // Reset all anchor props so collapsed ↔ expanded never leave stale values
-  overlayFrame.style.top = 'auto';
-  overlayFrame.style.bottom = 'auto';
-  overlayFrame.style.left = 'auto';
-  overlayFrame.style.right = 'auto';
-  overlayFrame.style.transform = 'none';
-
-  Object.assign(overlayFrame.style, overlayCollapsed ? COLLAPSED_STYLE : EXPANDED_STYLE);
-}
-
 function resizeOverlay(height, width, collapsed) {
   if (!overlayFrame) return;
-  if (typeof collapsed === 'boolean') applyDockPosition(collapsed);
-  overlayFrame.style.height = `${Math.max(overlayCollapsed ? 52 : 56, height)}px`;
-  if (width) overlayFrame.style.width = `${width}px`;
+
+  if (typeof collapsed === 'boolean') {
+    overlayCollapsed = collapsed;
+  } else if (width && width <= 52) {
+    overlayCollapsed = true;
+  }
+
+  if (width) overlayWidth = width;
+  if (height) overlayHeight = height;
+  else if (!overlayCollapsed) overlayHeight = BAR_HEIGHT;
+
+  applyOverlayBox();
 }
 
 // ── Messages from background service worker ───────────────────────────────────
@@ -137,8 +154,8 @@ chrome.runtime.onMessage.addListener((message) => {
 // ── Messages from overlay iframe (postMessage) ────────────────────────────────
 
 window.addEventListener('message', (event) => {
-  // Only accept messages from our own extension overlay
   if (!event.data || typeof event.data !== 'object') return;
+  if (overlayFrame && event.source !== overlayFrame.contentWindow) return;
 
   const msg = event.data;
 

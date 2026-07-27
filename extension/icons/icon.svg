@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background -->
+  <rect width="128" height="128" rx="24" fill="#1a1a1a"/>
+  <!-- Green gradient background circle -->
+  <circle cx="64" cy="64" r="48" fill="#16a34a" opacity="0.15"/>
+  <!-- Microphone body -->
+  <rect x="48" y="20" width="32" height="52" rx="16" fill="#22c55e"/>
+  <!-- Microphone stand -->
+  <path d="M32 70 Q32 96 64 96 Q96 96 96 70" stroke="#22c55e" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- Stand pole -->
+  <line x1="64" y1="96" x2="64" y2="112" stroke="#22c55e" stroke-width="6" stroke-linecap="round"/>
+  <!-- Stand base -->
+  <line x1="44" y1="112" x2="84" y2="112" stroke="#22c55e" stroke-width="6" stroke-linecap="round"/>
+</svg>

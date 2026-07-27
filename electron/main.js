@@ -20,13 +20,17 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+  app.on('second-instance', (_event, argv) => {
+    focusMainWindow();
+    const protocolUrl = argv.find((arg) => typeof arg === 'string' && arg.startsWith('meetmind://'));
+    if (protocolUrl) logger.info('Opened via protocol', { protocolUrl });
   });
+}
+
+if (process.platform === 'win32' && process.defaultApp) {
+  app.setAsDefaultProtocolClient('meetmind', process.execPath, [path.resolve(process.argv[1])]);
+} else {
+  app.setAsDefaultProtocolClient('meetmind');
 }
 
 // Must be called before app.whenReady() to allow media playback from meetmind-audio://
@@ -43,6 +47,16 @@ protocol.registerSchemesAsPrivileged([{
 let mainWindow = null;
 let tray = null;
 let isRecording = false;
+
+function focusMainWindow() {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    createMainWindow();
+  }
+}
 
 // ── Window ──────────────────────────────────────────────────────────────────
 
@@ -827,11 +841,17 @@ app.whenReady().then(async () => {
   await startWebSocketServer(config.websocketPort, {
     onStartRecording: (data) => handleStartRecording(null, data.meetingUrl, data.meetingTitle),
     onStopRecording: () => handleStopRecording(),
+    onShowWindow: () => focusMainWindow(),
     onStatusRequest: () => ({
       recording: isRecording,
       sessionId: currentSessionId,
     }),
     mainWindow,
+  });
+
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    if (url.startsWith('meetmind://')) focusMainWindow();
   });
 
   app.setLoginItemSettings({ openAtLogin: config.autoLaunch });

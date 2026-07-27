@@ -47,7 +47,6 @@ React Renderer (Vite + Tailwind CSS config with CSS var theming)
 
 ## Prerequisites
 
-
 | Requirement              | Notes                                                              |
 | ------------------------ | ------------------------------------------------------------------ |
 | Windows 10/11 x64        | Required for WASAPI/dshow audio capture                            |
@@ -57,7 +56,6 @@ React Renderer (Vite + Tailwind CSS config with CSS var theming)
 | AssemblyAI API key       | Optional alternative to Google STT                                 |
 | Gemini API key           | [aistudio.google.com](https://aistudio.google.com/app/apikey)      |
 | Notion integration token | [notion.so/my-integrations](https://www.notion.so/my-integrations) |
-
 
 ---
 
@@ -217,16 +215,14 @@ meetmind/
 
 ## Available Scripts
 
-
-| Script                   | Description                                             |
-| ------------------------ | ------------------------------------------------------- |
-| `npm run dev`            | Start Electron + Vite dev server concurrently           |
-| `npm run build`          | Build renderer + package Windows NSIS installer         |
-| `npm run build:renderer` | Build renderer only (Vite)                              |
-| `npm run build:electron` | Package Electron app only                               |
-| `npm run build:ext`      | Zip Chrome extension into `dist/meetmind-extension.zip` |
-| `npm run generate-icons` | Generate PNG icons from `assets/icons/icon.svg`         |
-
+| Script                   | Description                                               |
+| ------------------------ | --------------------------------------------------------- |
+| `npm run dev`            | Start Electron + Vite dev server concurrently             |
+| `npm run build`          | Build renderer, extension zip, and Windows NSIS installer |
+| `npm run build:renderer` | Build renderer only (Vite)                                |
+| `npm run build:electron` | Package Electron app only                                 |
+| `npm run build:ext`      | Zip Chrome extension into `dist/meetmind-extension.zip`   |
+| `npm run generate-icons` | Generate PNG icons from `assets/icons/icon.svg`           |
 
 ---
 
@@ -239,16 +235,18 @@ meetmind/
 npm run build
 ```
 
-Output: `dist-electron/MeetMind Setup 1.0.0.exe`
+Output:
+
+- `dist/desktop/MeetMind Setup 1.0.0.exe`
+- `dist/meetmind-extension.zip`
 
 > [!CAUTION]
 > Ensure `dist/renderer/**` is included in `package.json` `build.files` before building. Otherwise, the installed app will open a blank window because the `dist` folder is in `.gitignore`. Note: Never commit downloaded FFmpeg `.exe` files, as they exceed GitHub's 100MB file size limit and are ignored by default.
 
-### Package the Chrome extension
+To build only the Chrome extension:
 
 ```powershell
 npm run build:ext
-# Output: dist/meetmind-extension.zip
 ```
 
 ---
@@ -259,16 +257,13 @@ The desktop app listens on `ws://localhost:39842`. The Chrome extension communic
 
 **Extension → Desktop**
 
-
 | Message                                                 | Description     |
 | ------------------------------------------------------- | --------------- |
 | `{ type: "START_RECORDING", meetingUrl, meetingTitle }` | Begin recording |
 | `{ type: "STOP_RECORDING" }`                            | End recording   |
 | `{ type: "APP_STATUS" }`                                | Heartbeat ping  |
 
-
 **Desktop → Extension**
-
 
 | Message                                                 | Description         |
 | ------------------------------------------------------- | ------------------- |
@@ -279,26 +274,22 @@ The desktop app listens on `ws://localhost:39842`. The Chrome extension communic
 | `{ type: "PROCESSING_COMPLETE", notionUrl, sessionId }` | Done                |
 | `{ type: "PROCESSING_ERROR", error }`                   | Error               |
 
-
 Security: only connections from `chrome-extension://` origins are accepted.
 
 ---
 
 ## Gemini Models
 
-
-| Model ID                        | Label                              | Best for                 |
-| ------------------------------- | ---------------------------------- | ------------------------ |
-| `gemini-3.1-flash-lite-preview` | Gemini 3.1 Flash Lite (Fast)       | Default, quick summaries |
-| `gemini-3-flash-preview`        | Gemini 3 Flash (Balanced)          | Standard meetings        |
-| `gemini-3-pro-preview`          | Gemini 3 Pro (pro)                 | Long, complex meetings   |
-| `gemini-3.1-pro-preview`        | Gemini 3.1 Pro (Experimental)      | Deep reasoning           |
-
+| Model ID                        | Label                         | Best for                 |
+| ------------------------------- | ----------------------------- | ------------------------ |
+| `gemini-3.1-flash-lite-preview` | Gemini 3.1 Flash Lite (Fast)  | Default, quick summaries |
+| `gemini-3-flash-preview`        | Gemini 3 Flash (Balanced)     | Standard meetings        |
+| `gemini-3-pro-preview`          | Gemini 3 Pro (pro)            | Long, complex meetings   |
+| `gemini-3.1-pro-preview`        | Gemini 3.1 Pro (Experimental) | Deep reasoning           |
 
 ---
 
 ## Session Statuses
-
 
 | Status         | Meaning                           |
 | -------------- | --------------------------------- |
@@ -308,7 +299,6 @@ Security: only connections from `chrome-extension://` origins are accepted.
 | `uploading`    | Uploading to Notion               |
 | `complete`     | All done                          |
 | `error`        | Pipeline failed (retry available) |
-
 
 ---
 

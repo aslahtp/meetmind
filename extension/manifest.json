@@ -43,7 +43,13 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["overlay/overlay.html", "overlay/overlay.css", "overlay/overlay.js"],
+      "resources": [
+        "overlay/overlay.html",
+        "overlay/overlay.css",
+        "overlay/overlay.js",
+        "icons/collapse_content.svg",
+        "icons/open_in_app.svg"
+      ],
       "matches": ["https://meet.google.com/*", "https://*.zoom.us/*"]
     }
   ]

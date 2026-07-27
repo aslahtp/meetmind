@@ -35,6 +35,12 @@ try {
 }
 
 const root = document.getElementById('overlay-root');
+const PILL_ICON_SIZE = 16;
+
+const MATERIAL_ICON_PATHS = {
+  'collapse_content.svg': 'M440-440v240h-80v-160H200v-80h240Zm160-320v160h160v80H520v-240h80Z',
+  'open_in_app.svg': 'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H600v-80h160v-480H200v480h160v80H200Zm240 0v-246l-64 64-56-58 160-160 160 160-56 58-64-64v246h-80Z',
+};
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -47,25 +53,22 @@ function render() {
 }
 
 function requestResize() {
+  // Fixed bar height keeps expanded + minimized on the same vertical band.
+  // Expanded pill uses one fixed width across all states.
   if (collapsed) {
     window.parent.postMessage({
       type: 'OVERLAY_RESIZE',
-      height: 56,
-      width: 48,
+      height: 52,
+      width: 40,
       collapsed: true,
     }, '*');
     return;
   }
 
-  const height = Math.ceil(root.scrollHeight + 4);
-  const width = currentState === State.RECORDING ? 420
-    : currentState === State.COMPLETE ? 360
-    : currentState === State.PROCESSING ? 340
-    : 360;
   window.parent.postMessage({
     type: 'OVERLAY_RESIZE',
-    height: Math.max(56, height),
-    width,
+    height: 52,
+    width: 160,
     collapsed: false,
   }, '*');
 }
@@ -114,14 +117,7 @@ function buildDockUI() {
     'aria-label': 'Show MeetMind overlay',
   });
 
-  let markVariant = '';
-  if (isRecording) markVariant = 'recording';
-  else if (isOffline) markVariant = 'muted';
-  else if (isComplete) markVariant = 'success';
-
-  const mark = el('div', { class: markVariant ? `dock-mark ${markVariant}` : 'dock-mark' });
-  if (isComplete) mark.appendChild(iconCheck(11));
-  else mark.appendChild(iconMic(12));
+  const mark = brandMark('', 'dock');
 
   let statusClass = 'dock-status idle';
   if (isRecording) statusClass = 'dock-status recording';
@@ -138,7 +134,6 @@ function buildDockUI() {
 
 function addMinimizeControl(pill, { dismiss = false } = {}) {
   pill.classList.add('has-controls');
-  const controls = el('div', { class: 'pill-controls' });
 
   const hideBtn = el('button', {
     class: 'icon-btn',
@@ -146,12 +141,12 @@ function addMinimizeControl(pill, { dismiss = false } = {}) {
     title: 'Hide to edge',
     'aria-label': 'Hide overlay to right edge',
   });
-  hideBtn.appendChild(iconDock(12));
+  hideBtn.appendChild(iconAsset('collapse_content.svg'));
   hideBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     setCollapsed(true);
   });
-  controls.appendChild(hideBtn);
+  pill.appendChild(hideBtn);
 
   if (dismiss) {
     const closeBtn = el('button', {
@@ -160,142 +155,142 @@ function addMinimizeControl(pill, { dismiss = false } = {}) {
       title: 'Dismiss',
       'aria-label': 'Dismiss overlay',
     });
-    closeBtn.appendChild(iconClose(12));
+    closeBtn.appendChild(iconClose());
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       clearTimeout(dismissTimer);
       window.parent.postMessage({ type: 'OVERLAY_DISMISS' }, '*');
     });
-    controls.appendChild(closeBtn);
+    pill.appendChild(closeBtn);
   }
 
-  pill.appendChild(controls);
   return pill;
+}
+
+function pillLabel(text, extraClass = '') {
+  return el('span', {
+    class: extraClass ? `pill-label ${extraClass}` : 'pill-label',
+    title: text,
+  }, text);
 }
 
 // ── IDLE ──────────────────────────────────────────────────────────────────────
 
 function buildIdleUI() {
-  const pill = el('div', { class: 'pill' });
+  const pill = el('div', { class: 'pill compact' });
 
   const mark = brandMark();
-  const copy = el('div', { class: 'col', style: 'gap:1px;flex:1;min-width:0' });
-  copy.append(
-    el('span', { class: 'state-label' }, 'MeetMind'),
-    el('span', { class: 'state-sub' }, 'Ready to capture this meeting'),
-  );
 
-  const btn = el('button', { class: 'btn btn-start', title: 'Start recording' });
-  btn.append(iconMic(14), document.createTextNode(' Record'));
+  const btn = el('button', {
+    class: 'btn btn-start btn-fill',
+    type: 'button',
+    title: 'Start recording',
+    'aria-label': 'Start recording',
+  });
+  btn.append(iconMic(13), document.createTextNode('Record'));
   btn.addEventListener('click', startRecording);
 
-  pill.append(mark, copy, btn);
+  pill.append(mark, btn);
   return addMinimizeControl(pill);
 }
 
 // ── RECORDING ─────────────────────────────────────────────────────────────────
 
 function buildRecordingUI() {
-  const pill = el('div', { class: 'pill recording-active' });
+  const pill = el('div', { class: 'pill compact recording-active' });
 
-  const mark = brandMark('recording');
+  const dot = el('span', { class: 'dot recording', title: 'Recording' });
+  const time = el('span', {
+    class: 'pill-label timer-label',
+    id: 'timer-display',
+    title: 'Recording time',
+  }, formatTime(timerSeconds));
 
-  const copy = el('div', { class: 'col', style: 'gap:1px;flex:1;min-width:0' });
-  const titleRow = el('div', { class: 'row', style: 'gap:6px' });
-  titleRow.append(
-    el('span', { class: 'dot recording' }),
-    el('span', { class: 'state-label' }, 'Recording'),
-  );
-  copy.append(titleRow, el('span', { class: 'state-sub' }, 'Capturing audio…'));
-
-  const wave = el('div', { class: 'waveform', 'aria-hidden': 'true' });
-  for (let i = 0; i < 5; i++) wave.appendChild(el('div', { class: 'wave-bar' }));
-
-  const time = el('span', { class: 'timer', id: 'timer-display' }, formatTime(timerSeconds));
-
-  const btn = el('button', { class: 'btn btn-stop', title: 'Stop recording' });
-  btn.append(iconSquare(8), document.createTextNode(' Stop'));
+  const btn = el('button', {
+    class: 'icon-btn icon-btn-stop',
+    type: 'button',
+    title: 'Stop recording',
+    'aria-label': 'Stop recording',
+  });
+  btn.appendChild(iconSquare());
   btn.addEventListener('click', stopRecording);
 
-  pill.append(mark, copy, wave, time, btn);
+  pill.append(dot, time, btn);
   return addMinimizeControl(pill);
 }
 
 // ── PROCESSING ────────────────────────────────────────────────────────────────
 
 function buildProcessingUI() {
-  const pill = el('div', { class: 'pill expanded' });
+  const pill = el('div', { class: 'pill compact' });
 
-  const row1 = el('div', { class: 'row' });
-  const spinner = el('div', { class: 'spinner', 'aria-hidden': 'true' });
-  const copy = el('div', { class: 'col', style: 'gap:1px;flex:1;min-width:0' });
-  copy.append(
-    el('span', { class: 'state-label' }, 'Processing notes'),
-    el('span', { class: 'stage-text' }, stageLabel(processingStage)),
-  );
-  const pct = el('span', { class: 'pct-text' }, `${Math.round(processingPercent)}%`);
-  row1.append(spinner, copy, pct);
-
-  const track = el('div', { class: 'progress-bar-track' });
-  const fill = el('div', {
-    class: 'progress-bar-fill',
-    style: `width:${Math.min(100, processingPercent)}%`,
+  const spinner = el('div', {
+    class: 'spinner',
+    title: stageLabel(processingStage),
+    'aria-hidden': 'true',
   });
-  track.appendChild(fill);
+  const label = pillLabel(stageShort(processingStage));
+  const pct = el('span', {
+    class: 'pct-text',
+    title: `${Math.round(processingPercent)}%`,
+  }, `${Math.round(processingPercent)}%`);
 
-  pill.append(row1, track);
+  pill.append(spinner, label, pct);
   return addMinimizeControl(pill);
 }
 
 function stageLabel(stage) {
   const labels = {
     transcribing: 'Transcribing audio…',
-    generating:   'Generating notes with AI…',
+    generating:   'Generating notes…',
     uploading:    'Uploading to Notion…',
     complete:     'Almost done…',
   };
-  return labels[stage] || 'Working on your meeting…';
+  return labels[stage] || 'Processing…';
+}
+
+function stageShort(stage) {
+  const labels = {
+    transcribing: 'Transcribe',
+    generating:   'Writing',
+    uploading:    'Upload',
+    complete:     'Finishing',
+  };
+  return labels[stage] || 'Working';
 }
 
 // ── COMPLETE ──────────────────────────────────────────────────────────────────
 
 function buildCompleteUI() {
-  const pill = el('div', { class: 'pill expanded' });
+  const pill = el('div', { class: 'pill compact' });
 
-  const row1 = el('div', { class: 'row' });
-  const checkIcon = el('div', { class: 'check-icon' });
+  const checkIcon = el('div', { class: 'check-icon', title: 'Notes ready' });
   checkIcon.appendChild(iconCheck(11));
-  const copy = el('div', { class: 'col', style: 'gap:1px;flex:1;min-width:0' });
-  copy.append(
-    el('span', { class: 'state-label' }, 'Notes ready'),
-    el('span', { class: 'state-sub' }, 'Saved and ready to review'),
-  );
-  row1.append(checkIcon, copy);
-
-  const actions = el('div', { class: 'actions' });
+  pill.append(checkIcon, pillLabel('Done'));
 
   if (notionUrl) {
-    const notionBtn = el('button', { class: 'btn btn-notion' });
-    notionBtn.append(iconExternal(12), document.createTextNode(' Open in Notion'));
+    const notionBtn = el('button', {
+      class: 'icon-btn',
+      type: 'button',
+      title: 'Open in Notion',
+      'aria-label': 'Open in Notion',
+    });
+    notionBtn.appendChild(iconExternal());
     notionBtn.addEventListener('click', () => window.open(notionUrl, '_blank'));
-    actions.appendChild(notionBtn);
+    pill.appendChild(notionBtn);
   }
 
-  const appBtn = el('button', { class: 'btn btn-ghost' });
-  appBtn.append(iconApp(12), document.createTextNode(' View in App'));
-  appBtn.addEventListener('click', () => window.parent.postMessage({ type: 'OVERLAY_OPEN_APP' }, '*'));
-  actions.appendChild(appBtn);
-
-  const dismissTrack = el('div', { class: 'progress-bar-track' });
-  const dismissFill = el('div', {
-    class: 'dismiss-bar',
-    id: 'dismiss-bar',
-    style: 'width:100%',
+  const appBtn = el('button', {
+    class: 'icon-btn',
+    type: 'button',
+    title: 'View in App',
+    'aria-label': 'View in App',
   });
-  dismissTrack.appendChild(dismissFill);
+  appBtn.appendChild(iconAsset('open_in_app.svg'));
+  appBtn.addEventListener('click', () => window.parent.postMessage({ type: 'OVERLAY_OPEN_APP' }, '*'));
+  pill.appendChild(appBtn);
 
-  pill.append(row1, actions, dismissTrack);
-  addMinimizeControl(pill, { dismiss: true });
+  addMinimizeControl(pill);
   startDismissCountdown();
   return pill;
 }
@@ -305,8 +300,6 @@ function startDismissCountdown() {
   let remaining = dismissSeconds;
   const tick = () => {
     remaining--;
-    const fill = document.getElementById('dismiss-bar');
-    if (fill) fill.style.width = `${(remaining / dismissSeconds) * 100}%`;
     if (remaining <= 0) {
       window.parent.postMessage({ type: 'OVERLAY_DISMISS' }, '*');
     } else {
@@ -319,24 +312,23 @@ function startDismissCountdown() {
 // ── APP OFFLINE ───────────────────────────────────────────────────────────────
 
 function buildOfflineUI() {
-  const pill = el('div', { class: 'pill' });
+  const pill = el('div', { class: 'pill compact' });
 
-  const mark = brandMark('muted');
-  mark.appendChild(iconMic(12));
+  const mark = brandMark('muted offline');
+  mark.setAttribute('title', 'MeetMind — app offline');
 
-  const copy = el('div', { class: 'col', style: 'gap:1px;flex:1;min-width:0' });
-  const titleRow = el('div', { class: 'row', style: 'gap:6px' });
-  titleRow.append(
-    el('span', { class: 'dot offline' }),
-    el('span', { class: 'state-label warning' }, 'App not running'),
-  );
-  copy.append(titleRow, el('span', { class: 'state-sub' }, 'Open MeetMind to start recording'));
+  const label = pillLabel('Offline', 'offline-label');
 
-  const btn = el('button', { class: 'btn btn-download' });
-  btn.append(iconDownload(12), document.createTextNode(' Get App'));
-  btn.addEventListener('click', () => window.open('https://github.com/meetmind/meetmind/releases', '_blank'));
+  const btn = el('button', {
+    class: 'icon-btn',
+    type: 'button',
+    title: 'Open MeetMind app',
+    'aria-label': 'Open MeetMind app',
+  });
+  btn.appendChild(iconAsset('open_in_app.svg'));
+  btn.addEventListener('click', () => window.parent.postMessage({ type: 'OVERLAY_OPEN_APP' }, '*'));
 
-  pill.append(mark, copy, btn);
+  pill.append(mark, label, btn);
   return addMinimizeControl(pill);
 }
 
@@ -469,12 +461,32 @@ function el(tag, attrs = {}, text = '') {
   return node;
 }
 
-function brandMark(variant = '') {
-  const mark = el('div', { class: variant ? `brand-mark ${variant}` : 'brand-mark' });
-  if (variant !== 'muted') {
-    mark.appendChild(iconMic(12));
-  }
+function brandMark(variant = '', size = 'pill') {
+  const classes = ['brand-mark'];
+  if (variant) classes.push(variant);
+  if (size === 'dock') classes.push('dock-size');
+  const mark = el('div', { class: classes.join(' ') });
+  mark.appendChild(iconMic(size === 'dock' ? 11 : 12));
   return mark;
+}
+
+function iconAsset(filename, size = PILL_ICON_SIZE) {
+  const pathD = MATERIAL_ICON_PATHS[filename];
+  if (!pathD) throw new Error(`Unknown icon asset: ${filename}`);
+  return iconMaterial(pathD, size);
+}
+
+function iconMaterial(pathD, size = PILL_ICON_SIZE) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('viewBox', '0 -960 960 960');
+  svg.setAttribute('fill', 'currentColor');
+  svg.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', pathD);
+  svg.appendChild(p);
+  return svg;
 }
 
 function svgEl(attrs = {}) {
@@ -499,7 +511,7 @@ function path(d) {
   return p;
 }
 
-function iconMic(size) {
+function iconMic(size = PILL_ICON_SIZE) {
   const svg = svgEl({ width: size, height: size });
   svg.append(
     path('M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z'),
@@ -509,7 +521,7 @@ function iconMic(size) {
   return svg;
 }
 
-function iconSquare(size) {
+function iconSquare(size = 10) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
@@ -523,19 +535,19 @@ function iconSquare(size) {
   return svg;
 }
 
-function iconCheck(size) {
+function iconCheck(size = 11) {
   const svg = svgEl({ width: size, height: size, 'stroke-width': '3' });
   svg.appendChild(path('M20 6 9 17l-5-5'));
   return svg;
 }
 
-function iconClose(size) {
+function iconClose(size = PILL_ICON_SIZE) {
   const svg = svgEl({ width: size, height: size, 'stroke-width': '2.2' });
   svg.append(path('M18 6 6 18'), path('M6 6l12 12'));
   return svg;
 }
 
-function iconExternal(size) {
+function iconExternal(size = PILL_ICON_SIZE) {
   const svg = svgEl({ width: size, height: size, 'stroke-width': '2.2' });
   svg.append(
     path('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'),
@@ -545,37 +557,12 @@ function iconExternal(size) {
   return svg;
 }
 
-function iconApp(size) {
-  const svg = svgEl({ width: size, height: size, 'stroke-width': '2.2' });
-  const mk = (x, y) => {
-    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    r.setAttribute('x', String(x));
-    r.setAttribute('y', String(y));
-    r.setAttribute('width', '7');
-    r.setAttribute('height', '7');
-    r.setAttribute('rx', '1.5');
-    return r;
-  };
-  svg.append(mk(3, 3), mk(14, 3), mk(3, 14), mk(14, 14));
-  return svg;
-}
-
 function iconDownload(size) {
   const svg = svgEl({ width: size, height: size, 'stroke-width': '2.2' });
   svg.append(
     path('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'),
     path('M7 10l5 5 5-5'),
     path('M12 15V3'),
-  );
-  return svg;
-}
-
-function iconDock(size) {
-  const svg = svgEl({ width: size, height: size, 'stroke-width': '2.2' });
-  svg.append(
-    path('M20 6H10a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10'),
-    path('M9 12h11'),
-    path('M17 9l3 3-3 3'),
   );
   return svg;
 }

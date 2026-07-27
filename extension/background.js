@@ -116,6 +116,17 @@ function sendToDesktop(message) {
   return false;
 }
 
+function launchDesktopApp() {
+  chrome.tabs.create({ url: 'meetmind://open', active: false }, (tab) => {
+    if (tab?.id) {
+      setTimeout(() => {
+        chrome.tabs.remove(tab.id).catch(() => {});
+      }, 1500);
+    }
+  });
+  connectWebSocket();
+}
+
 // ── Handle messages from desktop app ─────────────────────────────────────────
 
 function handleDesktopMessage(msg) {
@@ -298,8 +309,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case 'OPEN_APP': {
-      // Tell desktop to show the main window
-      sendToDesktop({ type: 'SHOW_WINDOW' });
+      if (wsConnected) {
+        sendToDesktop({ type: 'SHOW_WINDOW' });
+      } else {
+        launchDesktopApp();
+      }
       sendResponse({ success: true });
       break;
     }

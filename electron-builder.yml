@@ -3,7 +3,7 @@ productName: MeetMind
 copyright: Copyright © 2025 MeetMind
 
 directories:
-  output: dist-electron
+  output: dist/desktop
   buildResources: assets
 
 win:
@@ -11,16 +11,20 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: assets/icons/icon.ico
+  icon: icons/icon256.png
+  signAndEditExecutable: false
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  installerIcon: assets/icons/icon.ico
-  uninstallerIcon: assets/icons/icon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: MeetMind
+
+protocols:
+  - name: MeetMind
+    schemes:
+      - meetmind
 
 extraResources:
   - from: assets/ffmpeg/

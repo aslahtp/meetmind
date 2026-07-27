@@ -1,16 +1,19 @@
 {
   "name": "meetmind",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "AI meeting notes — transcribe, summarize, and upload to Notion",
   "main": "electron/main.js",
   "scripts": {
+    "predev": "npm run generate-icons && npm run build:ext",
     "dev": "concurrently \"vite\" \"cross-env NODE_ENV=development electron .\"",
     "dev:renderer": "vite",
     "dev:electron": "cross-env NODE_ENV=development electron .",
-    "build": "vite build && electron-builder --win",
+    "prebuild": "npm run generate-icons && npm run build:ext",
+    "build": "vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml",
     "build:renderer": "vite build",
-    "build:electron": "electron-builder --win",
-    "build:ext": "cd extension && powershell Compress-Archive -Path * -DestinationPath ../dist/meetmind-extension.zip -Force",
+    "build:electron": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml",
+    "build:dir": "vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --dir --config electron-builder.yml",
+    "build:ext": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && cd extension && powershell Compress-Archive -Path * -DestinationPath ../dist/meetmind-extension.zip -Force",
     "preview": "vite preview",
     "generate-icons": "node scripts/generate-icons.js"
   },
@@ -39,7 +42,7 @@
     "vite": "^6.0.5"
   },
   "build": {
-    "extends": null,
+    "extends": "./electron-builder.yml",
     "files": [
       "electron/**",
       "dist/renderer/**",
