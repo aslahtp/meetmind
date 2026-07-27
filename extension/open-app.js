@@ -6,23 +6,37 @@ const hintEl = document.getElementById('hint');
 const launchEl = document.getElementById('launch');
 
 function openProtocol() {
-  // Chrome blocks meetmind:// in chrome.tabs.create from the service worker.
-  // Navigating from this extension page is the reliable handoff.
+  // Prefer a real user-activated <a> click — most reliable in Chrome.
   try {
-    window.location.href = PROTOCOL_URL;
-  } catch (_) {
     launchEl.click();
+  } catch (_) {
+    window.location.href = PROTOCOL_URL;
+  }
+
+  // Fallback iframe handoff (some Chrome builds ignore location.assign for custom schemes)
+  try {
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = PROTOCOL_URL;
+    document.body.appendChild(iframe);
+    setTimeout(() => iframe.remove(), 2000);
+  } catch (_) {
+    // ignore
   }
 }
+
+launchEl.addEventListener('click', () => {
+  statusEl.textContent = 'Launching MeetMind…';
+});
 
 openProtocol();
 
 setTimeout(() => {
   statusEl.textContent = 'Waiting for MeetMind…';
   hintEl.hidden = false;
-}, 1200);
+}, 1000);
 
-// Ask the background to close this helper tab after the OS handles the protocol.
+// Keep the tab briefly so Chrome can show the external-protocol prompt.
 setTimeout(() => {
   chrome.runtime.sendMessage({ type: 'CLOSE_OPEN_APP_TAB' }).catch(() => {});
-}, 2500);
+}, 8000);

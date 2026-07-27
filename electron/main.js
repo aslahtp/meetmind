@@ -27,11 +27,10 @@ if (!gotSingleInstanceLock) {
   });
 }
 
-if (process.defaultApp) {
-  if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('meetmind', process.execPath, [path.resolve(process.argv[1])]);
-  }
-} else {
+// Only the packaged app should own meetmind://.
+// Registering from `npm run dev` steals the handler and points it at electron.exe,
+// so "Open App" from the extension fails after install.
+if (app.isPackaged) {
   app.setAsDefaultProtocolClient('meetmind');
 }
 
@@ -875,6 +874,11 @@ app.whenReady().then(async () => {
 
   createMainWindow();
   createTray();
+
+  // Keep meetmind:// pointed at this installed exe (not a leftover dev registration).
+  if (app.isPackaged) {
+    app.setAsDefaultProtocolClient('meetmind');
+  }
 
   // Windows cold-start via meetmind:// puts the URL on process.argv
   const startupProtocolUrl = process.argv.find(

@@ -26,7 +26,7 @@ function connectWebSocket() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
   try {
-    ws = new WebSocket(`ws://localhost:${currentPort}`);
+    ws = new WebSocket(`ws://127.0.0.1:${currentPort}`);
   } catch {
     tryNextPort();
     return;

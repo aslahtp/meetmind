@@ -23,6 +23,8 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: MeetMind
+  include: installer.nsh
+  warningsAsErrors: false
 
 protocols:
   - name: MeetMind
