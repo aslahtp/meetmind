@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import NotionIcon from './NotionIcon.jsx';
 
 const STAGES = [
   { id: 'transcribing', label: 'Transcribing audio speech…',     icon: '🎙️', range: [0, 60]  },
   { id: 'generating',   label: 'Generating notes with AI…',      icon: '🧠', range: [60, 85] },
-  { id: 'uploading',    label: 'Uploading page to Notion…',      icon: '📤', range: [85, 100] },
+  { id: 'uploading',    label: 'Uploading page to Notion…',      icon: 'notion', range: [85, 100] },
 ];
 
 function getStageIndex(stageId) {
@@ -37,6 +38,12 @@ export default function ProcessingOverlay({ stage, percent }) {
 
   const currentStageIndex = getStageIndex(stage);
   const roundedPercent = Math.round(displayPercent);
+  const currentStage = STAGES[Math.max(0, currentStageIndex)];
+
+  const renderStageIcon = (stageIcon, size = 28) => {
+    if (stageIcon === 'notion') return <NotionIcon size={size} />;
+    return stageIcon;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md fade-in">
@@ -47,11 +54,11 @@ export default function ProcessingOverlay({ stage, percent }) {
         {/* Icon + title */}
         <div className="text-center mb-8 relative z-10">
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl shadow-inner">
-            {STAGES[Math.max(0, currentStageIndex)]?.icon || '⚙️'}
+            {currentStage ? renderStageIcon(currentStage.icon, 32) : '⚙️'}
           </div>
           <h2 className="text-xl font-bold tracking-tight text-white">Processing Meeting</h2>
           <p className="text-zinc-400 text-sm mt-1">
-            {STAGES[Math.max(0, currentStageIndex)]?.label || 'Please wait…'}
+            {currentStage?.label || 'Please wait…'}
           </p>
         </div>
 
@@ -97,7 +104,10 @@ export default function ProcessingOverlay({ stage, percent }) {
                   isCurrent  ? 'text-white' :
                                'text-zinc-500'
                 }`}>
-                  {s.icon} {s.label}
+                  <span className="inline-flex items-center gap-1.5">
+                    {s.icon === 'notion' ? <NotionIcon size={14} /> : s.icon}
+                    {s.label}
+                  </span>
                 </span>
               </div>
             );

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { useApp } from '../app.jsx';
+import NotionIcon from './NotionIcon.jsx';
 
 const SENTIMENT_BADGE = {
   positive: { cls: 'badge-green', icon: '✨' },
@@ -185,9 +186,7 @@ function SessionCard({ session, onClick, onDelete }) {
           )}
           {session.notion_page_url && (
             <span className="text-emerald-400 font-medium flex items-center gap-1.5">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M4 4h16v16H4V4z" />
-              </svg>
+              <NotionIcon size={14} />
               Notion Synced
             </span>
           )}

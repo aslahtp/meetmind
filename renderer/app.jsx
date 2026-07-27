@@ -17,6 +17,13 @@ export function useApp() {
 
 // ── Root App ──────────────────────────────────────────────────────────────────
 
+function hasSttApiKey(cfg) {
+  const service = cfg?.sttService || 'google';
+  if (service === 'assemblyai') return !!cfg?.assemblyAiApiKey?.trim();
+  if (service === 'sarvam') return !!cfg?.sarvamApiKey?.trim();
+  return !!cfg?.googleApiKey?.trim();
+}
+
 function App() {
   const [view, setView] = useState('dashboard');           // 'dashboard' | 'session' | 'settings'
   const [selectedSession, setSelectedSession] = useState(null);
@@ -26,7 +33,7 @@ function App() {
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  const keysNotSet = !config?.googleApiKey?.trim() || !config?.geminiApiKey?.trim();
+  const keysNotSet = !hasSttApiKey(config) || !config?.geminiApiKey?.trim();
 
   // Request microphone access at startup so Windows adds this app to the
   // Privacy → Microphone list and allows FFmpeg (a desktop app) to capture audio.
@@ -129,7 +136,7 @@ function App() {
       if (!window.meetmind) return;
       const cfg = await window.meetmind.config.get();
       setConfigState(cfg);
-      if (!cfg?.googleApiKey?.trim() || !cfg?.geminiApiKey?.trim()) setShowOnboarding(true);
+      if (!hasSttApiKey(cfg) || !cfg?.geminiApiKey?.trim()) setShowOnboarding(true);
 
       const list = await window.meetmind.sessions.list();
       setSessions(list);
@@ -328,7 +335,7 @@ function Sidebar() {
       </nav>
 
       {/* Bottom status CTA */}
-      <div className="px-3 titlebar-no-drag pt-3 border-t border-zinc-800/80">
+      <div className="px-3 pb-3 titlebar-no-drag pt-3 border-t border-zinc-800/80">
         {!isRecording ? (
           <button onClick={startRecording} className="btn-primary w-full justify-center text-xs py-2.5">
             <span className="w-2 h-2 rounded-full bg-zinc-950 animate-pulse" />

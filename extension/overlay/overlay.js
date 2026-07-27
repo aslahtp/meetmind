@@ -36,6 +36,9 @@ try {
 
 const root = document.getElementById('overlay-root');
 const PILL_ICON_SIZE = 16;
+const NOTION_ICON_URL = typeof chrome !== 'undefined' && chrome.runtime?.getURL
+  ? chrome.runtime.getURL('icons/icons8-notion-96.png')
+  : '../icons/icons8-notion-96.png';
 
 const MATERIAL_ICON_PATHS = {
   'collapse_content.svg': 'M440-440v240h-80v-160H200v-80h240Zm160-320v160h160v80H520v-240h80Z',
@@ -275,7 +278,7 @@ function buildCompleteUI() {
       title: 'Open in Notion',
       'aria-label': 'Open in Notion',
     });
-    notionBtn.appendChild(iconExternal());
+    notionBtn.appendChild(iconNotion());
     notionBtn.addEventListener('click', () => window.open(notionUrl, '_blank'));
     pill.appendChild(notionBtn);
   }
@@ -545,6 +548,18 @@ function iconClose(size = PILL_ICON_SIZE) {
   const svg = svgEl({ width: size, height: size, 'stroke-width': '2.2' });
   svg.append(path('M18 6 6 18'), path('M6 6l12 12'));
   return svg;
+}
+
+function iconNotion(size = PILL_ICON_SIZE) {
+  const img = document.createElement('img');
+  img.src = NOTION_ICON_URL;
+  img.width = size;
+  img.height = size;
+  img.alt = '';
+  img.className = 'notion-icon';
+  img.setAttribute('aria-hidden', 'true');
+  img.draggable = false;
+  return img;
 }
 
 function iconExternal(size = PILL_ICON_SIZE) {

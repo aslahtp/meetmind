@@ -2,11 +2,19 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const logger = require('../utils/logger');
 
 const AVAILABLE_MODELS = [
-  { id: 'gemini-3.1-flash-lite-preview',label: 'Gemini 3.1 Flash Lite (Fast)'},
-  { id: 'gemini-3-flash-preview',label: 'Gemini 3 Flash (Balanced)'},
-  { id: 'gemini-3-pro-preview',label: 'Gemini 3 Pro (pro)'},
-  { id: 'gemini-3.1-pro-preview',label: 'Gemini 3.1 Pro (Experimental)'},
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.1-pro-preview',
 ];
+
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+
+function resolveModelId(modelId) {
+  if (modelId && AVAILABLE_MODELS.includes(modelId)) return modelId;
+  return DEFAULT_GEMINI_MODEL;
+}
 
 const SYSTEM_PROMPT = `You are an expert meeting notes assistant.
 
@@ -66,7 +74,7 @@ function formatTime(seconds) {
 async function generateMeetingNotes(transcript, modelId, apiKey) {
   if (!apiKey) throw new Error('Gemini API key is required');
 
-  const selectedModel = modelId || AVAILABLE_MODELS[0].id;
+  const selectedModel = resolveModelId(modelId);
   const transcriptText = transcriptToText(transcript);
 
   logger.info('Generating meeting notes', { modelId: selectedModel, transcriptLength: transcriptText.length });
@@ -118,7 +126,7 @@ async function generateMeetingNotes(transcript, modelId, apiKey) {
 async function testGeminiConnection(apiKey, modelId) {
   if (!apiKey) throw new Error('Gemini API key is required');
   const genAI = new GoogleGenerativeAI(apiKey);
-  const modelToUse = modelId || AVAILABLE_MODELS[0].id;
+  const modelToUse = resolveModelId(modelId);
   const model = genAI.getGenerativeModel({ model: modelToUse });
   const result = await model.generateContent('Reply with "OK" only.');
   const text = result.response.text();
@@ -129,4 +137,10 @@ function getAvailableModels() {
   return AVAILABLE_MODELS;
 }
 
-module.exports = { generateMeetingNotes, getAvailableModels, testGeminiConnection, AVAILABLE_MODELS };
+module.exports = {
+  generateMeetingNotes,
+  getAvailableModels,
+  testGeminiConnection,
+  AVAILABLE_MODELS,
+  DEFAULT_GEMINI_MODEL,
+};

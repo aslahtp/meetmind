@@ -49,7 +49,8 @@
         "overlay/overlay.css",
         "overlay/overlay.js",
         "icons/collapse_content.svg",
-        "icons/open_in_app.svg"
+        "icons/open_in_app.svg",
+        "icons/icons8-notion-96.png"
       ],
       "matches": ["https://meet.google.com/*", "https://*.zoom.us/*"]
     }

@@ -1,4 +1,5 @@
 const Store = require('electron-store');
+const { AVAILABLE_MODELS, DEFAULT_GEMINI_MODEL } = require('../services/gemini');
 
 const schema = {
   googleApiKey: {
@@ -35,7 +36,7 @@ const schema = {
   },
   selectedModel: {
     type: 'string',
-    default: 'gemini-3.1-flash-lite-preview',
+    default: DEFAULT_GEMINI_MODEL,
   },
   systemAudioDevice: {
     type: 'string',
@@ -73,16 +74,31 @@ const schema = {
     type: 'string',
     default: '',
   },
+  sarvamApiKey: {
+    type: 'string',
+    default: '',
+  },
 };
 
 const store = new Store({ schema, name: 'meetmind-config' });
 
-const DEPRECATED_GEMINI_MODELS = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-thinking-exp'];
-const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite-preview';
+const DEPRECATED_GEMINI_MODELS = {
+  'gemini-1.5-flash': 'gemini-3.5-flash-lite',
+  'gemini-1.5-pro': 'gemini-3.5-flash-lite',
+  'gemini-2.0-flash': 'gemini-3.5-flash-lite',
+  'gemini-2.0-flash-thinking-exp': 'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite',
+  'gemini-3-flash-preview': 'gemini-3.6-flash',
+  'gemini-3-pro-preview': 'gemini-3.6-flash',
+};
 
 function getConfig() {
   let selectedModel = store.get('selectedModel');
-  if (DEPRECATED_GEMINI_MODELS.includes(selectedModel)) {
+  if (selectedModel in DEPRECATED_GEMINI_MODELS) {
+    selectedModel = DEPRECATED_GEMINI_MODELS[selectedModel];
+    store.set('selectedModel', selectedModel);
+  }
+  if (!AVAILABLE_MODELS.includes(selectedModel)) {
     selectedModel = DEFAULT_GEMINI_MODEL;
     store.set('selectedModel', selectedModel);
   }
@@ -111,6 +127,7 @@ function getConfig() {
     sttService:       store.get('sttService') || 'google',
     assemblyAiApiKey: store.get('assemblyAiApiKey') || '',
     assemblyAiPrompt: store.get('assemblyAiPrompt') || '',
+    sarvamApiKey:     store.get('sarvamApiKey') || '',
   };
 }
 

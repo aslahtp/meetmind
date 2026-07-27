@@ -19,6 +19,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'renderer'),
+      '@assets': path.resolve(__dirname, 'assets'),
     },
   },
 });

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../app.jsx';
+import NotionIcon from './NotionIcon.jsx';
 
 function Field({ label, hint, children }) {
   return (
@@ -145,6 +146,18 @@ const ONBOARDING_STEPS = [
     link: 'https://console.cloud.google.com/apis/library/speech.googleapis.com',
   },
   {
+    id: 'sarvam',
+    title: 'Sarvam AI',
+    description: 'Indian STT with native Malayalam–English code-switching support.',
+    steps: [
+      'Go to dashboard.sarvam.ai',
+      'Create an account or sign in',
+      'Generate an API key from the API Keys section',
+      'Paste it into the Sarvam AI API Key field in Settings',
+    ],
+    link: 'https://dashboard.sarvam.ai',
+  },
+  {
     id: 'assemblyai',
     title: 'AssemblyAI',
     description: 'Alternative STT with strong multilingual and code-switching support.',
@@ -191,13 +204,14 @@ export default function Settings({ onSave }) {
     notionToken:           '',
     notionDatabaseId:      '',
     notionPageId:          '',
-    selectedModel:     'gemini-3.1-flash-lite-preview',
+    selectedModel:     'gemini-3.5-flash-lite',
     systemAudioDevice: '',
     micDevice:         '',
     autoLaunch:        true,
     sttService:        'google',
     assemblyAiApiKey:  '',
     assemblyAiPrompt:  '',
+    sarvamApiKey:      '',
   });
   const [models, setModels] = useState([]);
   const [devices, setDevices] = useState({ all: [], system: null, mic: null });
@@ -218,13 +232,14 @@ export default function Settings({ onSave }) {
         notionToken:           config.notionToken           || '',
         notionDatabaseId:      config.notionDatabaseId      || '',
         notionPageId:          config.notionPageId          || '',
-        selectedModel:         config.selectedModel         || 'gemini-3.1-flash-lite-preview',
+        selectedModel:         config.selectedModel         || 'gemini-3.5-flash-lite',
         systemAudioDevice:     config.systemAudioDevice     || '',
         micDevice:             config.micDevice             || '',
         autoLaunch:            config.autoLaunch !== false,
         sttService:            config.sttService || 'google',
         assemblyAiApiKey:      config.assemblyAiApiKey || '',
         assemblyAiPrompt:      config.assemblyAiPrompt || '',
+        sarvamApiKey:          config.sarvamApiKey || '',
       });
     }
   }, [config]);
@@ -296,7 +311,10 @@ export default function Settings({ onSave }) {
                   onClick={() => setActiveOnboardingStep(activeOnboardingStep === step.id ? null : step.id)}
                 >
                   <div>
-                    <span className="text-sm font-medium">{step.title}</span>
+                    <span className="text-sm font-medium inline-flex items-center gap-2">
+                      {step.id === 'notion' && <NotionIcon size={16} />}
+                      {step.title}
+                    </span>
                     <span className="text-[#555] text-xs ml-2">{step.description}</span>
                   </div>
                   <svg
@@ -340,6 +358,7 @@ export default function Settings({ onSave }) {
             >
               <option value="google">Google Speech-to-Text</option>
               <option value="assemblyai">AssemblyAI</option>
+              <option value="sarvam">Sarvam AI</option>
             </select>
           </Field>
 
@@ -406,6 +425,36 @@ export default function Settings({ onSave }) {
                   onChange={update('googleCloudStorageKeyPath')}
                   placeholder="C:\\path\\to\\key.json"
                   className="input"
+                />
+              </Field>
+            </div>
+          )}
+
+          {form.sttService === 'sarvam' && (
+            <div className="space-y-4 p-3 rounded-lg border border-[#333] bg-[rgb(var(--color-tertiary))]">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-[#d0d0d0]">Sarvam AI settings</p>
+                <p className="text-xs text-[#aaa]">
+                  Uses Sarvam&apos;s saaras:v3 model in codemix mode with automatic language detection.
+                  Works well for meetings that mix Malayalam and English — English stays in Latin script,
+                  Indic languages in their native script. Speaker diarization is enabled.
+                </p>
+              </div>
+
+              <Field
+                label="Sarvam AI API Key"
+                hint="Required. Get an API key from dashboard.sarvam.ai."
+              >
+                <PasswordInput
+                  value={form.sarvamApiKey}
+                  onChange={update('sarvamApiKey')}
+                  placeholder="sk_..."
+                />
+                <TestButton
+                  onTest={async () => {
+                    const r = await window.meetmind.api.testSarvam(form.sarvamApiKey);
+                    if (!r.success) throw new Error(r.error);
+                  }}
                 />
               </Field>
             </div>
@@ -478,7 +527,12 @@ export default function Settings({ onSave }) {
           </Field>
 
           <Field
-            label="Notion Integration Token"
+            label={(
+              <span className="inline-flex items-center gap-2">
+                <NotionIcon size={16} />
+                Notion Integration Token
+              </span>
+            )}
             hint='Format: secret_xxx — from notion.so/my-integrations'
           >
             <PasswordInput
@@ -489,7 +543,12 @@ export default function Settings({ onSave }) {
           </Field>
 
           <Field
-            label="Notion Parent Page / Database ID"
+            label={(
+              <span className="inline-flex items-center gap-2">
+                <NotionIcon size={16} />
+                Notion Parent Page / Database ID
+              </span>
+            )}
             hint="Open the target page or database in Notion → share with your integration → copy the 32-char ID from the URL"
           >
             <input
@@ -515,10 +574,12 @@ export default function Settings({ onSave }) {
             <select
               value={form.selectedModel}
               onChange={update('selectedModel')}
-              className="input"
+              className="input font-mono text-xs"
             >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
+              {models.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
               ))}
             </select>
           </Field>

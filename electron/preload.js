@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('meetmind', {
     testGoogle: (apiKey, projectId) => ipcRenderer.invoke('api:test-google', apiKey, projectId),
     testGemini: (apiKey, modelId) => ipcRenderer.invoke('api:test-gemini', apiKey, modelId),
     testAssemblyAi: (apiKey) => ipcRenderer.invoke('api:test-assemblyai', apiKey),
+    testSarvam: (apiKey) => ipcRenderer.invoke('api:test-sarvam', apiKey),
   },
 
   // Processing

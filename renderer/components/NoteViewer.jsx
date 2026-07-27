@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import TranscriptViewer from './TranscriptViewer.jsx';
+import NotionIcon from './NotionIcon.jsx';
 
 const PRIORITY_STYLES = {
   high:   { cls: 'badge-red',    label: '🔴 High' },
@@ -440,15 +441,13 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
               className="text-emerald-400 text-xs font-medium hover:underline flex items-center gap-1.5 truncate"
               onClick={(e) => { e.preventDefault(); window.open?.(session.notion_page_url, '_blank'); }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v16H4V4z" /></svg>
+              <NotionIcon size={12} />
               View in Notion ↗
             </a>
           )}
           {uploadResult && (
             <span className="text-emerald-400 text-xs font-semibold flex items-center gap-1.5">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+              <NotionIcon size={12} />
               Synced to Notion
             </span>
           )}
@@ -497,7 +496,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                 </>
               ) : (
                 <>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v16H4V4z" /></svg>
+                  <NotionIcon size={12} />
                   Sync to Notion
                 </>
               )}
@@ -511,6 +510,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
               className="btn-ghost text-xs text-zinc-400 hover:text-white disabled:opacity-50"
               title="Re-upload to Notion"
             >
+              <NotionIcon size={12} className="mr-1" />
               Re-sync Notion
             </button>
           )}
