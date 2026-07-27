@@ -93,9 +93,15 @@ function createMainWindow() {
   mainWindow.setTitle('MeetMind');
   mainWindow.on('page-title-updated', (e) => e.preventDefault());
 
+  // Show quickly — don't wait forever for full renderer paint.
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  }, 400);
 
   mainWindow.on('close', (event) => {
     if (!app.isQuitting) {
@@ -825,9 +831,9 @@ if (process.platform === 'win32') {
 app.whenReady().then(async () => {
   logger.info('MeetMind starting up');
 
+  // Show UI as early as possible — defer heavy recovery work.
   await db.initialize();
   db.markStaleRecordingSessionsAsError();
-  await recoverOrphanedWebmFiles();
   registerIpcHandlers();
 
   // Serve session audio for renderer playback (meetmind-audio://<sessionId>)
@@ -899,6 +905,11 @@ app.whenReady().then(async () => {
       sessionId: currentSessionId,
     }),
     mainWindow,
+  });
+
+  // Background: convert leftover recordings without blocking first paint.
+  recoverOrphanedWebmFiles().catch((err) => {
+    logger.error('Orphan recovery failed', err);
   });
 
   app.on('open-url', (event, url) => {

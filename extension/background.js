@@ -119,18 +119,33 @@ function sendToDesktop(message) {
 let pendingOpenAppTabId = null;
 let launchRetryTimer = null;
 
+const HTTP_PROBE_TIMEOUT_MS = 200;
+
+async function probePort(port) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HTTP_PROBE_TIMEOUT_MS);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/open`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    return res.ok ? port : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Probe every candidate port in parallel with a short per-request timeout,
+// so a closed/hung port never stalls the whole check.
 async function tryHttpOpenApp() {
-  for (let i = 0; i < WS_PORT_RANGE; i++) {
-    const port = WS_PORT_START + i;
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/open`, { method: 'GET' });
-      if (res.ok) {
-        currentPort = port;
-        return true;
-      }
-    } catch {
-      // App not listening on this port
-    }
+  const ports = Array.from({ length: WS_PORT_RANGE }, (_, i) => WS_PORT_START + i);
+  const results = await Promise.all(ports.map(probePort));
+  const found = results.find((p) => p != null);
+  if (found != null) {
+    currentPort = found;
+    return true;
   }
   return false;
 }
@@ -149,17 +164,20 @@ function openProtocolBridgeTab() {
   });
 }
 
-async function launchDesktopApp() {
-  // 1) If the desktop app is already running (tray), raise it over HTTP.
-  const raised = await tryHttpOpenApp();
-  if (raised) {
-    console.log('[MeetMind] Raised desktop app via HTTP /open');
-    connectWebSocket();
-    return;
-  }
-
-  // 2) Otherwise hand off via meetmind:// (Chrome blocks this in chrome.tabs.create).
+function launchDesktopApp() {
+  // Open the bridge tab immediately — don't make the user wait on any network
+  // probe first. If the app turns out to already be running (rare: tray app
+  // up but our WebSocket never reconnected), we raise it over HTTP and close
+  // the bridge tab right after, in parallel.
   openProtocolBridgeTab();
+
+  tryHttpOpenApp().then((raised) => {
+    if (raised) {
+      console.log('[MeetMind] Raised desktop app via HTTP /open');
+      closeOpenAppTab();
+      connectWebSocket();
+    }
+  });
 
   // App may take a moment to start — keep trying the WebSocket.
   let attempts = 0;
