@@ -13,7 +13,7 @@
     "build:renderer": "vite build",
     "build:electron": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml",
     "build:dir": "vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --dir --config electron-builder.yml",
-    "build:ext": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && cd extension && powershell Compress-Archive -Path * -DestinationPath ../dist/meetmind-extension.zip -Force",
+    "build:ext": "node scripts/build-extension.js",
     "preview": "vite preview",
     "generate-icons": "node scripts/generate-icons.js"
   },
