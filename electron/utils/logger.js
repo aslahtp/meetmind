@@ -35,11 +35,45 @@ function write(level, message, data) {
   }
 }
 
+function getLogsDir() {
+  const dir = path.join(app.getPath('userData'), 'logs');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function readLogs(limit = 1000) {
+  try {
+    const filePath = getLogFilePath();
+    if (!fs.existsSync(filePath)) return [];
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n').filter(Boolean);
+    return lines.slice(-limit);
+  } catch {
+    return [];
+  }
+}
+
+function clearLogs() {
+  try {
+    const filePath = getLogFilePath();
+    if (fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, '');
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const logger = {
   info:  (msg, data) => write('info',  msg, data),
   warn:  (msg, data) => write('warn',  msg, data),
   error: (msg, data) => write('error', msg, data),
   debug: (msg, data) => write('debug', msg, data),
+  readLogs,
+  clearLogs,
+  getLogsDir,
+  getLogFilePath,
 };
 
 module.exports = logger;

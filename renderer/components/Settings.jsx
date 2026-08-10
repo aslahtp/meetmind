@@ -1,4 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  Check,
+  X,
+  ChevronDown,
+  ExternalLink,
+  KeyRound,
+} from 'lucide-react';
 import { useApp } from '../app.jsx';
 import NotionIcon from './NotionIcon.jsx';
 
@@ -31,15 +41,9 @@ function PasswordInput({ value, onChange, placeholder, ...props }) {
         tabIndex={-1}
       >
         {show ? (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-            <line x1="1" y1="1" x2="23" y2="23"/>
-          </svg>
+          <EyeOff size={14} strokeWidth={2} />
         ) : (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-          </svg>
+          <Eye size={14} strokeWidth={2} />
         )}
       </button>
     </div>
@@ -72,18 +76,14 @@ function TestButton({ onTest, label }) {
       >
         {status === 'testing' ? (
           <>
-            <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-            </svg>
+            <Loader2 size={12} strokeWidth={2} className="spinner" />
             Testing Connection…
           </>
         ) : 'Test Connection'}
       </button>
       {status === 'ok' && (
         <span className="text-emerald-400 text-xs font-semibold flex items-center gap-1">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
+          <Check size={12} strokeWidth={2.5} />
           Connected Successfully
         </span>
       )}
@@ -104,9 +104,7 @@ function DeviceProbeButton({ device, probing, result, onProbe }) {
       >
         {probing ? (
           <>
-            <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-            </svg>
+            <Loader2 size={12} strokeWidth={2} className="spinner" />
             Probing Audio (3s)…
           </>
         ) : 'Probe Level'}
@@ -114,16 +112,12 @@ function DeviceProbeButton({ device, probing, result, onProbe }) {
       {result && !probing && (
         result.isSilent ? (
           <span className="text-rose-400 text-xs flex items-center gap-1">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-            </svg>
+            <X size={12} strokeWidth={2.5} />
             Silent (peak {result.peak ?? 0}) — check levels &amp; privacy
           </span>
         ) : (
           <span className="text-emerald-400 text-xs font-semibold flex items-center gap-1">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
+            <Check size={12} strokeWidth={2.5} />
             Signal Detected (Peak {result.peak})
           </span>
         )
@@ -293,9 +287,14 @@ export default function Settings({ onSave }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-6 space-y-8">
-        <div>
-          <h1 className="text-lg font-semibold">Settings</h1>
-          <p className="text-[#666] text-sm mt-1">Configure your API keys and preferences</p>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-emerald-400">
+            <KeyRound size={18} strokeWidth={2} />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold">Settings</h1>
+            <p className="text-[#666] text-sm mt-0.5">Configure your API keys and preferences</p>
+          </div>
         </div>
 
         {/* ── API Keys ─────────────────────────────────────────── */}
@@ -317,12 +316,11 @@ export default function Settings({ onSave }) {
                     </span>
                     <span className="text-[#555] text-xs ml-2">{step.description}</span>
                   </div>
-                  <svg
-                    className={`w-4 h-4 text-[#555] flex-shrink-0 transition-transform ${activeOnboardingStep === step.id ? 'rotate-180' : ''}`}
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                  >
-                    <polyline points="6 9 12 15 18 9"/>
-                  </svg>
+                  <ChevronDown
+                    size={16}
+                    strokeWidth={2}
+                    className={`text-[#555] flex-shrink-0 transition-transform ${activeOnboardingStep === step.id ? 'rotate-180' : ''}`}
+                  />
                 </button>
                 {activeOnboardingStep === step.id && (
                   <div className="px-4 pb-4 bg-[rgb(var(--color-secondary))]">
@@ -336,10 +334,11 @@ export default function Settings({ onSave }) {
                     </ol>
                     <a
                       href={step.link}
-                      className="text-green-500 text-xs hover:underline"
+                      className="text-green-500 text-xs hover:underline inline-flex items-center gap-1"
                       target="_blank" rel="noreferrer"
                     >
-                      Open {step.title} ↗
+                      Open {step.title}
+                      <ExternalLink size={11} strokeWidth={2} />
                     </a>
                   </div>
                 )}
@@ -596,9 +595,7 @@ export default function Settings({ onSave }) {
             >
               {loadingDevices ? (
                 <>
-                  <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                  </svg>
+                  <Loader2 size={12} strokeWidth={2} className="spinner" />
                   Detecting…
                 </>
               ) : 'Detect Devices'}
@@ -704,9 +701,7 @@ export default function Settings({ onSave }) {
           <button onClick={handleSave} className="btn-primary">
             {saved ? (
               <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
+                <Check size={14} strokeWidth={2.5} />
                 Saved
               </>
             ) : 'Save Settings'}

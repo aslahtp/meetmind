@@ -1,10 +1,10 @@
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
 const { EventEmitter } = require('events');
 
-const { getFfmpegPath, validateFfmpegExists } = require('./ffmpeg-path');
+const { getFfmpegPath, getFfprobePath, validateFfmpegExists } = require('./ffmpeg-path');
 const {
   buildAmixFilter,
   buildSingleDeviceArgs,
@@ -445,6 +445,49 @@ async function convertFileToWav(inputPath, wavPath) {
   });
 }
 
+/**
+ * Probe media duration in seconds via ffprobe (works for wav/webm/mp3/m4a/…).
+ * Returns null when the file is missing or duration cannot be read.
+ */
+function getMediaDurationSeconds(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+
+  const ffprobePath = getFfprobePath();
+  if (!fs.existsSync(ffprobePath)) {
+    logger.warn('ffprobe not found, cannot probe media duration', { ffprobePath });
+    return null;
+  }
+
+  try {
+    const result = spawnSync(
+      ffprobePath,
+      [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        filePath,
+      ],
+      { encoding: 'utf8', windowsHide: true, timeout: 30000 }
+    );
+
+    if (result.error) {
+      logger.warn('ffprobe failed to start', { filePath, error: result.error.message });
+      return null;
+    }
+
+    const raw = String(result.stdout || '').trim();
+    const seconds = parseFloat(raw);
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      logger.warn('ffprobe returned invalid duration', { filePath, raw, stderr: String(result.stderr || '').slice(-300) });
+      return null;
+    }
+    return seconds;
+  } catch (err) {
+    logger.warn('ffprobe duration probe error', { filePath, error: err.message });
+    return null;
+  }
+}
+
 module.exports = {
   startRecording,
   stopRecording,
@@ -452,5 +495,6 @@ module.exports = {
   probeAudioDevice,
   convertWebmToWav,
   convertFileToWav,
+  getMediaDurationSeconds,
   recorder,
 };

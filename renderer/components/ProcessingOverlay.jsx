@@ -1,14 +1,21 @@
 import React, { useEffect, useState } from 'react';
+import { AudioLines, Brain, Check, Settings2 } from 'lucide-react';
 import NotionIcon from './NotionIcon.jsx';
 
 const STAGES = [
-  { id: 'transcribing', label: 'Transcribing audio speech…',     icon: '🎙️', range: [0, 60]  },
-  { id: 'generating',   label: 'Generating notes with AI…',      icon: '🧠', range: [60, 85] },
-  { id: 'uploading',    label: 'Uploading page to Notion…',      icon: 'notion', range: [85, 100] },
+  { id: 'transcribing', label: 'Transcribing audio speech…', Icon: AudioLines, range: [0, 60] },
+  { id: 'generating',   label: 'Generating notes with AI…',  Icon: Brain,      range: [60, 85] },
+  { id: 'uploading',    label: 'Uploading page to Notion…',  Icon: 'notion',    range: [85, 100] },
 ];
 
 function getStageIndex(stageId) {
   return STAGES.findIndex((s) => s.id === stageId);
+}
+
+function StageIcon({ icon, size = 28 }) {
+  if (icon === 'notion') return <NotionIcon size={size} />;
+  const Icon = icon;
+  return <Icon size={size} strokeWidth={2} />;
 }
 
 export default function ProcessingOverlay({ stage, percent }) {
@@ -40,11 +47,6 @@ export default function ProcessingOverlay({ stage, percent }) {
   const roundedPercent = Math.round(displayPercent);
   const currentStage = STAGES[Math.max(0, currentStageIndex)];
 
-  const renderStageIcon = (stageIcon, size = 28) => {
-    if (stageIcon === 'notion') return <NotionIcon size={size} />;
-    return stageIcon;
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md fade-in">
       <div className="relative w-full max-w-md p-8 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden backdrop-blur-xl">
@@ -53,8 +55,12 @@ export default function ProcessingOverlay({ stage, percent }) {
 
         {/* Icon + title */}
         <div className="text-center mb-8 relative z-10">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl shadow-inner">
-            {currentStage ? renderStageIcon(currentStage.icon, 32) : '⚙️'}
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-inner">
+            {currentStage ? (
+              <StageIcon icon={currentStage.Icon} size={32} />
+            ) : (
+              <Settings2 size={32} strokeWidth={2} />
+            )}
           </div>
           <h2 className="text-xl font-bold tracking-tight text-white">Processing Meeting</h2>
           <p className="text-zinc-400 text-sm mt-1">
@@ -90,9 +96,7 @@ export default function ProcessingOverlay({ stage, percent }) {
                                'bg-zinc-800/60 border border-zinc-700/50'
                 }`}>
                   {isComplete ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
+                    <Check size={12} strokeWidth={3} />
                   ) : isCurrent ? (
                     <div className="w-2 h-2 rounded-full bg-emerald-400 spinner" />
                   ) : (
@@ -105,7 +109,7 @@ export default function ProcessingOverlay({ stage, percent }) {
                                'text-zinc-500'
                 }`}>
                   <span className="inline-flex items-center gap-1.5">
-                    {s.icon === 'notion' ? <NotionIcon size={14} /> : s.icon}
+                    <StageIcon icon={s.Icon} size={14} />
                     {s.label}
                   </span>
                 </span>

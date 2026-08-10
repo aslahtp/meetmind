@@ -9,6 +9,13 @@ contextBridge.exposeInMainWorld('meetmind', {
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
   },
 
+  // Logs
+  logs: {
+    get: (options) => ipcRenderer.invoke('logs:get', options),
+    clear: () => ipcRenderer.invoke('logs:clear'),
+    openFolder: () => ipcRenderer.invoke('logs:openFolder'),
+  },
+
   // Config
   config: {
     get: () => ipcRenderer.invoke('config:get'),
@@ -30,6 +37,7 @@ contextBridge.exposeInMainWorld('meetmind', {
     list: () => ipcRenderer.invoke('sessions:list'),
     get: (id) => ipcRenderer.invoke('session:get', id),
     delete: (id) => ipcRenderer.invoke('session:delete', id),
+    openRecording: (id) => ipcRenderer.invoke('session:open-recording', id),
   },
 
   // Notion
@@ -79,6 +87,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'processing:error',
       'ws:extension-connected',
       'ws:recording-requested',
+      'sessions:durations-updated',
     ];
     if (validChannels.includes(channel)) {
       const subscription = (_event, ...args) => callback(...args);

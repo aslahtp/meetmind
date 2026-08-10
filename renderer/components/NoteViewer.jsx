@@ -1,19 +1,69 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
+import {
+  Volume2,
+  ChevronLeft,
+  Copy,
+  Check,
+  FileText,
+  Mic,
+  ListChecks,
+  MicOff,
+  Loader2,
+  RefreshCw,
+  ExternalLink,
+  FolderOpen,
+  Sparkles,
+  MessageCircle,
+  Zap,
+  Flame,
+  ArrowUp,
+  Minus,
+  ArrowDown,
+  CalendarDays,
+  Clock,
+  Timer,
+  Users,
+  User,
+  Play,
+  Pause,
+  AlertTriangle,
+} from 'lucide-react';
 import TranscriptViewer from './TranscriptViewer.jsx';
 import NotionIcon from './NotionIcon.jsx';
 
 const PRIORITY_STYLES = {
-  high:   { cls: 'badge-red',    label: '🔴 High' },
-  medium: { cls: 'badge-yellow', label: '🟡 Medium' },
-  low:    { cls: 'badge-green',  label: '🟢 Low' },
+  high:   {
+    cls: 'badge-red',
+    label: 'High',
+    Icon: ArrowUp,
+    ring: 'hover:border-rose-500/30',
+  },
+  medium: {
+    cls: 'badge-yellow',
+    label: 'Medium',
+    Icon: Minus,
+    ring: 'hover:border-amber-500/30',
+  },
+  low:    {
+    cls: 'badge-green',
+    label: 'Low',
+    Icon: ArrowDown,
+    ring: 'hover:border-emerald-500/30',
+  },
 };
 
 const SENTIMENT_STYLES = {
-  positive: { cls: 'badge-green',  label: '✨ Positive' },
-  neutral:  { cls: 'badge-gray',   label: '💬 Neutral' },
-  mixed:    { cls: 'badge-yellow', label: '⚡ Mixed' },
-  tense:    { cls: 'badge-red',    label: '🔥 Tense' },
+  positive: { cls: 'badge-green',  label: 'Positive', Icon: Sparkles },
+  neutral:  { cls: 'badge-gray',   label: 'Neutral',  Icon: MessageCircle },
+  mixed:    { cls: 'badge-yellow', label: 'Mixed',    Icon: Zap },
+  tense:    { cls: 'badge-red',    label: 'Tense',    Icon: Flame },
 };
+
+const TABS = [
+  { id: 'summary', label: 'Summary', Icon: FileText },
+  { id: 'transcript', label: 'Transcript', Icon: Mic },
+  { id: 'audio', label: 'Audio', Icon: Volume2 },
+];
 
 function formatDate(isoString) {
   if (!isoString) return '';
@@ -22,28 +72,161 @@ function formatDate(isoString) {
   });
 }
 
-function formatDurationSeconds(secs) {
-  if (!secs) return null;
-  const m = Math.floor(secs / 60);
-  if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
-  return `${m}m`;
+function formatStartTime(isoString) {
+  if (!isoString) return '';
+  return new Date(isoString).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
 }
 
-// ── Audio Player Component ───────────────────────────────────────────────────
+function formatDurationSeconds(secs) {
+  if (secs == null || secs <= 0) return null;
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 
-function AudioPlayerCard({ sessionId, title }) {
-  const audioRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
+function formatPlayerTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
-    }
+function SectionLabel({ icon: Icon, colorClass, children, count }) {
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      <div className={`w-7 h-7 rounded-lg flex items-center justify-center border ${colorClass}`}>
+        <Icon size={14} strokeWidth={2} />
+      </div>
+      <h2 className="text-sm font-semibold text-zinc-100 tracking-tight">{children}</h2>
+      {count != null && (
+        <span className="text-[11px] font-medium text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-full">
+          {count}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ActionItemsList({ items }) {
+  const [checked, setChecked] = useState(() => ({}));
+
+  const toggle = (idx) => {
+    setChecked((prev) => ({ ...prev, [idx]: !prev[idx] }));
   };
+
+  const doneCount = items.reduce((n, _, idx) => n + (checked[idx] ? 1 : 0), 0);
+
+  if (!items.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-zinc-800 px-4 py-8 text-center">
+        <ListChecks size={22} strokeWidth={1.75} className="mx-auto mb-2 text-zinc-600" />
+        <p className="text-zinc-500 text-sm">No action items were identified in this meeting.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <SectionLabel
+          icon={ListChecks}
+          colorClass="bg-amber-500/10 border-amber-500/25 text-amber-400"
+        >
+          Action Items
+        </SectionLabel>
+        <span className="text-[11px] font-medium text-zinc-500 tabular-nums mb-4 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800">
+          {doneCount}/{items.length} done
+        </span>
+      </div>
+
+      <ul className="space-y-2">
+        {items.map((item, idx) => {
+          const priorityStyle = PRIORITY_STYLES[item.priority] || null;
+          const PriorityIcon = priorityStyle?.Icon;
+          const isDone = !!checked[idx];
+
+          return (
+            <li key={idx}>
+              <button
+                type="button"
+                onClick={() => toggle(idx)}
+                className={`w-full text-left flex items-start gap-3 px-3.5 py-3 rounded-xl border border-zinc-800/70 bg-zinc-900/25 transition-all ${
+                  priorityStyle?.ring || 'hover:border-zinc-700/80'
+                } ${isDone ? 'opacity-55' : 'hover:bg-zinc-900/45'}`}
+              >
+                <span
+                  className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                    isDone
+                      ? 'bg-emerald-500 border-emerald-500 text-zinc-950'
+                      : 'border-zinc-600 bg-zinc-950/60 text-transparent'
+                  }`}
+                  aria-hidden
+                >
+                  <Check size={12} strokeWidth={3} />
+                </span>
+
+                <div className="flex-1 min-w-0 space-y-2">
+                  <p className={`text-sm font-medium leading-snug ${
+                    isDone ? 'text-zinc-500 line-through' : 'text-zinc-100'
+                  }`}>
+                    {item.task}
+                  </p>
+
+                  {(item.owner || item.due || priorityStyle) && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      {item.owner && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
+                          <span className="w-4 h-4 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+                            <User size={10} strokeWidth={2} />
+                          </span>
+                          {item.owner}
+                        </span>
+                      )}
+                      {item.due && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+                          <CalendarDays size={11} strokeWidth={2} />
+                          {item.due}
+                        </span>
+                      )}
+                      {priorityStyle && (
+                        <span className={priorityStyle.cls}>
+                          <PriorityIcon size={11} strokeWidth={2.5} />
+                          {priorityStyle.label}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// ── Audio Player ─────────────────────────────────────────────────────────────
+
+function AudioPlayerCard({ sessionId, title, durationLabel }) {
+  const audioRef = useRef(null);
+  const [speed, setSpeed] = useState(1);
+  const [error, setError] = useState(null);
+  const [ready, setReady] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [openMessage, setOpenMessage] = useState(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const audioSrc = sessionId ? `meetmind-audio://session/${sessionId}` : '';
+  const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
 
   const changeSpeed = () => {
     const speeds = [1, 1.25, 1.5, 2];
@@ -53,48 +236,295 @@ function AudioPlayerCard({ sessionId, title }) {
     if (audioRef.current) audioRef.current.playbackRate = nextSpeed;
   };
 
-  return (
-    <div className="card p-6 bg-zinc-900/80 border-zinc-800 shadow-2xl backdrop-blur-md max-w-xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm text-zinc-100">{title || 'Session Audio'}</h3>
-            <p className="text-zinc-500 text-xs font-mono">ID: {sessionId?.slice(0, 8)}</p>
-          </div>
-        </div>
-        <button
-          onClick={changeSpeed}
-          className="px-2.5 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-xs font-mono text-emerald-400 font-semibold hover:bg-zinc-700 transition-colors"
-        >
-          {speed}x
-        </button>
-      </div>
+  const togglePlay = async () => {
+    if (!audioRef.current || error) return;
+    try {
+      if (audioRef.current.paused) await audioRef.current.play();
+      else audioRef.current.pause();
+    } catch {
+      setError('Unable to start playback. Try opening the recording file instead.');
+    }
+  };
 
-      <audio
-        ref={audioRef}
-        key={sessionId}
-        controls
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        className="w-full h-10 accent-emerald-500 rounded-lg"
-        src={`meetmind-audio://${sessionId}`}
-        preload="metadata"
-      >
-        Your browser does not support audio playback.
-      </audio>
+  const seek = (e) => {
+    if (!audioRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    audioRef.current.currentTime = ratio * duration;
+  };
+
+  const openRecordingFile = async () => {
+    if (!sessionId || opening) return;
+    setOpening(true);
+    setOpenMessage(null);
+    try {
+      const result = await window.meetmind.sessions.openRecording(sessionId);
+      if (!result?.success) {
+        setOpenMessage(result?.error || 'Recording file not found for this session.');
+      }
+    } catch (err) {
+      setOpenMessage(err.message || 'Failed to open recording file.');
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 shadow-2xl shadow-black/40">
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative px-8 pt-10 pb-8 space-y-8">
+          <div className="text-center space-y-3">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shadow-inner">
+              <Volume2 size={28} strokeWidth={1.75} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white tracking-tight truncate px-4">
+                {title || 'Session Audio'}
+              </h3>
+              <p className="text-zinc-500 text-xs mt-1">
+                {durationLabel ? `${durationLabel} recording` : 'Session recording'}
+                {sessionId ? ` · ${sessionId.slice(0, 8)}` : ''}
+              </p>
+            </div>
+          </div>
+
+          {error ? (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-amber-200 text-sm leading-relaxed flex gap-3">
+              <AlertTriangle size={16} strokeWidth={2} className="flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  disabled={!ready}
+                  className="w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label={playing ? 'Pause' : 'Play'}
+                >
+                  {playing ? (
+                    <Pause size={22} strokeWidth={2.5} fill="currentColor" />
+                  ) : (
+                    <Play size={22} strokeWidth={2.5} fill="currentColor" className="ml-0.5" />
+                  )}
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={seek}
+                  className="group relative w-full h-2 rounded-full bg-zinc-800 overflow-hidden cursor-pointer"
+                  aria-label="Seek"
+                >
+                  <div
+                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-[width] duration-75"
+                    style={{ width: `${progress}%` }}
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white shadow opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ left: `calc(${progress}% - 7px)` }}
+                  />
+                </button>
+                <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
+                  <span>{formatPlayerTime(currentTime)}</span>
+                  <span>{formatPlayerTime(duration)}</span>
+                </div>
+              </div>
+
+              <audio
+                ref={audioRef}
+                key={sessionId}
+                className="hidden"
+                src={audioSrc}
+                preload="metadata"
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+                onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
+                onLoadedMetadata={() => {
+                  setReady(true);
+                  setError(null);
+                  setDuration(audioRef.current?.duration || 0);
+                  if (audioRef.current) audioRef.current.playbackRate = speed;
+                }}
+                onCanPlay={() => setReady(true)}
+                onEnded={() => setPlaying(false)}
+                onError={() => {
+                  setReady(false);
+                  setPlaying(false);
+                  setError('Audio file could not be loaded. The recording may be missing or still converting.');
+                }}
+              />
+
+              {!ready && (
+                <p className="text-center text-zinc-500 text-xs flex items-center justify-center gap-2">
+                  <Loader2 size={12} className="spinner" />
+                  Loading audio…
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <button
+              onClick={changeSpeed}
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-mono text-emerald-400 font-semibold hover:bg-zinc-800 hover:border-zinc-700 transition-colors"
+              title="Playback speed"
+            >
+              {speed}x
+            </button>
+            <button
+              onClick={openRecordingFile}
+              disabled={opening}
+              className="btn-outline text-xs px-3 py-1.5 disabled:opacity-50"
+              title="Show recording file in Explorer"
+            >
+              {opening ? (
+                <Loader2 size={13} strokeWidth={2} className="spinner" />
+              ) : (
+                <FolderOpen size={13} strokeWidth={2} />
+              )}
+              Open File
+            </button>
+          </div>
+
+          {openMessage && (
+            <p className="text-center text-rose-400 text-xs">{openMessage}</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Main NoteViewer Component ────────────────────────────────────────────────
+// ── Summary content ──────────────────────────────────────────────────────────
+
+function SummaryContent({ notes, session, noSpeech, isError, processingError }) {
+  if (!notes) {
+    return (
+      <div className="flex items-center justify-center min-h-[420px]">
+        <div className="text-center max-w-md w-full rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-10 shadow-2xl">
+          {noSpeech ? (
+            <>
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-5 text-amber-400">
+                <MicOff size={28} strokeWidth={2} />
+              </div>
+              <h2 className="font-semibold text-lg text-white mb-2">No speech detected</h2>
+              {processingError && (
+                <p className="text-amber-300/90 text-xs font-mono bg-zinc-950/80 rounded-xl p-3 mb-4 text-left leading-relaxed border border-amber-500/20">
+                  {processingError}
+                </p>
+              )}
+              <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+                The recording was saved but contained no audible speech.
+              </p>
+              <button
+                onClick={() => window.meetmind.processing.retry(session.id, 'all')}
+                className="btn-primary text-xs"
+              >
+                Retry Processing
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-5 text-emerald-400">
+                <Sparkles size={26} strokeWidth={2} />
+              </div>
+              <h2 className="font-semibold text-lg text-white mb-2">
+                {isError ? 'Processing failed' : 'Notes not ready yet'}
+              </h2>
+              <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+                {isError
+                  ? 'Something went wrong while generating notes for this session.'
+                  : 'Generate an AI summary, action items, and key topics from the transcript.'}
+              </p>
+              <button
+                onClick={() => window.meetmind.processing.run(session.id)}
+                className="btn-primary px-6 py-2.5 text-xs"
+              >
+                Generate Notes
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const actionItems = notes.action_items || [];
+  const keyPoints = (notes.key_points || []).filter((p) => p?.heading || p?.summary);
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-10 fade-in">
+      {notes.summary && (
+        <section>
+          <SectionLabel
+            icon={Sparkles}
+            colorClass="bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
+          >
+            Executive Summary
+          </SectionLabel>
+          <p className="text-zinc-200 text-[15px] leading-7">{notes.summary}</p>
+        </section>
+      )}
+
+      <section>
+        <ActionItemsList items={actionItems} />
+      </section>
+
+      {keyPoints.length > 0 && (
+        <section>
+          <SectionLabel
+            icon={FileText}
+            colorClass="bg-sky-500/10 border-sky-500/25 text-sky-400"
+            count={keyPoints.length}
+          >
+            Key Topics
+          </SectionLabel>
+
+          <div className="space-y-7">
+            {keyPoints.map((point, idx) => {
+              const lines = (point.summary || '')
+                .split(/\r?\n+/)
+                .map((l) => l.trim())
+                .filter(Boolean);
+              return (
+                <article key={idx}>
+                  <div className="flex items-baseline gap-2.5 mb-2.5 pl-3">
+                    <span className="text-[11px] font-bold text-zinc-500 tabular-nums">
+                      {String(idx + 1).padStart(2, '0')}
+                    </span>
+                    <h3 className="font-semibold text-[15px] text-zinc-100 leading-snug">
+                      {point.heading || 'Topic'}
+                    </h3>
+                  </div>
+                  {lines.length > 0 && (
+                    <ul className="space-y-2 pl-8">
+                      {lines.map((line, i) => (
+                        <li key={i} className="flex gap-2.5 text-sm text-zinc-300 leading-relaxed">
+                          <span className="mt-2 w-1 h-1 rounded-full bg-zinc-600 flex-shrink-0" />
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── Main NoteViewer ──────────────────────────────────────────────────────────
 
 export default function NoteViewer({ session, onBack, onRefresh }) {
-  const [activeTab, setActiveTab] = useState('summary'); // 'summary' | 'transcript' | 'audio'
+  const [activeTab, setActiveTab] = useState('summary');
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [uploadError, setUploadError] = useState(null);
@@ -102,11 +532,33 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const [copied, setCopied] = useState(false);
 
   const notes = session.notes;
-  const transcript = session.transcript;
+  const rawTranscript = session.transcript;
+
+  const normalizedTranscript = useMemo(() => {
+    if (!rawTranscript) return [];
+    if (Array.isArray(rawTranscript)) return rawTranscript;
+    if (typeof rawTranscript === 'string') {
+      try {
+        const parsed = JSON.parse(rawTranscript);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        if (rawTranscript.trim()) {
+          return [{ speaker: 'Speaker 1', text: rawTranscript.trim(), startTime: 0 }];
+        }
+      }
+    }
+    return [];
+  }, [rawTranscript]);
 
   const sentiment = notes?.sentiment;
   const sentimentStyle = SENTIMENT_STYLES[sentiment] || null;
   const duration = formatDurationSeconds(session.duration_seconds);
+  const startTime = formatStartTime(session.started_at);
+  const SentimentIcon = sentimentStyle?.Icon;
+  const isError = session.status === 'error';
+  const noSpeech = isError && !normalizedTranscript.length;
+  const processingError = session._processingError || null;
+  const notionUrl = uploadResult || session.notion_page_url;
 
   const handleRegenerate = async () => {
     setRegenerating(true);
@@ -163,359 +615,209 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (!notes) {
-    const isError = session.status === 'error';
-    const noSpeech = isError && !transcript?.length;
-    const processingError = session._processingError || null;
-
-    return (
-      <div className="h-full flex flex-col bg-zinc-950/40 fade-in">
-        {/* Back header */}
-        <div className="flex-shrink-0 px-6 py-4 border-b border-zinc-800 flex items-center gap-3">
-          <button onClick={onBack} className="btn-ghost p-1.5 text-zinc-400 hover:text-white">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <h1 className="font-bold text-lg text-white flex-1 truncate">{session.title || 'Meeting'}</h1>
-        </div>
-
-        <div className="flex-1 flex items-center justify-center px-8">
-          <div className="text-center max-w-md card p-8 bg-zinc-900/90 border-zinc-800 shadow-2xl">
-            {noSpeech ? (
-              <>
-                <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4 text-amber-400">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" />
-                  </svg>
-                </div>
-                <h2 className="font-bold text-lg text-white mb-2">No speech detected</h2>
-                {processingError && (
-                  <p className="text-amber-400/90 text-xs font-mono bg-zinc-950 rounded-lg p-3 mb-4 text-left leading-relaxed border border-amber-500/20">
-                    {processingError}
-                  </p>
-                )}
-                <p className="text-zinc-400 text-sm leading-relaxed mb-4">
-                  The recording was saved but contained no audible speech.
-                </p>
-                <div className="text-left bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-6 text-xs text-zinc-400 space-y-2">
-                  <p className="font-semibold text-zinc-200">How to ensure audio capture:</p>
-                  <p>1. In MeetMind <strong className="text-white">Settings → Audio</strong>, run device probes.</p>
-                  <p>2. Select your microphone or active speaker loopback device.</p>
-                </div>
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={() => window.meetmind.processing.retry(session.id, 'all')}
-                    className="btn-primary text-xs"
-                  >
-                    Retry Processing
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="text-zinc-400 mb-5">{isError ? 'Processing failed for this session.' : 'Notes not yet generated for this session.'}</p>
-                <button
-                  onClick={() => window.meetmind.processing.run(session.id)}
-                  className="btn-primary px-6 py-2.5"
-                >
-                  Generate Notes
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-full flex flex-col overflow-hidden bg-zinc-950/40 fade-in">
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-4 border-b border-zinc-800/80 backdrop-blur-md">
-        <div className="flex items-center gap-3 mb-2.5">
-          <button onClick={onBack} className="btn-ghost p-1.5 text-zinc-400 hover:text-white">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <h1 className="font-bold text-xl text-white flex-1 truncate tracking-tight">
-            {notes.title || session.title || 'Meeting Notes'}
-          </h1>
-          <button
-            onClick={copyMarkdownSummary}
-            className="btn-outline text-xs px-3 py-1.5"
-            title="Copy formatted Markdown notes"
-          >
-            {copied ? '✓ Copied' : '📋 Copy Notes'}
-          </button>
-        </div>
+      <header className="flex-shrink-0 border-b border-zinc-800/80 bg-zinc-950/50 backdrop-blur-md titlebar-drag select-none">
+        <div className="px-6 pt-3 pb-4 space-y-4">
+          <div className="flex items-start gap-3 titlebar-no-drag">
+            <button
+              onClick={onBack}
+              className="btn-ghost p-2 mt-0.5 text-zinc-400 hover:text-white rounded-xl"
+              title="Back to sessions"
+            >
+              <ChevronLeft size={18} strokeWidth={2} />
+            </button>
 
-        <div className="flex items-center flex-wrap gap-2 text-xs text-zinc-400">
-          {session.started_at && (
-            <span>{formatDate(session.started_at)}</span>
-          )}
-          {duration && (
-            <>
-              <span className="text-zinc-600">·</span>
-              <span className="font-mono bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded text-zinc-300">
-                {duration}
-              </span>
-            </>
-          )}
-          {notes.attendees?.length > 0 && (
-            <>
-              <span className="text-zinc-600">·</span>
-              <div className="flex flex-wrap gap-1">
-                {notes.attendees.slice(0, 5).map((a, i) => (
-                  <span key={i} className="badge-gray text-[11px]">{a}</span>
-                ))}
-                {notes.attendees.length > 5 && (
-                  <span className="badge-gray text-[11px]">+{notes.attendees.length - 5}</span>
+            <div className="flex-1 min-w-0 space-y-2.5">
+              <h1 className="font-bold text-xl text-white truncate tracking-tight leading-tight">
+                {notes?.title || session.title || 'Meeting Notes'}
+              </h1>
+
+              <div className="flex items-center flex-wrap gap-1.5">
+                {session.started_at && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 bg-zinc-900/80 border border-zinc-800 px-2 py-1 rounded-lg">
+                    <CalendarDays size={11} strokeWidth={2} />
+                    {formatDate(session.started_at)}
+                  </span>
+                )}
+                {startTime && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 bg-zinc-900/80 border border-zinc-800 px-2 py-1 rounded-lg">
+                    <Clock size={11} strokeWidth={2} />
+                    {startTime}
+                  </span>
+                )}
+                {duration && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-zinc-300 bg-zinc-900/80 border border-zinc-800 px-2 py-1 rounded-lg">
+                    <Timer size={11} strokeWidth={2} />
+                    {duration}
+                  </span>
+                )}
+                {notes?.attendees?.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 bg-zinc-900/80 border border-zinc-800 px-2 py-1 rounded-lg max-w-[280px]">
+                    <Users size={11} strokeWidth={2} className="flex-shrink-0" />
+                    <span className="truncate">
+                      {notes.attendees.slice(0, 3).join(', ')}
+                      {notes.attendees.length > 3 ? ` +${notes.attendees.length - 3}` : ''}
+                    </span>
+                  </span>
+                )}
+                {sentimentStyle && (
+                  <span className={sentimentStyle.cls}>
+                    <SentimentIcon size={12} strokeWidth={2} />
+                    {sentimentStyle.label}
+                  </span>
                 )}
               </div>
-            </>
-          )}
-          {sentimentStyle && (
-            <span className={sentimentStyle.cls}>{sentimentStyle.label}</span>
-          )}
-        </div>
-
-        {/* Tabs: Summary | Transcript | Audio */}
-        <div className="flex gap-2 mt-4 border-t border-zinc-800/60 pt-3">
-          <button
-            type="button"
-            onClick={() => setActiveTab('summary')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-              activeTab === 'summary'
-                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
-            </svg>
-            AI Summary & Action Items
-          </button>
-
-          {transcript?.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('transcript')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'transcript'
-                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              </svg>
-              Transcript ({transcript.length})
-            </button>
-          )}
-
-          {session.audio_path && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('audio')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'audio'
-                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-              </svg>
-              Audio Playback
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 pb-24">
-        {activeTab === 'summary' && (
-          <div className="space-y-7 max-w-4xl">
-            {/* Overview / Executive Summary */}
-            {notes.summary && (
-              <div className="card p-5 bg-zinc-900/50 border-zinc-800/80">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2">Executive Summary</h2>
-                <p className="text-zinc-200 text-sm leading-relaxed">{notes.summary}</p>
-              </div>
-            )}
-
-            {/* Action Items & Next Steps */}
-            <div className="card p-5 bg-zinc-900/50 border-zinc-800/80">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-3.5 flex items-center gap-2">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                </svg>
-                Action Items & Next Steps
-              </h2>
-              {notes.action_items?.length ? (
-                <ul className="space-y-2.5">
-                  {notes.action_items.map((item, idx) => {
-                    const priorityStyle = PRIORITY_STYLES[item.priority] || { cls: 'badge-gray', label: item.priority };
-                    return (
-                      <li key={idx} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-zinc-950/60 border border-zinc-800/60 group hover:border-zinc-700/60 transition-colors">
-                        <div className="flex items-start gap-3 min-w-0">
-                          <input type="checkbox" className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-900 accent-emerald-500 cursor-pointer" />
-                          <div>
-                            <span className="text-sm font-medium text-zinc-100 block">{item.task}</span>
-                            {item.owner && (
-                              <span className="text-xs text-zinc-400 mt-0.5 block">Owner: <strong className="text-zinc-200">{item.owner}</strong></span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {item.due && (
-                            <span className="text-xs font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
-                              Due {item.due}
-                            </span>
-                          )}
-                          {item.priority && (
-                            <span className={priorityStyle.cls}>{priorityStyle.label}</span>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="text-zinc-500 text-sm italic">No action items identified.</p>
-              )}
             </div>
 
-            {/* Key Points */}
-            {notes.key_points?.length > 0 && (
-              <div className="space-y-4">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 px-1">Key Discussion Topics</h2>
-                {notes.key_points.map((point, idx) => {
-                  if (!point?.heading && !point?.summary) return null;
-                  const lines = (point.summary || '')
-                    .split(/\r?\n+/)
-                    .map((l) => l.trim())
-                    .filter(Boolean);
-                  return (
-                    <div key={idx} className="card p-5 bg-zinc-900/40 border-zinc-800/80 hover:border-zinc-700/80 transition-all">
-                      <h3 className="font-semibold text-base text-zinc-100 mb-2">{point.heading || 'Topic'}</h3>
-                      {lines.length > 0 && (
-                        <ul className="space-y-2 text-sm text-zinc-300">
-                          {lines.map((line, i) => (
-                            <li key={i} className="flex gap-2.5 leading-relaxed">
-                              <span className="text-emerald-400 flex-shrink-0 mt-1">•</span>
-                              <span>{line}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+            {notes && (
+              <button
+                onClick={copyMarkdownSummary}
+                className="btn-outline text-xs px-3 py-2 flex-shrink-0"
+                title="Copy formatted Markdown notes"
+              >
+                {copied ? (
+                  <>
+                    <Check size={13} strokeWidth={2.5} />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy size={13} strokeWidth={2} />
+                    Copy
+                  </>
+                )}
+              </button>
             )}
           </div>
-        )}
 
-        {activeTab === 'transcript' && transcript?.length > 0 && (
-          <TranscriptViewer transcript={transcript} />
-        )}
+          {/* Segmented tabs */}
+          <div className="titlebar-no-drag inline-flex p-1 rounded-xl bg-zinc-900/80 border border-zinc-800/80">
+            {TABS.map(({ id, label, Icon }) => {
+              const active = activeTab === id;
+              const count = id === 'transcript' && normalizedTranscript.length > 0
+                ? normalizedTranscript.length
+                : null;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+                    active
+                      ? 'bg-emerald-500/15 text-emerald-400 shadow-sm'
+                      : 'text-zinc-500 hover:text-zinc-200'
+                  }`}
+                >
+                  <Icon size={14} strokeWidth={2} />
+                  {label}
+                  {count != null && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                      active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
+                    }`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </header>
 
-        {activeTab === 'audio' && session.audio_path && (
-          <AudioPlayerCard sessionId={session.id} title={notes.title || session.title} />
+      {/* Content */}
+      <div
+        className={`flex-1 overflow-y-auto px-6 pb-28 ${
+          activeTab === 'transcript' ? 'pt-0 scrollbar-wide' : 'pt-6'
+        }`}
+      >
+        {activeTab === 'summary' && (
+          <SummaryContent
+            notes={notes}
+            session={session}
+            noSpeech={noSpeech}
+            isError={isError}
+            processingError={processingError}
+          />
+        )}
+        {activeTab === 'transcript' && (
+          <TranscriptViewer transcript={normalizedTranscript} />
+        )}
+        {activeTab === 'audio' && (
+          <AudioPlayerCard
+            sessionId={session.id}
+            title={notes?.title || session.title}
+            durationLabel={duration}
+          />
         )}
       </div>
 
-      {/* Footer */}
-      <div className="flex-shrink-0 px-6 py-4 border-t border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex-1 min-w-0">
-          {session.notion_page_url && !uploadResult && (
-            <a
-              href={session.notion_page_url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-emerald-400 text-xs font-medium hover:underline flex items-center gap-1.5 truncate"
-              onClick={(e) => { e.preventDefault(); window.open?.(session.notion_page_url, '_blank'); }}
-            >
-              <NotionIcon size={12} />
-              View in Notion ↗
-            </a>
-          )}
-          {uploadResult && (
-            <span className="text-emerald-400 text-xs font-semibold flex items-center gap-1.5">
-              <NotionIcon size={12} />
-              Synced to Notion
-            </span>
-          )}
-          {uploadError && (
-            <span className="text-rose-400 text-xs">{uploadError}</span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRegenerate}
-            disabled={regenerating || uploading}
-            className="btn-ghost text-xs text-zinc-400 hover:text-white disabled:opacity-50"
-            title="Regenerate notes from transcript with current model"
-          >
-            {regenerating ? (
-              <>
-                <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-                Regenerating…
-              </>
+      {/* Footer actions */}
+      <footer className="flex-shrink-0 px-6 py-3.5 border-t border-zinc-800/80 bg-zinc-950/85 backdrop-blur-md">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex-1 min-w-0">
+            {notionUrl ? (
+              <a
+                href={notionUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-emerald-400 text-xs font-medium hover:text-emerald-300 transition-colors truncate max-w-full"
+                onClick={(e) => { e.preventDefault(); window.open?.(notionUrl, '_blank'); }}
+              >
+                <NotionIcon size={12} />
+                {uploadResult ? 'Synced to Notion' : 'View in Notion'}
+                <ExternalLink size={11} strokeWidth={2} />
+              </a>
             ) : (
-              <>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                </svg>
-                Regenerate Notes
-              </>
+              <span className="text-zinc-600 text-xs">Not synced to Notion yet</span>
             )}
-          </button>
+            {uploadError && (
+              <p className="text-rose-400 text-xs mt-1 truncate">{uploadError}</p>
+            )}
+          </div>
 
-          {!uploadResult && !session.notion_page_url && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRegenerate}
+              disabled={regenerating || uploading}
+              className="btn-ghost text-xs text-zinc-400 hover:text-white disabled:opacity-50"
+              title="Regenerate notes from transcript"
+            >
+              {regenerating ? (
+                <>
+                  <Loader2 size={13} strokeWidth={2} className="spinner" />
+                  Regenerating…
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={13} strokeWidth={2} />
+                  Regenerate
+                </>
+              )}
+            </button>
+
             <button
               onClick={handleUploadToNotion}
               disabled={uploading}
-              className="btn-outline text-xs disabled:opacity-50"
+              className={`${notionUrl ? 'btn-ghost' : 'btn-outline'} text-xs disabled:opacity-50`}
+              title={notionUrl ? 'Re-upload to Notion' : 'Upload notes to Notion'}
             >
               {uploading ? (
                 <>
-                  <svg className="spinner w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
+                  <Loader2 size={13} strokeWidth={2} className="spinner" />
                   Syncing…
                 </>
               ) : (
                 <>
                   <NotionIcon size={12} />
-                  Sync to Notion
+                  {notionUrl ? 'Re-sync' : 'Sync to Notion'}
                 </>
               )}
             </button>
-          )}
-
-          {(uploadResult || session.notion_page_url) && (
-            <button
-              onClick={handleUploadToNotion}
-              disabled={uploading}
-              className="btn-ghost text-xs text-zinc-400 hover:text-white disabled:opacity-50"
-              title="Re-upload to Notion"
-            >
-              <NotionIcon size={12} className="mr-1" />
-              Re-sync Notion
-            </button>
-          )}
+          </div>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }

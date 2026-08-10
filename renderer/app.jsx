@@ -1,10 +1,22 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { createRoot } from 'react-dom/client';
+import {
+  Mic,
+  LayoutGrid,
+  Settings as SettingsIcon,
+  Terminal,
+  X,
+  Minus,
+  Square,
+  ArrowRight,
+  KeyRound,
+} from 'lucide-react';
 import './styles/globals.css';
 
 import Dashboard from './components/Dashboard.jsx';
 import NoteViewer from './components/NoteViewer.jsx';
 import Settings from './components/Settings.jsx';
+import LogsViewer from './components/LogsViewer.jsx';
 import RecordingBar from './components/RecordingBar.jsx';
 
 // ── App Context ───────────────────────────────────────────────────────────────
@@ -182,11 +194,22 @@ function App() {
       }
     });
 
+    const unsubDurations = window.meetmind.on('sessions:durations-updated', async () => {
+      const updated = await window.meetmind.sessions.list();
+      setSessions(updated);
+      setSelectedSession((prev) => {
+        if (!prev?.id) return prev;
+        const next = updated.find((s) => s.id === prev.id);
+        return next ? { ...next, _processingError: prev._processingError } : prev;
+      });
+    });
+
     return () => {
       unsubRecordingStarted?.();
       unsubRecordingStopped?.();
       unsubComplete?.();
       unsubError?.();
+      unsubDurations?.();
     };
   }, []);
 
@@ -241,8 +264,8 @@ function App() {
         {/* Sidebar */}
         <Sidebar />
 
-        {/* Main content — pt-8 clears the fixed titlebar strip above */}
-        <main className="flex-1 flex flex-col overflow-hidden pt-8 pb-6">
+        {/* Main content */}
+        <main className="flex-1 flex flex-col overflow-hidden pt-0 pb-6">
           {isRecording && (
             <RecordingBar
               sessionId={recordingSessionId}
@@ -272,6 +295,9 @@ function App() {
                 }}
               />
             )}
+            {view === 'logs' && (
+              <LogsViewer />
+            )}
           </div>
         </main>
       </div>
@@ -296,24 +322,19 @@ function TitleBar() {
   const handleClose = () => window.meetmind?.window?.close();
 
   return (
-    <div
-      className="titlebar-drag fixed top-0 left-0 right-0 h-8 z-50 flex items-center justify-between px-3.5 select-none bg-[#0c0c0f] border-b border-zinc-800/40"
-    >
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pointer-events-none">MeetMind</span>
-      </div>
+    <div className="fixed top-0 left-0 right-0 h-8 z-50 flex items-center justify-between pointer-events-none select-none">
+      {/* Draggable header region across full width */}
+      <div className="titlebar-drag flex-1 h-full pointer-events-auto" />
 
-      {/* Window Controls */}
-      <div className="flex items-center titlebar-no-drag -mr-3.5 h-full">
+      {/* Window Controls (minimize, maximize, close) */}
+      <div className="flex items-center titlebar-no-drag h-full pointer-events-auto">
         <button
           type="button"
           onClick={handleMinimize}
           className="h-full px-3 text-zinc-400 hover:text-white hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
           title="Minimize"
         >
-          <svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
-            <rect width="10" height="1" />
-          </svg>
+          <Minus size={12} strokeWidth={2} />
         </button>
         <button
           type="button"
@@ -321,19 +342,15 @@ function TitleBar() {
           className="h-full px-3 text-zinc-400 hover:text-white hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
           title="Maximize / Restore"
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
-            <rect x="0.5" y="0.5" width="9" height="9" />
-          </svg>
+          <Square size={10} strokeWidth={2} />
         </button>
         <button
           type="button"
           onClick={handleClose}
-          className="h-full px-3.5 text-zinc-400 hover:text-white hover:bg-rose-600 flex items-center justify-center transition-colors rounded-tr-lg"
+          className="h-full px-3.5 text-zinc-400 hover:text-white hover:bg-rose-600 flex items-center justify-center transition-colors"
           title="Close"
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2">
-            <path d="M1 1L9 9M9 1L1 9" />
-          </svg>
+          <X size={12} strokeWidth={2} />
         </button>
       </div>
     </div>
@@ -346,16 +363,11 @@ function Sidebar() {
   const { view, setView, isRecording, startRecording } = useApp();
 
   return (
-    <aside className="w-56 flex-shrink-0 flex flex-col bg-zinc-950/80 border-r border-zinc-800/80 pb-6 pt-8 backdrop-blur-xl">
-      {/* Logo mark sits below the fixed titlebar strip (pt-8 clears it) */}
-
+    <aside className="w-56 flex-shrink-0 flex flex-col bg-zinc-950/80 border-r border-zinc-800/80 pb-6 pt-3 backdrop-blur-xl">
       {/* Logo mark */}
-      <div className="px-4 pt-1 pb-4 titlebar-no-drag flex items-center gap-3">
+      <div className="px-4 pt-1 pb-4 titlebar-drag flex items-center gap-3 select-none">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/25 flex-shrink-0">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-zinc-950">
-            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/>
-          </svg>
+          <Mic size={18} strokeWidth={2.5} className="text-zinc-950" />
         </div>
         <div>
           <span className="font-bold text-sm text-white block tracking-tight">MeetMind</span>
@@ -368,21 +380,22 @@ function Sidebar() {
           className={`sidebar-item w-full ${view === 'dashboard' ? 'active' : ''}`}
           onClick={() => setView('dashboard')}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
-            <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
-          </svg>
+          <LayoutGrid size={16} strokeWidth={2} />
           Dashboard
         </button>
         <button
           className={`sidebar-item w-full ${view === 'settings' ? 'active' : ''}`}
           onClick={() => setView('settings')}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-          </svg>
+          <SettingsIcon size={16} strokeWidth={2} />
           Settings
+        </button>
+        <button
+          className={`sidebar-item w-full ${view === 'logs' ? 'active' : ''}`}
+          onClick={() => setView('logs')}
+        >
+          <Terminal size={16} strokeWidth={2} />
+          Logs
         </button>
       </nav>
 
@@ -410,13 +423,18 @@ function OnboardingBanner({ onSetup, onClose, hasSessions }) {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-[rgb(var(--color-background-secondary))] border border-[rgb(var(--color-border))] rounded-xl p-4 shadow-2xl fade-in">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="font-semibold text-sm mb-1">Welcome to MeetMind</h3>
-          <p className="text-[rgb(var(--color-foreground-muted))] text-xs mb-3">
-            {hasSessions
-              ? 'Add API keys to transcribe and summarize your recordings, and upload to Notion.'
-              : 'Set up your API keys to get started with transcription and Notion upload.'}
-          </p>
+        <div className="min-w-0 flex gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
+            <KeyRound size={16} strokeWidth={2} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm mb-1">Welcome to MeetMind</h3>
+            <p className="text-[rgb(var(--color-foreground-muted))] text-xs mb-3">
+              {hasSessions
+                ? 'Add API keys to transcribe and summarize your recordings, and upload to Notion.'
+                : 'Set up your API keys to get started with transcription and Notion upload.'}
+            </p>
+          </div>
         </div>
         <button
           type="button"
@@ -424,13 +442,12 @@ function OnboardingBanner({ onSetup, onClose, hasSessions }) {
           className="flex-shrink-0 p-1 rounded text-[rgb(var(--color-foreground-subtle))] hover:text-[rgb(var(--color-foreground-muted))] hover:bg-[rgb(var(--color-background-tertiary))] transition-colors"
           aria-label="Close"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
+          <X size={16} strokeWidth={2} />
         </button>
       </div>
       <button onClick={onSetup} className="btn-primary text-xs">
-        Configure API Keys →
+        Configure API Keys
+        <ArrowRight size={13} strokeWidth={2} />
       </button>
     </div>
   );

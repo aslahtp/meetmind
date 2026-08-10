@@ -1,13 +1,13 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, net, desktopCapturer, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { pathToFileURL } = require('url');
+const { Readable } = require('stream');
 
 const { getConfig, setConfig, setMultipleConfig, isFirstRun } = require('./utils/config');
 const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
-const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav } = require('./audio/recorder');
-const { transcribeAudio, getWavDurationSeconds, testGoogleSTT, testAssemblyAI, testSarvam } = require('./services/transcription');
+const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
+const { transcribeAudio, testGoogleSTT, testAssemblyAI, testSarvam } = require('./services/transcription');
 const { generateMeetingNotes, getAvailableModels } = require('./services/gemini');
 const { uploadToNotion, testNotionConnection } = require('./services/notion');
 const { testGeminiConnection } = require('./services/gemini');
@@ -42,6 +42,7 @@ protocol.registerSchemesAsPrivileged([{
     secure: true,
     supportFetchAPI: true,
     stream: true,
+    bypassCSP: true,
   },
 }]);
 
@@ -382,10 +383,7 @@ async function handleStopRecording() {
     let durationSeconds = null;
     try {
       if (audioPath) {
-        durationSeconds = Math.round(getWavDurationSeconds(audioPath));
-        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-          durationSeconds = null;
-        }
+        durationSeconds = probeDurationSeconds(audioPath);
       }
     } catch (err) {
       logger.warn('Failed to compute audio duration from file', {
@@ -512,6 +510,11 @@ function registerIpcHandlers() {
   ipcMain.handle('window:close',     () => { app.isQuitting = true; mainWindow?.close(); });
   ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
 
+  // ── Logs ──────────────────────────────────────────────────────────────────
+  ipcMain.handle('logs:get', (_e, { limit } = {}) => logger.readLogs(limit));
+  ipcMain.handle('logs:clear', () => logger.clearLogs());
+  ipcMain.handle('logs:openFolder', () => shell.openPath(logger.getLogsDir()));
+
   ipcMain.handle('config:get', () => getConfig());
 
   ipcMain.handle('config:set', (_e, key, value) => {
@@ -594,10 +597,7 @@ function registerIpcHandlers() {
 
       let durationSeconds = null;
       try {
-        durationSeconds = Math.round(getWavDurationSeconds(destPath));
-        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-          durationSeconds = null;
-        }
+        durationSeconds = probeDurationSeconds(destPath);
       } catch (err) {
         logger.warn('Failed to compute duration for imported audio', {
           srcPath,
@@ -632,6 +632,20 @@ function registerIpcHandlers() {
   ipcMain.handle('session:delete', (_e, id) => {
     db.deleteSession(id);
     return true;
+  });
+
+  ipcMain.handle('session:open-recording', async (_e, sessionId) => {
+    const audioPath = resolveSessionAudioPath(sessionId);
+    if (!audioPath) {
+      return { success: false, error: 'Recording file not found for this session.' };
+    }
+    try {
+      shell.showItemInFolder(audioPath);
+      return { success: true, path: audioPath };
+    } catch (err) {
+      logger.error('Failed to open recording file', { sessionId, audioPath, error: err.message });
+      return { success: false, error: err.message || 'Failed to open recording file.' };
+    }
   });
 
   ipcMain.handle('notion:upload', async (_e, sessionId) => {
@@ -769,6 +783,70 @@ function registerIpcHandlers() {
   });
 }
 
+function resolveSessionAudioPath(sessionId) {
+  if (!sessionId) return null;
+  const session = db.getSession(sessionId);
+  if (!session) return null;
+
+  let audioPath = session.audio_path;
+  if (audioPath && fs.existsSync(audioPath)) return audioPath;
+
+  const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+  const wavPath = path.join(recordingsDir, `${sessionId}.wav`);
+  const webmPath = path.join(recordingsDir, `${sessionId}.webm`);
+  if (fs.existsSync(wavPath)) return wavPath;
+  if (fs.existsSync(webmPath)) return webmPath;
+  return null;
+}
+
+function probeDurationSeconds(audioPath) {
+  if (!audioPath) return null;
+  try {
+    const seconds = getMediaDurationSeconds(audioPath);
+    if (seconds == null) return null;
+    const rounded = Math.round(seconds);
+    return Number.isFinite(rounded) && rounded > 0 ? rounded : null;
+  } catch (err) {
+    logger.warn('Failed to probe media duration', { audioPath, error: err.message });
+    return null;
+  }
+}
+
+/**
+ * Use ffprobe to compute duration for every session that has an audio file.
+ * Updates duration_seconds in the DB when a value is found.
+ */
+function backfillSessionDurations() {
+  const sessions = db.listSessions();
+  let updated = 0;
+
+  for (const session of sessions) {
+    const audioPath = resolveSessionAudioPath(session.id);
+    if (!audioPath) continue;
+
+    const durationSeconds = probeDurationSeconds(audioPath);
+    if (durationSeconds == null) continue;
+    if (session.duration_seconds === durationSeconds) continue;
+
+    db.updateSession(session.id, { duration_seconds: durationSeconds });
+    updated += 1;
+  }
+
+  if (updated > 0) {
+    logger.info('Backfilled session durations via ffprobe', {
+      updated,
+      total: sessions.length,
+    });
+    mainWindow?.webContents.send('sessions:durations-updated');
+  } else {
+    logger.info('Session duration backfill complete (no changes)', {
+      total: sessions.length,
+    });
+  }
+
+  return updated;
+}
+
 // ── Crash recovery ───────────────────────────────────────────────────────────
 
 /**
@@ -811,11 +889,7 @@ async function recoverOrphanedWebmFiles() {
       // Update the database session if it exists
       const session = db.getSession(sessionId);
       if (session && !session.audio_path) {
-        let durationSeconds = null;
-        try {
-          durationSeconds = Math.round(getWavDurationSeconds(wavPath));
-          if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) durationSeconds = null;
-        } catch { /* ignore */ }
+        const durationSeconds = probeDurationSeconds(wavPath);
 
         db.updateSession(sessionId, {
           audio_path: wavPath,
@@ -852,42 +926,76 @@ app.whenReady().then(async () => {
   db.markStaleRecordingSessionsAsError();
   registerIpcHandlers();
 
-  // Serve session audio for renderer playback (meetmind-audio://<sessionId>)
+  // Serve session audio for renderer playback:
+  // meetmind-audio://session/<sessionId>  (preferred)
+  // meetmind-audio://<sessionId>          (legacy)
   protocol.handle('meetmind-audio', (request) => {
     try {
-      const sessionId = new URL(request.url).hostname || '';
-      const session = db.getSession(sessionId);
-      if (!session) {
-        logger.warn('meetmind-audio request for unknown session', { sessionId });
+      const parsed = new URL(request.url);
+      const pathId = decodeURIComponent(parsed.pathname.replace(/^\/+/, '').split('/')[0] || '');
+      const sessionId = pathId || parsed.hostname || '';
+      if (!sessionId || sessionId === 'session') {
+        logger.warn('meetmind-audio request missing session id', { url: request.url });
+        return new Response(null, { status: 400 });
+      }
+
+      const audioPath = resolveSessionAudioPath(sessionId);
+      if (!audioPath) {
+        logger.warn('meetmind-audio file not found', { sessionId });
         return new Response(null, { status: 404 });
       }
 
-      let audioPath = session.audio_path;
+      const ext = path.extname(audioPath).toLowerCase();
+      const mimeTypes = {
+        '.wav': 'audio/wav',
+        '.webm': 'audio/webm',
+        '.mp3': 'audio/mpeg',
+        '.m4a': 'audio/mp4',
+        '.aac': 'audio/aac',
+        '.ogg': 'audio/ogg',
+        '.flac': 'audio/flac',
+      };
+      const mime = mimeTypes[ext] || 'application/octet-stream';
+      const { size } = fs.statSync(audioPath);
+      const rangeHeader = request.headers.get('Range');
 
-      // Fallback: if audio_path is missing or the file was moved, try to locate
-      // a recording file by sessionId in the standard recordings directory.
-      if (!audioPath || !fs.existsSync(audioPath)) {
-        const recordingsDir = path.join(app.getPath('userData'), 'recordings');
-        const wavPath = path.join(recordingsDir, `${sessionId}.wav`);
-        const webmPath = path.join(recordingsDir, `${sessionId}.webm`);
+      logger.info('meetmind-audio streaming file', { sessionId, audioPath, mime, range: rangeHeader || 'none' });
 
-        if (fs.existsSync(wavPath)) {
-          audioPath = wavPath;
-        } else if (fs.existsSync(webmPath)) {
-          audioPath = webmPath;
+      if (rangeHeader) {
+        const match = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
+        if (!match) {
+          return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
         }
-      }
-
-      if (!audioPath || !fs.existsSync(audioPath)) {
-        logger.warn('meetmind-audio file not found', {
-          sessionId,
-          audioPath: session.audio_path,
+        const start = match[1] ? parseInt(match[1], 10) : 0;
+        const end = match[2] ? parseInt(match[2], 10) : size - 1;
+        if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) {
+          return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+        }
+        const chunkEnd = Math.min(end, size - 1);
+        const chunkSize = chunkEnd - start + 1;
+        const nodeStream = fs.createReadStream(audioPath, { start, end: chunkEnd });
+        return new Response(Readable.toWeb(nodeStream), {
+          status: 206,
+          headers: {
+            'Content-Type': mime,
+            'Content-Length': String(chunkSize),
+            'Content-Range': `bytes ${start}-${chunkEnd}/${size}`,
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'no-cache',
+          },
         });
-        return new Response(null, { status: 404 });
       }
 
-      logger.info('meetmind-audio streaming file', { sessionId, audioPath });
-      return net.fetch(pathToFileURL(audioPath).toString());
+      const nodeStream = fs.createReadStream(audioPath);
+      return new Response(Readable.toWeb(nodeStream), {
+        status: 200,
+        headers: {
+          'Content-Type': mime,
+          'Content-Length': String(size),
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'no-cache',
+        },
+      });
     } catch (err) {
       logger.error('meetmind-audio protocol error', err);
       return new Response(null, { status: 500 });
@@ -923,10 +1031,18 @@ app.whenReady().then(async () => {
     mainWindow,
   });
 
-  // Background: convert leftover recordings without blocking first paint.
-  recoverOrphanedWebmFiles().catch((err) => {
-    logger.error('Orphan recovery failed', err);
-  });
+  // Background: convert leftover recordings and backfill durations without blocking first paint.
+  recoverOrphanedWebmFiles()
+    .catch((err) => {
+      logger.error('Orphan recovery failed', err);
+    })
+    .finally(() => {
+      try {
+        backfillSessionDurations();
+      } catch (err) {
+        logger.error('Duration backfill failed', err);
+      }
+    });
 
   app.on('open-url', (event, url) => {
     event.preventDefault();
