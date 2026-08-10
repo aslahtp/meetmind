@@ -1,55 +1,39 @@
-# MeetMind v{VERSION} 🚀
+# MeetMind v{VERSION} 📎
 
-> **AI Meeting Assistant** — Automatic transcription, smart summarization, action item extraction, and seamless Notion integration.
+## Changelog
 
----
+- 
 
-## 🌟 What's New in this Release
+## Downloads
 
-### ✨ Key Highlights
+- **Windows installer** (recommended):
 
-- **\[Feature Title\]**: Brief description of the highlight.
-- **\[Feature Title\]**: Brief description of the highlight.
+  - `MeetMind Setup x.y.z.exe`
 
----
+- **Optional browser extension bundle** :
 
-## 🚀 Features & Enhancements
+  - `meetmind-extension.zip` – for manual installation of the extension.
 
-- ⚡ **\[Component\]**: Description of feature or improvement ([#PR](https://github.com/aslahtp/meetmind/pull/XXX)) by @author
+> Note: Auto‑update is not yet wired up. To upgrade, download and run the latest installer from this release.
 
-## 🐛 Bug Fixes & Stability
+## Setup
 
-- 🛠️ **\[Component\]**: Fix description ([#PR](https://github.com/aslahtp/meetmind/pull/XXX)) by @author
+### Windows App
 
-## 🎨 UI/UX Improvements
+1. Install the Windows `.exe` from the Assets section below.
+2. Open MeetMind → **Settings → API Keys**.
+3. Choose your **Transcription Service**:
+   - For **AssemblyAI** (Recommended):
+     - Paste your AssemblyAI API key.
+     - (Optional) Add a short prompt to fine‑tune behavior for English/Malayalam meetings.
+   - For **Google STT**: Enter your Google Cloud API key and Project ID.
+   - For **Sarvam AI STT**: Paste your Sarvam AI API key
+4. Configure **Audio Devices** (System + Microphone) and run a quick test recording.
 
-- 💄 **\[Component\]**: Visual polish or theme improvement ([#PR](https://github.com/aslahtp/meetmind/pull/XXX)) by @author
+### Browser Extension
 
-## 📦 Downloads & Installation
-
-| OS / Platform | Installer | Architecture |
-| --- | --- | --- |
-| 🪟 Windows | `MeetMind-Setup-{VERSION}.exe` | x64 |
-| 🪟 Windows Portable | `MeetMind-{VERSION}-portable.exe` | x64 |
-| 🧩 Chrome Extension | `meetmind-extension-v{VERSION}.zip` | Extension |
-
-### 🛠️ Installation Notes
-
-- **Windows Setup**: Download and run `MeetMind-Setup-{VERSION}.exe`.
-- **Chrome Extension**: Unpack `meetmind-extension-v{VERSION}.zip` and load it via `chrome://extensions` (Developer Mode).
-
----
-
-## 🔐 Checksums (SHA-256)
-
-```text
-# Verify release file integrity using certutil on Windows:
-# certutil -hashfile MeetMind-Setup-{VERSION}.exe SHA256
-
-<SHA256_CHECKSUM>  MeetMind-Setup-{VERSION}.exe
-<SHA256_CHECKSUM>  meetmind-extension-v{VERSION}.zip
-```
-
----
-
-**Full Changelog**: https://github.com/aslahtp/meetmind/compare/v{PREVIOUS_VERSION}...v{VERSION}
+1. Extract the `meetmind-extension.zip` archive
+2. Open Chrome → `chrome://extensions`
+3. Enable **Developer Mode** (top right)
+4. Click **Load unpacked**
+5. Select the `meetmind-chrome-extension` folder
