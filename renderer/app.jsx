@@ -235,11 +235,14 @@ function App() {
   return (
     <AppContext.Provider value={ctx}>
       <div className="flex h-screen overflow-hidden bg-[rgb(var(--color-background))] text-[rgb(var(--color-foreground))]">
+        {/* Full-width custom titlebar strip — uniform #0c0c0f background with working window controls */}
+        <TitleBar />
+
         {/* Sidebar */}
         <Sidebar />
 
-        {/* Main content — top padding clears the title bar overlay (window controls) */}
-        <main className="flex-1 flex flex-col overflow-hidden pt-10 pb-6">
+        {/* Main content — pt-8 clears the fixed titlebar strip above */}
+        <main className="flex-1 flex flex-col overflow-hidden pt-8 pb-6">
           {isRecording && (
             <RecordingBar
               sessionId={recordingSessionId}
@@ -285,17 +288,66 @@ function App() {
   );
 }
 
+// ── Custom TitleBar ────────────────────────────────────────────────────────────
+
+function TitleBar() {
+  const handleMinimize = () => window.meetmind?.window?.minimize();
+  const handleMaximize = () => window.meetmind?.window?.maximize();
+  const handleClose = () => window.meetmind?.window?.close();
+
+  return (
+    <div
+      className="titlebar-drag fixed top-0 left-0 right-0 h-8 z-50 flex items-center justify-between px-3.5 select-none bg-[#0c0c0f] border-b border-zinc-800/40"
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pointer-events-none">MeetMind</span>
+      </div>
+
+      {/* Window Controls */}
+      <div className="flex items-center titlebar-no-drag -mr-3.5 h-full">
+        <button
+          type="button"
+          onClick={handleMinimize}
+          className="h-full px-3 text-zinc-400 hover:text-white hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
+          title="Minimize"
+        >
+          <svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
+            <rect width="10" height="1" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={handleMaximize}
+          className="h-full px-3 text-zinc-400 hover:text-white hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
+          title="Maximize / Restore"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+            <rect x="0.5" y="0.5" width="9" height="9" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={handleClose}
+          className="h-full px-3.5 text-zinc-400 hover:text-white hover:bg-rose-600 flex items-center justify-center transition-colors rounded-tr-lg"
+          title="Close"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2">
+            <path d="M1 1L9 9M9 1L1 9" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar() {
   const { view, setView, isRecording, startRecording } = useApp();
 
   return (
-    <aside className="w-56 flex-shrink-0 flex flex-col bg-zinc-950/80 border-r border-zinc-800/80 pb-6 backdrop-blur-xl">
-      {/* Titlebar drag region */}
-      <div className="titlebar-drag h-8 flex items-center px-4">
-        <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest select-none">MeetMind</span>
-      </div>
+    <aside className="w-56 flex-shrink-0 flex flex-col bg-zinc-950/80 border-r border-zinc-800/80 pb-6 pt-8 backdrop-blur-xl">
+      {/* Logo mark sits below the fixed titlebar strip (pt-8 clears it) */}
 
       {/* Logo mark */}
       <div className="px-4 pt-1 pb-4 titlebar-no-drag flex items-center gap-3">

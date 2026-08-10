@@ -1,6 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('meetmind', {
+  // Window controls (frameless window)
+  window: {
+    minimize:    () => ipcRenderer.invoke('window:minimize'),
+    maximize:    () => ipcRenderer.invoke('window:maximize'),
+    close:       () => ipcRenderer.invoke('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+  },
+
   // Config
   config: {
     get: () => ipcRenderer.invoke('config:get'),

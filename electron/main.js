@@ -67,13 +67,9 @@ function createMainWindow() {
     height: 720,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#1a1a1a',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#1a1a1a',
-      symbolColor: '#ffffff',
-      height: 32,
-    },
+    backgroundColor: '#0c0c0f',
+    frame: false,            // Custom titlebar in renderer — no native frame at all
+    backgroundMaterial: 'none',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -507,6 +503,15 @@ async function runProcessingPipeline(sessionId, audioPath) {
 // ── IPC Handlers ─────────────────────────────────────────────────────────────
 
 function registerIpcHandlers() {
+  // ── Custom window controls (frameless window) ──────────────────────────────
+  ipcMain.handle('window:minimize',  () => mainWindow?.minimize());
+  ipcMain.handle('window:maximize',  () => {
+    if (mainWindow?.isMaximized()) mainWindow.restore();
+    else mainWindow?.maximize();
+  });
+  ipcMain.handle('window:close',     () => { app.isQuitting = true; mainWindow?.close(); });
+  ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
+
   ipcMain.handle('config:get', () => getConfig());
 
   ipcMain.handle('config:set', (_e, key, value) => {

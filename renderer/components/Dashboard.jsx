@@ -294,21 +294,66 @@ export default function Dashboard({ onOpenSession }) {
 
       {/* Overview Stats Bar */}
       <div className="grid grid-cols-4 gap-3 px-6 pt-4 pb-2 flex-shrink-0">
-        <div className="card py-3 px-4 bg-zinc-900/50 border-zinc-800/60">
-          <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Meetings</span>
-          <div className="text-lg font-bold text-white mt-0.5">{metrics.totalMeetings}</div>
+        {/* Meetings */}
+        <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3.5 group hover:border-violet-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Meetings</span>
+            <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-violet-400">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-white tracking-tight">{metrics.totalMeetings}</div>
+          <p className="text-zinc-600 text-[10px] mt-0.5">sessions recorded</p>
         </div>
-        <div className="card py-3 px-4 bg-zinc-900/50 border-zinc-800/60">
-          <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Recorded Time</span>
-          <div className="text-lg font-bold text-white mt-0.5">{metrics.totalMinutes}m</div>
+
+        {/* Recorded Time */}
+        <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3.5 group hover:border-sky-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+          <div className="absolute inset-0 bg-gradient-to-br from-sky-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Recorded Time</span>
+            <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center flex-shrink-0">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-sky-400">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-white tracking-tight">
+            {metrics.totalMinutes >= 60
+              ? `${Math.floor(metrics.totalMinutes / 60)}h ${metrics.totalMinutes % 60}m`
+              : `${metrics.totalMinutes}m`}
+          </div>
+          <p className="text-zinc-600 text-[10px] mt-0.5">total audio captured</p>
         </div>
-        <div className="card py-3 px-4 bg-zinc-900/50 border-zinc-800/60">
-          <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Action Items</span>
-          <div className="text-lg font-bold text-amber-400 mt-0.5">{metrics.actionItems}</div>
+
+        {/* Action Items */}
+        <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3.5 group hover:border-amber-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Action Items</span>
+            <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400">
+                <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-amber-400 tracking-tight">{metrics.actionItems}</div>
+          <p className="text-zinc-600 text-[10px] mt-0.5">tasks extracted</p>
         </div>
-        <div className="card py-3 px-4 bg-zinc-900/50 border-zinc-800/60">
-          <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Notion Synced</span>
-          <div className="text-lg font-bold text-emerald-400 mt-0.5">{metrics.notionSynced}</div>
+
+        {/* Notion Synced */}
+        <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3.5 group hover:border-emerald-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Notion Synced</span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+              <NotionIcon size={13} className="text-emerald-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-emerald-400 tracking-tight">{metrics.notionSynced}</div>
+          <p className="text-zinc-600 text-[10px] mt-0.5">pages uploaded</p>
         </div>
       </div>
 

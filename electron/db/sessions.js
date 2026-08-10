@@ -118,10 +118,16 @@ function getSession(id) {
   return deserializeSession(row);
 }
 
-function listSessions({ limit = 50, offset = 0 } = {}) {
+function listSessions({ limit = null, offset = 0 } = {}) {
   const d = ensureDb();
-  const stmt = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?');
-  stmt.bind([limit, offset]);
+  let stmt;
+  if (limit !== null) {
+    stmt = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?');
+    stmt.bind([limit, offset]);
+  } else {
+    stmt = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC');
+    stmt.bind([]);
+  }
   const rows = [];
   while (stmt.step()) {
     rows.push(stmt.getAsObject());

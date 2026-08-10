@@ -5,7 +5,7 @@
 /* ── CSS Variables ─────────────────────────────────────────────────────────── */
 :root {
   /* Core dark theme palette (RGB triplets for opacity-friendly usage) */
-  --color-background:           14 14 18;       /* #0e0e12 deep obsidian */
+  --color-background:           12 12 15;       /* #0c0c0f deep obsidian */
   --color-background-secondary: 21 21 27;       /* #15151b sleek card background */
   --color-background-tertiary:  28 28 36;       /* #1c1c24 elevated surface */
   --color-background-glass:     21 21 27;
@@ -58,7 +58,7 @@
 }
 
 .dark {
-  --color-background:           14 14 18;
+  --color-background:           12 12 15;
   --color-background-secondary: 21 21 27;
   --color-background-tertiary:  28 28 36;
   --color-foreground:           245 245 250;
