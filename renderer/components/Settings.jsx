@@ -592,16 +592,15 @@ export default function Settings({ onSave }) {
 
           <Field
             label="System Prompt"
-            hint="Customise the instructions sent to Gemini when generating meeting notes. Leave empty to use the built-in default."
+            hint="The instructions sent to Gemini when generating meeting notes."
           >
             <textarea
-              value={form.geminiSystemPrompt}
-              onChange={update('geminiSystemPrompt')}
-              placeholder={defaultSystemPrompt}
+              value={form.geminiSystemPrompt || defaultSystemPrompt}
+              onChange={(e) => setForm((p) => ({ ...p, geminiSystemPrompt: e.target.value }))}
               rows={8}
               className="input resize-y font-mono text-xs leading-relaxed"
             />
-            {form.geminiSystemPrompt && (
+            {defaultSystemPrompt && (form.geminiSystemPrompt || defaultSystemPrompt) !== defaultSystemPrompt && (
               <button
                 type="button"
                 onClick={() => setForm((p) => ({ ...p, geminiSystemPrompt: '' }))}
