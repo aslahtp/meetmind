@@ -8,7 +8,7 @@ const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
 const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
 const { transcribeAudio, testGoogleSTT, testAssemblyAI, testSarvam } = require('./services/transcription');
-const { generateMeetingNotes, getAvailableModels } = require('./services/gemini');
+const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT } = require('./services/gemini');
 const { uploadToNotion, testNotionConnection } = require('./services/notion');
 const { testGeminiConnection } = require('./services/gemini');
 const db = require('./db/sessions');
@@ -469,7 +469,7 @@ async function runProcessingPipeline(sessionId, audioPath) {
     sendProgress('generating', 60);
 
     // Stage 2: Gemini notes (60–85%)
-    const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey);
+    const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey, config.geminiSystemPrompt);
     db.updateSession(sessionId, {
       notes: JSON.stringify(notes),
       title: notes.title || 'Untitled Meeting',
@@ -686,6 +686,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle('models:list', () => getAvailableModels());
 
+  ipcMain.handle('gemini:default-system-prompt', () => DEFAULT_SYSTEM_PROMPT);
+
   ipcMain.handle('api:test-google', async (_e, apiKey, _projectId) => {
     try {
       await testGoogleSTT(apiKey);
@@ -758,7 +760,7 @@ function registerIpcHandlers() {
           typeof session2.transcript === 'string'
             ? JSON.parse(session2.transcript || '[]')
             : (session2.transcript || []);
-        const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey);
+        const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey, config.geminiSystemPrompt);
         db.updateSession(sessionId, { notes: JSON.stringify(notes), title: notes.title });
       }
       if (stage === 'notion') {

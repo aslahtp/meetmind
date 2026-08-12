@@ -16,7 +16,7 @@ function resolveModelId(modelId) {
   return DEFAULT_GEMINI_MODEL;
 }
 
-const SYSTEM_PROMPT = `You are an expert meeting notes assistant.
+const DEFAULT_SYSTEM_PROMPT = `You are an expert meeting notes assistant.
 
 Given a meeting transcript (possibly with speaker labels), generate structured meeting notes in JSON format that will be rendered as:
 - A top section called "Action Items & Next Steps" in todo/checklist form
@@ -52,6 +52,9 @@ Rules:
 - Be concise but complete — every important point must appear.
 - Return ONLY the JSON object, no markdown, no explanation.`;
 
+// Alias kept for internal use
+const SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;
+
 function transcriptToText(transcript) {
   if (!Array.isArray(transcript) || transcript.length === 0) {
     return 'No transcript available.';
@@ -71,7 +74,7 @@ function formatTime(seconds) {
   return `${m}:${s}`;
 }
 
-async function generateMeetingNotes(transcript, modelId, apiKey) {
+async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPrompt) {
   if (!apiKey) throw new Error('Gemini API key is required');
 
   const selectedModel = resolveModelId(modelId);
@@ -79,10 +82,12 @@ async function generateMeetingNotes(transcript, modelId, apiKey) {
 
   logger.info('Generating meeting notes', { modelId: selectedModel, transcriptLength: transcriptText.length });
 
+  const effectivePrompt = (customSystemPrompt && customSystemPrompt.trim()) || DEFAULT_SYSTEM_PROMPT;
+
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: selectedModel,
-    systemInstruction: SYSTEM_PROMPT,
+    systemInstruction: effectivePrompt,
   });
 
   const prompt = `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate structured meeting notes in JSON format as specified.`;
@@ -143,4 +148,5 @@ module.exports = {
   testGeminiConnection,
   AVAILABLE_MODELS,
   DEFAULT_GEMINI_MODEL,
+  DEFAULT_SYSTEM_PROMPT,
 };

@@ -51,6 +51,11 @@ contextBridge.exposeInMainWorld('meetmind', {
     list: () => ipcRenderer.invoke('models:list'),
   },
 
+  // Gemini
+  gemini: {
+    getDefaultSystemPrompt: () => ipcRenderer.invoke('gemini:default-system-prompt'),
+  },
+
   // API Tests
   api: {
     testGoogle: (apiKey, projectId) => ipcRenderer.invoke('api:test-google', apiKey, projectId),

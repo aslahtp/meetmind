@@ -1,5 +1,5 @@
 const Store = require('electron-store');
-const { AVAILABLE_MODELS, DEFAULT_GEMINI_MODEL } = require('../services/gemini');
+const { AVAILABLE_MODELS, DEFAULT_GEMINI_MODEL, DEFAULT_SYSTEM_PROMPT } = require('../services/gemini');
 
 const schema = {
   googleApiKey: {
@@ -78,6 +78,10 @@ const schema = {
     type: 'string',
     default: '',
   },
+  geminiSystemPrompt: {
+    type: 'string',
+    default: '',
+  },
 };
 
 const store = new Store({ schema, name: 'meetmind-config' });
@@ -128,6 +132,7 @@ function getConfig() {
     assemblyAiApiKey: store.get('assemblyAiApiKey') || '',
     assemblyAiPrompt: store.get('assemblyAiPrompt') || '',
     sarvamApiKey:     store.get('sarvamApiKey') || '',
+    geminiSystemPrompt: store.get('geminiSystemPrompt') || '',
   };
 }
 
@@ -156,4 +161,5 @@ module.exports = {
   setMultipleConfig,
   isFirstRun,
   markOnboardingComplete,
+  DEFAULT_SYSTEM_PROMPT,
 };

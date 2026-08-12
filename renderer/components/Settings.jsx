@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ExternalLink,
   KeyRound,
+  RotateCcw,
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
 import NotionIcon from './NotionIcon.jsx';
@@ -206,6 +207,7 @@ export default function Settings({ onSave }) {
     assemblyAiApiKey:  '',
     assemblyAiPrompt:  '',
     sarvamApiKey:      '',
+    geminiSystemPrompt: '',
   });
   const [models, setModels] = useState([]);
   const [devices, setDevices] = useState({ all: [], system: null, mic: null });
@@ -214,6 +216,7 @@ export default function Settings({ onSave }) {
   const [probingDevice, setProbingDevice] = useState(null);
   const [saved, setSaved] = useState(false);
   const [activeOnboardingStep, setActiveOnboardingStep] = useState(null);
+  const [defaultSystemPrompt, setDefaultSystemPrompt] = useState('');
 
   useEffect(() => {
     if (config) {
@@ -234,12 +237,16 @@ export default function Settings({ onSave }) {
         assemblyAiApiKey:      config.assemblyAiApiKey || '',
         assemblyAiPrompt:      config.assemblyAiPrompt || '',
         sarvamApiKey:          config.sarvamApiKey || '',
+        geminiSystemPrompt:    config.geminiSystemPrompt || '',
       });
     }
   }, [config]);
 
   useEffect(() => {
     window.meetmind?.models.list().then(setModels);
+    window.meetmind?.gemini?.getDefaultSystemPrompt().then((prompt) => {
+      if (prompt) setDefaultSystemPrompt(prompt);
+    });
   }, []);
 
   const update = (key) => (e) => {
@@ -581,6 +588,29 @@ export default function Settings({ onSave }) {
                 </option>
               ))}
             </select>
+          </Field>
+
+          <Field
+            label="System Prompt"
+            hint="Customise the instructions sent to Gemini when generating meeting notes. Leave empty to use the built-in default."
+          >
+            <textarea
+              value={form.geminiSystemPrompt}
+              onChange={update('geminiSystemPrompt')}
+              placeholder={defaultSystemPrompt}
+              rows={8}
+              className="input resize-y font-mono text-xs leading-relaxed"
+            />
+            {form.geminiSystemPrompt && (
+              <button
+                type="button"
+                onClick={() => setForm((p) => ({ ...p, geminiSystemPrompt: '' }))}
+                className="btn-ghost text-xs px-2 py-1 mt-1.5 text-yellow-400/80 hover:text-yellow-300 flex items-center gap-1.5"
+              >
+                <RotateCcw size={12} strokeWidth={2} />
+                Reset to Default
+              </button>
+            )}
           </Field>
         </section>
 
