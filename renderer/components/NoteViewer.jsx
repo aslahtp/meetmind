@@ -27,9 +27,145 @@ import {
   Play,
   Pause,
   AlertTriangle,
+  CheckCircle2,
+  HelpCircle,
+  Target,
+  Info,
+  UserCheck,
 } from 'lucide-react';
 import TranscriptViewer from './TranscriptViewer.jsx';
 import NotionIcon from './NotionIcon.jsx';
+
+const CONFIDENCE_STYLES = {
+  confirmed: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
+  inferred:  'bg-amber-500/10 border-amber-500/30 text-amber-400',
+  unknown:   'bg-zinc-800 border-zinc-700 text-zinc-400',
+};
+
+function parseInlineMarkdown(text) {
+  if (!text) return text;
+  const parts = [];
+  const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
+  let lastIdx = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(text.substring(lastIdx, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('**') && token.endsWith('**')) {
+      parts.push(<strong key={match.index} className="font-semibold text-zinc-100">{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith('*') && token.endsWith('*')) {
+      parts.push(<em key={match.index} className="italic text-zinc-200">{token.slice(1, -1)}</em>);
+    } else if (token.startsWith('`') && token.endsWith('`')) {
+      parts.push(<code key={match.index} className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-emerald-300 font-mono text-[12px]">{token.slice(1, -1)}</code>);
+    }
+    lastIdx = regex.lastIndex;
+  }
+  if (lastIdx < text.length) {
+    parts.push(text.substring(lastIdx));
+  }
+  return parts;
+}
+
+function FormattedText({ content, className = '' }) {
+  if (!content) return null;
+
+  const blocks = [];
+  const lines = content.split(/\r?\n/);
+  let inCodeBlock = false;
+  let currentCodeLines = [];
+  let codeLang = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim().startsWith('```')) {
+      if (inCodeBlock) {
+        blocks.push({
+          type: 'code',
+          lang: codeLang,
+          code: currentCodeLines.join('\n'),
+        });
+        inCodeBlock = false;
+        currentCodeLines = [];
+        codeLang = '';
+      } else {
+        inCodeBlock = true;
+        codeLang = line.trim().slice(3).trim();
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      currentCodeLines.push(line);
+    } else {
+      blocks.push({ type: 'line', text: line });
+    }
+  }
+
+  if (inCodeBlock && currentCodeLines.length > 0) {
+    blocks.push({ type: 'code', lang: codeLang, code: currentCodeLines.join('\n') });
+  }
+
+  return (
+    <div className={`space-y-2.5 ${className}`}>
+      {blocks.map((block, idx) => {
+        if (block.type === 'code') {
+          return (
+            <div key={idx} className="my-3 rounded-xl border border-zinc-800 bg-zinc-950 p-3.5 font-mono text-xs text-emerald-300 overflow-x-auto shadow-inner">
+              {block.lang && (
+                <div className="text-[10px] uppercase font-sans font-bold text-zinc-500 mb-1.5 tracking-wider">
+                  {block.lang}
+                </div>
+              )}
+              <pre className="whitespace-pre leading-relaxed">{block.code}</pre>
+            </div>
+          );
+        }
+
+        const line = block.text;
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ');
+        const isNumbered = /^\d+\.\s/.test(trimmed);
+
+        let textToFormat = trimmed;
+        if (isBullet) {
+          textToFormat = trimmed.replace(/^[-*•]\s+/, '');
+        } else if (isNumbered) {
+          textToFormat = trimmed.replace(/^\d+\.\s+/, '');
+        }
+
+        return (
+          <div
+            key={idx}
+            className={
+              isBullet
+                ? 'flex items-start gap-2.5 pl-2'
+                : isNumbered
+                ? 'flex items-start gap-2.5 pl-2'
+                : ''
+            }
+          >
+            {isBullet && (
+              <span className="mt-2 w-1.5 h-1.5 rounded-full bg-emerald-400/80 flex-shrink-0" />
+            )}
+            {isNumbered && (
+              <span className="text-xs font-mono font-bold text-emerald-400 flex-shrink-0 mt-0.5">
+                {trimmed.match(/^\d+\./)[0]}
+              </span>
+            )}
+            <span className="leading-relaxed text-zinc-300 text-sm">
+              {parseInlineMarkdown(textToFormat)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const PRIORITY_STYLES = {
   high:   {
@@ -455,66 +591,174 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
   }
 
   const actionItems = notes.action_items || [];
-  const keyPoints = (notes.key_points || []).filter((p) => p?.heading || p?.summary);
+  const topics = (notes.sections?.length ? notes.sections : notes.topics?.length ? notes.topics : notes.key_points || []).filter((p) => p?.heading || p?.content || p?.summary);
+  const participants = notes.participants || [];
+  const statusUpdate = notes.status_update;
+  const notableMentions = notes.notable_mentions || [];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-10 fade-in">
-      {notes.summary && (
+    <div className="max-w-3xl mx-auto space-y-9 fade-in">
+      {/* Participants Card */}
+      {participants.length > 0 && (
         <section>
           <SectionLabel
-            icon={Sparkles}
-            colorClass="bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
+            icon={Users}
+            colorClass="bg-purple-500/10 border-purple-500/25 text-purple-400"
+            count={participants.length}
           >
-            Executive Summary
+            Participants
           </SectionLabel>
-          <p className="text-zinc-200 text-[15px] leading-7">{notes.summary}</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {participants.map((p, idx) => {
+              const confCls = CONFIDENCE_STYLES[p.identity_confidence] || CONFIDENCE_STYLES.inferred;
+              return (
+                <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-zinc-800/70 bg-zinc-900/30">
+                  <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-zinc-300 flex-shrink-0 font-bold text-xs">
+                    {(p.name || p.label || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-200 truncate">
+                        {p.name || p.label}
+                      </span>
+                      {p.name && p.label && p.name !== p.label && (
+                        <span className="text-[10px] text-zinc-500 font-mono">({p.label})</span>
+                      )}
+                    </div>
+                    {p.role && <p className="text-[11px] text-zinc-400 truncate">{p.role}</p>}
+                  </div>
+                  {p.identity_confidence && (
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border capitalize flex-shrink-0 ${confCls}`}>
+                      {p.identity_confidence}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </section>
       )}
 
+      {/* Status Update Card */}
+      {statusUpdate && (statusUpdate.completion_estimate || statusUpdate.remaining_scope?.length > 0) && (
+        <section className="p-4 rounded-xl border border-sky-500/20 bg-sky-500/5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Target size={16} className="text-sky-400" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-sky-300">Status Update</h3>
+            {statusUpdate.completion_estimate && (
+              <span className="ml-auto text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300">
+                {statusUpdate.completion_estimate}
+              </span>
+            )}
+          </div>
+          {statusUpdate.remaining_scope?.length > 0 && (
+            <div className="space-y-1 pl-6">
+              <p className="text-[11px] font-semibold uppercase text-zinc-400 tracking-wider">Remaining Scope:</p>
+              <ul className="space-y-1">
+                {statusUpdate.remaining_scope.map((item, i) => (
+                  <li key={i} className="text-xs text-zinc-300 flex items-center gap-2">
+                    <span className="w-1 h-1 rounded-full bg-sky-400 flex-shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Action Items */}
       <section>
         <ActionItemsList items={actionItems} />
       </section>
 
-      {keyPoints.length > 0 && (
+      {/* Topics */}
+      {topics.length > 0 && (
         <section>
           <SectionLabel
             icon={FileText}
             colorClass="bg-sky-500/10 border-sky-500/25 text-sky-400"
-            count={keyPoints.length}
+            count={topics.length}
           >
             Key Topics
           </SectionLabel>
 
-          <div className="space-y-7">
-            {keyPoints.map((point, idx) => {
-              const lines = (point.summary || '')
-                .split(/\r?\n+/)
-                .map((l) => l.trim())
-                .filter(Boolean);
-              return (
-                <article key={idx}>
-                  <div className="flex items-baseline gap-2.5 mb-2.5 pl-3">
-                    <span className="text-[11px] font-bold text-zinc-500 tabular-nums">
-                      {String(idx + 1).padStart(2, '0')}
-                    </span>
-                    <h3 className="font-semibold text-[15px] text-zinc-100 leading-snug">
-                      {point.heading || 'Topic'}
-                    </h3>
-                  </div>
-                  {lines.length > 0 && (
-                    <ul className="space-y-2 pl-8">
-                      {lines.map((line, i) => (
-                        <li key={i} className="flex gap-2.5 text-sm text-zinc-300 leading-relaxed">
-                          <span className="mt-2 w-1 h-1 rounded-full bg-zinc-600 flex-shrink-0" />
-                          <span>{line}</span>
+          <div className="space-y-8">
+            {topics.map((topic, idx) => (
+              <article key={idx} className="p-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/20 space-y-4">
+                <div className="flex items-baseline gap-2.5 border-b border-zinc-800/60 pb-3">
+                  <span className="text-[11px] font-bold text-emerald-400 tabular-nums bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                    #{String(idx + 1).padStart(2, '0')}
+                  </span>
+                  <h3 className="font-semibold text-[15px] text-zinc-100 leading-snug">
+                    {topic.heading || 'Topic'}
+                  </h3>
+                </div>
+
+                {/* Summary */}
+                {topic.summary && (
+                  <FormattedText content={topic.summary} />
+                )}
+
+                {/* Options Discussed */}
+                {topic.options_discussed?.length > 0 && (
+                  <div className="pl-3 border-l-2 border-zinc-700/50 space-y-1.5 pt-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Options / Perspectives Discussed:</p>
+                    <ul className="space-y-1">
+                      {topic.options_discussed.map((opt, i) => (
+                        <li key={i} className="text-xs text-zinc-300 flex items-start gap-2">
+                          <span className="mt-1.5 w-1 h-1 rounded-full bg-zinc-500 flex-shrink-0" />
+                          <span>{parseInlineMarkdown(opt)}</span>
                         </li>
                       ))}
                     </ul>
-                  )}
-                </article>
-              );
-            })}
+                  </div>
+                )}
+
+                {/* Final Decision */}
+                {topic.decision && (
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 text-xs leading-relaxed">
+                    <CheckCircle2 size={16} strokeWidth={2} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-emerald-300 block mb-0.5">Decision:</span>
+                      {parseInlineMarkdown(topic.decision)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Open Questions */}
+                {topic.open_questions?.length > 0 && (
+                  <div className="p-3 rounded-xl border border-amber-500/25 bg-amber-500/10 space-y-1.5 text-xs text-amber-200">
+                    <div className="flex items-center gap-2 font-semibold text-amber-300">
+                      <HelpCircle size={14} strokeWidth={2} className="flex-shrink-0" />
+                      <span>Pending / Open Questions:</span>
+                    </div>
+                    <ul className="space-y-1 pl-5 list-disc marker:text-amber-400">
+                      {topic.open_questions.map((q, i) => (
+                        <li key={i}>{parseInlineMarkdown(q)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </article>
+            ))}
           </div>
+        </section>
+      )}
+
+      {/* Notable Mentions */}
+      {notableMentions.length > 0 && (
+        <section className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <Info size={16} className="text-emerald-400" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Notable Mentions & Risks</h3>
+          </div>
+          <ul className="space-y-1.5 pl-6 list-disc text-xs text-zinc-300">
+            {notableMentions.map((item, idx) => (
+              <li key={idx}>{parseInlineMarkdown(item)}</li>
+            ))}
+          </ul>
         </section>
       )}
     </div>
@@ -595,8 +839,31 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
 
   const copyMarkdownSummary = async () => {
     if (!notes) return;
-    let md = `# ${notes.title || session.title || 'Meeting Summary'}\n\n`;
-    if (notes.summary) md += `## Overview\n${notes.summary}\n\n`;
+    let md = `# ${notes.meeting_title || notes.title || session.title || 'Meeting Summary'}\n\n`;
+
+    if (notes.participants?.length) {
+      md += `## Participants\n`;
+      notes.participants.forEach((p) => {
+        const nameStr = p.name ? `${p.name} (${p.label})` : p.label;
+        const roleStr = p.role ? ` — ${p.role}` : '';
+        const confStr = p.identity_confidence ? ` [${p.identity_confidence}]` : '';
+        md += `- ${nameStr}${roleStr}${confStr}\n`;
+      });
+      md += `\n`;
+    }
+
+    if (notes.status_update) {
+      md += `## Status Update\n`;
+      if (notes.status_update.completion_estimate) {
+        md += `- **Completion Estimate:** ${notes.status_update.completion_estimate}\n`;
+      }
+      if (notes.status_update.remaining_scope?.length) {
+        md += `- **Remaining Scope:**\n`;
+        notes.status_update.remaining_scope.forEach((s) => (md += `  - ${s}\n`));
+      }
+      md += `\n`;
+    }
+
     if (notes.action_items?.length) {
       md += `## Action Items\n`;
       notes.action_items.forEach((item) => {
@@ -604,12 +871,33 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
       });
       md += `\n`;
     }
-    if (notes.key_points?.length) {
-      md += `## Key Points\n`;
-      notes.key_points.forEach((kp) => {
-        md += `### ${kp.heading}\n${kp.summary}\n\n`;
+
+    const topics = notes.topics?.length ? notes.topics : notes.key_points;
+    if (topics?.length) {
+      md += `## Key Topics\n\n`;
+      topics.forEach((t, idx) => {
+        md += `### ${idx + 1}. ${t.heading || 'Topic'}\n\n`;
+        if (t.summary) md += `${t.summary}\n\n`;
+        if (t.options_discussed?.length) {
+          md += `**Options Discussed:**\n`;
+          t.options_discussed.forEach((opt) => (md += `- ${opt}\n`));
+          md += `\n`;
+        }
+        if (t.decision) md += `**Decision:** ${t.decision}\n\n`;
+        if (t.open_questions?.length) {
+          md += `**Open Questions:**\n`;
+          t.open_questions.forEach((q) => (md += `- ${q}\n`));
+          md += `\n`;
+        }
       });
     }
+
+    if (notes.notable_mentions?.length) {
+      md += `## Notable Mentions\n`;
+      notes.notable_mentions.forEach((m) => (md += `- ${m}\n`));
+      md += `\n`;
+    }
+
     await navigator.clipboard.writeText(md);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -631,7 +919,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
 
             <div className="flex-1 min-w-0 space-y-2.5">
               <h1 className="font-bold text-xl text-white truncate tracking-tight leading-tight">
-                {notes?.title || session.title || 'Meeting Notes'}
+                {notes?.meeting_title || notes?.title || session.title || 'Meeting Notes'}
               </h1>
 
               <div className="flex items-center flex-wrap gap-1.5">
@@ -647,10 +935,10 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                     {startTime}
                   </span>
                 )}
-                {duration && (
+                {(duration || notes?.duration) && (
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-zinc-300 bg-zinc-900/80 border border-zinc-800 px-2 py-1 rounded-lg">
                     <Timer size={11} strokeWidth={2} />
-                    {duration}
+                    {notes?.duration || duration}
                   </span>
                 )}
                 {notes?.attendees?.length > 0 && (

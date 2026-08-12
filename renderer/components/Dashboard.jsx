@@ -197,9 +197,9 @@ function SessionCard({ session, onClick, onDelete }) {
               Notion Synced
             </span>
           )}
-          {notes?.key_points?.length > 0 && (
+          {(notes?.topics?.length || notes?.key_points?.length) > 0 && (
             <span className="text-zinc-500">
-              {notes.key_points.length} key point{notes.key_points.length !== 1 ? 's' : ''}
+              {(notes.topics?.length || notes.key_points.length)} topic{(notes.topics?.length || notes.key_points.length) !== 1 ? 's' : ''}
             </span>
           )}
         </div>

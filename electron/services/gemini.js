@@ -16,41 +16,63 @@ function resolveModelId(modelId) {
   return DEFAULT_GEMINI_MODEL;
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are an expert meeting notes assistant.
+const DEFAULT_SYSTEM_PROMPT = `Write for someone who was not in the meeting. Each section's \`content\` must fully explain the topic (what was raised, what was discussed, what was decided, what's still open) so a reader understands it completely without needing the audio. Use markdown inside string values (bold, bullet lines, inline code) for readability. Skip small talk unless it affects timelines, staffing, or decisions. Identify speakers by name/role from context where possible; mark uncertain ones as such. Write in plain, neutral English regardless of the transcript's original language(s). Do not preserve filler words, false starts, or verbatim phrasing. No em dashes.
 
-Given a meeting transcript (possibly with speaker labels), generate structured meeting notes in JSON format that will be rendered as:
-- A top section called "Action Items & Next Steps" in todo/checklist form
-- Below that, several section headings (Key discussion areas) with bullet points under each heading
-
-The transcript may contain a mix of English and Malayalam (or other languages). Understand all languages present and generate the output entirely in English regardless of the transcript language.
-
-Return ONLY valid JSON with this exact schema (no extra text, no markdown, no emojis):
+\`\`\`json
 {
-  "title": "Meeting title inferred from context",
-  "action_items": [
-    {
-      "task": "todo-style task description with no emojis or markdown with mentioning of the task owner if possible",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MeetingNotes",
+  "type": "object",
+  "required": ["title", "duration", "attendees", "sections", "action_items"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Short title for the meeting's overall focus"
+    },
+    "duration": {
+      "type": ["string", "null"],
+      "description": "Meeting length if known, e.g. '1h 35m'"
+    },
+    "attendees": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label"],
+        "properties": {
+          "label": { "type": "string", "description": "Speaker label as it appears in the transcript" },
+          "name": { "type": ["string", "null"], "description": "Inferred real name, if identifiable" },
+          "role": { "type": ["string", "null"], "description": "Inferred role, e.g. 'business development'" }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["heading", "content"],
+        "properties": {
+          "heading": { "type": "string", "description": "Topic heading" },
+          "content": {
+            "type": "string",
+            "description": "Full standalone account of the topic in markdown (bullet points work well). Must cover what was raised, what was discussed, any decision made, and any open questions, in enough detail that no meeting attendance is needed to understand it."
+          }
+        }
+      }
+    },
+    "action_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["owner", "tasks"],
+        "properties": {
+          "owner": { "type": "string", "description": "Person responsible, or 'All' if shared" },
+          "tasks": { "type": "array", "items": { "type": "string" } }
+        }
+      }
     }
-  ],
-  "key_points": [
-    {
-      "heading": "Short, descriptive topic heading (no emojis)",
-      "summary": "Bullet-style lines describing this topic. Use plain text only, no emojis or markdown. To express multiple bullets under this heading, separate each bullet with a newline character (\\n)."
-    }
-  ],
+  }
 }
-
-Rules:
-- The transcript may be in Malayalam, English, or a mix of both. Always generate the JSON output in English.
-- Don't use speaker labels like "Speaker 1", "Speaker 2", etc. Instead, if you can find the speaker's name in the transcript, use it for owner attribution.
-- If a speaker's actual name is not available, use "Team" as the owner.
-- Action items MUST come from explicit commitments, not guesses.
-- Make action_items.task concise, and never include emojis, checkboxes, or markdown.
-- key_points.heading should be concise, human-readable section titles that can be used as headings in the UI and Notion.
-- key_points.summary should be written so that splitting on newlines (\\n) yields individual bullet lines. Each line must stand alone as a readable point. Do NOT include bullet characters (-, *, •) or emojis; just plain sentences.
-- Never include emojis anywhere in the JSON.
-- Be concise but complete — every important point must appear.
-- Return ONLY the JSON object, no markdown, no explanation.`;
+\`\`\``;
 
 // Alias kept for internal use
 const SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;
@@ -72,6 +94,122 @@ function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
   const s = Math.floor(seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
+}
+
+function normalizeNotes(notes) {
+  if (!notes || typeof notes !== 'object') return notes;
+
+  // Title backward/forward compatibility
+  const resolvedTitle = notes.title || notes.meeting_title || 'Meeting Notes';
+  notes.title = resolvedTitle;
+  notes.meeting_title = resolvedTitle;
+
+  // Duration normalization
+  if (notes.duration && typeof notes.duration === 'string') {
+    notes.duration = notes.duration.trim();
+  } else if (!notes.duration) {
+    notes.duration = null;
+  }
+
+  // Participants & Attendees compatibility
+  let rawParticipants = Array.isArray(notes.participants)
+    ? notes.participants
+    : Array.isArray(notes.attendees)
+      ? notes.attendees
+      : [];
+
+  const normalizedParticipants = rawParticipants.map((p) => {
+    if (typeof p === 'string') {
+      return {
+        label: p,
+        name: p,
+        role: null,
+        identity_confidence: 'inferred',
+      };
+    }
+    if (p && typeof p === 'object') {
+      return {
+        label: p.label || p.name || 'Speaker',
+        name: p.name || null,
+        role: p.role || null,
+        identity_confidence: p.identity_confidence || (p.name ? 'inferred' : 'unknown'),
+      };
+    }
+    return { label: 'Speaker', name: null, role: null, identity_confidence: 'unknown' };
+  });
+
+  notes.participants = normalizedParticipants;
+  notes.attendees = normalizedParticipants.map((p) => p.name || p.label).filter(Boolean);
+
+  // Sections, Topics, Key Points compatibility
+  let rawSections = Array.isArray(notes.sections)
+    ? notes.sections
+    : Array.isArray(notes.topics)
+      ? notes.topics
+      : Array.isArray(notes.key_points)
+        ? notes.key_points
+        : [];
+
+  const normalizedSections = rawSections.map((s) => {
+    const heading = s.heading || 'Topic';
+    const content = s.content || s.summary || '';
+    const options = Array.isArray(s.options_discussed) ? s.options_discussed : [];
+    const decision = s.decision || null;
+    const openQuestions = Array.isArray(s.open_questions) ? s.open_questions : [];
+
+    return {
+      heading,
+      content,
+      summary: content,
+      options_discussed: options,
+      decision,
+      open_questions: openQuestions,
+    };
+  });
+
+  notes.sections = normalizedSections;
+  notes.topics = normalizedSections;
+  notes.key_points = normalizedSections;
+
+  // Action Items compatibility (support { owner, tasks } and flat { task, owner })
+  let rawActionItems = Array.isArray(notes.action_items) ? notes.action_items : [];
+  const normalizedActionItems = [];
+
+  for (const item of rawActionItems) {
+    if (typeof item === 'string') {
+      if (item.trim()) {
+        normalizedActionItems.push({ task: item.trim(), owner: null });
+      }
+    } else if (item && typeof item === 'object') {
+      if (Array.isArray(item.tasks) && item.tasks.length > 0) {
+        for (const t of item.tasks) {
+          if (typeof t === 'string' && t.trim()) {
+            normalizedActionItems.push({
+              task: t.trim(),
+              owner: item.owner || null,
+              priority: item.priority || null,
+              due: item.due || null,
+            });
+          }
+        }
+      } else if (item.task && typeof item.task === 'string' && item.task.trim()) {
+        normalizedActionItems.push({
+          task: item.task.trim(),
+          owner: item.owner || null,
+          priority: item.priority || null,
+          due: item.due || null,
+        });
+      }
+    }
+  }
+
+  notes.action_items = normalizedActionItems;
+
+  if (!Array.isArray(notes.notable_mentions)) {
+    notes.notable_mentions = [];
+  }
+
+  return notes;
 }
 
 async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPrompt) {
@@ -102,29 +240,38 @@ async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPro
   }
 
   try {
-    const notes = JSON.parse(jsonText);
+    const parsedNotes = JSON.parse(jsonText);
+    const notes = normalizeNotes(parsedNotes);
+
     logger.info('Meeting notes generated', {
       title: notes.title,
       actionItems: notes.action_items?.length || 0,
-      keyPoints: notes.key_points?.length || 0,
+      topics: notes.topics?.length || 0,
+      participants: notes.participants?.length || 0,
     });
     return notes;
   } catch (err) {
     logger.error('Failed to parse Gemini JSON response', { error: err.message, text: jsonText.slice(0, 200) });
-    // Return a safe fallback structure
-    return {
+    // Return a safe fallback structure conforming to the schema
+    const fallback = {
+      meeting_title: 'Meeting Notes',
       title: 'Meeting Notes',
       date: new Date().toISOString(),
       duration: 'Unknown',
+      participants: [],
       attendees: [],
       action_items: [],
+      topics: [{ heading: 'Summary', summary: jsonText.slice(0, 500), options_discussed: [], decision: null, open_questions: [] }],
       key_points: [{ heading: 'Summary', summary: jsonText.slice(0, 500) }],
+      status_update: null,
+      notable_mentions: [],
       decisions: [],
       questions_unresolved: [],
       next_meeting: null,
       sentiment: 'neutral',
       _rawResponse: jsonText,
     };
+    return fallback;
   }
 }
 

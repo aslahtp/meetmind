@@ -136,43 +136,96 @@ function buildBlocks(notes, transcript) {
 
   // Optional: quoted duration block directly under Summary heading
   const durationSeconds =
-    (typeof notes?.duration_seconds === 'number' && notes.duration_seconds > 0)
+    typeof notes?.duration_seconds === 'number' && notes.duration_seconds > 0
       ? notes.duration_seconds
       : getTranscriptDurationSeconds(transcript);
-  const durationLabel = formatDuration(durationSeconds);
+  const durationLabel = notes.duration || formatDuration(durationSeconds);
   if (durationLabel) {
     blocks.push(quoteBlock(`Duration: ${durationLabel}`, { bold: true, italic: true }));
+  }
+
+  // Participants
+  if (notes.participants?.length > 0) {
+    const partLines = notes.participants.map((p) => {
+      if (typeof p === 'string') return p;
+      const nameStr = p.name ? `${p.name} (${p.label})` : p.label;
+      const roleStr = p.role ? ` — ${p.role}` : '';
+      const confStr = p.identity_confidence ? ` [${p.identity_confidence}]` : '';
+      return `${nameStr}${roleStr}${confStr}`;
+    });
+    blocks.push(calloutBlock(`Participants: ${partLines.join(' | ')}`, '👥'));
+  }
+
+  // Status Update
+  if (notes.status_update) {
+    let statusText = 'Status Update:';
+    if (notes.status_update.completion_estimate) {
+      statusText += ` ${notes.status_update.completion_estimate}.`;
+    }
+    if (notes.status_update.remaining_scope?.length) {
+      statusText += ` Remaining scope: ${notes.status_update.remaining_scope.join(', ')}`;
+    }
+    blocks.push(calloutBlock(statusText, '🎯'));
   }
 
   // Action Items & Next Steps as todo (checklist) blocks
   blocks.push(heading3Block('Action Items & Next Steps'));
   if (notes.action_items?.length > 0) {
     for (const item of notes.action_items) {
-      const due = item.due ? ` (Due: ${item.due})` : '';
-      const owner = item.owner ? ` — ${item.owner}` : '';
-      const label = `${item.task || ''}${owner}${due}`.trim();
-      if (label) blocks.push(todoBlock(label, false));
+      if (typeof item === 'string') {
+        blocks.push(todoBlock(item, false));
+      } else if (item.task) {
+        const due = item.due ? ` (Due: ${item.due})` : '';
+        const owner = item.owner ? ` — ${item.owner}` : '';
+        const label = `${item.task || ''}${owner}${due}`.trim();
+        if (label) blocks.push(todoBlock(label, false));
+      } else if (Array.isArray(item.tasks)) {
+        for (const t of item.tasks) {
+          const owner = item.owner ? ` — ${item.owner}` : '';
+          const label = `${t || ''}${owner}`.trim();
+          if (label) blocks.push(todoBlock(label, false));
+        }
+      }
     }
   } else {
     blocks.push(paragraphBlock('No action items identified.'));
   }
 
-  // Key points: each becomes a sub-heading with bullet lines beneath it
-  if (notes.key_points?.length > 0) {
-    for (const point of notes.key_points) {
-      if (!point?.heading && !point?.summary) continue;
-      blocks.push(heading3Block(point.heading || 'Notes'));
-      const lines = (point.summary || '')
+  // Topics / Sections
+  const topics = notes.sections?.length ? notes.sections : notes.topics?.length ? notes.topics : notes.key_points;
+  if (topics?.length > 0) {
+    for (const topic of topics) {
+      if (!topic?.heading && !topic?.content && !topic?.summary) continue;
+      blocks.push(heading3Block(topic.heading || 'Topic'));
+      const text = topic.content || topic.summary || '';
+      const lines = text
         .split(/\r?\n+/)
         .map((l) => l.trim())
         .filter(Boolean);
       for (const line of lines) {
         blocks.push(bulletedBlock(line));
       }
+      if (topic.options_discussed?.length > 0) {
+        blocks.push(paragraphBlock(`Options Discussed: ${topic.options_discussed.join(', ')}`));
+      }
+      if (topic.decision) {
+        blocks.push(calloutBlock(`Decision: ${topic.decision}`, '✅'));
+      }
+      if (topic.open_questions?.length > 0) {
+        blocks.push(calloutBlock(`Open Questions: ${topic.open_questions.join(' | ')}`, '❓'));
+      }
     }
   }
 
-  if (!notes.action_items?.length && !notes.key_points?.length) {
+  // Notable Mentions
+  if (notes.notable_mentions?.length > 0) {
+    blocks.push(heading3Block('Notable Mentions'));
+    for (const mention of notes.notable_mentions) {
+      blocks.push(bulletedBlock(mention));
+    }
+  }
+
+  if (!notes.action_items?.length && !topics?.length) {
     blocks.push(paragraphBlock('No summary available.'));
   }
 

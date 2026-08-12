@@ -472,7 +472,7 @@ async function runProcessingPipeline(sessionId, audioPath) {
     const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey, config.geminiSystemPrompt);
     db.updateSession(sessionId, {
       notes: JSON.stringify(notes),
-      title: notes.title || 'Untitled Meeting',
+      title: notes.meeting_title || notes.title || 'Untitled Meeting',
       status: 'complete',
     });
     sendProgress('complete', 85);
@@ -761,7 +761,7 @@ function registerIpcHandlers() {
             ? JSON.parse(session2.transcript || '[]')
             : (session2.transcript || []);
         const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey, config.geminiSystemPrompt);
-        db.updateSession(sessionId, { notes: JSON.stringify(notes), title: notes.title });
+        db.updateSession(sessionId, { notes: JSON.stringify(notes), title: notes.meeting_title || notes.title || 'Untitled Meeting' });
       }
       if (stage === 'notion') {
         const session3 = db.getSession(sessionId);
