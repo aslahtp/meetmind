@@ -66,25 +66,29 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate Release Notes from Template and CHANGELOG
-        shell: powershell
         run: |
-          $ver = "${{ needs.check-version.outputs.version }}"
-          $content = Get-Content CHANGELOG.md -Raw
-          $pattern = "(?ms)##\s+v?$ver\s*\r?\n(.*?)(?=\r?\n##\s+|$)"
-          $changelogBody = ""
-          if ($content -match $pattern) {
-            $changelogBody = $matches[1].Trim()
-          } else {
-            $changelogBody = "- Release updates for v$ver"
-          }
+          node -e "
+            const fs = require('fs');
+            const ver = '${{ needs.check-version.outputs.version }}';
+            let changelog = '';
+            try { changelog = fs.readFileSync('CHANGELOG.md', 'utf8'); } catch (e) {}
+            const escVer = ver.replace(/\\./g, '\\\\.');
+            const pattern = new RegExp('##\\\\s+v?' + escVer + '\\\\s*\\\\r?\\\\n([\\\\s\\\\S]*?)(?=\\\\r?\\\\n##\\\\s+|$)', 'i');
+            const match = changelog.match(pattern);
+            const changelogBody = match ? match[1].trim() : '- Release updates for v' + ver;
+            let template = '# MeetMind v{VERSION}\n\n## Changelog\n\n{CHANGELOG_BODY}';
+            if (fs.existsSync('.github/release_template.md')) {
+              template = fs.readFileSync('.github/release_template.md', 'utf8');
+            }
+            template = template.replace(/^\uFEFF/, '');
+            const body = template
+              .replace(/{VERSION}/g, ver)
+              .replace(/x\.y\.z/g, ver)
+              .replace(/{CHANGELOG_BODY}/g, changelogBody);
+            fs.writeFileSync('release_notes.md', body, 'utf8');
+            console.log('Generated release_notes.md successfully in clean UTF-8');
+          "
 
-          if (Test-Path .github/release_template.md) {
-            $template = Get-Content .github/release_template.md -Raw
-            $body = $template.Replace("{VERSION}", $ver).Replace("x.y.z", $ver).Replace("{CHANGELOG_BODY}", $changelogBody)
-            $body | Out-File -FilePath release_notes.md -Encoding utf8
-          } else {
-            $changelogBody | Out-File -FilePath release_notes.md -Encoding utf8
-          }
 
 
       - name: Create GitHub Release and Upload Artifacts
