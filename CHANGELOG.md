@@ -6,7 +6,15 @@ updated: 2026-08-13
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## v1.5.0
+
+- **Automated GitHub Actions CI/CD Release Pipeline** — added `.github/workflows/release.yml` workflow that automatically triggers on `package.json` version bump, compiles Windows installer (`.exe`), NSIS blockmap (`.blockmap`), and Chrome extension zip (`meetmind-extension.zip`), and publishes them to GitHub Releases.
+- **Templated Release Description Integration** — workflow dynamically populates `.github/release_template.md` with version placeholders (`{VERSION}`, `x.y.z`) and extracted changelog entries (`{CHANGELOG_BODY}`) for rich release notes on GitHub.
+- **Cross-Platform Extension Packaging** — updated `scripts/build-extension.js` with cross-platform fallback support (`powershell` on Windows, `zip` on Linux/macOS).
+- **Automated Version & Changelog Rule** — added learned workflow rule in `AGENTS.md` requiring package version bumps and `CHANGELOG.md` updates for all moderate to major changes.
+
 ## v1.4.0
+
 
 - **Executive Assistant Markdown Prompt** — default system prompt for Markdown output mode configured with a 10+ year Executive Assistant & Documentation Specialist prompt structure (Header, Executive Summary, Key Discussion Points, Key Decisions, Action Items table, Next Steps).
 - **Dual Output Mode (JSON / Markdown)** — toggle pill in Settings (`JSON` / `Markdown`) allowing choice between structured JSON and prose Markdown notes. Persisted in `electron-store` schema and `config.js` (`noteOutputMode`).

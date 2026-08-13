@@ -1,6 +1,7 @@
 {
   "name": "meetmind",
-  "version": "1.4.0",
+  "version": "1.5.0",
+
   "description": "AI meeting notes — transcribe, summarize, and upload to Notion",
   "main": "electron/main.js",
   "scripts": {
