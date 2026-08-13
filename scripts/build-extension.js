@@ -21,11 +21,23 @@ fs.mkdirSync(DIST, { recursive: true });
 fs.rmSync(STAGING_ROOT, { recursive: true, force: true });
 fs.cpSync(EXTENSION_SRC, STAGING_DIR, { recursive: true });
 
-execSync(
-  `powershell Compress-Archive -Path "${STAGING_DIR}" -DestinationPath "${ZIP_PATH}" -Force`,
-  { stdio: 'inherit' }
-);
-
-fs.rmSync(STAGING_ROOT, { recursive: true, force: true });
+try {
+  if (process.platform === 'win32') {
+    execSync(
+      `powershell Compress-Archive -Path "${STAGING_DIR}" -DestinationPath "${ZIP_PATH}" -Force`,
+      { stdio: 'inherit' }
+    );
+  } else {
+    execSync(
+      `cd "${STAGING_ROOT}" && zip -r "${ZIP_PATH}" meetmind-chrome-extension`,
+      { stdio: 'inherit' }
+    );
+  }
+} catch (err) {
+  console.error('Failed to create extension zip:', err.message);
+  process.exit(1);
+} finally {
+  fs.rmSync(STAGING_ROOT, { recursive: true, force: true });
+}
 
 console.log(`✓ ${path.relative(ROOT, ZIP_PATH)} (Extension/...)`);
