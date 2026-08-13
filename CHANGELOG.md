@@ -6,6 +6,10 @@ updated: 2026-08-13
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## v1.5.1
+
+- Updated the README.md file.
+
 ## v1.5.0
 
 - **Automated GitHub Actions CI/CD Release Pipeline** — added `.github/workflows/release.yml` workflow that automatically triggers on `package.json` version bump, compiles Windows installer (`.exe`), NSIS blockmap (`.blockmap`), and Chrome extension zip (`meetmind-extension.zip`), and publishes them to GitHub Releases.
