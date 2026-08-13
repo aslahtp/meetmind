@@ -8,12 +8,25 @@ const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
 const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
 const { transcribeAudio, testGoogleSTT, testAssemblyAI, testSarvam } = require('./services/transcription');
-const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT } = require('./services/gemini');
+const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/gemini');
 const { uploadToNotion, testNotionConnection } = require('./services/notion');
 const { testGeminiConnection } = require('./services/gemini');
 const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
+
+// Resolve the effective system prompt based on the configured output mode.
+// If the user has a custom prompt saved, it always takes precedence.
+// Otherwise fall back to the mode-appropriate default.
+function resolveSystemPrompt(config) {
+  if (config.geminiSystemPrompt && config.geminiSystemPrompt.trim()) {
+    return config.geminiSystemPrompt.trim();
+  }
+  if (config.noteOutputMode === 'markdown') {
+    return DEFAULT_MD_SYSTEM_PROMPT;
+  }
+  return DEFAULT_SYSTEM_PROMPT;
+}
 
 // Ensure a single running instance (prevents duplicate windows/tray icons)
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -429,47 +442,67 @@ async function handleStopRecording() {
   }
 }
 
-async function runProcessingPipeline(sessionId, audioPath) {
+async function runProcessingPipeline(sessionId, audioPath, options = {}) {
   const sendProgress = (stage, percent) => {
     mainWindow?.webContents.send('processing:progress', { stage, percent });
     broadcastToExtension({ type: 'PROCESSING_PROGRESS', stage, percent });
   };
 
   try {
-    // Stage 1: Transcription (0–60%)
-    sendProgress('transcribing', 0);
     const config = getConfig();
+    const session = db.getSession(sessionId);
+    let transcript = null;
 
-    const onTranscriptionProgress = (pct) => sendProgress('transcribing', Math.round(pct * 0.6));
-    const transcript = await transcribeAudio(
-      audioPath,
-      config.googleApiKey,
-      onTranscriptionProgress,
-      config.googleCloudProjectId,
-      config.googleCloudStorageBucket,
-      config.googleCloudStorageKeyPath,
-      config.sttService,
-      config.assemblyAiApiKey,
-      config.assemblyAiPrompt,
-      config.sarvamApiKey
-    );
-
-    // transcribeAudio throws for silent files; if we get here but with empty results,
-    // treat it the same way (STT may return empty for near-silence)
-    if (!transcript || transcript.length === 0) {
-      throw new Error(
-        'No speech detected in the recording. ' +
-        'Stereo Mix only captures audio playing through your speakers. ' +
-        'To test capture: play a video or music while recording. ' +
-        'To capture your voice: select your microphone in Settings → Audio.'
-      );
+    // Check if transcript already exists for this session unless forceRetranscribe is true
+    if (!options?.forceRetranscribe && session && session.transcript) {
+      try {
+        const parsed = typeof session.transcript === 'string' ? JSON.parse(session.transcript) : session.transcript;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          transcript = parsed;
+          logger.info('Reusing existing transcript for session', { sessionId, segments: transcript.length });
+        }
+      } catch (e) {
+        logger.warn('Failed to parse existing transcript, will re-transcribe', { sessionId, error: e.message });
+      }
     }
 
-    db.updateSession(sessionId, { transcript: JSON.stringify(transcript), status: 'generating' });
+    if (!transcript) {
+      // Stage 1: Transcription (0–60%)
+      sendProgress('transcribing', 0);
+      const onTranscriptionProgress = (pct) => sendProgress('transcribing', Math.round(pct * 0.6));
+      transcript = await transcribeAudio(
+        audioPath,
+        config.googleApiKey,
+        onTranscriptionProgress,
+        config.googleCloudProjectId,
+        config.googleCloudStorageBucket,
+        config.googleCloudStorageKeyPath,
+        config.sttService,
+        config.assemblyAiApiKey,
+        config.assemblyAiPrompt,
+        config.sarvamApiKey
+      );
+
+      // transcribeAudio throws for silent files; if we get here but with empty results,
+      // treat it the same way (STT may return empty for near-silence)
+      if (!transcript || transcript.length === 0) {
+        throw new Error(
+          'No speech detected in the recording. ' +
+          'Stereo Mix only captures audio playing through your speakers. ' +
+          'To test capture: play a video or music while recording. ' +
+          'To capture your voice: select your microphone in Settings → Audio.'
+        );
+      }
+
+      db.updateSession(sessionId, { transcript: JSON.stringify(transcript), status: 'generating' });
+    } else {
+      db.updateSession(sessionId, { status: 'generating' });
+    }
+
     sendProgress('generating', 60);
 
     // Stage 2: Gemini notes (60–85%)
-    const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey, config.geminiSystemPrompt);
+    const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey, resolveSystemPrompt(config));
     db.updateSession(sessionId, {
       notes: JSON.stringify(notes),
       title: notes.meeting_title || notes.title || 'Untitled Meeting',
@@ -688,6 +721,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle('gemini:default-system-prompt', () => DEFAULT_SYSTEM_PROMPT);
 
+  ipcMain.handle('gemini:default-md-system-prompt', () => DEFAULT_MD_SYSTEM_PROMPT);
+
   ipcMain.handle('api:test-google', async (_e, apiKey, _projectId) => {
     try {
       await testGoogleSTT(apiKey);
@@ -737,51 +772,33 @@ function registerIpcHandlers() {
     const session = db.getSession(sessionId);
     if (!session) return { success: false, error: 'Session not found' };
 
-    const config = getConfig();
-    try {
-      if (stage === 'transcription' || stage === 'all') {
-        const transcript = await transcribeAudio(
-          session.audio_path,
-          config.googleApiKey,
-          undefined,
-          config.googleCloudProjectId,
-          config.googleCloudStorageBucket,
-          config.googleCloudStorageKeyPath,
-          config.sttService,
-          config.assemblyAiApiKey,
-          config.assemblyAiPrompt,
-          config.sarvamApiKey
-        );
-        db.updateSession(sessionId, { transcript: JSON.stringify(transcript) });
-      }
-      if (stage === 'notes' || stage === 'all') {
-        const session2 = db.getSession(sessionId);
-        const transcript =
-          typeof session2.transcript === 'string'
-            ? JSON.parse(session2.transcript || '[]')
-            : (session2.transcript || []);
-        const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey, config.geminiSystemPrompt);
-        db.updateSession(sessionId, { notes: JSON.stringify(notes), title: notes.meeting_title || notes.title || 'Untitled Meeting' });
-      }
-      if (stage === 'notion') {
-        const session3 = db.getSession(sessionId);
+    if (stage === 'notes') {
+      runProcessingPipeline(sessionId, session.audio_path, { forceRetranscribe: false });
+      return { success: true };
+    }
+    if (stage === 'all' || stage === 'transcription') {
+      runProcessingPipeline(sessionId, session.audio_path, { forceRetranscribe: true });
+      return { success: true };
+    }
+    if (stage === 'notion') {
+      const config = getConfig();
+      try {
         const notes =
-          typeof session3.notes === 'string'
-            ? JSON.parse(session3.notes || '{}')
-            : (session3.notes || {});
+          typeof session.notes === 'string'
+            ? JSON.parse(session.notes || '{}')
+            : (session.notes || {});
         const transcript =
-          typeof session3.transcript === 'string'
-            ? JSON.parse(session3.transcript || '[]')
-            : (session3.transcript || []);
+          typeof session.transcript === 'string'
+            ? JSON.parse(session.transcript || '[]')
+            : (session.transcript || []);
         const url = await uploadToNotion(notes, transcript, config.notionPageId, config.notionToken);
         db.updateSession(sessionId, { notion_page_url: url, status: 'complete' });
         return { success: true, url };
+      } catch (err) {
+        return { success: false, error: err.message };
       }
-      db.updateSession(sessionId, { status: 'complete' });
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
     }
+    return { success: false, error: 'Unknown stage' };
   });
 }
 

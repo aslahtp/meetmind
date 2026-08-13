@@ -74,6 +74,27 @@ const DEFAULT_SYSTEM_PROMPT = `Write for someone who was not in the meeting. Eac
 }
 \`\`\``;
 
+// Default system prompt for Markdown output mode.
+// When this (or any custom prompt that doesn't instruct JSON) is used, Gemini
+// returns plain Markdown and the renderer switches to a prose markdown view.
+const DEFAULT_MD_SYSTEM_PROMPT = `You are a meeting notes assistant. Write clear, well-structured meeting notes in Markdown format for someone who was NOT in the meeting.
+
+Use these sections as appropriate (omit empty ones):
+- **# [Meeting Title]** — top-level heading summarising the meeting focus
+- **## Overview** — 2-3 sentence summary of the meeting's purpose and outcome
+- **## Participants** — bullet list of speakers/attendees with inferred roles if identifiable
+- **## Key Discussion Points** — H3 subheadings for each major topic with concise bullet notes under each
+- **## Decisions Made** — bullet list of any decisions reached
+- **## Action Items** — bullet list in the format: \`- [ ] Task description — @Owner (due: date if known)\`
+- **## Open Questions** — bullet list of unresolved items
+
+Rules:
+- Write in plain, neutral English regardless of the transcript's original language(s)
+- Do not include filler words, false starts, or verbatim quotes unless critical
+- Be concise but complete — a reader should understand the outcome without attending the meeting
+- No em dashes; use plain punctuation
+- Output ONLY valid Markdown — no JSON, no code fences around the whole document`;
+
 // Alias kept for internal use
 const SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;
 
@@ -222,18 +243,38 @@ async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPro
 
   const effectivePrompt = (customSystemPrompt && customSystemPrompt.trim()) || DEFAULT_SYSTEM_PROMPT;
 
+  // Detect markdown output mode: if the prompt doesn't reference JSON schema we
+  // expect a plain markdown response instead of structured JSON.
+  const isMarkdownMode = !effectivePrompt.includes('"$schema"') && !effectivePrompt.includes('json\n{');
+
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: selectedModel,
     systemInstruction: effectivePrompt,
   });
 
-  const prompt = `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate structured meeting notes in JSON format as specified.`;
+  const prompt = isMarkdownMode
+    ? `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate the meeting notes as instructed.`
+    : `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate structured meeting notes in JSON format as specified.`;
 
   const result = await model.generateContent(prompt);
   const text = result.response.text().trim();
 
-  // Strip markdown code fences if present
+  // If this is a markdown-mode prompt, return immediately as raw markdown.
+  if (isMarkdownMode) {
+    // Strip surrounding markdown code fence if the model wrapped it anyway
+    let mdText = text;
+    if (mdText.startsWith('```') && mdText.endsWith('```')) {
+      mdText = mdText.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '').trim();
+    }
+    // Derive a title from the first # heading if present
+    const titleMatch = mdText.match(/^#\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : 'Meeting Notes';
+    logger.info('Meeting notes generated (markdown mode)', { title });
+    return { _rawMarkdown: mdText, title, meeting_title: title };
+  }
+
+  // JSON mode — strip markdown code fences if present
   let jsonText = text;
   if (jsonText.startsWith('```')) {
     jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
@@ -296,4 +337,5 @@ module.exports = {
   AVAILABLE_MODELS,
   DEFAULT_GEMINI_MODEL,
   DEFAULT_SYSTEM_PROMPT,
+  DEFAULT_MD_SYSTEM_PROMPT,
 };

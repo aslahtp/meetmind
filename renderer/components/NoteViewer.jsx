@@ -32,6 +32,7 @@ import {
   Target,
   Info,
   UserCheck,
+  Braces,
 } from 'lucide-react';
 import TranscriptViewer from './TranscriptViewer.jsx';
 import NotionIcon from './NotionIcon.jsx';
@@ -44,8 +45,9 @@ const CONFIDENCE_STYLES = {
 
 function parseInlineMarkdown(text) {
   if (!text) return text;
+  // Matches images ![alt](src), links [text](url), code `code`, bold **b** / __b__, strike ~~s~~, italic *i* / _i_
+  const regex = /(!?\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|__([^_]+)__|~~([^~]+)~~|\*([^*]+)\*|_([^_]+)_)/g;
   const parts = [];
-  const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
   let lastIdx = 0;
   let match;
 
@@ -53,19 +55,69 @@ function parseInlineMarkdown(text) {
     if (match.index > lastIdx) {
       parts.push(text.substring(lastIdx, match.index));
     }
-    const token = match[0];
-    if (token.startsWith('**') && token.endsWith('**')) {
-      parts.push(<strong key={match.index} className="font-semibold text-zinc-100">{token.slice(2, -2)}</strong>);
-    } else if (token.startsWith('*') && token.endsWith('*')) {
-      parts.push(<em key={match.index} className="italic text-zinc-200">{token.slice(1, -1)}</em>);
-    } else if (token.startsWith('`') && token.endsWith('`')) {
-      parts.push(<code key={match.index} className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-emerald-300 font-mono text-[12px]">{token.slice(1, -1)}</code>);
+
+    const [full, , linkText, linkUrl, codeText, boldText1, boldText2, strikeText, italicText1, italicText2] = match;
+
+    if (full.startsWith('![')) {
+      parts.push(
+        <img
+          key={match.index}
+          src={linkUrl}
+          alt={linkText}
+          className="my-2 rounded-lg max-h-80 object-cover border border-zinc-800"
+        />
+      );
+    } else if (full.startsWith('[')) {
+      parts.push(
+        <a
+          key={match.index}
+          href={linkUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sky-400 hover:text-sky-300 underline underline-offset-2 transition-colors font-medium"
+          onClick={(e) => {
+            if (linkUrl.startsWith('http')) {
+              e.preventDefault();
+              window.open?.(linkUrl, '_blank');
+            }
+          }}
+        >
+          {linkText}
+        </a>
+      );
+    } else if (codeText != null) {
+      parts.push(
+        <code key={match.index} className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-emerald-300 font-mono text-[12px]">
+          {codeText}
+        </code>
+      );
+    } else if (boldText1 != null || boldText2 != null) {
+      parts.push(
+        <strong key={match.index} className="font-semibold text-zinc-100">
+          {boldText1 ?? boldText2}
+        </strong>
+      );
+    } else if (strikeText != null) {
+      parts.push(
+        <del key={match.index} className="line-through text-zinc-500">
+          {strikeText}
+        </del>
+      );
+    } else if (italicText1 != null || italicText2 != null) {
+      parts.push(
+        <em key={match.index} className="italic text-zinc-200">
+          {italicText1 ?? italicText2}
+        </em>
+      );
     }
+
     lastIdx = regex.lastIndex;
   }
+
   if (lastIdx < text.length) {
     parts.push(text.substring(lastIdx));
   }
+
   return parts;
 }
 
@@ -128,12 +180,12 @@ function FormattedText({ content, className = '' }) {
         const trimmed = line.trim();
         if (!trimmed) return null;
 
-        const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ');
+        const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('\u2022 ');
         const isNumbered = /^\d+\.\s/.test(trimmed);
 
         let textToFormat = trimmed;
         if (isBullet) {
-          textToFormat = trimmed.replace(/^[-*•]\s+/, '');
+          textToFormat = trimmed.replace(/^[-*\u2022]\s+/, '');
         } else if (isNumbered) {
           textToFormat = trimmed.replace(/^\d+\.\s+/, '');
         }
@@ -166,6 +218,270 @@ function FormattedText({ content, className = '' }) {
     </div>
   );
 }
+
+// ── Markdown prose renderer (used for _rawMarkdown mode notes) ────────────────
+
+function isTableSeparator(line) {
+  const trimmed = line.trim();
+  return /^\|(?:\s*:?-+:?\s*\|)+$/.test(trimmed);
+}
+
+function parseTableAlignments(sepLine) {
+  return sepLine
+    .split('|')
+    .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+    .map((col) => {
+      const c = col.trim();
+      if (c.startsWith(':') && c.endsWith(':')) return 'center';
+      if (c.endsWith(':')) return 'right';
+      return 'left';
+    });
+}
+
+function parseTableRow(rowLine) {
+  return rowLine
+    .split('|')
+    .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+    .map((c) => c.trim());
+}
+
+function MarkdownNoteView({ markdown }) {
+  if (!markdown) return null;
+
+  // Split into lines and build block list (separating fenced code blocks)
+  const lines = markdown.split(/\r?\n/);
+  const blocks = [];
+  let inCodeBlock = false;
+  let codeLines = [];
+  let codeLang = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    if (raw.trim().startsWith('```')) {
+      if (inCodeBlock) {
+        blocks.push({ type: 'code', lang: codeLang, code: codeLines.join('\n') });
+        inCodeBlock = false;
+        codeLines = [];
+        codeLang = '';
+      } else {
+        inCodeBlock = true;
+        codeLang = raw.trim().slice(3).trim();
+      }
+      continue;
+    }
+    if (inCodeBlock) {
+      codeLines.push(raw);
+      continue;
+    }
+    blocks.push({ type: 'line', text: raw });
+  }
+  if (inCodeBlock && codeLines.length > 0) {
+    blocks.push({ type: 'code', lang: codeLang, code: codeLines.join('\n') });
+  }
+
+  const rendered = [];
+  let i = 0;
+  while (i < blocks.length) {
+    const b = blocks[i];
+
+    if (b.type === 'code') {
+      rendered.push(
+        <div key={`code-${i}`} className="my-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs text-emerald-300 overflow-x-auto shadow-inner">
+          {b.lang && <div className="text-[10px] uppercase font-sans font-bold text-zinc-500 mb-2 tracking-wider">{b.lang}</div>}
+          <pre className="whitespace-pre leading-relaxed">{b.code}</pre>
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    const line = b.text;
+    const trimmed = line.trim();
+
+    // Empty line
+    if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // Table detection
+    if (
+      trimmed.startsWith('|') &&
+      trimmed.endsWith('|') &&
+      i + 1 < blocks.length &&
+      blocks[i + 1].type === 'line' &&
+      isTableSeparator(blocks[i + 1].text)
+    ) {
+      const headerRow = parseTableRow(trimmed);
+      const aligns = parseTableAlignments(blocks[i + 1].text);
+      i += 2; // skip header and separator
+
+      const rows = [];
+      while (i < blocks.length && blocks[i].type === 'line') {
+        const t = blocks[i].text.trim();
+        if (!t.startsWith('|') || !t.endsWith('|')) break;
+        rows.push(parseTableRow(t));
+        i++;
+      }
+
+      rendered.push(
+        <div key={`table-${i}`} className="my-5 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/70 shadow-lg">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead className="bg-zinc-900/90 border-b border-zinc-800 text-zinc-200">
+              <tr>
+                {headerRow.map((h, colIdx) => (
+                  <th
+                    key={colIdx}
+                    style={{ textAlign: aligns[colIdx] || 'left' }}
+                    className="px-4 py-3 font-semibold uppercase tracking-wider text-[11px] text-zinc-300"
+                  >
+                    {parseInlineMarkdown(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+              {rows.map((row, rowIdx) => (
+                <tr key={rowIdx} className="hover:bg-zinc-900/40 transition-colors">
+                  {headerRow.map((_, colIdx) => (
+                    <td
+                      key={colIdx}
+                      style={{ textAlign: aligns[colIdx] || 'left' }}
+                      className="px-4 py-2.5 leading-relaxed"
+                    >
+                      {parseInlineMarkdown(row[colIdx] || '')}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    // ATX headings
+    const h1 = trimmed.match(/^#\s+(.+)/);
+    const h2 = trimmed.match(/^##\s+(.+)/);
+    const h3 = trimmed.match(/^###\s+(.+)/);
+    const h4 = trimmed.match(/^####\s+(.+)/);
+
+    if (h1 && !h2) {
+      rendered.push(<h1 key={`h1-${i}`} className="text-2xl font-bold text-white mt-3 mb-4 leading-tight tracking-tight">{parseInlineMarkdown(h1[1])}</h1>);
+      i++; continue;
+    }
+    if (h2 && !h3) {
+      rendered.push(
+        <div key={`h2-${i}`} className="mt-8 mb-3">
+          <h2 className="text-base font-semibold text-zinc-100 flex items-center gap-2">
+            <span className="w-1 h-4 rounded-full bg-sky-400 flex-shrink-0 inline-block" />
+            {parseInlineMarkdown(h2[1])}
+          </h2>
+          <div className="h-px bg-zinc-800/70 mt-2" />
+        </div>
+      );
+      i++; continue;
+    }
+    if (h3 && !h4) {
+      rendered.push(<h3 key={`h3-${i}`} className="text-sm font-semibold text-zinc-200 mt-5 mb-2">{parseInlineMarkdown(h3[1])}</h3>);
+      i++; continue;
+    }
+    if (h4) {
+      rendered.push(<h4 key={`h4-${i}`} className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mt-4 mb-1">{parseInlineMarkdown(h4[1])}</h4>);
+      i++; continue;
+    }
+
+    // Blockquote (grouping consecutive > lines)
+    if (trimmed.startsWith('>')) {
+      const quoteLines = [];
+      while (i < blocks.length && blocks[i].type === 'line') {
+        const t = blocks[i].text.trim();
+        if (!t.startsWith('>')) break;
+        quoteLines.push(t.replace(/^>\s?/, ''));
+        i++;
+      }
+      rendered.push(
+        <blockquote key={`quote-${i}`} className="border-l-2 border-sky-500/60 bg-sky-500/5 px-4 py-3 rounded-r-xl my-3 text-zinc-300 text-sm italic space-y-1.5">
+          {quoteLines.map((ql, qidx) => (
+            <p key={qidx}>{parseInlineMarkdown(ql)}</p>
+          ))}
+        </blockquote>
+      );
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}$/.test(trimmed)) {
+      rendered.push(<hr key={`hr-${i}`} className="border-zinc-800 my-6" />);
+      i++; continue;
+    }
+
+    // List items (nested bullets, numbered, task lists)
+    const isTaskDone = trimmed.match(/^-\s+\[x\]\s+(.*)/i);
+    const isTaskOpen = trimmed.match(/^-\s+\[\s?\]\s+(.*)/);
+    const isBullet = !isTaskDone && !isTaskOpen && trimmed.match(/^[-*\u2022+]\s+(.*)/);
+    const isNumbered = !isTaskDone && !isTaskOpen && trimmed.match(/^(\d+)\.\s+(.*)/);
+
+    if (isTaskDone || isTaskOpen || isBullet || isNumbered) {
+      const rawIndent = line.match(/^(\s*)/)[1].replace(/\t/g, '  ').length;
+      const indentLevel = Math.floor(rawIndent / 2);
+
+      let contentText = '';
+      if (isTaskDone) contentText = isTaskDone[1];
+      else if (isTaskOpen) contentText = isTaskOpen[1];
+      else if (isBullet) contentText = isBullet[1];
+      else if (isNumbered) contentText = isNumbered[2];
+
+      const paddingLeft = indentLevel > 0 ? `${indentLevel * 1.5}rem` : undefined;
+
+      rendered.push(
+        <div key={`item-${i}`} style={paddingLeft ? { paddingLeft } : undefined} className="flex items-start gap-2.5 my-1.5">
+          {isTaskDone && (
+            <span className="mt-0.5 flex-shrink-0 w-4 h-4 rounded bg-emerald-500 border border-emerald-500 flex items-center justify-center text-zinc-950">
+              <Check size={10} strokeWidth={3} />
+            </span>
+          )}
+          {isTaskOpen && (
+            <span className="mt-0.5 flex-shrink-0 w-4 h-4 rounded border border-zinc-600 bg-zinc-950/60" />
+          )}
+          {isBullet && indentLevel === 0 && (
+            <span className="mt-2 w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0" />
+          )}
+          {isBullet && indentLevel === 1 && (
+            <span className="mt-2 w-1.5 h-1.5 rounded-full border border-sky-400/80 flex-shrink-0" />
+          )}
+          {isBullet && indentLevel >= 2 && (
+            <span className="mt-2 w-1 h-1 bg-zinc-400 flex-shrink-0" />
+          )}
+          {isNumbered && (
+            <span className="text-xs font-mono font-bold text-sky-400 flex-shrink-0 mt-0.5 min-w-[1.2rem]">
+              {isNumbered[1]}.
+            </span>
+          )}
+          <span className={`text-sm leading-relaxed ${isTaskDone ? 'text-zinc-400 line-through' : 'text-zinc-300'}`}>
+            {parseInlineMarkdown(contentText)}
+          </span>
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // Regular paragraph
+    rendered.push(
+      <p key={`p-${i}`} className="text-sm text-zinc-300 leading-relaxed my-2">{parseInlineMarkdown(trimmed)}</p>
+    );
+    i++;
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto fade-in">
+      <div className="space-y-1">{rendered}</div>
+    </div>
+  );
+}
+
 
 const PRIORITY_STYLES = {
   high:   {
@@ -590,6 +906,12 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
     );
   }
 
+  // ── Markdown mode: raw markdown output ───────────────────────────────────
+  if (notes._rawMarkdown) {
+    return <MarkdownNoteView markdown={notes._rawMarkdown} />;
+  }
+
+  // ── JSON mode: rich structured UI ────────────────────────────────────────
   const actionItems = notes.action_items || [];
   const topics = (notes.sections?.length ? notes.sections : notes.topics?.length ? notes.topics : notes.key_points || []).filter((p) => p?.heading || p?.content || p?.summary);
   const participants = notes.participants || [];
@@ -839,6 +1161,12 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
 
   const copyMarkdownSummary = async () => {
     if (!notes) return;
+    if (notes._rawMarkdown) {
+      await navigator.clipboard.writeText(notes._rawMarkdown);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      return;
+    }
     let md = `# ${notes.meeting_title || notes.title || session.title || 'Meeting Summary'}\n\n`;
 
     if (notes.participants?.length) {
@@ -955,6 +1283,19 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                     <SentimentIcon size={12} strokeWidth={2} />
                     {sentimentStyle.label}
                   </span>
+                )}
+                {notes && (
+                  notes._rawMarkdown ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-sky-400 bg-sky-500/10 border border-sky-500/30 px-2 py-1 rounded-lg">
+                      <FileText size={11} strokeWidth={2} />
+                      Markdown
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-lg">
+                      <Braces size={11} strokeWidth={2} />
+                      JSON
+                    </span>
+                  )
                 )}
               </div>
             </div>

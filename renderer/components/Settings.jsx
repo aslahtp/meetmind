@@ -9,6 +9,8 @@ import {
   ExternalLink,
   KeyRound,
   RotateCcw,
+  FileText,
+  Braces,
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
 import NotionIcon from './NotionIcon.jsx';
@@ -208,6 +210,7 @@ export default function Settings({ onSave }) {
     assemblyAiPrompt:  '',
     sarvamApiKey:      '',
     geminiSystemPrompt: '',
+    noteOutputMode: 'json',
   });
   const [models, setModels] = useState([]);
   const [devices, setDevices] = useState({ all: [], system: null, mic: null });
@@ -217,6 +220,7 @@ export default function Settings({ onSave }) {
   const [saved, setSaved] = useState(false);
   const [activeOnboardingStep, setActiveOnboardingStep] = useState(null);
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState('');
+  const [defaultMdSystemPrompt, setDefaultMdSystemPrompt] = useState('');
 
   useEffect(() => {
     if (config) {
@@ -238,6 +242,7 @@ export default function Settings({ onSave }) {
         assemblyAiPrompt:      config.assemblyAiPrompt || '',
         sarvamApiKey:          config.sarvamApiKey || '',
         geminiSystemPrompt:    config.geminiSystemPrompt || '',
+        noteOutputMode:        config.noteOutputMode || 'json',
       });
     }
   }, [config]);
@@ -246,6 +251,9 @@ export default function Settings({ onSave }) {
     window.meetmind?.models.list().then(setModels);
     window.meetmind?.gemini?.getDefaultSystemPrompt().then((prompt) => {
       if (prompt) setDefaultSystemPrompt(prompt);
+    });
+    window.meetmind?.gemini?.getMdDefaultSystemPrompt().then((prompt) => {
+      if (prompt) setDefaultMdSystemPrompt(prompt);
     });
   }, []);
 
@@ -594,22 +602,73 @@ export default function Settings({ onSave }) {
             label="System Prompt"
             hint="The instructions sent to Gemini when generating meeting notes."
           >
-            <textarea
-              value={form.geminiSystemPrompt || defaultSystemPrompt}
-              onChange={(e) => setForm((p) => ({ ...p, geminiSystemPrompt: e.target.value }))}
-              rows={8}
-              className="input resize-y font-mono text-xs leading-relaxed"
-            />
-            {defaultSystemPrompt && (form.geminiSystemPrompt || defaultSystemPrompt) !== defaultSystemPrompt && (
-              <button
-                type="button"
-                onClick={() => setForm((p) => ({ ...p, geminiSystemPrompt: '' }))}
-                className="btn-ghost text-xs px-2 py-1 mt-1.5 text-yellow-400/80 hover:text-yellow-300 flex items-center gap-1.5"
-              >
-                <RotateCcw size={12} strokeWidth={2} />
-                Reset to Default
-              </button>
-            )}
+            {/* Output mode toggle */}
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="text-xs text-zinc-500 font-medium">Output format:</span>
+              <div className="inline-flex p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((p) => ({ ...p, noteOutputMode: 'json', geminiSystemPrompt: '' }));
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    form.noteOutputMode !== 'markdown'
+                      ? 'bg-emerald-500/15 text-emerald-400 shadow-sm'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  <Braces size={12} strokeWidth={2} />
+                  JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((p) => ({ ...p, noteOutputMode: 'markdown', geminiSystemPrompt: '' }));
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    form.noteOutputMode === 'markdown'
+                      ? 'bg-sky-500/15 text-sky-400 shadow-sm'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  <FileText size={12} strokeWidth={2} />
+                  Markdown
+                </button>
+              </div>
+              {form.noteOutputMode === 'markdown' && (
+                <span className="text-[11px] text-sky-400/70 ml-1">
+                  Produces a plain markdown document — rendered as prose in the viewer
+                </span>
+              )}
+            </div>
+
+            {/* Prompt textarea */}
+            {(() => {
+              const ismd = form.noteOutputMode === 'markdown';
+              const activeDefault = ismd ? defaultMdSystemPrompt : defaultSystemPrompt;
+              const currentVal = form.geminiSystemPrompt || activeDefault;
+              const isDirty = form.geminiSystemPrompt !== '' && form.geminiSystemPrompt !== activeDefault;
+              return (
+                <>
+                  <textarea
+                    value={currentVal}
+                    onChange={(e) => setForm((p) => ({ ...p, geminiSystemPrompt: e.target.value }))}
+                    rows={8}
+                    className="input resize-y font-mono text-xs leading-relaxed"
+                  />
+                  {isDirty && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, geminiSystemPrompt: '' }))}
+                      className="btn-ghost text-xs px-2 py-1 mt-1.5 text-yellow-400/80 hover:text-yellow-300 flex items-center gap-1.5"
+                    >
+                      <RotateCcw size={12} strokeWidth={2} />
+                      Reset to Default
+                    </button>
+                  )}
+                </>
+              );
+            })()}
           </Field>
         </section>
 
