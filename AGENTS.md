@@ -1,5 +1,7 @@
 ## Learned User Preferences
 
+- For every moderate to major change, bump the version number in `package.json` and document the changes under a new version heading in `CHANGELOG.md`.
+
 ## Learned Workspace Facts
 
 - MeetMind renderer uses React + Tailwind; theming is driven by CSS variables in `renderer/styles/globals.css` and Tailwind `darkMode: 'class'` with `<html class="dark">` in `renderer/index.html`.

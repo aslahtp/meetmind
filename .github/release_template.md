@@ -2,7 +2,7 @@
 
 ## Changelog
 
-- 
+{CHANGELOG_BODY}
 
 ## Downloads
 
