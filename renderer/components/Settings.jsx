@@ -635,12 +635,17 @@ export default function Settings({ onSave }) {
                   Markdown
                 </button>
               </div>
-              {form.noteOutputMode === 'markdown' && (
+              {form.noteOutputMode !== 'markdown' ? (
+                <span className="text-[11px] text-emerald-400/70 ml-1">
+                  Produces structured JSON — rendered with rich participant cards &amp; interactive action items
+                </span>
+              ) : (
                 <span className="text-[11px] text-sky-400/70 ml-1">
                   Produces a plain markdown document — rendered as prose in the viewer
                 </span>
               )}
             </div>
+
 
             {/* Prompt textarea */}
             {(() => {

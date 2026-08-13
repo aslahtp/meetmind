@@ -5,37 +5,108 @@ const NOTION_BLOCK_LIMIT = 100;
 
 // ── Block builders ─────────────────────────────────────────────────────────────
 
-function richText(text, options = {}) {
-  return [{
-    type: 'text',
-    text: { content: text.slice(0, 2000) },
-    annotations: {
-      bold: options.bold || false,
-      italic: options.italic || false,
-      code: options.code || false,
-      color: options.color || 'default',
-    },
-  }];
+// ── Inline Markdown → Notion Rich Text ───────────────────────────────────────
+
+function parseMarkdownRichText(text) {
+  if (!text) return [{ type: 'text', text: { content: '' } }];
+
+  const regex = /(!?\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|__([^_]+)__|~~([^~]+)~~|\*([^*]+)\*|_([^_]+)_)/g;
+  const richTexts = [];
+  let lastIdx = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      const plain = text.substring(lastIdx, match.index);
+      if (plain) {
+        richTexts.push({
+          type: 'text',
+          text: { content: plain.slice(0, 2000) },
+        });
+      }
+    }
+
+    const [full, , linkText, linkUrl, codeText, boldText1, boldText2, strikeText, italicText1, italicText2] = match;
+
+    if (full.startsWith('[')) {
+      richTexts.push({
+        type: 'text',
+        text: {
+          content: (linkText || '').slice(0, 2000),
+          link: linkUrl ? { url: linkUrl } : null,
+        },
+      });
+    } else if (codeText != null) {
+      richTexts.push({
+        type: 'text',
+        text: { content: codeText.slice(0, 2000) },
+        annotations: { code: true },
+      });
+    } else if (boldText1 != null || boldText2 != null) {
+      richTexts.push({
+        type: 'text',
+        text: { content: (boldText1 ?? boldText2).slice(0, 2000) },
+        annotations: { bold: true },
+      });
+    } else if (strikeText != null) {
+      richTexts.push({
+        type: 'text',
+        text: { content: strikeText.slice(0, 2000) },
+        annotations: { strikethrough: true },
+      });
+    } else if (italicText1 != null || italicText2 != null) {
+      richTexts.push({
+        type: 'text',
+        text: { content: (italicText1 ?? italicText2).slice(0, 2000) },
+        annotations: { italic: true },
+      });
+    }
+
+    lastIdx = regex.lastIndex;
+  }
+
+  if (lastIdx < text.length) {
+    const plain = text.substring(lastIdx);
+    if (plain) {
+      richTexts.push({
+        type: 'text',
+        text: { content: plain.slice(0, 2000) },
+      });
+    }
+  }
+
+  return richTexts.length > 0 ? richTexts : [{ type: 'text', text: { content: text.slice(0, 2000) } }];
 }
 
+// Legacy fallback
+function richText(text, options = {}) {
+  return parseMarkdownRichText(text);
+}
+
+// ── Block builders ─────────────────────────────────────────────────────────────
+
 function heading2Block(text) {
-  return { object: 'block', type: 'heading_2', heading_2: { rich_text: richText(text) } };
+  return { object: 'block', type: 'heading_2', heading_2: { rich_text: parseMarkdownRichText(text) } };
 }
 
 function heading3Block(text) {
-  return { object: 'block', type: 'heading_3', heading_3: { rich_text: richText(text) } };
+  return { object: 'block', type: 'heading_3', heading_3: { rich_text: parseMarkdownRichText(text) } };
 }
 
 function paragraphBlock(text) {
-  return { object: 'block', type: 'paragraph', paragraph: { rich_text: richText(text) } };
+  return { object: 'block', type: 'paragraph', paragraph: { rich_text: parseMarkdownRichText(text) } };
 }
 
-function bulletedBlock(text) {
-  return { object: 'block', type: 'bulleted_list_item', bulleted_list_item: { rich_text: richText(text) } };
+function bulletedBlock(text, children = []) {
+  const b = { object: 'block', type: 'bulleted_list_item', bulleted_list_item: { rich_text: parseMarkdownRichText(text) } };
+  if (children && children.length > 0) {
+    b.bulleted_list_item.children = children.slice(0, NOTION_BLOCK_LIMIT);
+  }
+  return b;
 }
 
 function todoBlock(text, checked = false) {
-  return { object: 'block', type: 'to_do', to_do: { rich_text: richText(text), checked } };
+  return { object: 'block', type: 'to_do', to_do: { rich_text: parseMarkdownRichText(text), checked } };
 }
 
 function quoteBlock(text, options = {}) {
@@ -43,7 +114,7 @@ function quoteBlock(text, options = {}) {
     object: 'block',
     type: 'quote',
     quote: {
-      rich_text: richText(text, options),
+      rich_text: parseMarkdownRichText(text),
       color: 'default',
     },
   };
@@ -58,7 +129,7 @@ function calloutBlock(text, emoji = '📋') {
     object: 'block',
     type: 'callout',
     callout: {
-      rich_text: richText(text),
+      rich_text: parseMarkdownRichText(text),
       icon: { type: 'emoji', emoji },
     },
   };
@@ -69,7 +140,7 @@ function toggleBlock(heading, children = []) {
     object: 'block',
     type: 'toggle',
     toggle: {
-      rich_text: richText(heading),
+      rich_text: parseMarkdownRichText(heading),
       children: children.slice(0, NOTION_BLOCK_LIMIT),
     },
   };
@@ -80,8 +151,48 @@ function codeBlock(text) {
     object: 'block',
     type: 'code',
     code: {
-      rich_text: richText(text.slice(0, 2000)),
+      rich_text: [{ type: 'text', text: { content: text.slice(0, 2000) } }],
       language: 'plain text',
+    },
+  };
+}
+
+function tableBlock(headers, rows) {
+  const colCount = Math.max(headers.length, ...rows.map((r) => r.length));
+  if (colCount === 0) return null;
+
+  const tableChildren = [];
+
+  // Header row
+  const headerCells = [];
+  for (let c = 0; c < colCount; c++) {
+    headerCells.push(parseMarkdownRichText(headers[c] || ''));
+  }
+  tableChildren.push({
+    type: 'table_row',
+    table_row: { cells: headerCells },
+  });
+
+  // Data rows
+  for (const row of rows) {
+    const rowCells = [];
+    for (let c = 0; c < colCount; c++) {
+      rowCells.push(parseMarkdownRichText(row[c] || ''));
+    }
+    tableChildren.push({
+      type: 'table_row',
+      table_row: { cells: rowCells },
+    });
+  }
+
+  return {
+    object: 'block',
+    type: 'table',
+    table: {
+      table_width: colCount,
+      has_column_header: true,
+      has_row_header: false,
+      children: tableChildren.slice(0, NOTION_BLOCK_LIMIT),
     },
   };
 }
@@ -126,108 +237,313 @@ function formatDuration(seconds) {
   return `${secs}s`;
 }
 
-// ── Build page content ────────────────────────────────────────────────────────
+// ── Markdown block & list tree parser ────────────────────────────────────────
 
-function buildBlocks(notes, transcript) {
-  const blocks = [];
+function parseTableRow(rowLine) {
+  return rowLine
+    .split('|')
+    .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+    .map((c) => c.trim());
+}
 
-  // ── Summary heading ───────────────────────────────────────────────────────
-  blocks.push(heading2Block('Summary'));
+function parseMarkdownListTree(lines, startIdx) {
+  const rootBlocks = [];
+  const stack = [{ level: -1, children: rootBlocks }];
 
-  // Optional: quoted duration block directly under Summary heading
-  const durationSeconds =
-    typeof notes?.duration_seconds === 'number' && notes.duration_seconds > 0
-      ? notes.duration_seconds
-      : getTranscriptDurationSeconds(transcript);
-  const durationLabel = notes.duration || formatDuration(durationSeconds);
-  if (durationLabel) {
-    blocks.push(quoteBlock(`Duration: ${durationLabel}`, { bold: true, italic: true }));
-  }
-
-  // Participants
-  if (notes.participants?.length > 0) {
-    const partLines = notes.participants.map((p) => {
-      if (typeof p === 'string') return p;
-      const nameStr = p.name ? `${p.name} (${p.label})` : p.label;
-      const roleStr = p.role ? ` — ${p.role}` : '';
-      const confStr = p.identity_confidence ? ` [${p.identity_confidence}]` : '';
-      return `${nameStr}${roleStr}${confStr}`;
-    });
-    blocks.push(calloutBlock(`Participants: ${partLines.join(' | ')}`, '👥'));
-  }
-
-  // Status Update
-  if (notes.status_update) {
-    let statusText = 'Status Update:';
-    if (notes.status_update.completion_estimate) {
-      statusText += ` ${notes.status_update.completion_estimate}.`;
+  let i = startIdx;
+  while (i < lines.length) {
+    const raw = lines[i];
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      i++;
+      continue;
     }
-    if (notes.status_update.remaining_scope?.length) {
-      statusText += ` Remaining scope: ${notes.status_update.remaining_scope.join(', ')}`;
+
+    const taskDone = trimmed.match(/^-\s+\[x\]\s+(.*)/i);
+    const taskOpen = trimmed.match(/^-\s+\[\s?\]\s+(.*)/);
+    const bullet = !taskDone && !taskOpen && trimmed.match(/^[-*\u2022+]\s+(.*)/);
+    const numbered = !taskDone && !taskOpen && trimmed.match(/^(\d+)\.\s+(.*)/);
+
+    if (!taskDone && !taskOpen && !bullet && !numbered) {
+      break; // End of continuous list block
     }
-    blocks.push(calloutBlock(statusText, '🎯'));
+
+    const rawIndent = raw.match(/^(\s*)/)[1].replace(/\t/g, '  ').length;
+    const level = Math.floor(rawIndent / 2);
+
+    let block;
+    if (taskDone) {
+      block = todoBlock(taskDone[1].trim(), true);
+    } else if (taskOpen) {
+      block = todoBlock(taskOpen[1].trim(), false);
+    } else if (bullet) {
+      block = bulletedBlock(bullet[1].trim());
+    } else if (numbered) {
+      block = {
+        object: 'block',
+        type: 'numbered_list_item',
+        numbered_list_item: { rich_text: parseMarkdownRichText(numbered[2].trim()) },
+      };
+    }
+
+    while (stack.length > 1 && stack[stack.length - 1].level >= level) {
+      stack.pop();
+    }
+
+    const parent = stack[stack.length - 1];
+    const type = block.type;
+    block[type].children = [];
+
+    parent.children.push(block);
+    stack.push({ level, children: block[type].children });
+
+    i++;
   }
 
-  // Action Items & Next Steps as todo (checklist) blocks
-  blocks.push(heading3Block('Action Items & Next Steps'));
-  if (notes.action_items?.length > 0) {
-    for (const item of notes.action_items) {
-      if (typeof item === 'string') {
-        blocks.push(todoBlock(item, false));
-      } else if (item.task) {
-        const due = item.due ? ` (Due: ${item.due})` : '';
-        const owner = item.owner ? ` — ${item.owner}` : '';
-        const label = `${item.task || ''}${owner}${due}`.trim();
-        if (label) blocks.push(todoBlock(label, false));
-      } else if (Array.isArray(item.tasks)) {
-        for (const t of item.tasks) {
-          const owner = item.owner ? ` — ${item.owner}` : '';
-          const label = `${t || ''}${owner}`.trim();
-          if (label) blocks.push(todoBlock(label, false));
+  function cleanEmptyChildren(items) {
+    for (const item of items) {
+      const type = item.type;
+      if (item[type] && item[type].children) {
+        if (item[type].children.length === 0) {
+          delete item[type].children;
+        } else {
+          cleanEmptyChildren(item[type].children);
         }
       }
     }
+  }
+
+  cleanEmptyChildren(rootBlocks);
+  return { blocks: rootBlocks, nextIdx: i };
+}
+
+function buildBlocksFromMarkdown(markdown) {
+  const blocks = [];
+  const lines = markdown.split(/\r?\n/);
+  let inCodeBlock = false;
+  let codeLines = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const raw = lines[i];
+    const trimmed = raw.trim();
+
+    if (trimmed.startsWith('```')) {
+      if (inCodeBlock) {
+        if (codeLines.length > 0) {
+          blocks.push(codeBlock(codeLines.join('\n')));
+        }
+        inCodeBlock = false;
+        codeLines = [];
+      } else {
+        inCodeBlock = true;
+      }
+      i++;
+      continue;
+    }
+    if (inCodeBlock) {
+      codeLines.push(raw);
+      i++;
+      continue;
+    }
+
+    if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // Table detection
+    if (
+      trimmed.startsWith('|') &&
+      trimmed.endsWith('|') &&
+      i + 1 < lines.length &&
+      lines[i + 1].trim().startsWith('|') &&
+      /^\|(?:\s*:?-+:?\s*\|)+$/.test(lines[i + 1].trim())
+    ) {
+      const headerRow = parseTableRow(trimmed);
+      i += 2; // skip header and separator lines
+
+      const rows = [];
+      while (i < lines.length) {
+        const t = lines[i].trim();
+        if (!t.startsWith('|') || !t.endsWith('|')) break;
+        rows.push(parseTableRow(t));
+        i++;
+      }
+
+      const tbl = tableBlock(headerRow, rows);
+      if (tbl) blocks.push(tbl);
+      continue;
+    }
+
+    // ATX Headings
+    const h1 = trimmed.match(/^#\s+(.+)/);
+    const h2 = trimmed.match(/^##\s+(.+)/);
+    const h3 = trimmed.match(/^###\s+(.+)/);
+    const h4 = trimmed.match(/^####\s+(.+)/);
+
+    if (h1 && !h2) {
+      blocks.push(heading2Block(h1[1].trim()));
+      i++; continue;
+    }
+    if (h2 && !h3) {
+      blocks.push(heading2Block(h2[1].trim()));
+      i++; continue;
+    }
+    if (h3 && !h4) {
+      blocks.push(heading3Block(h3[1].trim()));
+      i++; continue;
+    }
+    if (h4) {
+      blocks.push(heading3Block(h4[1].trim()));
+      i++; continue;
+    }
+
+    // Quote
+    if (trimmed.startsWith('>')) {
+      blocks.push(quoteBlock(trimmed.replace(/^>\s?/, '')));
+      i++; continue;
+    }
+
+    // Divider
+    if (/^[-*_]{3,}$/.test(trimmed)) {
+      blocks.push(dividerBlock());
+      i++; continue;
+    }
+
+    // List item (Bullet, Numbered, Task) — parse as nested tree
+    const taskDone = trimmed.match(/^-\s+\[x\]\s+(.*)/i);
+    const taskOpen = trimmed.match(/^-\s+\[\s?\]\s+(.*)/);
+    const bullet = !taskDone && !taskOpen && trimmed.match(/^[-*\u2022+]\s+(.*)/);
+    const numbered = !taskDone && !taskOpen && trimmed.match(/^(\d+)\.\s+(.*)/);
+
+    if (taskDone || taskOpen || bullet || numbered) {
+      const { blocks: listBlocks, nextIdx } = parseMarkdownListTree(lines, i);
+      blocks.push(...listBlocks);
+      i = nextIdx;
+      continue;
+    }
+
+    // Regular paragraph
+    blocks.push(paragraphBlock(trimmed));
+    i++;
+  }
+
+  if (inCodeBlock && codeLines.length > 0) {
+    blocks.push(codeBlock(codeLines.join('\n')));
+  }
+
+  return blocks;
+}
+
+
+// ── Build page content ────────────────────────────────────────────────────────
+
+function buildBlocks(notes, transcript) {
+  let blocks = [];
+
+  if (notes && notes._rawMarkdown) {
+    blocks = buildBlocksFromMarkdown(notes._rawMarkdown);
   } else {
-    blocks.push(paragraphBlock('No action items identified.'));
-  }
+    // Summary heading
+    blocks.push(heading2Block('Summary'));
 
-  // Topics / Sections
-  const topics = notes.sections?.length ? notes.sections : notes.topics?.length ? notes.topics : notes.key_points;
-  if (topics?.length > 0) {
-    for (const topic of topics) {
-      if (!topic?.heading && !topic?.content && !topic?.summary) continue;
-      blocks.push(heading3Block(topic.heading || 'Topic'));
-      const text = topic.content || topic.summary || '';
-      const lines = text
-        .split(/\r?\n+/)
-        .map((l) => l.trim())
-        .filter(Boolean);
-      for (const line of lines) {
-        blocks.push(bulletedBlock(line));
+    // Optional: quoted duration block directly under Summary heading
+    const durationSeconds =
+      typeof notes?.duration_seconds === 'number' && notes.duration_seconds > 0
+        ? notes.duration_seconds
+        : getTranscriptDurationSeconds(transcript);
+    const durationLabel = notes.duration || formatDuration(durationSeconds);
+    if (durationLabel) {
+      blocks.push(quoteBlock(`Duration: ${durationLabel}`, { bold: true, italic: true }));
+    }
+
+    // Participants
+    if (notes.participants?.length > 0) {
+      const partLines = notes.participants.map((p) => {
+        if (typeof p === 'string') return p;
+        const nameStr = p.name ? `${p.name} (${p.label})` : p.label;
+        const roleStr = p.role ? ` — ${p.role}` : '';
+        const confStr = p.identity_confidence ? ` [${p.identity_confidence}]` : '';
+        return `${nameStr}${roleStr}${confStr}`;
+      });
+      blocks.push(calloutBlock(`Participants: ${partLines.join(' | ')}`, '👥'));
+    }
+
+    // Status Update
+    if (notes.status_update) {
+      let statusText = 'Status Update:';
+      if (notes.status_update.completion_estimate) {
+        statusText += ` ${notes.status_update.completion_estimate}.`;
       }
-      if (topic.options_discussed?.length > 0) {
-        blocks.push(paragraphBlock(`Options Discussed: ${topic.options_discussed.join(', ')}`));
+      if (notes.status_update.remaining_scope?.length) {
+        statusText += ` Remaining scope: ${notes.status_update.remaining_scope.join(', ')}`;
       }
-      if (topic.decision) {
-        blocks.push(calloutBlock(`Decision: ${topic.decision}`, '✅'));
+      blocks.push(calloutBlock(statusText, '🎯'));
+    }
+
+    // Action Items & Next Steps as todo (checklist) blocks
+    blocks.push(heading3Block('Action Items & Next Steps'));
+    if (notes.action_items?.length > 0) {
+      for (const item of notes.action_items) {
+        if (typeof item === 'string') {
+          blocks.push(todoBlock(item, false));
+        } else if (item.task) {
+          const due = item.due ? ` (Due: ${item.due})` : '';
+          const owner = item.owner ? ` — ${item.owner}` : '';
+          const label = `${item.task || ''}${owner}${due}`.trim();
+          if (label) blocks.push(todoBlock(label, false));
+        } else if (Array.isArray(item.tasks)) {
+          for (const t of item.tasks) {
+            const owner = item.owner ? ` — ${item.owner}` : '';
+            const label = `${t || ''}${owner}`.trim();
+            if (label) blocks.push(todoBlock(label, false));
+          }
+        }
       }
-      if (topic.open_questions?.length > 0) {
-        blocks.push(calloutBlock(`Open Questions: ${topic.open_questions.join(' | ')}`, '❓'));
+    } else {
+      blocks.push(paragraphBlock('No action items identified.'));
+    }
+
+    // Topics / Sections
+    const topics = notes.sections?.length ? notes.sections : notes.topics?.length ? notes.topics : notes.key_points;
+    if (topics?.length > 0) {
+      for (const topic of topics) {
+        if (!topic?.heading && !topic?.content && !topic?.summary) continue;
+        blocks.push(heading3Block(topic.heading || 'Topic'));
+        const text = topic.content || topic.summary || '';
+        const lines = text
+          .split(/\r?\n+/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+        for (const line of lines) {
+          blocks.push(bulletedBlock(line));
+        }
+        if (topic.options_discussed?.length > 0) {
+          blocks.push(paragraphBlock(`Options Discussed: ${topic.options_discussed.join(', ')}`));
+        }
+        if (topic.decision) {
+          blocks.push(calloutBlock(`Decision: ${topic.decision}`, '✅'));
+        }
+        if (topic.open_questions?.length > 0) {
+          blocks.push(calloutBlock(`Open Questions: ${topic.open_questions.join(' | ')}`, '❓'));
+        }
       }
+    }
+
+    // Notable Mentions
+    if (notes.notable_mentions?.length > 0) {
+      blocks.push(heading3Block('Notable Mentions'));
+      for (const mention of notes.notable_mentions) {
+        blocks.push(bulletedBlock(mention));
+      }
+    }
+
+    if (!notes.action_items?.length && !topics?.length) {
+      blocks.push(paragraphBlock('No summary available.'));
     }
   }
 
-  // Notable Mentions
-  if (notes.notable_mentions?.length > 0) {
-    blocks.push(heading3Block('Notable Mentions'));
-    for (const mention of notes.notable_mentions) {
-      blocks.push(bulletedBlock(mention));
-    }
-  }
-
-  if (!notes.action_items?.length && !topics?.length) {
-    blocks.push(paragraphBlock('No summary available.'));
-  }
 
   // ── Transcript heading (Toggle H2) ──────────────────────────────────────────
   blocks.push(dividerBlock());
