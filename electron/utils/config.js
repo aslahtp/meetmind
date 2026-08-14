@@ -86,6 +86,10 @@ const schema = {
     type: 'string',
     default: 'json',
   },
+  autoCheckUpdates: {
+    type: 'boolean',
+    default: true,
+  },
 };
 
 const store = new Store({ schema, name: 'meetmind-config' });
@@ -138,6 +142,7 @@ function getConfig() {
     sarvamApiKey:     store.get('sarvamApiKey') || '',
     geminiSystemPrompt: store.get('geminiSystemPrompt') || '',
     noteOutputMode:   store.get('noteOutputMode') || 'json',
+    autoCheckUpdates: store.get('autoCheckUpdates') !== false,
   };
 }
 

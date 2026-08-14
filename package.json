@@ -1,8 +1,11 @@
 {
   "name": "meetmind",
-  "version": "1.5.2",
-
+  "version": "1.6.0",
   "description": "AI meeting notes — transcribe, summarize, and upload to Notion",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aslahtp/meetmind.git"
+  },
   "main": "electron/main.js",
   "scripts": {
     "predev": "npm run generate-icons && npm run build:ext",
@@ -24,6 +27,7 @@
     "@notionhq/client": "^2.2.15",
     "assemblyai": "^4.26.1",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.9",
     "fluent-ffmpeg": "^2.1.3",
     "lucide-react": "^1.31.0",
     "sql.js": "^1.11.0",

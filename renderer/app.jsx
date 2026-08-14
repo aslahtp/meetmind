@@ -10,6 +10,8 @@ import {
   Square,
   ArrowRight,
   KeyRound,
+  Sparkles,
+  ArrowUpCircle,
 } from 'lucide-react';
 import './styles/globals.css';
 
@@ -44,6 +46,8 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [updaterState, setUpdaterState] = useState(null);
+  const [showUpdateBanner, setShowUpdateBanner] = useState(true);
 
   const keysNotSet = !hasSttApiKey(config) || !config?.geminiApiKey?.trim();
 
@@ -204,12 +208,30 @@ function App() {
       });
     });
 
+    const unsubUpdater = window.meetmind.on('updater:status', (status) => {
+      setUpdaterState(status);
+      if (status?.status === 'downloaded') {
+        setShowUpdateBanner(true);
+      }
+    });
+
+    // Check initial updater status
+    window.meetmind.updater?.getStatus().then((status) => {
+      if (status) {
+        setUpdaterState(status);
+        if (status.status === 'downloaded') {
+          setShowUpdateBanner(true);
+        }
+      }
+    });
+
     return () => {
       unsubRecordingStarted?.();
       unsubRecordingStopped?.();
       unsubComplete?.();
       unsubError?.();
       unsubDurations?.();
+      unsubUpdater?.();
     };
   }, []);
 
@@ -308,6 +330,15 @@ function App() {
           onSetup={() => { setView('settings'); setShowOnboarding(false); }}
           onClose={() => setShowOnboarding(false)}
           hasSessions={sessions.length > 0}
+        />
+      )}
+
+      {/* Auto-Update Downloaded Floating Banner */}
+      {updaterState?.status === 'downloaded' && showUpdateBanner && !isRecording && (
+        <UpdateBanner
+          version={updaterState.updateInfo?.version}
+          onInstall={() => window.meetmind.updater?.install()}
+          onClose={() => setShowUpdateBanner(false)}
         />
       )}
     </AppContext.Provider>
@@ -449,6 +480,53 @@ function OnboardingBanner({ onSetup, onClose, hasSessions }) {
         Configure API Keys
         <ArrowRight size={13} strokeWidth={2} />
       </button>
+    </div>
+  );
+}
+
+// ── Update Notification Banner ───────────────────────────────────────────────
+
+function UpdateBanner({ version, onInstall, onClose }) {
+  return (
+    <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-[rgb(var(--color-background-secondary))] border border-emerald-500/40 rounded-xl p-4 shadow-2xl shadow-emerald-950/40 fade-in">
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="min-w-0 flex gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
+            <Sparkles size={16} strokeWidth={2.5} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm text-white">Update Ready to Apply</h3>
+            <p className="text-[rgb(var(--color-foreground-muted))] text-xs mt-0.5">
+              MeetMind <span className="font-mono text-emerald-400 font-medium">v{version}</span> is downloaded and ready to install.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-shrink-0 p-1 rounded text-[rgb(var(--color-foreground-subtle))] hover:text-[rgb(var(--color-foreground-muted))] hover:bg-[rgb(var(--color-background-tertiary))] transition-colors"
+          aria-label="Close"
+        >
+          <X size={16} strokeWidth={2} />
+        </button>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onInstall}
+          className="btn-primary text-xs flex items-center gap-1.5"
+        >
+          <ArrowUpCircle size={14} />
+          Restart &amp; Update
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn-secondary text-xs"
+        >
+          Later
+        </button>
+      </div>
     </div>
   );
 }

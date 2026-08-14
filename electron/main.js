@@ -11,6 +11,7 @@ const { transcribeAudio, testGoogleSTT, testAssemblyAI, testSarvam } = require('
 const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/gemini');
 const { uploadToNotion, testNotionConnection } = require('./services/notion');
 const { testGeminiConnection } = require('./services/gemini');
+const { initializeAutoUpdater, checkForUpdates, quitAndInstall, getUpdaterState } = require('./services/updater');
 const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -235,12 +236,26 @@ function createTray() {
 
 function updateTrayMenu() {
   if (!tray) return;
-  const contextMenu = Menu.buildFromTemplate([
+  const updaterState = getUpdaterState();
+  const updateDownloaded = updaterState.status === 'downloaded';
+
+  const menuItems = [
     {
       label: 'Open MeetMind',
       click: () => { focusMainWindow(); },
     },
     { type: 'separator' },
+  ];
+
+  if (updateDownloaded) {
+    menuItems.push({
+      label: `✨ Restart to Update (v${updaterState.updateInfo?.version || ''})`,
+      click: () => { quitAndInstall(); },
+    });
+    menuItems.push({ type: 'separator' });
+  }
+
+  menuItems.push(
     {
       label: isRecording ? '⏹ Stop Recording' : '⏺ Start Recording',
       click: async () => {
@@ -253,13 +268,23 @@ function updateTrayMenu() {
     },
     { type: 'separator' },
     {
+      label: 'Check for Updates...',
+      click: async () => {
+        focusMainWindow();
+        await checkForUpdates(true);
+      },
+    },
+    { type: 'separator' },
+    {
       label: 'Quit',
       click: () => {
         app.isQuitting = true;
         app.quit();
       },
     },
-  ]);
+  );
+
+  const contextMenu = Menu.buildFromTemplate(menuItems);
   tray.setContextMenu(contextMenu);
 }
 
@@ -855,6 +880,12 @@ function registerIpcHandlers() {
     }
     return { success: false, error: 'Unknown stage' };
   });
+
+  // ── Auto updater ──────────────────────────────────────────────────────────
+  ipcMain.handle('updater:check', (_e) => checkForUpdates(true));
+  ipcMain.handle('updater:install', (_e) => quitAndInstall());
+  ipcMain.handle('updater:get-status', (_e) => getUpdaterState());
+  ipcMain.handle('app:version', (_e) => app.getVersion());
 }
 
 function resolveSessionAudioPath(sessionId) {
@@ -1078,6 +1109,13 @@ app.whenReady().then(async () => {
 
   createMainWindow();
   createTray();
+
+  initializeAutoUpdater({
+    sendToRenderer,
+    onUpdateDownloaded: () => {
+      updateTrayMenu();
+    },
+  });
 
   // Keep meetmind:// pointed at this installed exe (not a leftover dev registration).
   if (app.isPackaged) {

@@ -49,3 +49,9 @@ files:
   - "!assets/ffmpeg/**"
 
 electronVersion: "33.2.1"
+
+publish:
+  provider: github
+  owner: aslahtp
+  repo: meetmind
+  releaseType: release

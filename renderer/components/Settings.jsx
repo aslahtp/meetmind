@@ -11,6 +11,12 @@ import {
   RotateCcw,
   FileText,
   Braces,
+  RefreshCw,
+  Download,
+  Sparkles,
+  ArrowUpCircle,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
 import NotionIcon from './NotionIcon.jsx';
@@ -211,6 +217,7 @@ export default function Settings({ onSave }) {
     sarvamApiKey:      '',
     geminiSystemPrompt: '',
     noteOutputMode: 'json',
+    autoCheckUpdates: true,
   });
   const [models, setModels] = useState([]);
   const [devices, setDevices] = useState({ all: [], system: null, mic: null });
@@ -221,6 +228,9 @@ export default function Settings({ onSave }) {
   const [activeOnboardingStep, setActiveOnboardingStep] = useState(null);
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState('');
   const [defaultMdSystemPrompt, setDefaultMdSystemPrompt] = useState('');
+  const [appVersion, setAppVersion] = useState('');
+  const [updaterState, setUpdaterState] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
     if (config) {
@@ -243,9 +253,23 @@ export default function Settings({ onSave }) {
         sarvamApiKey:          config.sarvamApiKey || '',
         geminiSystemPrompt:    config.geminiSystemPrompt || '',
         noteOutputMode:        config.noteOutputMode || 'json',
+        autoCheckUpdates:      config.autoCheckUpdates !== false,
       });
     }
   }, [config]);
+
+  useEffect(() => {
+    window.meetmind?.app?.getVersion().then((v) => { if (v) setAppVersion(v); });
+    window.meetmind?.updater?.getStatus().then((status) => { if (status) setUpdaterState(status); });
+
+    const unsub = window.meetmind?.on?.('updater:status', (status) => {
+      setUpdaterState(status);
+    });
+
+    return () => {
+      unsub?.();
+    };
+  }, []);
 
   useEffect(() => {
     window.meetmind?.models.list().then(setModels);
@@ -289,6 +313,25 @@ export default function Settings({ onSave }) {
       console.error('Failed to list devices:', err);
     } finally {
       setLoadingDevices(false);
+    }
+  };
+
+  const handleCheckUpdates = async () => {
+    setCheckingUpdate(true);
+    try {
+      await window.meetmind?.updater?.check();
+    } catch (err) {
+      console.error('Failed to check for updates:', err);
+    } finally {
+      setTimeout(() => setCheckingUpdate(false), 1200);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    try {
+      await window.meetmind?.updater?.install();
+    } catch (err) {
+      console.error('Failed to install update:', err);
     }
   };
 
@@ -785,6 +828,105 @@ export default function Settings({ onSave }) {
               onClick={() => setForm((p) => ({ ...p, autoLaunch: !p.autoLaunch }))}
             >
               <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${form.autoLaunch ? 'left-5' : 'left-1'}`} />
+            </div>
+          </label>
+        </section>
+
+        {/* ── Application Updates ─────────────────────────────────── */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-medium text-sm text-[#a0a0a0] uppercase tracking-wider">Application Updates</h2>
+              <p className="text-zinc-500 text-xs mt-0.5">
+                Current Version: <span className="font-mono text-zinc-300 font-semibold">{appVersion ? `v${appVersion}` : (updaterState?.currentVersion ? `v${updaterState.currentVersion}` : 'v1.6.0')}</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCheckUpdates}
+              disabled={checkingUpdate || updaterState?.status === 'checking' || updaterState?.status === 'downloading'}
+              className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-2"
+            >
+              <RefreshCw size={13} className={checkingUpdate || updaterState?.status === 'checking' ? 'animate-spin' : ''} />
+              {checkingUpdate || updaterState?.status === 'checking' ? 'Checking...' : 'Check for Updates'}
+            </button>
+          </div>
+
+          {/* Update Downloaded Card */}
+          {updaterState?.status === 'downloaded' && (
+            <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-emerald-200">
+                    MeetMind v{updaterState.updateInfo?.version} Ready to Install
+                  </h4>
+                  <p className="text-xs text-emerald-300/80 mt-0.5">
+                    Update has been downloaded. Restart to apply the latest version.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleInstallUpdate}
+                className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 flex-shrink-0"
+              >
+                <ArrowUpCircle size={14} />
+                Restart &amp; Update
+              </button>
+            </div>
+          )}
+
+          {/* Update Downloading Progress */}
+          {updaterState?.status === 'downloading' && (
+            <div className="p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-zinc-300 flex items-center gap-2">
+                  <Download size={13} className="text-emerald-400 animate-bounce" />
+                  Downloading Update v{updaterState.updateInfo?.version || ''}...
+                </span>
+                <span className="font-mono text-emerald-400 font-semibold">
+                  {updaterState.downloadProgress?.percent || 0}%
+                </span>
+              </div>
+              <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-300"
+                  style={{ width: `${updaterState.downloadProgress?.percent || 0}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Up to Date Confirmation */}
+          {updaterState?.status === 'not-available' && (
+            <div className="p-3 rounded-lg bg-zinc-900/50 border border-zinc-800/80 flex items-center gap-2.5 text-xs text-zinc-400">
+              <CheckCircle2 size={15} className="text-emerald-400 flex-shrink-0" />
+              <span>You are on the latest version of MeetMind.</span>
+            </div>
+          )}
+
+          {/* Update Error Notice */}
+          {updaterState?.status === 'error' && updaterState?.errorMessage && (
+            <div className="p-3 rounded-lg bg-rose-950/30 border border-rose-800/40 flex items-center gap-2.5 text-xs text-rose-300">
+              <AlertCircle size={15} className="text-rose-400 flex-shrink-0" />
+              <span className="truncate">{updaterState.errorMessage}</span>
+            </div>
+          )}
+
+          {/* Auto check toggle */}
+          <label className="flex items-center justify-between cursor-pointer pt-1">
+            <div>
+              <p className="text-sm font-medium">Automatic update checks</p>
+              <p className="text-[#555] text-xs">Check for new releases in the background</p>
+            </div>
+            <div
+              className={`w-10 h-6 rounded-full transition-colors relative ${form.autoCheckUpdates !== false ? 'bg-green-600' : 'bg-[#333]'}`}
+              onClick={() => setForm((p) => ({ ...p, autoCheckUpdates: p.autoCheckUpdates === false ? true : false }))}
+            >
+              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${form.autoCheckUpdates !== false ? 'left-5' : 'left-1'}`} />
             </div>
           </label>
         </section>

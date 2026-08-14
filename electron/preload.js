@@ -81,6 +81,17 @@ contextBridge.exposeInMainWorld('meetmind', {
     sendAudioData: (buffer) => ipcRenderer.send('capture:audio-data', buffer),
   },
 
+  // Auto updater
+  updater: {
+    check: () => ipcRenderer.invoke('updater:check'),
+    install: () => ipcRenderer.invoke('updater:install'),
+    getStatus: () => ipcRenderer.invoke('updater:get-status'),
+  },
+
+  app: {
+    getVersion: () => ipcRenderer.invoke('app:version'),
+  },
+
   // Event listeners
   on: (channel, callback) => {
     const validChannels = [
@@ -94,6 +105,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'ws:extension-connected',
       'ws:recording-requested',
       'sessions:durations-updated',
+      'updater:status',
     ];
     if (validChannels.includes(channel)) {
       const subscription = (_event, ...args) => callback(...args);

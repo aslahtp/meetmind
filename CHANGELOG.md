@@ -6,6 +6,14 @@ updated: 2026-08-14
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## v1.6.0
+
+- **Integrated Seamless GitHub Releases Auto-Updates** — added `electron-updater` integration that automatically detects, downloads, and applies new releases in the background from GitHub Releases (`aslahtp/meetmind`).
+- **Background Update Scheduler & Tray Notifications** — automated update checks run 6s after launch and periodically every 4 hours; tray menu dynamically surfaces a prominent "Restart to Update" action when an update is downloaded.
+- **Application Updates Settings Card** — added a dedicated "Application Updates" section in Settings with current version badge, "Check for Updates" button, real-time download progress bar, update ready status, and an automatic update checks toggle.
+- **Update Notification Toast Banner** — non-intrusive floating toast banner notifies the user when an update is ready with 1-click "Restart & Update" and "Later" actions.
+- **CI/CD Release Metadata Publishing** — updated `.github/workflows/release.yml` and `electron-builder.yml` to publish `latest.yml` metadata alongside `.exe` and `.blockmap` artifacts for update discovery.
+
 ## v1.5.2
 
 - **Fixed "Object has been destroyed" Crash in Background Mode** — resolved uncaught main process exception when the Chrome extension connected or sent messages while MeetMind was minimized/hidden to tray.
