@@ -267,7 +267,8 @@ Output files in `dist/`:
 
 | Model ID                 | Label                         | Best for                       |
 | ------------------------ | ----------------------------- | ------------------------------ |
-| `gemini-3.6-flash`       | Gemini 3.6 Flash              | Recommended — latest Flash     |
+| `gemini-3.7-flash`       | Gemini 3.7 Flash              | Default & recommended — fast, top quality |
+| `gemini-3.6-flash`       | Gemini 3.6 Flash              | High quality Flash model       |
 | `gemini-3.5-flash-lite`  | Gemini 3.5 Flash Lite         | Fast, highly cost-effective    |
 | `gemini-3.5-flash`       | Gemini 3.5 Flash              | Balanced quality and speed     |
 | `gemini-3.1-flash-lite`  | Gemini 3.1 Flash Lite         | Lightweight summaries          |

@@ -6,6 +6,10 @@ updated: 2026-08-14
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## v1.7.0
+
+- **Added Gemini 3.7 Flash Support & Made It Default** — enabled `gemini-3.7-flash` across MeetMind as the primary default AI model for meeting notes summarization and structured generation, providing top quality with fast response times.
+
 ## v1.6.2
 
 - **Fixed Unhandled Rejection on Update Download Failure** — `electron-updater` with `autoDownload=true` internally returns a `downloadPromise` that rejects on failure (e.g. 404); attached a `.catch()` to it so the rejection no longer escapes to the global unhandled rejection handler while the `error` event continues to own user-visible state.
