@@ -15,6 +15,21 @@ const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// Top-level crash guards for main process
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception in main process', {
+    error: err?.message || String(err),
+    stack: err?.stack,
+  });
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection in main process', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+});
+
 // Resolve the effective system prompt based on the configured output mode.
 // If the user has a custom prompt saved, it always takes precedence.
 // Otherwise fall back to the mode-appropriate default.
@@ -63,8 +78,20 @@ let mainWindow = null;
 let tray = null;
 let isRecording = false;
 
+function sendToRenderer(channel, ...args) {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send(channel, ...args);
+      return true;
+    }
+  } catch (err) {
+    logger.warn(`Failed to send ${channel} to renderer`, { error: err.message });
+  }
+  return false;
+}
+
 function focusMainWindow() {
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
@@ -76,6 +103,13 @@ function focusMainWindow() {
 // ── Window ──────────────────────────────────────────────────────────────────
 
 function createMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    return mainWindow;
+  }
+
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 720,
@@ -105,7 +139,9 @@ function createMainWindow() {
 
   // Show quickly — don't wait forever for full renderer paint.
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+    }
   });
   setTimeout(() => {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
@@ -120,6 +156,10 @@ function createMainWindow() {
     }
   });
 
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
   // Auto-approve system audio loopback capture (no picker dialog).
   // Electron's loopback mode captures all system audio via Chromium's WASAPI
   // layer — works with speakers, headphones, USB, and Bluetooth output.
@@ -127,6 +167,8 @@ function createMainWindow() {
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
       if (sources.length === 0) { callback(); return; }
       callback({ video: sources[0], audio: 'loopback' });
+    }).catch(() => {
+      callback();
     });
   }, { useSystemPicker: false });
 
@@ -183,18 +225,11 @@ function createTray() {
   updateTrayMenu();
 
   tray.on('click', () => {
-    if (!mainWindow) return;
-    if (mainWindow.isVisible()) {
-      mainWindow.focus();
-    } else {
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    focusMainWindow();
   });
 
   tray.on('double-click', () => {
-    mainWindow?.show();
-    mainWindow?.focus();
+    focusMainWindow();
   });
 }
 
@@ -203,7 +238,7 @@ function updateTrayMenu() {
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Open MeetMind',
-      click: () => { mainWindow?.show(); mainWindow?.focus(); },
+      click: () => { focusMainWindow(); },
     },
     { type: 'separator' },
     {
@@ -241,7 +276,10 @@ let rendererBytesWritten = 0;   // Total bytes flushed to disk
 
 function requestRendererCaptureStart() {
   return new Promise((resolve) => {
-    if (!mainWindow?.webContents) { resolve(false); return; }
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
+      resolve(false);
+      return;
+    }
 
     function onStarted() { cleanup(); resolve(true); }
     function onFailed() { cleanup(); resolve(false); }
@@ -253,7 +291,7 @@ function requestRendererCaptureStart() {
 
     ipcMain.once('capture:started', onStarted);
     ipcMain.once('capture:failed', onFailed);
-    mainWindow.webContents.send('capture:start');
+    sendToRenderer('capture:start');
 
     const timer = setTimeout(() => { cleanup(); resolve(false); }, 6000);
   });
@@ -266,7 +304,10 @@ function requestRendererCaptureStart() {
  */
 function requestRendererCaptureStop() {
   return new Promise((resolve, reject) => {
-    if (!mainWindow?.webContents) { reject(new Error('No window')); return; }
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
+      reject(new Error('No window'));
+      return;
+    }
 
     function onDone(_e, buffer) {
       clearTimeout(timer);
@@ -275,7 +316,7 @@ function requestRendererCaptureStop() {
     }
 
     ipcMain.once('capture:audio-data', onDone);
-    mainWindow.webContents.send('capture:stop');
+    sendToRenderer('capture:stop');
 
     const timer = setTimeout(() => {
       ipcMain.removeListener('capture:audio-data', onDone);
@@ -319,7 +360,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
       rendererBytesWritten = 0;
 
       updateTrayMenu();
-      mainWindow?.webContents.send('recording:started', { sessionId: currentSessionId });
+      sendToRenderer('recording:started', { sessionId: currentSessionId });
       broadcastToExtension({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
       logger.info('Recording started (renderer capture)', { sessionId: currentSessionId });
       return { success: true, sessionId: currentSessionId };
@@ -331,7 +372,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
     await startRecording(currentSessionId);
     isRecording = true;
     updateTrayMenu();
-    mainWindow?.webContents.send('recording:started', { sessionId: currentSessionId });
+    sendToRenderer('recording:started', { sessionId: currentSessionId });
     broadcastToExtension({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
     logger.info('Recording started (FFmpeg fallback)', { sessionId: currentSessionId });
     return { success: true, sessionId: currentSessionId };
@@ -339,7 +380,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
     logger.error('Failed to start recording', { error: err.message });
     captureMode = 'none';
     db.updateSession(currentSessionId, { status: 'error' });
-    mainWindow?.webContents.send('recording:error', { error: err.message });
+    sendToRenderer('recording:error', { error: err.message });
     return { success: false, error: err.message };
   }
 }
@@ -414,7 +455,7 @@ async function handleStopRecording() {
     });
 
     updateTrayMenu();
-    mainWindow?.webContents.send('recording:stopped', { sessionId: currentSessionId, audioPath });
+    sendToRenderer('recording:stopped', { sessionId: currentSessionId, audioPath });
     broadcastToExtension({ type: 'RECORDING_STOPPED' });
     logger.info('Recording stopped', { sessionId: currentSessionId, audioPath });
 
@@ -444,7 +485,7 @@ async function handleStopRecording() {
 
 async function runProcessingPipeline(sessionId, audioPath, options = {}) {
   const sendProgress = (stage, percent) => {
-    mainWindow?.webContents.send('processing:progress', { stage, percent });
+    sendToRenderer('processing:progress', { stage, percent });
     broadcastToExtension({ type: 'PROCESSING_PROGRESS', stage, percent });
   };
 
@@ -520,13 +561,13 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
       sendProgress('complete', 100);
     }
 
-    mainWindow?.webContents.send('processing:complete', { sessionId, notionUrl });
+    sendToRenderer('processing:complete', { sessionId, notionUrl });
     broadcastToExtension({ type: 'PROCESSING_COMPLETE', notionUrl, sessionId });
     logger.info('Processing pipeline complete', { sessionId, notionUrl });
   } catch (err) {
     logger.error('Processing pipeline error', { sessionId, error: err.message });
     db.updateSession(sessionId, { status: 'error' });
-    mainWindow?.webContents.send('processing:error', { sessionId, error: err.message });
+    sendToRenderer('processing:error', { sessionId, error: err.message });
     broadcastToExtension({ type: 'PROCESSING_ERROR', error: err.message });
   }
 }
@@ -535,13 +576,26 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
 
 function registerIpcHandlers() {
   // ── Custom window controls (frameless window) ──────────────────────────────
-  ipcMain.handle('window:minimize',  () => mainWindow?.minimize());
-  ipcMain.handle('window:maximize',  () => {
-    if (mainWindow?.isMaximized()) mainWindow.restore();
-    else mainWindow?.maximize();
+  ipcMain.handle('window:minimize',  () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
   });
-  ipcMain.handle('window:close',     () => { app.isQuitting = true; mainWindow?.close(); });
-  ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
+  ipcMain.handle('window:maximize',  () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMaximized()) mainWindow.restore();
+      else mainWindow.maximize();
+    }
+  });
+  ipcMain.handle('window:close',     () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.close();
+    }
+  });
+  ipcMain.handle('window:isMaximized', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      return mainWindow.isMaximized();
+    }
+    return false;
+  });
 
   // ── Logs ──────────────────────────────────────────────────────────────────
   ipcMain.handle('logs:get', (_e, { limit } = {}) => logger.readLogs(limit));
@@ -593,7 +647,8 @@ function registerIpcHandlers() {
   ipcMain.handle('audio:probe-device', (_e, device) => probeAudioDevice(device));
 
   ipcMain.handle('audio:import-file', async () => {
-    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow || undefined, {
+    const parentWin = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const { canceled, filePaths } = await dialog.showOpenDialog(parentWin, {
       title: 'Select audio file',
       properties: ['openFile'],
       filters: [
@@ -856,7 +911,7 @@ function backfillSessionDurations() {
       updated,
       total: sessions.length,
     });
-    mainWindow?.webContents.send('sessions:durations-updated');
+    sendToRenderer('sessions:durations-updated');
   } else {
     logger.info('Session duration backfill complete (no changes)', {
       total: sessions.length,
@@ -1047,7 +1102,7 @@ app.whenReady().then(async () => {
       recording: isRecording,
       sessionId: currentSessionId,
     }),
-    mainWindow,
+    sendToRenderer,
   });
 
   // Background: convert leftover recordings and backfill durations without blocking first paint.
@@ -1071,8 +1126,7 @@ app.whenReady().then(async () => {
   app.setLoginItemSettings({ openAtLogin: config.autoLaunch });
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
-    else mainWindow?.show();
+    focusMainWindow();
   });
 });
 

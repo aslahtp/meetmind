@@ -1,10 +1,17 @@
 ---
 tags: [meta, changelog]
-updated: 2026-08-13
+updated: 2026-08-14
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## v1.5.2
+
+- **Fixed "Object has been destroyed" Crash in Background Mode** — resolved uncaught main process exception when the Chrome extension connected or sent messages while MeetMind was minimized/hidden to tray.
+- **Protected Window Lifecycle & IPC Dispatching** — added centralized `sendToRenderer` helper with `isDestroyed()` checks and try-catch safety across all IPC and WebSocket events.
+- **Fixed Window Close & Single-Instance Tray Management** — corrected custom titlebar close handling so closing the window cleanly hides to tray without prematurely setting `app.isQuitting` and leaving stale destroyed window handles.
+- **Added Main Process Exception Handlers** — attached global `uncaughtException` and `unhandledRejection` guards to log unexpected runtime errors instead of surfacing fatal error dialogs.
 
 ## v1.5.1
 

@@ -64,43 +64,53 @@ function tryListen(port, handlers) {
  */
 function attachHandlers(server, port, handlers) {
   server.on('connection', (ws, req) => {
-    const origin = req.headers.origin || '';
+    try {
+      const origin = req.headers.origin || '';
 
-    if (!origin.startsWith('chrome-extension://')) {
-      logger.warn('Rejected WebSocket connection from unknown origin', { origin });
-      ws.close(4001, 'Forbidden');
-      return;
-    }
-
-    logger.info('Chrome extension connected', { origin });
-    extensionSocket = ws;
-
-    handlers.mainWindow?.webContents.send('ws:extension-connected', { origin });
-
-    ws.on('message', (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        handleExtensionMessage(message, ws, handlers);
-      } catch (err) {
-        logger.error('Failed to parse WebSocket message', { error: err.message });
+      if (!origin.startsWith('chrome-extension://')) {
+        logger.warn('Rejected WebSocket connection from unknown origin', { origin });
+        ws.close(4001, 'Forbidden');
+        return;
       }
-    });
 
-    ws.on('close', () => {
-      logger.info('Chrome extension disconnected');
-      if (extensionSocket === ws) extensionSocket = null;
-    });
+      logger.info('Chrome extension connected', { origin });
+      extensionSocket = ws;
 
-    ws.on('error', (err) => {
-      logger.error('WebSocket client error', { error: err.message });
-    });
+      if (typeof handlers.sendToRenderer === 'function') {
+        handlers.sendToRenderer('ws:extension-connected', { origin });
+      }
 
-    const status = handlers.onStatusRequest();
-    ws.send(JSON.stringify({
-      type: 'APP_STATUS',
-      recording: status.recording,
-      sessionId: status.sessionId,
-    }));
+      ws.on('message', (data) => {
+        try {
+          const message = JSON.parse(data.toString());
+          handleExtensionMessage(message, ws, handlers);
+        } catch (err) {
+          logger.error('Failed to parse WebSocket message', { error: err.message });
+        }
+      });
+
+      ws.on('close', () => {
+        logger.info('Chrome extension disconnected');
+        if (extensionSocket === ws) extensionSocket = null;
+      });
+
+      ws.on('error', (err) => {
+        logger.error('WebSocket client error', { error: err.message });
+      });
+
+      try {
+        const status = handlers.onStatusRequest?.() || { recording: false, sessionId: null };
+        ws.send(JSON.stringify({
+          type: 'APP_STATUS',
+          recording: !!status.recording,
+          sessionId: status.sessionId || null,
+        }));
+      } catch (err) {
+        logger.error('Failed to send status to extension on connection', { error: err.message });
+      }
+    } catch (err) {
+      logger.error('Error in WebSocket connection handler', { error: err.message });
+    }
   });
 }
 
@@ -137,40 +147,46 @@ async function startWebSocketServer(port, handlers) {
 }
 
 function handleExtensionMessage(message, ws, handlers) {
-  logger.debug('Received extension message', { type: message.type });
+  logger.debug('Received extension message', { type: message?.type });
 
-  switch (message.type) {
-    case 'START_RECORDING':
-      handlers.onStartRecording({
-        meetingUrl:   message.meetingUrl   || '',
-        meetingTitle: message.meetingTitle || 'Untitled Meeting',
-      });
-      handlers.mainWindow?.webContents.send('ws:recording-requested', {
-        meetingUrl:   message.meetingUrl,
-        meetingTitle: message.meetingTitle,
-      });
-      break;
+  try {
+    switch (message.type) {
+      case 'START_RECORDING':
+        handlers.onStartRecording?.({
+          meetingUrl:   message.meetingUrl   || '',
+          meetingTitle: message.meetingTitle || 'Untitled Meeting',
+        });
+        if (typeof handlers.sendToRenderer === 'function') {
+          handlers.sendToRenderer('ws:recording-requested', {
+            meetingUrl:   message.meetingUrl,
+            meetingTitle: message.meetingTitle,
+          });
+        }
+        break;
 
-    case 'STOP_RECORDING':
-      handlers.onStopRecording();
-      break;
+      case 'STOP_RECORDING':
+        handlers.onStopRecording?.();
+        break;
 
-    case 'APP_STATUS': {
-      const status = handlers.onStatusRequest();
-      ws.send(JSON.stringify({
-        type: 'APP_STATUS',
-        recording: status.recording,
-        sessionId: status.sessionId,
-      }));
-      break;
+      case 'APP_STATUS': {
+        const status = handlers.onStatusRequest?.() || { recording: false, sessionId: null };
+        ws.send(JSON.stringify({
+          type: 'APP_STATUS',
+          recording: !!status.recording,
+          sessionId: status.sessionId || null,
+        }));
+        break;
+      }
+
+      case 'SHOW_WINDOW':
+        handlers.onShowWindow?.();
+        break;
+
+      default:
+        logger.warn('Unknown WebSocket message type', { type: message?.type });
     }
-
-    case 'SHOW_WINDOW':
-      handlers.onShowWindow?.();
-      break;
-
-    default:
-      logger.warn('Unknown WebSocket message type', { type: message.type });
+  } catch (err) {
+    logger.error('Failed to handle extension message', { type: message?.type, error: err.message });
   }
 }
 

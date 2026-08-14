@@ -1,6 +1,6 @@
 ## Learned User Preferences
 
-- For every moderate to major change, bump the version number in `package.json` and document the changes under a new version heading in `CHANGELOG.md`.
+- For every changes (apart from minor changes), bump the version number (1.0.0 for major, 0.1.0 for moderate and 0.0.1 for minor changes)in `package.json` and document the changes under a new version heading in `CHANGELOG.md`.
 
 ## Learned Workspace Facts
 
@@ -10,4 +10,3 @@
 - Prevent duplicate running instances/tray icons by using `app.requestSingleInstanceLock()` in `electron/main.js` and focusing the existing window on `second-instance`.
 - Don’t commit bundled FFmpeg `.exe` binaries over GitHub’s 100MB limit; keep them ignored or manage them via Git LFS / external download.
 - Meetings commonly include both English and Malayalam, so transcription and language models should support code-switching between these languages.
-
