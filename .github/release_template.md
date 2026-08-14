@@ -1,4 +1,4 @@
-# MeetMind v{VERSION}
+# MeetMind v
 
 ## Changelog
 
@@ -9,12 +9,9 @@
 - **Windows installer** (recommended):
 
   - `MeetMind Setup x.y.z.exe`
-
 - **Optional browser extension bundle**:
 
   - `meetmind-extension.zip` - for manual installation of the extension.
-
-> Note: Auto-update is not yet wired up. To upgrade, download and run the latest installer from this release.
 
 ## Setup
 

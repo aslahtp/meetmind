@@ -20,6 +20,10 @@ import {
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
 import NotionIcon from './NotionIcon.jsx';
+import GoogleCloudIcon from './GoogleCloudIcon.jsx';
+import GeminiIcon from './GeminiIcon.jsx';
+import SarvamIcon from './SarvamIcon.jsx';
+import AssemblyAiIcon from './AssemblyAiIcon.jsx';
 
 function Field({ label, hint, children }) {
   return (
@@ -369,6 +373,10 @@ export default function Settings({ onSave }) {
                 >
                   <div>
                     <span className="text-sm font-medium inline-flex items-center gap-2">
+                      {step.id === 'google' && <GoogleCloudIcon size={16} />}
+                      {step.id === 'sarvam' && <SarvamIcon size={16} />}
+                      {step.id === 'assemblyai' && <AssemblyAiIcon size={16} />}
+                      {step.id === 'gemini' && <GeminiIcon size={16} />}
                       {step.id === 'notion' && <NotionIcon size={16} />}
                       {step.title}
                     </span>
@@ -422,7 +430,10 @@ export default function Settings({ onSave }) {
           {form.sttService === 'google' && (
             <div className="space-y-4 p-3 rounded-lg border border-[#333] bg-[rgb(var(--color-tertiary))]">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-[#d0d0d0]">Google Speech-to-Text settings</p>
+                <p className="text-sm font-medium text-[#d0d0d0] inline-flex items-center gap-2">
+                  <GoogleCloudIcon size={16} />
+                  Google Speech-to-Text settings
+                </p>
                 <p className="text-xs text-[#aaa]">
                   Uses Google Cloud Speech-to-Text with support for long meetings and English/Malayalam recognition.
                   Configure API key, project, and optional GCS bucket for BatchRecognize.
@@ -430,7 +441,12 @@ export default function Settings({ onSave }) {
               </div>
 
               <Field
-                label="Google Cloud API Key"
+                label={(
+                  <span className="inline-flex items-center gap-2">
+                    <GoogleCloudIcon size={16} />
+                    Google Cloud API Key
+                  </span>
+                )}
                 hint="Used for Speech-to-Text transcription."
               >
                 <PasswordInput
@@ -447,7 +463,12 @@ export default function Settings({ onSave }) {
               </Field>
 
               <Field
-                label="Google Cloud Project ID"
+                label={(
+                  <span className="inline-flex items-center gap-2">
+                    <GoogleCloudIcon size={16} />
+                    Google Cloud Project ID
+                  </span>
+                )}
                 hint="Required for Speech-to-Text v2. Your GCP project ID from Cloud Console."
               >
                 <input
@@ -460,7 +481,12 @@ export default function Settings({ onSave }) {
               </Field>
 
               <Field
-                label="GCS bucket (optional)"
+                label={(
+                  <span className="inline-flex items-center gap-2">
+                    <GoogleCloudIcon size={16} />
+                    GCS bucket (optional)
+                  </span>
+                )}
                 hint="For v2 BatchRecognize: upload WAV here, then transcribe. See docs/GCS-SETUP.md for bucket + service account setup."
               >
                 <input
@@ -473,7 +499,12 @@ export default function Settings({ onSave }) {
               </Field>
 
               <Field
-                label="Service account key path (optional)"
+                label={(
+                  <span className="inline-flex items-center gap-2">
+                    <GoogleCloudIcon size={16} />
+                    Service account key path (optional)
+                  </span>
+                )}
                 hint="Path to service account JSON key (needs Storage Object Admin on bucket). Or set GOOGLE_APPLICATION_CREDENTIALS."
               >
                 <input
@@ -490,7 +521,10 @@ export default function Settings({ onSave }) {
           {form.sttService === 'sarvam' && (
             <div className="space-y-4 p-3 rounded-lg border border-[#333] bg-[rgb(var(--color-tertiary))]">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-[#d0d0d0]">Sarvam AI settings</p>
+                <p className="text-sm font-medium text-[#d0d0d0] inline-flex items-center gap-2">
+                  <SarvamIcon size={16} />
+                  Sarvam AI settings
+                </p>
                 <p className="text-xs text-[#aaa]">
                   Uses Sarvam&apos;s saaras:v3 model in codemix mode with automatic language detection.
                   Works well for meetings that mix Malayalam and English — English stays in Latin script,
@@ -499,7 +533,12 @@ export default function Settings({ onSave }) {
               </div>
 
               <Field
-                label="Sarvam AI API Key"
+                label={(
+                  <span className="inline-flex items-center gap-2">
+                    <SarvamIcon size={16} />
+                    Sarvam AI API Key
+                  </span>
+                )}
                 hint="Required. Get an API key from dashboard.sarvam.ai."
               >
                 <PasswordInput
@@ -521,9 +560,10 @@ export default function Settings({ onSave }) {
             <div className="space-y-4 p-3 rounded-lg border border-[#333] bg-[rgb(var(--color-tertiary))]">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-[#d0d0d0]">
+                  <p className="text-sm font-medium text-[#d0d0d0] inline-flex items-center gap-2">
+                    <AssemblyAiIcon size={16} />
                     AssemblyAI settings
-                    <span className="ml-2 inline-flex items-center rounded-full border border-yellow-500/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-400/90">
+                    <span className="ml-1 inline-flex items-center rounded-full border border-yellow-500/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-400/90">
                       Beta
                     </span>
                   </p>
@@ -535,7 +575,12 @@ export default function Settings({ onSave }) {
               </div>
 
               <Field
-                label="AssemblyAI API Key"
+                label={(
+                  <span className="inline-flex items-center gap-2">
+                    <AssemblyAiIcon size={16} />
+                    AssemblyAI API Key
+                  </span>
+                )}
                 hint="Required. Get an API key from your AssemblyAI dashboard."
               >
                 <PasswordInput
@@ -552,7 +597,12 @@ export default function Settings({ onSave }) {
               </Field>
 
               <Field
-                label="AssemblyAI Prompt (optional)"
+                label={(
+                  <span className="inline-flex items-center gap-2">
+                    <AssemblyAiIcon size={16} />
+                    AssemblyAI Prompt (optional)
+                  </span>
+                )}
                 hint="Short instruction to fine-tune transcription behavior. Leave empty to use the default model behavior."
               >
                 <textarea
@@ -567,7 +617,12 @@ export default function Settings({ onSave }) {
           )}
 
           <Field
-            label="Gemini API Key"
+            label={(
+              <span className="inline-flex items-center gap-2">
+                <GeminiIcon size={16} />
+                Gemini API Key
+              </span>
+            )}
             hint="Used for AI note generation"
           >
             <PasswordInput
@@ -627,7 +682,15 @@ export default function Settings({ onSave }) {
         {/* ── Model Selector ───────────────────────────────────── */}
         <section className="space-y-5">
           <h2 className="font-medium text-sm text-[#a0a0a0] uppercase tracking-wider">AI Model</h2>
-          <Field label="Gemini Model" hint="Flash is faster; Pro gives the most detailed notes">
+          <Field
+            label={(
+              <span className="inline-flex items-center gap-2">
+                <GeminiIcon size={16} />
+                Gemini Model
+              </span>
+            )}
+            hint="Flash is faster; Pro gives the most detailed notes"
+          >
             <select
               value={form.selectedModel}
               onChange={update('selectedModel')}

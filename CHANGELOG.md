@@ -6,6 +6,10 @@ updated: 2026-08-14
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## v1.6.1
+
+- **Provider Brand Icons Across Settings** — added vector SVG brand icons for Google Cloud STT, Sarvam AI, AssemblyAI, Google Gemini, and Notion across the API Keys onboarding table/accordion, service configuration cards, and field labels for a consistent and branded UI experience.
+
 ## v1.6.0
 
 - **Integrated Seamless GitHub Releases Auto-Updates** — added `electron-updater` integration that automatically detects, downloads, and applies new releases in the background from GitHub Releases (`aslahtp/meetmind`).

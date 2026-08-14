@@ -1,10 +1,10 @@
 import React from 'react';
-import notionIcon from '@assets/icons/icons8-notion-100.png';
+import notionSvg from '@assets/icons/services/notion-svgrepo-com.svg';
 
 export default function NotionIcon({ size = 16, className = '', alt = '' }) {
   return (
     <img
-      src={notionIcon}
+      src={notionSvg}
       alt={alt}
       width={size}
       height={size}
