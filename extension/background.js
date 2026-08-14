@@ -81,7 +81,8 @@ function tryNextPort() {
   const nextPort = currentPort + 1;
   if (nextPort < WS_PORT_START + WS_PORT_RANGE) {
     currentPort = nextPort;
-    connectWebSocket();
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connectWebSocket, 800);
   } else {
     currentPort = WS_PORT_START;
     scheduleReconnect();
