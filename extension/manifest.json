@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MeetMind",
-  "version": "1.0.0",
+  "version": "1.7.1",
   "description": "AI meeting notes — auto-detects Google Meet & Zoom. Requires the MeetMind desktop app.",
   "permissions": [
     "tabs",
@@ -24,22 +24,24 @@
         "https://*.zoom.us/wc/*",
         "https://*.zoom.us/j/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16":  "icons/icon16.png",
-      "48":  "icons/icon48.png",
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
     "default_title": "MeetMind"
   },
   "icons": {
-    "16":  "icons/icon16.png",
-    "48":  "icons/icon48.png",
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "web_accessible_resources": [
@@ -52,7 +54,10 @@
         "icons/open_in_app.svg",
         "icons/icons8-notion-96.png"
       ],
-      "matches": ["https://meet.google.com/*", "https://*.zoom.us/*"]
+      "matches": [
+        "https://meet.google.com/*",
+        "https://*.zoom.us/*"
+      ]
     }
   ]
 }

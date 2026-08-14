@@ -1,6 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
   const dot  = document.getElementById('status-dot');
   const text = document.getElementById('status-text');
+  const versionBadge = document.getElementById('version-badge');
+
+  // Display current extension version from manifest
+  try {
+    const manifest = chrome.runtime.getManifest();
+    if (manifest?.version && versionBadge) {
+      versionBadge.textContent = `v${manifest.version}`;
+    }
+  } catch (_e) {}
 
   // Check status from background
   chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (status) => {

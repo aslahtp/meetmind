@@ -17,6 +17,14 @@ const STAGING_ROOT = path.join(DIST, '_ext-staging');
 const STAGING_DIR = path.join(STAGING_ROOT, 'meetmind-chrome-extension');
 const ZIP_PATH = path.join(DIST, 'meetmind-extension.zip');
 
+const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+const manifestPath = path.join(EXTENSION_SRC, 'manifest.json');
+if (fs.existsSync(manifestPath)) {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.version = pkg.version;
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+}
+
 fs.mkdirSync(DIST, { recursive: true });
 fs.rmSync(STAGING_ROOT, { recursive: true, force: true });
 fs.cpSync(EXTENSION_SRC, STAGING_DIR, { recursive: true });
