@@ -94,8 +94,21 @@ function setupAutoUpdaterEvents() {
 
   autoUpdater.on('error', (err) => {
     currentStatus = 'error';
-    errorMessage = err?.message || 'Error checking for updates';
-    logger.warn('AutoUpdater error', { error: errorMessage });
+    const raw = err?.message || 'Error checking for updates';
+    // Provide a friendly error message — strip raw download URLs to avoid noise
+    let friendlyMessage = raw;
+    if (/cannot download/i.test(raw) || /net::/i.test(raw) || /ENOTFOUND/i.test(raw) || /ETIMEDOUT/i.test(raw)) {
+      friendlyMessage = 'Unable to download update. The release may not be ready yet — please try again later.';
+    } else if (/404/i.test(raw) || /not found/i.test(raw)) {
+      friendlyMessage = 'Update release not found on GitHub. It may still be publishing.';
+    } else if (/403/i.test(raw) || /forbidden/i.test(raw)) {
+      friendlyMessage = 'Access denied when checking for updates.';
+    } else if (raw.length > 120) {
+      // Truncate overly long messages that usually contain URLs
+      friendlyMessage = raw.substring(0, 120).replace(/https?:\/\/\S+/g, '').trim() + '…';
+    }
+    errorMessage = friendlyMessage;
+    logger.warn('AutoUpdater error', { error: raw });
     broadcastState();
   });
 }
