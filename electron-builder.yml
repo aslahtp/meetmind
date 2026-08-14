@@ -13,12 +13,14 @@ win:
         - x64
   icon: icons/icon.ico
   signAndEditExecutable: false
+  artifactName: "${productName}-Setup-${version}.${ext}"
 
 afterPack: scripts/after-pack.js
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  artifactName: "${productName}-Setup-${version}.${ext}"
   installerIcon: icons/icon.ico
   uninstallerIcon: icons/icon.ico
   installerHeaderIcon: icons/icon.ico

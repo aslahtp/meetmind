@@ -102,7 +102,7 @@ jobs:
           files: |
             dist/desktop/*.exe
             dist/desktop/*.blockmap
-            dist/desktop/*.yml
+            dist/desktop/latest.yml
             dist/meetmind-extension.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

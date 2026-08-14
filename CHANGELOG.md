@@ -6,6 +6,11 @@ updated: 2026-08-14
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## v1.7.1
+
+- **Fixed Release Asset Filename Mismatch for Auto-Updates** — set explicit hyphenated `artifactName: "${productName}-Setup-${version}.${ext}"` in `electron-builder.yml` to prevent GitHub Releases from replacing spaces with dots in download URLs (`MeetMind.Setup.1.7.0.exe`), resolving 404 download errors in `electron-updater`.
+- **Cleaned Up Release Asset Uploads** — restricted workflow artifact uploads to `dist/desktop/latest.yml` to avoid uploading unnecessary `builder-debug.yml`.
+
 ## v1.7.0
 
 - **Added Gemini 3.7 Flash Support & Made It Default** — enabled `gemini-3.7-flash` across MeetMind as the primary default AI model for meeting notes summarization and structured generation, providing top quality with fast response times.
