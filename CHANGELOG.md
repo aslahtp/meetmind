@@ -6,6 +6,12 @@ updated: 2026-08-14
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## v1.6.2
+
+- **Fixed Unhandled Rejection on Update Download Failure** — `electron-updater` with `autoDownload=true` internally returns a `downloadPromise` that rejects on failure (e.g. 404); attached a `.catch()` to it so the rejection no longer escapes to the global unhandled rejection handler while the `error` event continues to own user-visible state.
+- **Friendly Auto-Update Error Messages** — sanitized raw error messages in the updater service; `Cannot download ...` 404 URLs are now replaced with readable messages like "Unable to download update. The release may not be ready yet — please try again later."
+- **Service Brand Icons from Asset Files** — replaced all hand-crafted inline SVG icon components with image imports from `assets/icons/services/` using Vite's `@assets` alias, ensuring correct bundling and loading in the packaged app.
+
 ## v1.6.1
 
 - **Provider Brand Icons Across Settings** — added vector SVG brand icons for Google Cloud STT, Sarvam AI, AssemblyAI, Google Gemini, and Notion across the API Keys onboarding table/accordion, service configuration cards, and field labels for a consistent and branded UI experience.

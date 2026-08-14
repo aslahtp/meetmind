@@ -172,7 +172,15 @@ async function checkForUpdates(manual = false) {
     errorMessage = null;
     broadcastState();
     const result = await autoUpdater.checkForUpdates();
-    return { success: true, status: currentStatus, result };
+    // electron-updater stores the in-flight download as result.downloadPromise when
+    // autoDownload=true. If the download fails (e.g. 404) it fires the 'error' event
+    // AND rejects this promise. Attaching a no-op .catch() here prevents it from
+    // escaping as an unhandled rejection — our 'error' event handler deals with the
+    // user-visible state and logging.
+    if (result?.downloadPromise) {
+      result.downloadPromise.catch(() => { /* handled by autoUpdater 'error' event */ });
+    }
+    return { success: true, status: currentStatus };
   } catch (err) {
     currentStatus = 'error';
     errorMessage = err?.message || 'Failed to check for updates';
