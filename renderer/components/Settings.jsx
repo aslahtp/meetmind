@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useTransition } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useTransition } from 'react';
 import {
   Save,
   Check,
@@ -328,6 +328,7 @@ export default function Settings({ onSave }) {
     autoCheckUpdates: true,
   });
 
+  const [initialForm, setInitialForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testingStt, setTestingStt] = useState(false);
@@ -341,6 +342,11 @@ export default function Settings({ onSave }) {
   const [downloadingUpdate, setDownloadingUpdate] = useState(false);
   const [appVersion, setAppVersion] = useState(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '');
 
+  const isDirty = useMemo(() => {
+    if (!initialForm) return false;
+    return Object.keys(form).some((key) => form[key] !== initialForm[key]);
+  }, [form, initialForm]);
+
   useEffect(() => {
     async function load() {
       if (!window.meetmind) return;
@@ -352,7 +358,7 @@ export default function Settings({ onSave }) {
       }
       const cfg = await window.meetmind.config.get();
       if (cfg) {
-        setForm({
+        const loadedForm = {
           sttService: cfg.sttService || 'google',
           googleApiKey: cfg.googleApiKey || '',
           sarvamApiKey: cfg.sarvamApiKey || '',
@@ -369,7 +375,9 @@ export default function Settings({ onSave }) {
           promptOutputMode: cfg.promptOutputMode || cfg.noteOutputMode || 'json',
           autoLaunch: cfg.autoLaunch || false,
           autoCheckUpdates: cfg.autoCheckUpdates !== false,
-        });
+        };
+        setForm(loadedForm);
+        setInitialForm(loadedForm);
       }
 
       if (window.meetmind.updater) {
@@ -388,6 +396,7 @@ export default function Settings({ onSave }) {
     setSaving(true);
     try {
       await onSave(form);
+      setInitialForm({ ...form });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } finally {
@@ -473,28 +482,30 @@ export default function Settings({ onSave }) {
           </p>
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="btn-primary text-xs px-4 py-2 titlebar-no-drag shadow-emerald-500/25"
-        >
-          {saving ? (
-            <>
-              <Loader2 size={13} strokeWidth={2} className="spinner" />
-              Saving…
-            </>
-          ) : saved ? (
-            <>
-              <Check size={13} strokeWidth={2.5} />
-              Saved!
-            </>
-          ) : (
-            <>
-              <Save size={13} strokeWidth={2} />
-              Save Changes
-            </>
-          )}
-        </button>
+        {(isDirty || saving || saved) && (
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="btn-primary text-xs px-4 py-2 titlebar-no-drag shadow-emerald-500/25 fade-in"
+          >
+            {saving ? (
+              <>
+                <Loader2 size={13} strokeWidth={2} className="spinner" />
+                Saving…
+              </>
+            ) : saved ? (
+              <>
+                <Check size={13} strokeWidth={2.5} />
+                Saved!
+              </>
+            ) : (
+              <>
+                <Save size={13} strokeWidth={2} />
+                Save Changes
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Content */}

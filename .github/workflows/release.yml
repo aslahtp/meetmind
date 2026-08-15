@@ -19,6 +19,7 @@ jobs:
       release_needed: ${{ steps.version_check.outputs.release_needed }}
       version: ${{ steps.version_check.outputs.version }}
       tag: ${{ steps.version_check.outputs.tag }}
+      prev_tag: ${{ steps.version_check.outputs.prev_tag }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -34,6 +35,10 @@ jobs:
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
           git fetch --tags
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${TAG}$" | head -n 1 || echo "")
+          echo "prev_tag=${PREV_TAG}" >> $GITHUB_OUTPUT
+          echo "Previous release tag on GitHub: ${PREV_TAG}"
+
           if git rev-parse "${TAG}" >/dev/null 2>&1; then
             echo "Tag ${TAG} already exists on remote. Skipping release build."
             echo "release_needed=false" >> $GITHUB_OUTPUT
@@ -50,6 +55,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -66,28 +73,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate Release Notes from Template and CHANGELOG
-        run: |
-          node -e "
-            const fs = require('fs');
-            const ver = '${{ needs.check-version.outputs.version }}';
-            let changelog = '';
-            try { changelog = fs.readFileSync('CHANGELOG.md', 'utf8'); } catch (e) {}
-            const escVer = ver.replace(/\\./g, '\\\\.');
-            const pattern = new RegExp('##\\\\s+v?' + escVer + '\\\\s*\\\\r?\\\\n([\\\\s\\\\S]*?)(?=\\\\r?\\\\n##\\\\s+|$)', 'i');
-            const match = changelog.match(pattern);
-            const changelogBody = match ? match[1].trim() : '- Release updates for v' + ver;
-            let template = '# MeetMind v{VERSION}\n\n## Changelog\n\n{CHANGELOG_BODY}';
-            if (fs.existsSync('.github/release_template.md')) {
-              template = fs.readFileSync('.github/release_template.md', 'utf8');
-            }
-            template = template.replace(/^\uFEFF/, '');
-            const body = template
-              .replace(/{VERSION}/g, ver)
-              .replace(/x\.y\.z/g, ver)
-              .replace(/{CHANGELOG_BODY}/g, changelogBody);
-            fs.writeFileSync('release_notes.md', body, 'utf8');
-            console.log('Generated release_notes.md successfully in clean UTF-8');
-          "
+        run: node scripts/generate-release-notes.js
+        env:
+          PREV_TAG: ${{ needs.check-version.outputs.prev_tag }}
 
 
 

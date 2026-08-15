@@ -1,5 +1,3 @@
-# MeetMind v
-
 ## Changelog
 
 {CHANGELOG_BODY}

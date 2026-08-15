@@ -471,11 +471,10 @@ function TitleBar() {
 function Sidebar() {
   const { view, setView, isRecording, startRecording, theme, toggleTheme } = useApp();
 
-  const themeLabel = theme === 'system' ? 'System (Auto)' : theme === 'light' ? 'Light Mode' : 'Dark Mode';
-  const badgeLabel = theme === 'system' ? 'Auto' : theme === 'light' ? 'Light' : 'Dark';
+  const themeDisplay = theme === 'system' ? 'System' : theme === 'light' ? 'Light' : 'Dark';
 
   return (
-    <aside className="w-56 flex-shrink-0 flex flex-col bg-slate-100/90 dark:bg-zinc-950/80 border-r border-slate-200 dark:border-zinc-800/80 pb-6 pt-8 backdrop-blur-xl transition-colors duration-200">
+    <aside className="w-56 flex-shrink-0 flex flex-col bg-slate-100/90 dark:bg-zinc-950/80 border-r border-slate-200 dark:border-zinc-800/80 pt-8 backdrop-blur-xl transition-colors duration-200">
       {/* Logo mark */}
       <div className="px-4 pt-1 pb-4 titlebar-drag flex items-center gap-3 select-none">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/25 flex-shrink-0">
@@ -517,7 +516,7 @@ function Sidebar() {
           type="button"
           onClick={toggleTheme}
           className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium bg-white dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:border-emerald-500/40 dark:hover:border-zinc-700 transition-all duration-150 shadow-sm dark:shadow-none"
-          title={`Theme: ${themeLabel} (Click to switch)`}
+          title={`Theme: ${themeDisplay} (Click to switch)`}
         >
           <span className="flex items-center gap-2 truncate">
             {theme === 'system' ? (
@@ -527,16 +526,16 @@ function Sidebar() {
             ) : (
               <Moon size={14} className="text-emerald-400 flex-shrink-0" />
             )}
-            <span className="truncate">{themeLabel}</span>
+            <span>Theme</span>
           </span>
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700/50 flex-shrink-0 ml-1">
-            {badgeLabel}
+          <span className="text-[10px] font-semibold capitalize px-2 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700/60 flex-shrink-0">
+            {themeDisplay}
           </span>
         </button>
       </div>
 
       {/* Bottom status CTA */}
-      <div className="px-3 pb-3 titlebar-no-drag pt-3 border-t border-slate-200 dark:border-zinc-800/80">
+      <div className="px-3 py-3 titlebar-no-drag border-t border-slate-200 dark:border-zinc-800/80">
         {!isRecording ? (
           <button onClick={startRecording} className="btn-primary w-full justify-center text-xs py-2.5">
             <span className="w-2 h-2 rounded-full bg-zinc-950 animate-pulse" />
