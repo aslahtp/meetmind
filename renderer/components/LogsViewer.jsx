@@ -1,223 +1,213 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  RefreshCw,
-  Radio,
+  Terminal,
+  Trash2,
   Copy,
   Check,
-  FolderOpen,
-  Trash2,
   Search,
-  ScrollText,
-  Layers,
-  Info,
+  Filter,
+  Download,
+  CheckCircle,
   AlertTriangle,
   XCircle,
-  Bug,
+  Info,
+  ChevronDown,
+  RefreshCw,
+  FolderOpen,
 } from 'lucide-react';
-
-function formatLocalTime(isoTimestamp) {
-  if (!isoTimestamp) return '';
-  const date = new Date(isoTimestamp);
-  if (Number.isNaN(date.getTime())) {
-    return isoTimestamp.length >= 19 ? isoTimestamp.slice(11, 19) : isoTimestamp;
-  }
-  return date.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-}
-
-function parseLogLine(line) {
-  // Line format: [timestamp] [LEVEL] message data
-  const match = line.match(/^\[(.*?)\]\s+\[(.*?)\]\s+(.*)$/);
-  if (!match) {
-    return { timestamp: '', level: 'INFO', message: line, raw: line };
-  }
-  const [, timestamp, level, rest] = match;
-  return {
-    timestamp,
-    level: level.toUpperCase(),
-    message: rest,
-    raw: line,
-  };
-}
 
 const LEVEL_META = {
   ALL: {
-    icon: Layers,
-    active: 'bg-zinc-700/90 text-white border-zinc-600/60',
-    idle: 'bg-zinc-900/50 text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-800/60',
+    label: 'All',
+    color: 'text-slate-700 dark:text-zinc-300',
+    activeClass: 'bg-slate-200 dark:bg-zinc-700/90 text-slate-900 dark:text-white border-slate-300 dark:border-zinc-600/60',
+    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-slate-900 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800/60',
   },
   INFO: {
+    label: 'Info',
     icon: Info,
-    active: 'text-sky-300 bg-sky-500/15 border-sky-500/30',
-    idle: 'bg-zinc-900/50 text-zinc-400 border-transparent hover:text-sky-300 hover:bg-sky-500/10',
-    row: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
+    color: 'text-sky-600 dark:text-sky-400',
+    activeClass: 'bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/40 font-semibold',
+    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-sky-600 dark:hover:text-sky-300 hover:bg-sky-500/10',
+    badge: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/20',
   },
   WARN: {
+    label: 'Warn',
     icon: AlertTriangle,
-    active: 'text-amber-300 bg-amber-500/15 border-amber-500/30',
-    idle: 'bg-zinc-900/50 text-zinc-400 border-transparent hover:text-amber-300 hover:bg-amber-500/10',
-    row: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+    color: 'text-amber-600 dark:text-amber-400',
+    activeClass: 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 font-semibold',
+    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-amber-600 dark:hover:text-amber-300 hover:bg-amber-500/10',
+    badge: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
   },
   ERROR: {
+    label: 'Error',
     icon: XCircle,
-    active: 'text-rose-300 bg-rose-500/15 border-rose-500/30',
-    idle: 'bg-zinc-900/50 text-zinc-400 border-transparent hover:text-rose-300 hover:bg-rose-500/10',
-    row: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+    color: 'text-rose-600 dark:text-rose-400',
+    activeClass: 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 font-semibold',
+    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-500/10',
+    badge: 'text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20',
   },
   DEBUG: {
-    icon: Bug,
-    active: 'text-zinc-200 bg-zinc-700/50 border-zinc-600/50',
-    idle: 'bg-zinc-900/50 text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-800/60',
-    row: 'text-zinc-400 bg-zinc-800/60 border-zinc-700/50',
+    label: 'Debug',
+    icon: Terminal,
+    color: 'text-slate-500 dark:text-zinc-500',
+    activeClass: 'text-slate-800 dark:text-zinc-200 bg-slate-200 dark:bg-zinc-700/50 border-slate-300 dark:border-zinc-600/50',
+    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-slate-900 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800/60',
+    badge: 'text-slate-600 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800/60 border-slate-200 dark:border-zinc-700/50',
   },
 };
 
-export default function LogsViewer() {
-  const [rawLogs, setRawLogs] = useState([]);
-  const [filterLevel, setFilterLevel] = useState('ALL');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const logsContainerRef = useRef(null);
-  const stickToBottomRef = useRef(true);
+function formatTimestamp(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const ms = d.getMilliseconds().toString().padStart(3, '0');
+  return `${time}.${ms}`;
+}
 
-  const fetchLogs = async () => {
-    if (!window.meetmind?.logs?.get) return;
-    try {
-      setLoading(true);
-      const lines = await window.meetmind.logs.get({ limit: 1000 });
-      setRawLogs(lines || []);
-    } catch (err) {
-      console.error('Failed to load logs:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+export default function LogsViewer() {
+  const [logs, setLogs] = useState([]);
+  const [levelFilter, setLevelFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [openingLogDir, setOpeningLogDir] = useState(false);
+  const logContainerRef = useRef(null);
 
   useEffect(() => {
-    fetchLogs();
+    async function loadLogs() {
+      if (!window.meetmind?.logs) return;
+      const history = await window.meetmind.logs.getHistory();
+      setLogs(history || []);
+    }
+    loadLogs();
+
+    if (!window.meetmind?.on) return;
+    const unsub = window.meetmind.on('log:entry', (entry) => {
+      setLogs((prev) => {
+        const next = [...prev, entry];
+        return next.length > 2000 ? next.slice(-2000) : next;
+      });
+    });
+
+    return () => unsub?.();
   }, []);
 
   useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(fetchLogs, 3000);
-    return () => clearInterval(interval);
-  }, [autoRefresh]);
+    if (autoScroll && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs, autoScroll]);
 
-  const parsedLogs = useMemo(() => rawLogs.map(parseLogLine), [rawLogs]);
+  const counts = useMemo(() => {
+    const c = { ALL: logs.length, INFO: 0, WARN: 0, ERROR: 0, DEBUG: 0 };
+    for (const l of logs) {
+      const lvl = (l.level || 'INFO').toUpperCase();
+      if (c[lvl] !== undefined) c[lvl]++;
+    }
+    return c;
+  }, [logs]);
 
   const filteredLogs = useMemo(() => {
-    return parsedLogs.filter((log) => {
-      if (filterLevel !== 'ALL' && log.level !== filterLevel) return false;
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        return (
-          log.message.toLowerCase().includes(query) ||
-          log.timestamp.toLowerCase().includes(query) ||
-          log.level.toLowerCase().includes(query)
-        );
+    const s = search.trim().toLowerCase();
+    return logs.filter((entry) => {
+      const entryLevel = (entry.level || 'INFO').toUpperCase();
+      if (levelFilter !== 'ALL' && entryLevel !== levelFilter) return false;
+      if (s) {
+        const msg = (entry.message || '').toLowerCase();
+        const ctx = (entry.context || '').toLowerCase();
+        const meta = entry.meta ? JSON.stringify(entry.meta).toLowerCase() : '';
+        if (!msg.includes(s) && !ctx.includes(s) && !meta.includes(s)) return false;
       }
       return true;
     });
-  }, [parsedLogs, filterLevel, searchTerm]);
-
-  useEffect(() => {
-    const el = logsContainerRef.current;
-    if (!el || !stickToBottomRef.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [filteredLogs]);
-
-  const handleLogsScroll = () => {
-    const el = logsContainerRef.current;
-    if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    stickToBottomRef.current = distanceFromBottom < 40;
-  };
-
-  const counts = useMemo(() => {
-    const map = { ALL: parsedLogs.length, INFO: 0, WARN: 0, ERROR: 0, DEBUG: 0 };
-    parsedLogs.forEach((l) => {
-      if (map[l.level] !== undefined) map[l.level]++;
-    });
-    return map;
-  }, [parsedLogs]);
+  }, [logs, levelFilter, search]);
 
   const handleCopy = async () => {
-    const text = filteredLogs.map((l) => l.raw).join('\n');
+    const text = filteredLogs
+      .map((l) => `[${l.timestamp}] [${l.level}] ${l.context ? `[${l.context}] ` : ''}${l.message}${l.meta ? ' ' + JSON.stringify(l.meta) : ''}`)
+      .join('\n');
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleExport = () => {
+    const text = logs
+      .map((l) => `[${l.timestamp}] [${l.level}] ${l.context ? `[${l.context}] ` : ''}${l.message}${l.meta ? ' ' + JSON.stringify(l.meta) : ''}`)
+      .join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `meetmind-logs-${new Date().toISOString().slice(0, 10)}.log`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleClear = async () => {
-    if (window.confirm('Are you sure you want to clear current logs?')) {
-      await window.meetmind?.logs?.clear();
-      setRawLogs([]);
+    if (window.meetmind?.logs?.clear) {
+      await window.meetmind.logs.clear();
+    }
+    setLogs([]);
+  };
+
+  const handleOpenLogFolder = async () => {
+    if (!window.meetmind?.logs?.openFolder) return;
+    setOpeningLogDir(true);
+    try {
+      await window.meetmind.logs.openFolder();
+    } finally {
+      setOpeningLogDir(false);
     }
   };
 
-  const handleOpenFolder = () => {
-    window.meetmind?.logs?.openFolder();
-  };
-
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-zinc-950/40 fade-in">
+    <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40 fade-in">
       {/* Header */}
-      <div className="flex-shrink-0 px-6 pt-3 pb-3 border-b border-zinc-800/80 backdrop-blur-md titlebar-drag select-none">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
-              <ScrollText size={16} className="text-emerald-400" strokeWidth={2} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-white">Application Logs</h1>
-              <p className="text-zinc-400 text-xs mt-0.5">
-                System events, STT & AI process diagnostics ({filteredLogs.length} entries)
-              </p>
-            </div>
+      <div className="flex-shrink-0 px-6 pt-3 pb-3 border-b border-slate-200 dark:border-zinc-800/80 bg-slate-100/50 dark:bg-transparent backdrop-blur-md titlebar-drag select-none">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Application Logs</h1>
+            <p className="text-slate-500 dark:text-zinc-400 text-xs mt-0.5">
+              Live diagnostic events, STT status, notes generation, and Notion sync logs
+            </p>
           </div>
 
           <div className="flex items-center gap-2 titlebar-no-drag">
             <button
-              onClick={fetchLogs}
-              className="btn-ghost p-2 text-zinc-400 hover:text-white"
-              title="Refresh logs"
+              type="button"
+              onClick={handleOpenLogFolder}
+              disabled={openingLogDir}
+              className="btn-outline text-xs px-2.5 py-1.5"
+              title="Open log files in Explorer"
             >
-              <RefreshCw
-                size={15}
-                strokeWidth={2}
-                className={loading ? 'animate-spin text-emerald-400' : ''}
-              />
+              <FolderOpen size={13} strokeWidth={2} />
+              Open Folder
             </button>
-
             <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`btn-outline text-xs px-3 py-1.5 flex items-center gap-1.5 ${
-                autoRefresh ? 'border-emerald-500/40 text-emerald-400' : 'text-zinc-400'
-              }`}
-              title="Toggle auto-refresh every 3s"
+              type="button"
+              onClick={handleExport}
+              className="btn-outline text-xs px-2.5 py-1.5"
+              title="Export all logs as file"
             >
-              <Radio
-                size={13}
-                strokeWidth={2}
-                className={autoRefresh ? 'text-emerald-400 animate-pulse' : 'text-zinc-500'}
-              />
-              Auto-Live
+              <Download size={13} strokeWidth={2} />
+              Export
             </button>
-
             <button
+              type="button"
               onClick={handleCopy}
-              className="btn-outline text-xs px-3 py-1.5 flex items-center gap-1.5"
-              title="Copy visible log entries to clipboard"
+              className="btn-outline text-xs px-2.5 py-1.5"
+              title="Copy filtered logs"
             >
               {copied ? (
                 <>
-                  <Check size={13} strokeWidth={2.5} className="text-emerald-400" />
+                  <Check size={13} strokeWidth={2.5} />
                   Copied
                 </>
               ) : (
@@ -227,102 +217,115 @@ export default function LogsViewer() {
                 </>
               )}
             </button>
-
             <button
-              onClick={handleOpenFolder}
-              className="btn-outline text-xs px-3 py-1.5 flex items-center gap-1.5"
-              title="Open log files directory on computer"
-            >
-              <FolderOpen size={13} strokeWidth={2} />
-              Open Folder
-            </button>
-
-            <button
+              type="button"
               onClick={handleClear}
-              className="btn-ghost text-xs px-3 py-1.5 text-rose-400 hover:bg-rose-500/10 flex items-center gap-1.5"
-              title="Clear current log file"
+              className="btn-ghost p-1.5 text-slate-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400"
+              title="Clear log buffer"
             >
-              <Trash2 size={13} strokeWidth={2} />
-              Clear
+              <Trash2 size={15} strokeWidth={2} />
             </button>
           </div>
         </div>
 
-        {/* Filter controls bar */}
-        <div className="flex items-center justify-between gap-4 mt-3 pt-3 border-t border-zinc-800/40 titlebar-no-drag">
-          <div className="flex items-center gap-1.5 flex-wrap text-xs">
-            {['ALL', 'INFO', 'WARN', 'ERROR', 'DEBUG'].map((level) => {
-              const meta = LEVEL_META[level];
-              const Icon = meta.icon;
-              const isActive = filterLevel === level;
+        {/* Toolbar: Level Filter + Search */}
+        <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-200 dark:border-zinc-800/40 titlebar-no-drag">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {Object.keys(LEVEL_META).map((key) => {
+              const meta = LEVEL_META[key];
+              const active = levelFilter === key;
+              const count = counts[key] || 0;
               return (
                 <button
-                  key={level}
-                  onClick={() => setFilterLevel(level)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border transition-all ${
-                    isActive ? `${meta.active} font-semibold` : meta.idle
+                  key={key}
+                  type="button"
+                  onClick={() => setLevelFilter(key)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono border transition-all ${
+                    active ? meta.activeClass : meta.idleClass
                   }`}
                 >
-                  <Icon size={12} strokeWidth={2} />
-                  {level}
-                  <span className="opacity-60 ml-0.5">({counts[level] || 0})</span>
+                  <span>{meta.label}</span>
+                  {count > 0 && (
+                    <span className="text-[10px] opacity-75 font-semibold">({count})</span>
+                  )}
                 </button>
               );
             })}
           </div>
 
-          <div className="relative w-64">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Filter log entries..."
-              className="w-full bg-zinc-900/80 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-emerald-500/50"
-            />
-            <Search
-              size={13}
-              strokeWidth={2}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
-            />
+          <div className="flex items-center gap-3">
+            <div className="relative w-56">
+              <Search
+                size={13}
+                strokeWidth={2}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500 pointer-events-none"
+              />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Filter logs…"
+                className="w-full bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-zinc-800 rounded-lg pl-8 pr-3 py-1 text-xs text-slate-800 dark:text-zinc-200 placeholder-slate-400 dark:placeholder-zinc-500 outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20"
+              />
+            </div>
+
+            <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-zinc-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoScroll}
+                onChange={(e) => setAutoScroll(e.target.checked)}
+                className="rounded border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-emerald-500 focus:ring-0"
+              />
+              Auto-scroll
+            </label>
           </div>
         </div>
       </div>
 
       {/* Log Console Body */}
-      <div className="flex-1 overflow-hidden p-6">
+      <div className="flex-1 p-6 overflow-hidden">
         <div
-          ref={logsContainerRef}
-          onScroll={handleLogsScroll}
-          className="h-full overflow-y-auto bg-zinc-950/90 border border-zinc-800/80 rounded-xl p-4 font-mono text-xs leading-relaxed space-y-0.5 shadow-inner select-text"
+          ref={logContainerRef}
+          className="h-full overflow-y-auto bg-white dark:bg-zinc-950/90 border border-slate-200 dark:border-zinc-800/80 rounded-xl p-4 font-mono text-xs text-slate-800 dark:text-zinc-300 space-y-1 select-text scrollbar-wide shadow-inner"
         >
           {filteredLogs.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-zinc-500 space-y-3 py-12">
-              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-                <ScrollText size={22} strokeWidth={1.5} className="text-zinc-600" />
-              </div>
-              <p className="text-xs">No log entries found</p>
+            <div className="flex items-center justify-center h-full text-slate-400 dark:text-zinc-600 text-xs">
+              {logs.length === 0 ? 'No logs recorded yet.' : 'No logs match your filter criteria.'}
             </div>
           ) : (
-            filteredLogs.map((log, i) => {
-              const meta = LEVEL_META[log.level] || LEVEL_META.DEBUG;
-              const LevelIcon = meta.icon;
+            filteredLogs.map((entry, idx) => {
+              const lvl = (entry.level || 'INFO').toUpperCase();
+              const meta = LEVEL_META[lvl] || LEVEL_META.INFO;
               return (
                 <div
-                  key={i}
-                  className="flex items-start gap-2.5 group hover:bg-zinc-900/60 px-2 py-1 rounded-md transition-colors"
+                  key={idx}
+                  className="flex items-start gap-2.5 py-0.5 leading-relaxed hover:bg-slate-100 dark:hover:bg-zinc-900/60 px-2 rounded -mx-2 transition-colors"
                 >
-                  {log.timestamp && (
-                    <span className="text-zinc-600 shrink-0 text-[11px] font-mono tabular-nums w-[4.5rem]">
-                      {formatLocalTime(log.timestamp)}
+                  <span className="text-[11px] text-slate-400 dark:text-zinc-600 flex-shrink-0 select-none">
+                    {formatTimestamp(entry.timestamp)}
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded border flex-shrink-0 ${
+                      meta.badge || 'text-slate-600 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
+                    }`}
+                  >
+                    {lvl}
+                  </span>
+                  {entry.context && (
+                    <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-semibold flex-shrink-0">
+                      [{entry.context}]
                     </span>
                   )}
-                  <span
-                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase shrink-0 border ${meta.row || 'text-zinc-400'}`}
-                  >
-                    <LevelIcon size={10} strokeWidth={2.5} />
-                    {log.level}
+                  <span className="text-slate-800 dark:text-zinc-300 break-all flex-1">
+                    {entry.message}
+                    {entry.meta && (
+                      <span className="ml-2 text-slate-500 dark:text-zinc-400 text-[11px]">
+                        {typeof entry.meta === 'object'
+                          ? JSON.stringify(entry.meta)
+                          : String(entry.meta)}
+                      </span>
+                    )}
                   </span>
-                  <span className="text-zinc-300 break-all flex-1 pt-px">{log.message}</span>
                 </div>
               );
             })

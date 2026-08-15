@@ -38,9 +38,9 @@ import TranscriptViewer from './TranscriptViewer.jsx';
 import NotionIcon from './NotionIcon.jsx';
 
 const CONFIDENCE_STYLES = {
-  confirmed: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
-  inferred:  'bg-amber-500/10 border-amber-500/30 text-amber-400',
-  unknown:   'bg-zinc-800 border-zinc-700 text-zinc-400',
+  confirmed: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400',
+  inferred:  'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400',
+  unknown:   'bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400',
 };
 
 function parseInlineMarkdown(text) {
@@ -64,7 +64,7 @@ function parseInlineMarkdown(text) {
           key={match.index}
           src={linkUrl}
           alt={linkText}
-          className="my-2 rounded-lg max-h-80 object-cover border border-zinc-800"
+          className="my-2 rounded-lg max-h-80 object-cover border border-slate-200 dark:border-zinc-800"
         />
       );
     } else if (full.startsWith('[')) {
@@ -74,11 +74,11 @@ function parseInlineMarkdown(text) {
           href={linkUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-sky-400 hover:text-sky-300 underline underline-offset-2 transition-colors font-medium"
+          className="text-sky-600 dark:text-sky-400 hover:text-sky-500 dark:hover:text-sky-300 underline underline-offset-2 transition-colors font-medium"
           onClick={(e) => {
             if (linkUrl.startsWith('http')) {
               e.preventDefault();
-              window.open?.(linkUrl, '_blank');
+              window.meetmind.shell.openExternal(linkUrl);
             }
           }}
         >
@@ -87,64 +87,62 @@ function parseInlineMarkdown(text) {
       );
     } else if (codeText != null) {
       parts.push(
-        <code key={match.index} className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-emerald-300 font-mono text-[12px]">
+        <code key={match.index} className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-emerald-700 dark:text-emerald-300 font-mono text-[12px]">
           {codeText}
         </code>
       );
     } else if (boldText1 != null || boldText2 != null) {
       parts.push(
-        <strong key={match.index} className="font-semibold text-zinc-100">
+        <strong key={match.index} className="font-semibold text-slate-900 dark:text-zinc-100">
           {boldText1 ?? boldText2}
         </strong>
       );
     } else if (strikeText != null) {
       parts.push(
-        <del key={match.index} className="line-through text-zinc-500">
+        <del key={match.index} className="line-through text-slate-400 dark:text-zinc-500">
           {strikeText}
         </del>
       );
     } else if (italicText1 != null || italicText2 != null) {
       parts.push(
-        <em key={match.index} className="italic text-zinc-200">
+        <em key={match.index} className="italic text-slate-800 dark:text-zinc-200">
           {italicText1 ?? italicText2}
         </em>
       );
     }
 
-    lastIdx = regex.lastIndex;
+    lastIdx = match.index + full.length;
   }
 
   if (lastIdx < text.length) {
     parts.push(text.substring(lastIdx));
   }
 
-  return parts;
+  return parts.length === 1 ? parts[0] : parts;
 }
 
 function FormattedText({ content, className = '' }) {
   if (!content) return null;
 
-  const blocks = [];
   const lines = content.split(/\r?\n/);
+  const blocks = [];
   let inCodeBlock = false;
   let currentCodeLines = [];
   let codeLang = '';
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line.trim().startsWith('```')) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
       if (inCodeBlock) {
-        blocks.push({
-          type: 'code',
-          lang: codeLang,
-          code: currentCodeLines.join('\n'),
-        });
+        blocks.push({ type: 'code', lang: codeLang, code: currentCodeLines.join('\n') });
         inCodeBlock = false;
         currentCodeLines = [];
         codeLang = '';
       } else {
         inCodeBlock = true;
-        codeLang = line.trim().slice(3).trim();
+        codeLang = trimmed.slice(3).trim();
       }
       continue;
     }
@@ -165,9 +163,9 @@ function FormattedText({ content, className = '' }) {
       {blocks.map((block, idx) => {
         if (block.type === 'code') {
           return (
-            <div key={idx} className="my-3 rounded-xl border border-zinc-800 bg-zinc-950 p-3.5 font-mono text-xs text-emerald-300 overflow-x-auto shadow-inner">
+            <div key={idx} className="my-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 p-3.5 font-mono text-xs text-emerald-700 dark:text-emerald-300 overflow-x-auto shadow-inner">
               {block.lang && (
-                <div className="text-[10px] uppercase font-sans font-bold text-zinc-500 mb-1.5 tracking-wider">
+                <div className="text-[10px] uppercase font-sans font-bold text-slate-500 dark:text-zinc-500 mb-1.5 tracking-wider">
                   {block.lang}
                 </div>
               )}
@@ -202,14 +200,14 @@ function FormattedText({ content, className = '' }) {
             }
           >
             {isBullet && (
-              <span className="mt-2 w-1.5 h-1.5 rounded-full bg-emerald-400/80 flex-shrink-0" />
+              <span className="mt-2 w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400/80 flex-shrink-0" />
             )}
             {isNumbered && (
-              <span className="text-xs font-mono font-bold text-emerald-400 flex-shrink-0 mt-0.5">
+              <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5">
                 {trimmed.match(/^\d+\./)[0]}
               </span>
             )}
-            <span className="leading-relaxed text-zinc-300 text-sm">
+            <span className="leading-relaxed text-slate-800 dark:text-zinc-300 text-sm">
               {parseInlineMarkdown(textToFormat)}
             </span>
           </div>
@@ -248,7 +246,6 @@ function parseTableRow(rowLine) {
 function MarkdownNoteView({ markdown }) {
   if (!markdown) return null;
 
-  // Split into lines and build block list (separating fenced code blocks)
   const lines = markdown.split(/\r?\n/);
   const blocks = [];
   let inCodeBlock = false;
@@ -286,8 +283,8 @@ function MarkdownNoteView({ markdown }) {
 
     if (b.type === 'code') {
       rendered.push(
-        <div key={`code-${i}`} className="my-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs text-emerald-300 overflow-x-auto shadow-inner">
-          {b.lang && <div className="text-[10px] uppercase font-sans font-bold text-zinc-500 mb-2 tracking-wider">{b.lang}</div>}
+        <div key={`code-${i}`} className="my-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 p-4 font-mono text-xs text-emerald-700 dark:text-emerald-300 overflow-x-auto shadow-inner">
+          {b.lang && <div className="text-[10px] uppercase font-sans font-bold text-slate-500 dark:text-zinc-500 mb-2 tracking-wider">{b.lang}</div>}
           <pre className="whitespace-pre leading-relaxed">{b.code}</pre>
         </div>
       );
@@ -325,24 +322,24 @@ function MarkdownNoteView({ markdown }) {
       }
 
       rendered.push(
-        <div key={`table-${i}`} className="my-5 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/70 shadow-lg">
+        <div key={`table-${i}`} className="my-5 overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/70 shadow-lg">
           <table className="w-full text-left border-collapse text-xs">
-            <thead className="bg-zinc-900/90 border-b border-zinc-800 text-zinc-200">
+            <thead className="bg-slate-100 dark:bg-zinc-900/90 border-b border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200">
               <tr>
                 {headerRow.map((h, colIdx) => (
                   <th
                     key={colIdx}
                     style={{ textAlign: aligns[colIdx] || 'left' }}
-                    className="px-4 py-3 font-semibold uppercase tracking-wider text-[11px] text-zinc-300"
+                    className="px-4 py-3 font-semibold uppercase tracking-wider text-[11px] text-slate-700 dark:text-zinc-300"
                   >
                     {parseInlineMarkdown(h)}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+            <tbody className="divide-y divide-slate-200 dark:divide-zinc-800/60 text-slate-800 dark:text-zinc-300">
               {rows.map((row, rowIdx) => (
-                <tr key={rowIdx} className="hover:bg-zinc-900/40 transition-colors">
+                <tr key={rowIdx} className="hover:bg-slate-50 dark:hover:bg-zinc-900/40 transition-colors">
                   {headerRow.map((_, colIdx) => (
                     <td
                       key={colIdx}
@@ -368,27 +365,27 @@ function MarkdownNoteView({ markdown }) {
     const h4 = trimmed.match(/^####\s+(.+)/);
 
     if (h1 && !h2) {
-      rendered.push(<h1 key={`h1-${i}`} className="text-2xl font-bold text-white mt-3 mb-4 leading-tight tracking-tight">{parseInlineMarkdown(h1[1])}</h1>);
+      rendered.push(<h1 key={`h1-${i}`} className="text-2xl font-bold text-slate-900 dark:text-white mt-3 mb-4 leading-tight tracking-tight">{parseInlineMarkdown(h1[1])}</h1>);
       i++; continue;
     }
     if (h2 && !h3) {
       rendered.push(
         <div key={`h2-${i}`} className="mt-8 mb-3">
-          <h2 className="text-base font-semibold text-zinc-100 flex items-center gap-2">
-            <span className="w-1 h-4 rounded-full bg-sky-400 flex-shrink-0 inline-block" />
+          <h2 className="text-base font-semibold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+            <span className="w-1 h-4 rounded-full bg-sky-500 dark:bg-sky-400 flex-shrink-0 inline-block" />
             {parseInlineMarkdown(h2[1])}
           </h2>
-          <div className="h-px bg-zinc-800/70 mt-2" />
+          <div className="h-px bg-slate-200 dark:bg-zinc-800/70 mt-2" />
         </div>
       );
       i++; continue;
     }
     if (h3 && !h4) {
-      rendered.push(<h3 key={`h3-${i}`} className="text-sm font-semibold text-zinc-200 mt-5 mb-2">{parseInlineMarkdown(h3[1])}</h3>);
+      rendered.push(<h3 key={`h3-${i}`} className="text-sm font-semibold text-slate-800 dark:text-zinc-200 mt-5 mb-2">{parseInlineMarkdown(h3[1])}</h3>);
       i++; continue;
     }
     if (h4) {
-      rendered.push(<h4 key={`h4-${i}`} className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mt-4 mb-1">{parseInlineMarkdown(h4[1])}</h4>);
+      rendered.push(<h4 key={`h4-${i}`} className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 mt-4 mb-1">{parseInlineMarkdown(h4[1])}</h4>);
       i++; continue;
     }
 
@@ -402,7 +399,7 @@ function MarkdownNoteView({ markdown }) {
         i++;
       }
       rendered.push(
-        <blockquote key={`quote-${i}`} className="border-l-2 border-sky-500/60 bg-sky-500/5 px-4 py-3 rounded-r-xl my-3 text-zinc-300 text-sm italic space-y-1.5">
+        <blockquote key={`quote-${i}`} className="border-l-2 border-sky-500/60 bg-sky-500/5 px-4 py-3 rounded-r-xl my-3 text-slate-800 dark:text-zinc-300 text-sm italic space-y-1.5">
           {quoteLines.map((ql, qidx) => (
             <p key={qidx}>{parseInlineMarkdown(ql)}</p>
           ))}
@@ -413,7 +410,7 @@ function MarkdownNoteView({ markdown }) {
 
     // Horizontal rule
     if (/^[-*_]{3,}$/.test(trimmed)) {
-      rendered.push(<hr key={`hr-${i}`} className="border-zinc-800 my-6" />);
+      rendered.push(<hr key={`hr-${i}`} className="border-slate-200 dark:border-zinc-800 my-6" />);
       i++; continue;
     }
 
@@ -443,23 +440,23 @@ function MarkdownNoteView({ markdown }) {
             </span>
           )}
           {isTaskOpen && (
-            <span className="mt-0.5 flex-shrink-0 w-4 h-4 rounded border border-zinc-600 bg-zinc-950/60" />
+            <span className="mt-0.5 flex-shrink-0 w-4 h-4 rounded border border-slate-300 dark:border-zinc-600 bg-white dark:bg-zinc-950/60" />
           )}
           {isBullet && indentLevel === 0 && (
-            <span className="mt-2 w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0" />
+            <span className="mt-2 w-1.5 h-1.5 rounded-full bg-sky-500 dark:bg-sky-400 flex-shrink-0" />
           )}
           {isBullet && indentLevel === 1 && (
-            <span className="mt-2 w-1.5 h-1.5 rounded-full border border-sky-400/80 flex-shrink-0" />
+            <span className="mt-2 w-1.5 h-1.5 rounded-full border border-sky-500 dark:border-sky-400/80 flex-shrink-0" />
           )}
           {isBullet && indentLevel >= 2 && (
-            <span className="mt-2 w-1 h-1 bg-zinc-400 flex-shrink-0" />
+            <span className="mt-2 w-1 h-1 bg-slate-400 dark:bg-zinc-400 flex-shrink-0" />
           )}
           {isNumbered && (
-            <span className="text-xs font-mono font-bold text-sky-400 flex-shrink-0 mt-0.5 min-w-[1.2rem]">
+            <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400 flex-shrink-0 mt-0.5 min-w-[1.2rem]">
               {isNumbered[1]}.
             </span>
           )}
-          <span className={`text-sm leading-relaxed ${isTaskDone ? 'text-zinc-400 line-through' : 'text-zinc-300'}`}>
+          <span className={`text-sm leading-relaxed ${isTaskDone ? 'text-slate-400 dark:text-zinc-400 line-through' : 'text-slate-800 dark:text-zinc-300'}`}>
             {parseInlineMarkdown(contentText)}
           </span>
         </div>
@@ -470,7 +467,7 @@ function MarkdownNoteView({ markdown }) {
 
     // Regular paragraph
     rendered.push(
-      <p key={`p-${i}`} className="text-sm text-zinc-300 leading-relaxed my-2">{parseInlineMarkdown(trimmed)}</p>
+      <p key={`p-${i}`} className="text-sm text-slate-800 dark:text-zinc-300 leading-relaxed my-2">{parseInlineMarkdown(trimmed)}</p>
     );
     i++;
   }
@@ -482,25 +479,24 @@ function MarkdownNoteView({ markdown }) {
   );
 }
 
-
 const PRIORITY_STYLES = {
-  high:   {
+  high: {
     cls: 'badge-red',
     label: 'High',
     Icon: ArrowUp,
-    ring: 'hover:border-rose-500/30',
+    ring: 'hover:border-rose-500/40',
   },
   medium: {
     cls: 'badge-yellow',
     label: 'Medium',
     Icon: Minus,
-    ring: 'hover:border-amber-500/30',
+    ring: 'hover:border-amber-500/40',
   },
-  low:    {
+  low: {
     cls: 'badge-green',
     label: 'Low',
     Icon: ArrowDown,
-    ring: 'hover:border-emerald-500/30',
+    ring: 'hover:border-emerald-500/40',
   },
 };
 
@@ -555,9 +551,9 @@ function SectionLabel({ icon: Icon, colorClass, children, count }) {
       <div className={`w-7 h-7 rounded-lg flex items-center justify-center border ${colorClass}`}>
         <Icon size={14} strokeWidth={2} />
       </div>
-      <h2 className="text-sm font-semibold text-zinc-100 tracking-tight">{children}</h2>
+      <h2 className="text-sm font-semibold text-slate-900 dark:text-zinc-100 tracking-tight">{children}</h2>
       {count != null && (
-        <span className="text-[11px] font-medium text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-full">
+        <span className="text-[11px] font-medium text-slate-600 dark:text-zinc-500 bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 px-2 py-0.5 rounded-full">
           {count}
         </span>
       )}
@@ -576,9 +572,9 @@ function ActionItemsList({ items }) {
 
   if (!items.length) {
     return (
-      <div className="rounded-xl border border-dashed border-zinc-800 px-4 py-8 text-center">
-        <ListChecks size={22} strokeWidth={1.75} className="mx-auto mb-2 text-zinc-600" />
-        <p className="text-zinc-500 text-sm">No action items were identified in this meeting.</p>
+      <div className="rounded-xl border border-dashed border-slate-200 dark:border-zinc-800 px-4 py-8 text-center bg-white dark:bg-transparent">
+        <ListChecks size={22} strokeWidth={1.75} className="mx-auto mb-2 text-slate-400 dark:text-zinc-600" />
+        <p className="text-slate-500 dark:text-zinc-500 text-sm">No action items were identified in this meeting.</p>
       </div>
     );
   }
@@ -588,65 +584,65 @@ function ActionItemsList({ items }) {
       <div className="flex items-center justify-between gap-3">
         <SectionLabel
           icon={ListChecks}
-          colorClass="bg-amber-500/10 border-amber-500/25 text-amber-400"
+          colorClass="bg-amber-500/10 border-amber-500/25 text-amber-600 dark:text-amber-400"
         >
           Action Items
         </SectionLabel>
-        <span className="text-[11px] font-medium text-zinc-500 tabular-nums mb-4 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800">
+        <span className="text-[11px] font-medium text-slate-600 dark:text-zinc-500 tabular-nums mb-4 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
           {doneCount}/{items.length} done
         </span>
       </div>
 
       <ul className="space-y-2">
         {items.map((item, idx) => {
-          const priorityStyle = PRIORITY_STYLES[item.priority] || null;
-          const PriorityIcon = priorityStyle?.Icon;
           const isDone = !!checked[idx];
+          const priority = (item.priority || 'medium').toLowerCase();
+          const priorityStyle = PRIORITY_STYLES[priority] || PRIORITY_STYLES.medium;
+          const PriorityIcon = priorityStyle.Icon;
 
           return (
             <li key={idx}>
               <button
                 type="button"
                 onClick={() => toggle(idx)}
-                className={`w-full text-left flex items-start gap-3 px-3.5 py-3 rounded-xl border border-zinc-800/70 bg-zinc-900/25 transition-all ${
-                  priorityStyle?.ring || 'hover:border-zinc-700/80'
-                } ${isDone ? 'opacity-55' : 'hover:bg-zinc-900/45'}`}
+                className={`w-full text-left flex items-start gap-3 px-3.5 py-3 rounded-xl border border-slate-200 dark:border-zinc-800/70 bg-white dark:bg-zinc-900/25 transition-all shadow-sm dark:shadow-none ${
+                  priorityStyle?.ring || 'hover:border-slate-300 dark:hover:border-zinc-700/80'
+                } ${isDone ? 'opacity-55' : 'hover:bg-slate-50 dark:hover:bg-zinc-900/45'}`}
               >
                 <span
-                  className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                  className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all ${
                     isDone
-                      ? 'bg-emerald-500 border-emerald-500 text-zinc-950'
-                      : 'border-zinc-600 bg-zinc-950/60 text-transparent'
+                      ? 'bg-emerald-500 border border-emerald-500 text-zinc-950'
+                      : 'border border-slate-300 dark:border-zinc-600 bg-slate-50 dark:bg-zinc-950/60 text-transparent'
                   }`}
-                  aria-hidden
                 >
-                  <Check size={12} strokeWidth={3} />
+                  <Check size={10} strokeWidth={3} />
                 </span>
 
-                <div className="flex-1 min-w-0 space-y-2">
-                  <p className={`text-sm font-medium leading-snug ${
-                    isDone ? 'text-zinc-500 line-through' : 'text-zinc-100'
-                  }`}>
-                    {item.task}
+                <div className="flex-1 min-w-0">
+                  <p
+                    className={`text-sm leading-snug font-medium transition-colors ${
+                      isDone ? 'text-slate-400 dark:text-zinc-500 line-through' : 'text-slate-900 dark:text-zinc-100'
+                    }`}
+                  >
+                    {item.task || item.description || item.action}
                   </p>
 
-                  {(item.owner || item.due || priorityStyle) && (
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  {(item.owner || item.due || item.priority) && (
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs">
                       {item.owner && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
-                          <span className="w-4 h-4 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
-                            <User size={10} strokeWidth={2} />
-                          </span>
+                        <span className="inline-flex items-center gap-1 text-slate-600 dark:text-zinc-400 font-medium">
+                          <User size={11} strokeWidth={2} />
                           {item.owner}
                         </span>
                       )}
                       {item.due && (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
-                          <CalendarDays size={11} strokeWidth={2} />
-                          {item.due}
+                        <span className="inline-flex items-center gap-1 text-slate-400 dark:text-zinc-500">
+                          <Clock size={11} strokeWidth={2} />
+                          Due: {item.due}
                         </span>
                       )}
-                      {priorityStyle && (
+                      {item.priority && (
                         <span className={priorityStyle.cls}>
                           <PriorityIcon size={11} strokeWidth={2.5} />
                           {priorityStyle.label}
@@ -723,19 +719,19 @@ function AudioPlayerCard({ sessionId, title, durationLabel }) {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 shadow-2xl shadow-black/40">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-800/80 bg-white dark:bg-gradient-to-b dark:from-zinc-900/90 dark:to-zinc-950/90 shadow-2xl shadow-black/10 dark:shadow-black/40">
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative px-8 pt-10 pb-8 space-y-8">
           <div className="text-center space-y-3">
-            <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shadow-inner">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-inner">
               <Volume2 size={28} strokeWidth={1.75} />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white tracking-tight truncate px-4">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight truncate px-4">
                 {title || 'Session Audio'}
               </h3>
-              <p className="text-zinc-500 text-xs mt-1">
+              <p className="text-slate-500 dark:text-zinc-500 text-xs mt-1">
                 {durationLabel ? `${durationLabel} recording` : 'Session recording'}
                 {sessionId ? ` · ${sessionId.slice(0, 8)}` : ''}
               </p>
@@ -743,7 +739,7 @@ function AudioPlayerCard({ sessionId, title, durationLabel }) {
           </div>
 
           {error ? (
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-amber-200 text-sm leading-relaxed flex gap-3">
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-amber-800 dark:text-amber-200 text-sm leading-relaxed flex gap-3">
               <AlertTriangle size={16} strokeWidth={2} className="flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -769,7 +765,7 @@ function AudioPlayerCard({ sessionId, title, durationLabel }) {
                 <button
                   type="button"
                   onClick={seek}
-                  className="group relative w-full h-2 rounded-full bg-zinc-800 overflow-hidden cursor-pointer"
+                  className="group relative w-full h-2 rounded-full bg-slate-200 dark:bg-zinc-800 overflow-hidden cursor-pointer"
                   aria-label="Seek"
                 >
                   <div
@@ -781,7 +777,7 @@ function AudioPlayerCard({ sessionId, title, durationLabel }) {
                     style={{ left: `calc(${progress}% - 7px)` }}
                   />
                 </button>
-                <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
+                <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-zinc-500">
                   <span>{formatPlayerTime(currentTime)}</span>
                   <span>{formatPlayerTime(duration)}</span>
                 </div>
@@ -812,7 +808,7 @@ function AudioPlayerCard({ sessionId, title, durationLabel }) {
               />
 
               {!ready && (
-                <p className="text-center text-zinc-500 text-xs flex items-center justify-center gap-2">
+                <p className="text-center text-slate-500 dark:text-zinc-500 text-xs flex items-center justify-center gap-2">
                   <Loader2 size={12} className="spinner" />
                   Loading audio…
                 </p>
@@ -823,7 +819,7 @@ function AudioPlayerCard({ sessionId, title, durationLabel }) {
           <div className="flex items-center justify-center gap-2 pt-1">
             <button
               onClick={changeSpeed}
-              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-mono text-emerald-400 font-semibold hover:bg-zinc-800 hover:border-zinc-700 transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold hover:bg-slate-200 dark:hover:bg-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 transition-colors"
               title="Playback speed"
             >
               {speed}x
@@ -844,7 +840,7 @@ function AudioPlayerCard({ sessionId, title, durationLabel }) {
           </div>
 
           {openMessage && (
-            <p className="text-center text-rose-400 text-xs">{openMessage}</p>
+            <p className="text-center text-rose-500 dark:text-rose-400 text-xs">{openMessage}</p>
           )}
         </div>
       </div>
@@ -858,19 +854,19 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
   if (!notes) {
     return (
       <div className="flex items-center justify-center min-h-[420px]">
-        <div className="text-center max-w-md w-full rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-10 shadow-2xl">
+        <div className="text-center max-w-md w-full rounded-2xl border border-slate-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-10 shadow-2xl">
           {noSpeech ? (
             <>
-              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-5 text-amber-400">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-5 text-amber-500 dark:text-amber-400">
                 <MicOff size={28} strokeWidth={2} />
               </div>
-              <h2 className="font-semibold text-lg text-white mb-2">No speech detected</h2>
+              <h2 className="font-semibold text-lg text-slate-900 dark:text-white mb-2">No speech detected</h2>
               {processingError && (
-                <p className="text-amber-300/90 text-xs font-mono bg-zinc-950/80 rounded-xl p-3 mb-4 text-left leading-relaxed border border-amber-500/20">
+                <p className="text-amber-700 dark:text-amber-300/90 text-xs font-mono bg-slate-100 dark:bg-zinc-950/80 rounded-xl p-3 mb-4 text-left leading-relaxed border border-amber-500/20">
                   {processingError}
                 </p>
               )}
-              <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+              <p className="text-slate-600 dark:text-zinc-400 text-sm leading-relaxed mb-6">
                 The recording was saved but contained no audible speech.
               </p>
               <button
@@ -882,13 +878,13 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
             </>
           ) : (
             <>
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-5 text-emerald-400">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-5 text-emerald-500 dark:text-emerald-400">
                 <Sparkles size={26} strokeWidth={2} />
               </div>
-              <h2 className="font-semibold text-lg text-white mb-2">
+              <h2 className="font-semibold text-lg text-slate-900 dark:text-white mb-2">
                 {isError ? 'Processing failed' : 'Notes not ready yet'}
               </h2>
-              <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+              <p className="text-slate-600 dark:text-zinc-400 text-sm leading-relaxed mb-6">
                 {isError
                   ? 'Something went wrong while generating notes for this session.'
                   : 'Generate an AI summary, action items, and key topics from the transcript.'}
@@ -925,7 +921,7 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
         <section>
           <SectionLabel
             icon={Users}
-            colorClass="bg-purple-500/10 border-purple-500/25 text-purple-400"
+            colorClass="bg-purple-500/10 border-purple-500/25 text-purple-600 dark:text-purple-400"
             count={participants.length}
           >
             Participants
@@ -935,20 +931,20 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
             {participants.map((p, idx) => {
               const confCls = CONFIDENCE_STYLES[p.identity_confidence] || CONFIDENCE_STYLES.inferred;
               return (
-                <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-zinc-800/70 bg-zinc-900/30">
-                  <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-zinc-300 flex-shrink-0 font-bold text-xs">
+                <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-zinc-800/70 bg-white dark:bg-zinc-900/30">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/80 flex items-center justify-center text-slate-700 dark:text-zinc-300 flex-shrink-0 font-bold text-xs">
                     {(p.name || p.label || '?').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-zinc-200 truncate">
+                      <span className="text-xs font-semibold text-slate-900 dark:text-zinc-200 truncate">
                         {p.name || p.label}
                       </span>
                       {p.name && p.label && p.name !== p.label && (
-                        <span className="text-[10px] text-zinc-500 font-mono">({p.label})</span>
+                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">({p.label})</span>
                       )}
                     </div>
-                    {p.role && <p className="text-[11px] text-zinc-400 truncate">{p.role}</p>}
+                    {p.role && <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">{p.role}</p>}
                   </div>
                   {p.identity_confidence && (
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border capitalize flex-shrink-0 ${confCls}`}>
@@ -966,21 +962,21 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
       {statusUpdate && (statusUpdate.completion_estimate || statusUpdate.remaining_scope?.length > 0) && (
         <section className="p-4 rounded-xl border border-sky-500/20 bg-sky-500/5 space-y-3">
           <div className="flex items-center gap-2">
-            <Target size={16} className="text-sky-400" />
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-sky-300">Status Update</h3>
+            <Target size={16} className="text-sky-500 dark:text-sky-400" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-300">Status Update</h3>
             {statusUpdate.completion_estimate && (
-              <span className="ml-auto text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300">
+              <span className="ml-auto text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-600 dark:text-sky-300">
                 {statusUpdate.completion_estimate}
               </span>
             )}
           </div>
           {statusUpdate.remaining_scope?.length > 0 && (
             <div className="space-y-1 pl-6">
-              <p className="text-[11px] font-semibold uppercase text-zinc-400 tracking-wider">Remaining Scope:</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-500 dark:text-zinc-400 tracking-wider">Remaining Scope:</p>
               <ul className="space-y-1">
                 {statusUpdate.remaining_scope.map((item, i) => (
-                  <li key={i} className="text-xs text-zinc-300 flex items-center gap-2">
-                    <span className="w-1 h-1 rounded-full bg-sky-400 flex-shrink-0" />
+                  <li key={i} className="text-xs text-slate-800 dark:text-zinc-300 flex items-center gap-2">
+                    <span className="w-1 h-1 rounded-full bg-sky-500 dark:bg-sky-400 flex-shrink-0" />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -1000,7 +996,7 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
         <section>
           <SectionLabel
             icon={FileText}
-            colorClass="bg-sky-500/10 border-sky-500/25 text-sky-400"
+            colorClass="bg-sky-500/10 border-sky-500/25 text-sky-600 dark:text-sky-400"
             count={topics.length}
           >
             Key Topics
@@ -1008,12 +1004,12 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
 
           <div className="space-y-8">
             {topics.map((topic, idx) => (
-              <article key={idx} className="p-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/20 space-y-4">
-                <div className="flex items-baseline gap-2.5 border-b border-zinc-800/60 pb-3">
-                  <span className="text-[11px] font-bold text-emerald-400 tabular-nums bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+              <article key={idx} className="p-4 rounded-2xl border border-slate-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/20 space-y-4">
+                <div className="flex items-baseline gap-2.5 border-b border-slate-200 dark:border-zinc-800/60 pb-3">
+                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
                     #{String(idx + 1).padStart(2, '0')}
                   </span>
-                  <h3 className="font-semibold text-[15px] text-zinc-100 leading-snug">
+                  <h3 className="font-semibold text-[15px] text-slate-900 dark:text-zinc-100 leading-snug">
                     {topic.heading || 'Topic'}
                   </h3>
                 </div>
@@ -1025,12 +1021,12 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
 
                 {/* Options Discussed */}
                 {topic.options_discussed?.length > 0 && (
-                  <div className="pl-3 border-l-2 border-zinc-700/50 space-y-1.5 pt-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Options / Perspectives Discussed:</p>
+                  <div className="pl-3 border-l-2 border-slate-300 dark:border-zinc-700/50 space-y-1.5 pt-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Options / Perspectives Discussed:</p>
                     <ul className="space-y-1">
                       {topic.options_discussed.map((opt, i) => (
-                        <li key={i} className="text-xs text-zinc-300 flex items-start gap-2">
-                          <span className="mt-1.5 w-1 h-1 rounded-full bg-zinc-500 flex-shrink-0" />
+                        <li key={i} className="text-xs text-slate-800 dark:text-zinc-300 flex items-start gap-2">
+                          <span className="mt-1.5 w-1 h-1 rounded-full bg-slate-400 dark:bg-zinc-500 flex-shrink-0" />
                           <span>{parseInlineMarkdown(opt)}</span>
                         </li>
                       ))}
@@ -1040,10 +1036,10 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
 
                 {/* Final Decision */}
                 {topic.decision && (
-                  <div className="flex items-start gap-2.5 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 text-xs leading-relaxed">
-                    <CheckCircle2 size={16} strokeWidth={2} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200 text-xs leading-relaxed">
+                    <CheckCircle2 size={16} strokeWidth={2} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-semibold text-emerald-300 block mb-0.5">Decision:</span>
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-300 block mb-0.5">Decision:</span>
                       {parseInlineMarkdown(topic.decision)}
                     </div>
                   </div>
@@ -1051,12 +1047,12 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
 
                 {/* Open Questions */}
                 {topic.open_questions?.length > 0 && (
-                  <div className="p-3 rounded-xl border border-amber-500/25 bg-amber-500/10 space-y-1.5 text-xs text-amber-200">
-                    <div className="flex items-center gap-2 font-semibold text-amber-300">
+                  <div className="p-3 rounded-xl border border-amber-500/25 bg-amber-500/10 space-y-1.5 text-xs text-amber-800 dark:text-amber-200">
+                    <div className="flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-300">
                       <HelpCircle size={14} strokeWidth={2} className="flex-shrink-0" />
                       <span>Pending / Open Questions:</span>
                     </div>
-                    <ul className="space-y-1 pl-5 list-disc marker:text-amber-400">
+                    <ul className="space-y-1 pl-5 list-disc marker:text-amber-500 dark:marker:text-amber-400">
                       {topic.open_questions.map((q, i) => (
                         <li key={i}>{parseInlineMarkdown(q)}</li>
                       ))}
@@ -1071,12 +1067,12 @@ function SummaryContent({ notes, session, noSpeech, isError, processingError }) 
 
       {/* Notable Mentions */}
       {notableMentions.length > 0 && (
-        <section className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 space-y-2.5">
+        <section className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 space-y-2.5">
           <div className="flex items-center gap-2">
-            <Info size={16} className="text-emerald-400" />
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Notable Mentions & Risks</h3>
+            <Info size={16} className="text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-800 dark:text-zinc-300">Notable Mentions &amp; Risks</h3>
           </div>
-          <ul className="space-y-1.5 pl-6 list-disc text-xs text-zinc-300">
+          <ul className="space-y-1.5 pl-6 list-disc text-xs text-slate-700 dark:text-zinc-300">
             {notableMentions.map((item, idx) => (
               <li key={idx}>{parseInlineMarkdown(item)}</li>
             ))}
@@ -1232,45 +1228,45 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-zinc-950/40 fade-in">
+    <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40 fade-in">
       {/* Header */}
-      <header className="flex-shrink-0 border-b border-zinc-800/80 bg-zinc-950/50 backdrop-blur-md titlebar-drag select-none">
+      <header className="flex-shrink-0 border-b border-slate-200 dark:border-zinc-800/80 bg-slate-100/50 dark:bg-zinc-950/50 backdrop-blur-md titlebar-drag select-none">
         <div className="px-6 pt-3 pb-4 space-y-4">
           <div className="flex items-start gap-3 titlebar-no-drag">
             <button
               onClick={onBack}
-              className="btn-ghost p-2 mt-0.5 text-zinc-400 hover:text-white rounded-xl"
+              className="btn-ghost p-2 mt-0.5 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white rounded-xl"
               title="Back to sessions"
             >
               <ChevronLeft size={18} strokeWidth={2} />
             </button>
 
             <div className="flex-1 min-w-0 space-y-2.5">
-              <h1 className="font-bold text-xl text-white truncate tracking-tight leading-tight">
+              <h1 className="font-bold text-xl text-slate-900 dark:text-white truncate tracking-tight leading-tight">
                 {notes?.meeting_title || notes?.title || session.title || 'Meeting Notes'}
               </h1>
 
               <div className="flex items-center flex-wrap gap-1.5">
                 {session.started_at && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 bg-zinc-900/80 border border-zinc-800 px-2 py-1 rounded-lg">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400 bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-zinc-800 px-2 py-1 rounded-lg">
                     <CalendarDays size={11} strokeWidth={2} />
                     {formatDate(session.started_at)}
                   </span>
                 )}
                 {startTime && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 bg-zinc-900/80 border border-zinc-800 px-2 py-1 rounded-lg">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400 bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-zinc-800 px-2 py-1 rounded-lg">
                     <Clock size={11} strokeWidth={2} />
                     {startTime}
                   </span>
                 )}
                 {(duration || notes?.duration) && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-zinc-300 bg-zinc-900/80 border border-zinc-800 px-2 py-1 rounded-lg">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-700 dark:text-zinc-300 bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-zinc-800 px-2 py-1 rounded-lg">
                     <Timer size={11} strokeWidth={2} />
                     {notes?.duration || duration}
                   </span>
                 )}
                 {notes?.attendees?.length > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 bg-zinc-900/80 border border-zinc-800 px-2 py-1 rounded-lg max-w-[280px]">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400 bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-zinc-800 px-2 py-1 rounded-lg max-w-[280px]">
                     <Users size={11} strokeWidth={2} className="flex-shrink-0" />
                     <span className="truncate">
                       {notes.attendees.slice(0, 3).join(', ')}
@@ -1286,12 +1282,12 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                 )}
                 {notes && (
                   notes._rawMarkdown ? (
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-sky-400 bg-sky-500/10 border border-sky-500/30 px-2 py-1 rounded-lg">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-500/10 border border-sky-500/30 px-2 py-1 rounded-lg">
                       <FileText size={11} strokeWidth={2} />
                       Markdown
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-lg">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-lg">
                       <Braces size={11} strokeWidth={2} />
                       JSON
                     </span>
@@ -1322,7 +1318,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
           </div>
 
           {/* Segmented tabs */}
-          <div className="titlebar-no-drag inline-flex p-1 rounded-xl bg-zinc-900/80 border border-zinc-800/80">
+          <div className="titlebar-no-drag inline-flex p-1 rounded-xl bg-slate-200/80 dark:bg-zinc-900/80 border border-slate-300/80 dark:border-zinc-800/80">
             {TABS.map(({ id, label, Icon }) => {
               const active = activeTab === id;
               const count = id === 'transcript' && normalizedTranscript.length > 0
@@ -1335,15 +1331,15 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                   onClick={() => setActiveTab(id)}
                   className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
                     active
-                      ? 'bg-emerald-500/15 text-emerald-400 shadow-sm'
-                      : 'text-zinc-500 hover:text-zinc-200'
+                      ? 'bg-white dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                      : 'text-slate-500 dark:text-zinc-500 hover:text-slate-900 dark:hover:text-zinc-200'
                   }`}
                 >
                   <Icon size={14} strokeWidth={2} />
                   {label}
                   {count != null && (
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                      active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
+                      active ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-300/60 dark:bg-zinc-800 text-slate-600 dark:text-zinc-500'
                     }`}>
                       {count}
                     </span>
@@ -1383,7 +1379,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
       </div>
 
       {/* Footer actions */}
-      <footer className="flex-shrink-0 px-6 py-3.5 border-t border-zinc-800/80 bg-zinc-950/85 backdrop-blur-md">
+      <footer className="flex-shrink-0 px-6 py-3.5 border-t border-slate-200 dark:border-zinc-800/80 bg-slate-100/80 dark:bg-zinc-950/85 backdrop-blur-md">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             {notionUrl ? (
@@ -1391,18 +1387,18 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                 href={notionUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-emerald-400 text-xs font-medium hover:text-emerald-300 transition-colors truncate max-w-full"
-                onClick={(e) => { e.preventDefault(); window.open?.(notionUrl, '_blank'); }}
+                className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-medium hover:text-emerald-500 dark:hover:text-emerald-300 transition-colors truncate max-w-full"
+                onClick={(e) => { e.preventDefault(); window.meetmind.shell.openExternal(notionUrl); }}
               >
                 <NotionIcon size={12} />
                 {uploadResult ? 'Synced to Notion' : 'View in Notion'}
                 <ExternalLink size={11} strokeWidth={2} />
               </a>
             ) : (
-              <span className="text-zinc-600 text-xs">Not synced to Notion yet</span>
+              <span className="text-slate-400 dark:text-zinc-600 text-xs">Not synced to Notion yet</span>
             )}
             {uploadError && (
-              <p className="text-rose-400 text-xs mt-1 truncate">{uploadError}</p>
+              <p className="text-rose-500 dark:text-rose-400 text-xs mt-1 truncate">{uploadError}</p>
             )}
           </div>
 
@@ -1410,7 +1406,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
             <button
               onClick={handleRegenerate}
               disabled={regenerating || uploading}
-              className="btn-ghost text-xs text-zinc-400 hover:text-white disabled:opacity-50"
+              className="btn-ghost text-xs text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white disabled:opacity-50"
               title="Regenerate notes from transcript"
             >
               {regenerating ? (

@@ -1,6 +1,6 @@
 ## Learned User Preferences
 
-- For every changes (apart from minor changes), bump the version number (1.0.0 for major, 0.1.0 for moderate and 0.0.1 for minor changes)in `package.json` and document the changes under a new version heading in `CHANGELOG.md`.
+- For every changes (apart from minor changes), bump the version number (1.0.0 for major, 0.1.0 for moderate and 0.0.1 for minor changes)in `package.json` and document the changes under a new version heading in `CHANGELOG.md`. Keep the changelog concise and avoid duplicate or near-duplicate points.
 
 ## Learned Workspace Facts
 

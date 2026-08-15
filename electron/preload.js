@@ -9,6 +9,11 @@ contextBridge.exposeInMainWorld('meetmind', {
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
   },
 
+  // Shell — open URLs in the system default browser
+  shell: {
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  },
+
   // Logs
   logs: {
     get: (options) => ipcRenderer.invoke('logs:get', options),

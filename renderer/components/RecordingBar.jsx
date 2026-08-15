@@ -26,34 +26,35 @@ export default function RecordingBar({ sessionId, onStop }) {
   };
 
   return (
-    <div className="flex items-center justify-between px-6 py-3 bg-rose-950/60 border-b border-rose-900/50 backdrop-blur-md flex-shrink-0 shadow-lg shadow-rose-950/20 fade-in">
+    <div className="flex items-center justify-between px-6 py-3 bg-rose-500/10 dark:bg-rose-950/60 border-b border-rose-500/20 dark:border-rose-900/50 backdrop-blur-md flex-shrink-0 shadow-lg shadow-rose-950/10 fade-in">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <span className="recording-dot w-3 h-3 rounded-full bg-rose-500 flex-shrink-0 shadow-lg shadow-rose-500/50" />
-          <span className="text-rose-200 text-sm font-semibold tracking-wide">Live Recording</span>
+          <span className="text-rose-700 dark:text-rose-200 text-sm font-semibold tracking-wide">Live Recording</span>
         </div>
 
         {/* Audio Waveform Animation */}
-        <div className="flex items-center gap-1 h-5 px-2 py-0.5 rounded bg-rose-900/40 border border-rose-800/40">
-          <div className="wave-bar w-1 bg-rose-400 rounded-full" style={{ animationDelay: '0ms' }} />
-          <div className="wave-bar w-1 bg-rose-400 rounded-full" style={{ animationDelay: '150ms' }} />
-          <div className="wave-bar w-1 bg-rose-400 rounded-full" style={{ animationDelay: '300ms' }} />
-          <div className="wave-bar w-1 bg-rose-400 rounded-full" style={{ animationDelay: '450ms' }} />
-          <div className="wave-bar w-1 bg-rose-400 rounded-full" style={{ animationDelay: '200ms' }} />
+        <div className="flex items-center gap-1 h-5 px-2 py-0.5 rounded bg-rose-500/15 dark:bg-rose-900/40 border border-rose-500/20 dark:border-rose-800/40">
+          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '0ms' }} />
+          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '150ms' }} />
+          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '300ms' }} />
+          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '450ms' }} />
+          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '200ms' }} />
         </div>
 
-        <span className="text-rose-300 text-sm font-mono font-medium tracking-wider px-2.5 py-0.5 rounded bg-rose-900/60 border border-rose-700/50 shadow-inner">
+        <span className="text-rose-700 dark:text-rose-300 text-sm font-mono font-medium tracking-wider px-2.5 py-0.5 rounded bg-rose-500/10 dark:bg-rose-900/60 border border-rose-500/20 dark:border-rose-700/50 shadow-inner">
           {formatDuration(elapsed)}
         </span>
       </div>
 
       <div className="flex items-center gap-3">
         {sessionId && (
-          <span className="text-rose-400/60 text-xs font-mono hidden sm:block">
+          <span className="text-rose-600/70 dark:text-rose-400/60 text-xs font-mono hidden sm:block">
             ID: {sessionId.slice(0, 8)}
           </span>
         )}
         <button
+          type="button"
           onClick={handleStop}
           disabled={stopping}
           title="Stop recording"

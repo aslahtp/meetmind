@@ -12,6 +12,9 @@ import {
   KeyRound,
   Sparkles,
   ArrowUpCircle,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
 import './styles/globals.css';
 
@@ -38,11 +41,34 @@ function hasSttApiKey(cfg) {
   return !!cfg?.googleApiKey?.trim();
 }
 
+function getEffectiveTheme(themeSetting) {
+  if (themeSetting === 'system') {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'dark';
+  }
+  return themeSetting === 'light' ? 'light' : 'dark';
+}
+
+function applyTheme(themeSetting) {
+  if (typeof document === 'undefined') return;
+  const effective = getEffectiveTheme(themeSetting);
+  if (effective === 'light') {
+    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.add('light');
+  } else {
+    document.documentElement.classList.remove('light');
+    document.documentElement.classList.add('dark');
+  }
+}
+
 function App() {
-  const [view, setView] = useState('dashboard');           // 'dashboard' | 'session' | 'settings'
+  const [view, setView] = useState('dashboard');           // 'dashboard' | 'session' | 'settings' | 'logs'
   const [selectedSession, setSelectedSession] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [config, setConfigState] = useState(null);
+  const [theme, setThemeState] = useState('dark');         // 'dark' | 'light' | 'system'
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -61,11 +87,6 @@ function App() {
   }, []);
 
   // ── Renderer-based audio capture (system loopback + mic via Web Audio) ─────
-  // The main process sends capture:start / capture:stop commands. We capture
-  // system audio through Electron's display-media loopback (WASAPI internally)
-  // and the microphone through getUserMedia, mix them, record as webm, and
-  // stream chunks to the main process immediately as they are recorded (every 1s).
-  // This makes recordings crash-safe — audio is on disk immediately.
   useEffect(() => {
     if (!window.meetmind?.capture) return;
 
@@ -152,6 +173,10 @@ function App() {
       if (!window.meetmind) return;
       const cfg = await window.meetmind.config.get();
       setConfigState(cfg);
+      const initialTheme = ['light', 'dark', 'system'].includes(cfg?.theme) ? cfg.theme : 'dark';
+      setThemeState(initialTheme);
+      applyTheme(initialTheme);
+
       if (!hasSttApiKey(cfg) || !cfg?.geminiApiKey?.trim()) setShowOnboarding(true);
 
       const list = await window.meetmind.sessions.list();
@@ -159,6 +184,24 @@ function App() {
     }
     init();
   }, []);
+
+  // Listen for system theme changes when theme is set to 'system'
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemThemeChange = () => {
+      if (theme === 'system') {
+        applyTheme('system');
+      }
+    };
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleSystemThemeChange);
+      return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
+    } else if (mediaQuery.addListener) {
+      mediaQuery.addListener(handleSystemThemeChange);
+      return () => mediaQuery.removeListener(handleSystemThemeChange);
+    }
+  }, [theme]);
 
   // Register event listeners
   useEffect(() => {
@@ -191,7 +234,6 @@ function App() {
       if (sessionId) {
         const session = await window.meetmind.sessions.get(sessionId);
         if (session) {
-          // Attach the error message directly on the session object so NoteViewer can display it
           setSelectedSession({ ...session, _processingError: error });
           setView('session');
         }
@@ -248,6 +290,41 @@ function App() {
   const updateConfig = async (key, value) => {
     await window.meetmind.config.set(key, value);
     setConfigState((prev) => ({ ...prev, [key]: value }));
+    if (key === 'theme') {
+      const t = ['light', 'dark', 'system'].includes(value) ? value : 'dark';
+      setThemeState(t);
+      applyTheme(t);
+    }
+  };
+
+  const updateMultipleConfig = async (updates) => {
+    if (window.meetmind?.config?.setMultiple) {
+      await window.meetmind.config.setMultiple(updates);
+    } else {
+      for (const [k, v] of Object.entries(updates)) {
+        await window.meetmind.config.set(k, v);
+      }
+    }
+    const fresh = await window.meetmind.config.get();
+    setConfigState(fresh || ((prev) => ({ ...prev, ...updates })));
+    if ('theme' in updates) {
+      const t = ['light', 'dark', 'system'].includes(updates.theme) ? updates.theme : 'dark';
+      setThemeState(t);
+      applyTheme(t);
+    }
+  };
+
+  const setTheme = async (newTheme) => {
+    const validTheme = ['light', 'dark', 'system'].includes(newTheme) ? newTheme : 'dark';
+    setThemeState(validTheme);
+    applyTheme(validTheme);
+    await updateConfig('theme', validTheme);
+  };
+
+  const toggleTheme = () => {
+    // Cycle: dark -> light -> system -> dark
+    const nextTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark';
+    setTheme(nextTheme);
   };
 
   const startRecording = async () => {
@@ -272,6 +349,7 @@ function App() {
     selectedSession, setSelectedSession,
     sessions, setSessions, refreshSessions,
     config, setConfigState, updateConfig,
+    theme, setTheme, toggleTheme,
     isRecording, recordingSessionId,
     startRecording, stopRecording,
     openSession,
@@ -279,15 +357,15 @@ function App() {
 
   return (
     <AppContext.Provider value={ctx}>
-      <div className="flex h-screen overflow-hidden bg-[rgb(var(--color-background))] text-[rgb(var(--color-foreground))]">
-        {/* Full-width custom titlebar strip — uniform #0c0c0f background with working window controls */}
+      <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-[rgb(var(--color-background))] text-slate-900 dark:text-[rgb(var(--color-foreground))]">
+        {/* Full-width custom titlebar strip */}
         <TitleBar />
 
         {/* Sidebar */}
         <Sidebar />
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col overflow-hidden pt-0 pb-6">
+        <main className="flex-1 flex flex-col overflow-hidden pt-8 bg-slate-50 dark:bg-[rgb(var(--color-background))]">
           {isRecording && (
             <RecordingBar
               sessionId={recordingSessionId}
@@ -310,8 +388,8 @@ function App() {
             )}
             {view === 'settings' && (
               <Settings
-                onSave={(updates) => {
-                  Object.entries(updates).forEach(([k, v]) => updateConfig(k, v));
+                onSave={async (updates) => {
+                  await updateMultipleConfig(updates);
                   if (!showOnboarding) setView('dashboard');
                   setShowOnboarding(false);
                 }}
@@ -362,7 +440,7 @@ function TitleBar() {
         <button
           type="button"
           onClick={handleMinimize}
-          className="h-full px-3 text-zinc-400 hover:text-white hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
+          className="h-full px-3 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
           title="Minimize"
         >
           <Minus size={12} strokeWidth={2} />
@@ -370,7 +448,7 @@ function TitleBar() {
         <button
           type="button"
           onClick={handleMaximize}
-          className="h-full px-3 text-zinc-400 hover:text-white hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
+          className="h-full px-3 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
           title="Maximize / Restore"
         >
           <Square size={10} strokeWidth={2} />
@@ -378,7 +456,7 @@ function TitleBar() {
         <button
           type="button"
           onClick={handleClose}
-          className="h-full px-3.5 text-zinc-400 hover:text-white hover:bg-rose-600 flex items-center justify-center transition-colors"
+          className="h-full px-3.5 text-slate-500 dark:text-zinc-400 hover:text-white hover:bg-rose-600 flex items-center justify-center transition-colors"
           title="Close"
         >
           <X size={12} strokeWidth={2} />
@@ -391,18 +469,21 @@ function TitleBar() {
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar() {
-  const { view, setView, isRecording, startRecording } = useApp();
+  const { view, setView, isRecording, startRecording, theme, toggleTheme } = useApp();
+
+  const themeLabel = theme === 'system' ? 'System (Auto)' : theme === 'light' ? 'Light Mode' : 'Dark Mode';
+  const badgeLabel = theme === 'system' ? 'Auto' : theme === 'light' ? 'Light' : 'Dark';
 
   return (
-    <aside className="w-56 flex-shrink-0 flex flex-col bg-zinc-950/80 border-r border-zinc-800/80 pb-6 pt-3 backdrop-blur-xl">
+    <aside className="w-56 flex-shrink-0 flex flex-col bg-slate-100/90 dark:bg-zinc-950/80 border-r border-slate-200 dark:border-zinc-800/80 pb-6 pt-8 backdrop-blur-xl transition-colors duration-200">
       {/* Logo mark */}
       <div className="px-4 pt-1 pb-4 titlebar-drag flex items-center gap-3 select-none">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/25 flex-shrink-0">
           <Mic size={18} strokeWidth={2.5} className="text-zinc-950" />
         </div>
         <div>
-          <span className="font-bold text-sm text-white block tracking-tight">MeetMind</span>
-          <span className="text-[10px] text-emerald-400/90 font-mono font-medium block -mt-0.5">AI Meeting Assistant</span>
+          <span className="font-bold text-sm text-slate-900 dark:text-white block tracking-tight">MeetMind</span>
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400/90 font-mono font-medium block -mt-0.5">AI Meeting Assistant</span>
         </div>
       </div>
 
@@ -430,8 +511,32 @@ function Sidebar() {
         </button>
       </nav>
 
+      {/* Theme toggle in sidebar */}
+      <div className="px-3 pb-3 titlebar-no-drag">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium bg-white dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:border-emerald-500/40 dark:hover:border-zinc-700 transition-all duration-150 shadow-sm dark:shadow-none"
+          title={`Theme: ${themeLabel} (Click to switch)`}
+        >
+          <span className="flex items-center gap-2 truncate">
+            {theme === 'system' ? (
+              <Monitor size={14} className="text-sky-500 flex-shrink-0" />
+            ) : theme === 'light' ? (
+              <Sun size={14} className="text-amber-500 flex-shrink-0" />
+            ) : (
+              <Moon size={14} className="text-emerald-400 flex-shrink-0" />
+            )}
+            <span className="truncate">{themeLabel}</span>
+          </span>
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700/50 flex-shrink-0 ml-1">
+            {badgeLabel}
+          </span>
+        </button>
+      </div>
+
       {/* Bottom status CTA */}
-      <div className="px-3 pb-3 titlebar-no-drag pt-3 border-t border-zinc-800/80">
+      <div className="px-3 pb-3 titlebar-no-drag pt-3 border-t border-slate-200 dark:border-zinc-800/80">
         {!isRecording ? (
           <button onClick={startRecording} className="btn-primary w-full justify-center text-xs py-2.5">
             <span className="w-2 h-2 rounded-full bg-zinc-950 animate-pulse" />
@@ -440,7 +545,7 @@ function Sidebar() {
         ) : (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
             <span className="recording-dot w-2 h-2 rounded-full bg-rose-500 flex-shrink-0" />
-            <span className="text-rose-300 text-xs font-medium">Recording Live</span>
+            <span className="text-rose-600 dark:text-rose-300 text-xs font-medium">Recording Live</span>
           </div>
         )}
       </div>
@@ -452,15 +557,15 @@ function Sidebar() {
 
 function OnboardingBanner({ onSetup, onClose, hasSessions }) {
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-[rgb(var(--color-background-secondary))] border border-[rgb(var(--color-border))] rounded-xl p-4 shadow-2xl fade-in">
+    <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-white dark:bg-[rgb(var(--color-background-secondary))] border border-slate-200 dark:border-[rgb(var(--color-border))] rounded-xl p-4 shadow-2xl fade-in">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
             <KeyRound size={16} strokeWidth={2} />
           </div>
           <div>
-            <h3 className="font-semibold text-sm mb-1">Welcome to MeetMind</h3>
-            <p className="text-[rgb(var(--color-foreground-muted))] text-xs mb-3">
+            <h3 className="font-semibold text-sm mb-1 text-slate-900 dark:text-white">Welcome to MeetMind</h3>
+            <p className="text-slate-600 dark:text-[rgb(var(--color-foreground-muted))] text-xs mb-3">
               {hasSessions
                 ? 'Add API keys to transcribe and summarize your recordings, and upload to Notion.'
                 : 'Set up your API keys to get started with transcription and Notion upload.'}
@@ -470,7 +575,7 @@ function OnboardingBanner({ onSetup, onClose, hasSessions }) {
         <button
           type="button"
           onClick={onClose}
-          className="flex-shrink-0 p-1 rounded text-[rgb(var(--color-foreground-subtle))] hover:text-[rgb(var(--color-foreground-muted))] hover:bg-[rgb(var(--color-background-tertiary))] transition-colors"
+          className="flex-shrink-0 p-1 rounded text-slate-400 dark:text-[rgb(var(--color-foreground-subtle))] hover:text-slate-600 dark:hover:text-[rgb(var(--color-foreground-muted))] hover:bg-slate-100 dark:hover:bg-[rgb(var(--color-background-tertiary))] transition-colors"
           aria-label="Close"
         >
           <X size={16} strokeWidth={2} />
@@ -488,23 +593,23 @@ function OnboardingBanner({ onSetup, onClose, hasSessions }) {
 
 function UpdateBanner({ version, onInstall, onClose }) {
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-[rgb(var(--color-background-secondary))] border border-emerald-500/40 rounded-xl p-4 shadow-2xl shadow-emerald-950/40 fade-in">
+    <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-white dark:bg-[rgb(var(--color-background-secondary))] border border-emerald-500/40 rounded-xl p-4 shadow-2xl shadow-emerald-950/40 fade-in">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0 flex gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
             <Sparkles size={16} strokeWidth={2.5} />
           </div>
           <div>
-            <h3 className="font-semibold text-sm text-white">Update Ready to Apply</h3>
-            <p className="text-[rgb(var(--color-foreground-muted))] text-xs mt-0.5">
-              MeetMind <span className="font-mono text-emerald-400 font-medium">v{version}</span> is downloaded and ready to install.
+            <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Update Ready to Apply</h3>
+            <p className="text-slate-600 dark:text-[rgb(var(--color-foreground-muted))] text-xs mt-0.5">
+              MeetMind <span className="font-mono text-emerald-600 dark:text-emerald-400 font-medium">v{version}</span> is downloaded and ready to install.
             </p>
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="flex-shrink-0 p-1 rounded text-[rgb(var(--color-foreground-subtle))] hover:text-[rgb(var(--color-foreground-muted))] hover:bg-[rgb(var(--color-background-tertiary))] transition-colors"
+          className="flex-shrink-0 p-1 rounded text-slate-400 dark:text-[rgb(var(--color-foreground-subtle))] hover:text-slate-600 dark:hover:text-[rgb(var(--color-foreground-muted))] hover:bg-slate-100 dark:hover:bg-[rgb(var(--color-background-tertiary))] transition-colors"
           aria-label="Close"
         >
           <X size={16} strokeWidth={2} />

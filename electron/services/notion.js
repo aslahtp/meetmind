@@ -593,24 +593,34 @@ async function appendBlocks(notion, pageId, blocks) {
   }
 }
 
+function normalizeNotionId(input) {
+  if (!input || typeof input !== 'string') return '';
+  const trimmed = input.trim();
+  // Extract 32-character hex ID from full Notion URL or raw string
+  const urlMatch = trimmed.match(/[a-f0-9]{32}(?=[/?#]|$)/i);
+  if (urlMatch) return urlMatch[0];
+  // UUID with hyphens
+  const uuidMatch = trimmed.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i);
+  if (uuidMatch) return uuidMatch[0];
+  return trimmed.replace(/^https?:\/\/[^/]+\//i, '').replace(/[^a-zA-Z0-9-]/g, '');
+}
+
 // ── Detect whether an ID belongs to a page or a database ─────────────────────
 
-async function detectParentType(notion, id) {
-  // Try page first; if Notion says it's a database, fall back to databases.retrieve
+async function detectParentType(notion, rawId) {
+  const id = normalizeNotionId(rawId) || rawId;
+  // Try page first; if Notion says it's a database or not found as page, try database
   try {
-    await notion.pages.retrieve({ page_id: id });
-    return 'page';
+    const page = await notion.pages.retrieve({ page_id: id });
+    return { type: 'page', id: page.id };
   } catch (err) {
-    const msg = err?.message || '';
-    if (msg.includes('database') || err?.code === 'object_not_found') {
-      try {
-        await notion.databases.retrieve({ database_id: id });
-        return 'database';
-      } catch {
-        // rethrow original error so the user sees a useful message
-      }
+    try {
+      const db = await notion.databases.retrieve({ database_id: id });
+      return { type: 'database', id: db.id };
+    } catch {
+      // rethrow original error so the user sees a useful message
+      throw err;
     }
-    throw err;
   }
 }
 
@@ -629,6 +639,7 @@ async function uploadToNotion(notes, transcript, parentId, notionToken) {
   if (!notionToken) throw new Error('Notion token is required');
   if (!parentId) throw new Error('Notion parent page/database ID is required. Paste it from the Notion URL into Settings.');
 
+  const cleanParentId = normalizeNotionId(parentId) || parentId;
   const notion = new Client({ auth: notionToken });
 
   const meetingTitle = (notes.title || 'Meeting Notes').slice(0, 1990);
@@ -661,25 +672,28 @@ async function uploadToNotion(notes, transcript, parentId, notionToken) {
     },
   ];
 
-  logger.info('Uploading to Notion', { parentId, title: meetingTitle });
+  logger.info('Uploading to Notion', { parentId: cleanParentId, title: meetingTitle });
 
-  const parentType = await detectParentType(notion, parentId);
-  logger.info('Notion parent type detected', { parentType });
+  const { type: parentType, id: resolvedId } = await detectParentType(notion, cleanParentId);
+  logger.info('Notion parent type detected', { parentType, resolvedId });
 
   let pagePayload;
   if (parentType === 'database') {
-    const titleKey = await getDatabaseTitleKey(notion, parentId);
+    const titleKey = await getDatabaseTitleKey(notion, resolvedId);
     pagePayload = {
-      parent: { database_id: parentId },
+      parent: { database_id: resolvedId },
       properties: {
         [titleKey]: { title: titleRichText },
       },
     };
   } else {
+    // Creating a child page inside a parent page requires title: { title: [...] }
     pagePayload = {
-      parent: { page_id: parentId },
+      parent: { page_id: resolvedId },
       properties: {
-        title: titleRichText,
+        title: {
+          title: titleRichText,
+        },
       },
     };
   }
@@ -699,11 +713,14 @@ async function testNotionConnection(parentId, notionToken) {
   if (!notionToken) throw new Error('Notion token is required');
   const notion = new Client({ auth: notionToken });
   if (parentId) {
-    const type = await detectParentType(notion, parentId);
-    logger.info('Notion connection test passed', { parentId, type });
+    const cleanParentId = normalizeNotionId(parentId) || parentId;
+    const { type, id: resolvedId } = await detectParentType(notion, cleanParentId);
+    logger.info('Notion connection test passed', { parentId: cleanParentId, type, resolvedId });
+    return { success: true, type, id: resolvedId };
   } else {
     await notion.users.me();
+    return { success: true };
   }
 }
 
-module.exports = { uploadToNotion, testNotionConnection };
+module.exports = { uploadToNotion, testNotionConnection, normalizeNotionId };

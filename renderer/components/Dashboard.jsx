@@ -70,12 +70,12 @@ function EmptyState({ onRecord }) {
     <div className="flex flex-col items-center justify-center h-full text-center px-8 fade-in">
       <div className="relative mb-6">
         <div className="absolute inset-0 rounded-3xl bg-emerald-500/20 blur-xl animate-pulse" />
-        <div className="relative w-20 h-20 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-2xl">
-          <Mic size={36} strokeWidth={1.5} className="text-emerald-400" />
+        <div className="relative w-20 h-20 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex items-center justify-center shadow-2xl">
+          <Mic size={36} strokeWidth={1.5} className="text-emerald-500 dark:text-emerald-400" />
         </div>
       </div>
-      <h2 className="text-xl font-bold tracking-tight text-white mb-2">No meeting notes yet</h2>
-      <p className="text-zinc-400 text-sm mb-7 max-w-sm leading-relaxed">
+      <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">No meeting notes yet</h2>
+      <p className="text-slate-600 dark:text-zinc-400 text-sm mb-7 max-w-sm leading-relaxed">
         Start recording any online or in-person meeting to automatically transcribe, summarize, and extract key action items.
       </p>
       <button onClick={onRecord} className="btn-primary px-6 py-2.5 text-sm shadow-emerald-500/25">
@@ -108,24 +108,24 @@ function SessionCard({ session, onClick, onDelete }) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left card bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-800/50 hover:border-zinc-700/80 transition-all duration-200 group relative overflow-hidden"
+      className="w-full text-left card bg-white dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800/80 hover:bg-slate-50 dark:hover:bg-zinc-800/50 hover:border-slate-300 dark:hover:border-zinc-700/80 transition-all duration-200 group relative overflow-hidden shadow-sm dark:shadow-none"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
-            <h3 className="font-semibold text-base text-zinc-100 truncate group-hover:text-emerald-400 transition-colors">
+            <h3 className="font-semibold text-base text-slate-900 dark:text-zinc-100 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
               {sessionDisplayTitle(session)}
             </h3>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap text-xs text-zinc-400">
-            <span className="flex items-center gap-1 text-zinc-400">
+          <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-zinc-400">
+            <span className="flex items-center gap-1 text-slate-500 dark:text-zinc-400">
               <CalendarDays size={12} strokeWidth={2} />
               {formatDate(session.started_at)}
             </span>
             {startTime && (
               <>
-                <span className="text-zinc-600">·</span>
+                <span className="text-slate-300 dark:text-zinc-600">·</span>
                 <span className="flex items-center gap-1">
                   <Clock size={12} strokeWidth={2} />
                   {startTime}
@@ -134,8 +134,8 @@ function SessionCard({ session, onClick, onDelete }) {
             )}
             {duration != null && (
               <>
-                <span className="text-zinc-600">·</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 font-mono text-[11px]">
+                <span className="text-slate-300 dark:text-zinc-600">·</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-transparent font-mono text-[11px]">
                   <Timer size={10} strokeWidth={2} />
                   {duration}
                 </span>
@@ -143,8 +143,8 @@ function SessionCard({ session, onClick, onDelete }) {
             )}
             {session.meeting_url && (
               <>
-                <span className="text-zinc-600">·</span>
-                <span className="text-emerald-400/80 truncate max-w-[150px]">
+                <span className="text-slate-300 dark:text-zinc-600">·</span>
+                <span className="text-emerald-600 dark:text-emerald-400/80 truncate max-w-[150px]">
                   {new URL(session.meeting_url).hostname.replace('www.', '')}
                 </span>
               </>
@@ -168,7 +168,7 @@ function SessionCard({ session, onClick, onDelete }) {
               e.stopPropagation();
               onDelete(session);
             }}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400"
+            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500/20 text-slate-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400"
             title="Delete session"
           >
             <Trash2 size={14} strokeWidth={2} />
@@ -177,28 +177,28 @@ function SessionCard({ session, onClick, onDelete }) {
       </div>
 
       {isError && (
-        <p className="mt-2.5 text-rose-400/90 text-xs flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 rounded-md p-2">
+        <p className="mt-2.5 text-rose-600 dark:text-rose-400/90 text-xs flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 rounded-md p-2">
           <AlertCircle size={14} strokeWidth={2} className="flex-shrink-0" />
           Recording was interrupted or needs retry. Click to view details.
         </p>
       )}
 
       {session.status === 'complete' && (
-        <div className="flex items-center gap-4 mt-3.5 pt-3 border-t border-zinc-800/60 text-xs text-zinc-400">
+        <div className="flex items-center gap-4 mt-3.5 pt-3 border-t border-slate-200 dark:border-zinc-800/60 text-xs text-slate-500 dark:text-zinc-400">
           {actionCount > 0 && (
-            <span className="flex items-center gap-1.5 text-amber-400/90 font-medium">
+            <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400/90 font-medium">
               <ListChecks size={13} strokeWidth={2} />
               {actionCount} action item{actionCount !== 1 ? 's' : ''}
             </span>
           )}
           {session.notion_page_url && (
-            <span className="text-emerald-400 font-medium flex items-center gap-1.5">
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
               <NotionIcon size={14} />
               Notion Synced
             </span>
           )}
           {(notes?.topics?.length || notes?.key_points?.length) > 0 && (
-            <span className="text-zinc-500">
+            <span className="text-slate-400 dark:text-zinc-500">
               {(notes.topics?.length || notes.key_points.length)} topic{(notes.topics?.length || notes.key_points.length) !== 1 ? 's' : ''}
             </span>
           )}
@@ -258,12 +258,12 @@ export default function Dashboard({ onOpenSession }) {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-zinc-950/40 fade-in">
+    <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40 fade-in">
       {/* Top Header */}
-      <div className="flex items-center justify-between px-6 pt-3 pb-3 border-b border-zinc-800/80 backdrop-blur-md flex-shrink-0 titlebar-drag select-none">
+      <div className="flex items-center justify-between px-6 pt-3 pb-3 border-b border-slate-200 dark:border-zinc-800/80 bg-slate-50/80 dark:bg-transparent backdrop-blur-md flex-shrink-0 titlebar-drag select-none">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white">Meeting Sessions</h1>
-          <p className="text-zinc-400 text-xs mt-0.5">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Meeting Sessions</h1>
+          <p className="text-slate-500 dark:text-zinc-400 text-xs mt-0.5">
             {sessions.length} meeting{sessions.length !== 1 ? 's' : ''} recorded
             {sessions.some((s) => s.status === 'error') && ' · Action required'}
           </p>
@@ -271,7 +271,7 @@ export default function Dashboard({ onOpenSession }) {
         <div className="flex items-center gap-2.5 titlebar-no-drag">
           <button
             onClick={refreshSessions}
-            className="btn-ghost p-2 text-zinc-400 hover:text-white"
+            className="btn-ghost p-2 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
             title="Refresh list"
           >
             <RefreshCw size={15} strokeWidth={2} />
@@ -295,59 +295,59 @@ export default function Dashboard({ onOpenSession }) {
       {/* Overview Stats Bar */}
       <div className="grid grid-cols-4 gap-3 px-6 pt-4 pb-2 flex-shrink-0">
         {/* Meetings */}
-        <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3.5 group hover:border-violet-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-violet-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
           <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className="flex items-center justify-between mb-2">
-            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Meetings</span>
+            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Meetings</span>
             <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
-              <Users size={13} strokeWidth={2} className="text-violet-400" />
+              <Users size={13} strokeWidth={2} className="text-violet-500 dark:text-violet-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white tracking-tight">{metrics.totalMeetings}</div>
-          <p className="text-zinc-600 text-[10px] mt-0.5">sessions recorded</p>
+          <div className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{metrics.totalMeetings}</div>
+          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">sessions recorded</p>
         </div>
 
         {/* Recorded Time */}
-        <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3.5 group hover:border-sky-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-sky-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
           <div className="absolute inset-0 bg-gradient-to-br from-sky-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className="flex items-center justify-between mb-2">
-            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Recorded Time</span>
+            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Recorded Time</span>
             <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center flex-shrink-0">
-              <Timer size={13} strokeWidth={2} className="text-sky-400" />
+              <Timer size={13} strokeWidth={2} className="text-sky-500 dark:text-sky-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white tracking-tight">
+          <div className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
             {metrics.totalMinutes >= 60
               ? `${Math.floor(metrics.totalMinutes / 60)}h ${metrics.totalMinutes % 60}m`
               : `${metrics.totalMinutes}m`}
           </div>
-          <p className="text-zinc-600 text-[10px] mt-0.5">total audio captured</p>
+          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">total audio captured</p>
         </div>
 
         {/* Action Items */}
-        <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3.5 group hover:border-amber-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-amber-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
           <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className="flex items-center justify-between mb-2">
-            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Action Items</span>
+            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Action Items</span>
             <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-              <ListChecks size={13} strokeWidth={2} className="text-amber-400" />
+              <ListChecks size={13} strokeWidth={2} className="text-amber-500 dark:text-amber-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-amber-400 tracking-tight">{metrics.actionItems}</div>
-          <p className="text-zinc-600 text-[10px] mt-0.5">tasks extracted</p>
+          <div className="text-2xl font-bold text-amber-500 dark:text-amber-400 tracking-tight">{metrics.actionItems}</div>
+          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">tasks extracted</p>
         </div>
 
         {/* Notion Synced */}
-        <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3.5 group hover:border-emerald-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-emerald-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className="flex items-center justify-between mb-2">
-            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Notion Synced</span>
+            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Notion Synced</span>
             <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
-              <NotionIcon size={13} className="text-emerald-400" />
+              <NotionIcon size={13} className="text-emerald-500 dark:text-emerald-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-emerald-400 tracking-tight">{metrics.notionSynced}</div>
-          <p className="text-zinc-600 text-[10px] mt-0.5">pages uploaded</p>
+          <div className="text-2xl font-bold text-emerald-500 dark:text-emerald-400 tracking-tight">{metrics.notionSynced}</div>
+          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">pages uploaded</p>
         </div>
       </div>
 

@@ -173,6 +173,15 @@ function createMainWindow() {
     });
   }, { useSystemPicker: false });
 
+  // Intercept all _blank window.open() calls and route to OS system browser.
+  // Without this, Electron would open a new BrowserWindow for every outbound link.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url).catch(() => {});
+    }
+    return { action: 'deny' };
+  });
+
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
@@ -622,6 +631,13 @@ function registerIpcHandlers() {
     return false;
   });
 
+  // Open a URL in the OS default browser (safe: only http/https allowed)
+  ipcMain.handle('shell:open-external', (_e, url) => {
+    if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      return shell.openExternal(url);
+    }
+  });
+
   // ── Logs ──────────────────────────────────────────────────────────────────
   ipcMain.handle('logs:get', (_e, { limit } = {}) => logger.readLogs(limit));
   ipcMain.handle('logs:clear', () => logger.clearLogs());
@@ -790,8 +806,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle('notion:test', async (_e, token, pageId) => {
     try {
-      await testNotionConnection(pageId, token);
-      return { success: true };
+      const res = await testNotionConnection(pageId, token);
+      return { success: true, ...(res || {}) };
     } catch (err) {
       return { success: false, error: err.message };
     }

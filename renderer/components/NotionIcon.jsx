@@ -8,8 +8,7 @@ export default function NotionIcon({ size = 16, className = '', alt = '' }) {
       alt={alt}
       width={size}
       height={size}
-      style={{ filter: 'invert(1)' }}
-      className={`inline-block shrink-0 object-contain ${className}`.trim()}
+      className={`inline-block shrink-0 object-contain dark:invert ${className}`.trim()}
       draggable={false}
       aria-hidden={alt ? undefined : true}
     />

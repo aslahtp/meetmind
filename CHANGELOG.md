@@ -1,10 +1,39 @@
 ---
 tags: [meta, changelog]
-updated: 2026-08-14
+updated: 2026-08-15
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## v2.0.3
+
+- **Fixed Notion Page Upload & ID Normalization** — fixed child page creation payload structure when the parent is a Notion Page (`properties.title.title` instead of direct array assignment); added `normalizeNotionId` to extract IDs from full URLs or raw UUIDs; enhanced connection testing and UI to explicitly support both Notion Pages and Databases.
+
+## v2.0.2
+
+- **Fixed Notion Token and Config Persistence** — resolved an issue where `notionApiKey` was not being persisted to `electron-store` due to schema mismatch with `notionToken`; updated `config.js` to register both aliases and keep them synchronized alongside `geminiModel`/`selectedModel`, `systemPrompt`/`geminiSystemPrompt`, and `promptOutputMode`/`noteOutputMode`.
+- **Atomic Config Updates** — updated Settings save flow in `app.jsx` to use `window.meetmind.config.setMultiple` and properly await completion.
+- **Dynamic App Version Display** — wired `window.meetmind.app.getVersion()` through IPC to automatically reflect the package version in Settings.
+
+## v2.0.1
+
+- **Fixed STT Service Card Grid Overflow** — changed the 3-column grid (`grid-cols-3`) on the STT engine selection to a responsive `sm:grid-cols-2 lg:grid-cols-3` breakpoint grid so the "Key Set" / "No Key" badges and radio buttons no longer clip in narrower windows.
+- **Fixed Radio Button Dot Invisible on Light Theme** — the selected-state radio indicator inner dot was hardcoded `bg-zinc-950` (dark only); corrected to `bg-white dark:bg-zinc-950` for proper contrast in both themes.
+- **Centered Settings Content Area** — added `mx-auto` and `w-full` to the Settings scroll container so the `max-w-3xl` content block is centered rather than left-aligned.
+- **Fixed Titlebar Clearance for Sidebar & Main** — bumped sidebar top padding from `pt-3` to `pt-8` and main content from `pt-0` to `pt-8` so no content is hidden behind the fixed `h-8` custom titlebar overlay.
+- **Improved Theme Toggle Active States** — System/Light/Dark buttons in Settings now show distinctly colored active rings (`ring-1`) in both light and dark mode; Moon icon uses correct `dark:text-emerald-400` for dark-mode contrast.
+- **Fixed Preferences Section Divider** — replaced mixed `dark:border-b` / `dark:border-[#2a2a2a]` divider with clean `bg-slate-200 dark:bg-zinc-800/80` horizontal rule.
+- **Removed Dead Bottom Padding on Main Content Area** — `pb-6` was applying invisible space below all views; removed since each view manages its own scroll/padding.
+
+## v2.0.0
+
+- **Added Full Light & System Theme Support** — added a clean light theme palette alongside the obsidian dark theme, with a new **System (Auto)** option that follows the OS / Windows theme preference.
+- **Dynamic OS Theme Sync** — automatically responds to Windows dark/light mode switches in real time when set to System theme via `prefers-color-scheme`.
+- **Sidebar & Settings Theme Controls** — added 3-way theme controls (System / Light / Dark) in Settings and quick cycling via the Sidebar footer button with instant visual feedback.
+- **Persistent Theme Configuration** — user's theme choice (`system`, `light`, or `dark`) is stored in `electron-store` and restored automatically on startup.
+- **Complete Component Adaptation Sweep** — overhauled all UI components (Dashboard, NoteViewer, Settings, LogsViewer, TranscriptViewer, RecordingBar, ProcessingOverlay, TitleBar, and Sidebar) for crisp contrast in both light and dark themes while preserving the exact dark theme styling.
+- **Theme-Aware Service Brand Icons** — updated brand icons like Notion to adapt seamlessly between dark and light modes.
 
 ## v1.7.1
 
@@ -52,7 +81,6 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 - **Automated Version & Changelog Rule** — added learned workflow rule in `AGENTS.md` requiring package version bumps and `CHANGELOG.md` updates for all moderate to major changes.
 
 ## v1.4.0
-
 
 - **Executive Assistant Markdown Prompt** — default system prompt for Markdown output mode configured with a 10+ year Executive Assistant & Documentation Specialist prompt structure (Header, Executive Summary, Key Discussion Points, Key Decisions, Action Items table, Next Steps).
 - **Dual Output Mode (JSON / Markdown)** — toggle pill in Settings (`JSON` / `Markdown`) allowing choice between structured JSON and prose Markdown notes. Persisted in `electron-store` schema and `config.js` (`noteOutputMode`).

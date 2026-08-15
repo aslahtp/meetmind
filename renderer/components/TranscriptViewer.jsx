@@ -9,12 +9,12 @@ function formatTime(seconds) {
 }
 
 const SPEAKER_COLORS = [
-  { text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25', dot: 'bg-emerald-400' },
-  { text: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/25', dot: 'bg-sky-400' },
-  { text: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/25', dot: 'bg-amber-400' },
-  { text: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/25', dot: 'bg-violet-400' },
-  { text: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/25', dot: 'bg-rose-400' },
-  { text: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/25', dot: 'bg-teal-400' },
+  { text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25', dot: 'bg-emerald-500 dark:bg-emerald-400' },
+  { text: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/25', dot: 'bg-sky-500 dark:bg-sky-400' },
+  { text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/25', dot: 'bg-amber-500 dark:bg-amber-400' },
+  { text: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/25', dot: 'bg-violet-500 dark:bg-violet-400' },
+  { text: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/25', dot: 'bg-rose-500 dark:bg-rose-400' },
+  { text: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/25', dot: 'bg-teal-500 dark:bg-teal-400' },
 ];
 
 function getSpeakerColor(speaker) {
@@ -33,7 +33,7 @@ function HighlightedText({ text, query }) {
     <span>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={i} className="bg-amber-400/25 text-amber-100 rounded px-0.5">{part}</mark>
+          <mark key={i} className="bg-amber-400/30 text-slate-900 dark:text-amber-100 rounded px-0.5">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
         )
@@ -85,11 +85,11 @@ export default function TranscriptViewer({ transcript }) {
     return (
       <div className="flex items-center justify-center min-h-[360px]">
         <div className="text-center max-w-sm">
-          <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-500">
+          <div className="w-14 h-14 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex items-center justify-center mx-auto mb-4 text-slate-400 dark:text-zinc-500 shadow-sm">
             <ScrollText size={26} strokeWidth={1.75} />
           </div>
-          <h3 className="text-sm font-semibold text-zinc-200 mb-1">No transcript yet</h3>
-          <p className="text-zinc-500 text-sm leading-relaxed">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-zinc-200 mb-1">No transcript yet</h3>
+          <p className="text-slate-500 dark:text-zinc-500 text-sm leading-relaxed">
             Transcript entries will appear here after speech-to-text finishes.
           </p>
         </div>
@@ -100,14 +100,14 @@ export default function TranscriptViewer({ transcript }) {
   return (
     <div className="fade-in">
       {/* Toolbar — flush sticky under header */}
-      <div className="sticky top-0 z-20 -mx-6 px-6 py-2.5 mb-4 bg-zinc-950 border-b border-zinc-800/70">
+      <div className="sticky top-0 z-20 -mx-6 px-6 py-2.5 mb-4 bg-slate-50 dark:bg-zinc-950 border-b border-slate-200 dark:border-zinc-800/70">
         <div className="max-w-3xl mx-auto space-y-2">
           <div className="flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <Search
                 size={14}
                 strokeWidth={2}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500 pointer-events-none"
               />
               <input
                 type="text"
@@ -120,7 +120,7 @@ export default function TranscriptViewer({ transcript }) {
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-zinc-500 hover:text-zinc-300"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300"
                   aria-label="Clear search"
                 >
                   <X size={13} strokeWidth={2} />
@@ -149,8 +149,8 @@ export default function TranscriptViewer({ transcript }) {
                 onClick={() => setSpeakerFilter(null)}
                 className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors ${
                   !speakerFilter
-                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                    : 'bg-zinc-900/80 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700'
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                    : 'bg-white dark:bg-zinc-900/80 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-800 hover:text-slate-900 dark:hover:text-zinc-200 hover:border-slate-300 dark:hover:border-zinc-700'
                 }`}
               >
                 All
@@ -166,7 +166,7 @@ export default function TranscriptViewer({ transcript }) {
                     className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors ${
                       active
                         ? `${color.bg} ${color.text} ${color.border}`
-                        : 'bg-zinc-900/80 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700'
+                        : 'bg-white dark:bg-zinc-900/80 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-800 hover:text-slate-900 dark:hover:text-zinc-200 hover:border-slate-300 dark:hover:border-zinc-700'
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color.dot}`} />
@@ -178,7 +178,7 @@ export default function TranscriptViewer({ transcript }) {
           )}
 
           {(searchQuery || speakerFilter) && (
-            <p className="text-zinc-500 text-[11px] px-0.5">
+            <p className="text-slate-500 dark:text-zinc-500 text-[11px] px-0.5">
               Showing {segments.length} of {transcript.length} segment{transcript.length !== 1 ? 's' : ''}
               {speakerFilter ? ` · ${speakerFilter}` : ''}
               {searchQuery ? ` · “${searchQuery}”` : ''}
@@ -191,35 +191,35 @@ export default function TranscriptViewer({ transcript }) {
       <div className="max-w-3xl mx-auto pb-2">
       {segments.length === 0 ? (
         <div className="py-16 text-center">
-          <Mic size={22} strokeWidth={1.75} className="mx-auto mb-3 text-zinc-600" />
-          <p className="text-zinc-500 text-sm">No segments match your filters.</p>
+          <Mic size={22} strokeWidth={1.75} className="mx-auto mb-3 text-slate-400 dark:text-zinc-600" />
+          <p className="text-slate-500 dark:text-zinc-500 text-sm">No segments match your filters.</p>
           <button
             type="button"
             onClick={() => { setSearchQuery(''); setSpeakerFilter(null); }}
-            className="mt-3 text-xs text-emerald-400 hover:text-emerald-300 font-medium"
+            className="mt-3 text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
           >
             Clear filters
           </button>
         </div>
       ) : (
         <div className="relative space-y-0">
-          <div className="absolute left-[19px] top-3 bottom-3 w-px bg-zinc-800/80 pointer-events-none" />
+          <div className="absolute left-[19px] top-3 bottom-3 w-px bg-slate-200 dark:bg-zinc-800/80 pointer-events-none" />
           {segments.map((seg, i) => {
             const speaker = seg.speaker || 'Speaker';
             const color = getSpeakerColor(speaker);
             return (
               <div key={i} className="relative flex gap-4 py-3 pl-1 group">
                 <div className="relative z-10 flex-shrink-0 w-10 flex flex-col items-center pt-0.5">
-                  <span className={`w-2.5 h-2.5 rounded-full ring-4 ring-zinc-950 ${color.dot}`} />
-                  <span className="mt-2 text-[10px] font-mono text-zinc-600 group-hover:text-zinc-400 transition-colors">
+                  <span className={`w-2.5 h-2.5 rounded-full ring-4 ring-slate-50 dark:ring-zinc-950 ${color.dot}`} />
+                  <span className="mt-2 text-[10px] font-mono text-slate-400 dark:text-zinc-600 group-hover:text-slate-600 dark:group-hover:text-zinc-400 transition-colors">
                     {formatTime(seg.startTime)}
                   </span>
                 </div>
-                <div className="flex-1 min-w-0 rounded-xl border border-zinc-800/60 bg-zinc-900/30 px-4 py-3 group-hover:border-zinc-700/70 group-hover:bg-zinc-900/50 transition-all">
+                <div className="flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/30 px-4 py-3 group-hover:border-slate-300 dark:group-hover:border-zinc-700/70 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900/50 transition-all shadow-sm dark:shadow-none">
                   <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md border mb-2 ${color.text} ${color.bg} ${color.border}`}>
                     {speaker}
                   </span>
-                  <p className="text-zinc-200 text-sm leading-relaxed">
+                  <p className="text-slate-800 dark:text-zinc-200 text-sm leading-relaxed">
                     <HighlightedText text={seg.text || ''} query={searchQuery} />
                   </p>
                 </div>

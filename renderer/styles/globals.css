@@ -30,6 +30,7 @@
   --color-error-muted:          239 68 68;
 
   --color-secondary:            21 21 27;
+  --color-tertiary:             28 28 36;
 
   /* Legacy variables mapped for compatibility */
   --bg-base:        rgb(var(--color-background));
@@ -61,11 +62,54 @@
   --color-background:           12 12 15;
   --color-background-secondary: 21 21 27;
   --color-background-tertiary:  28 28 36;
+  --color-background-glass:     21 21 27;
   --color-foreground:           245 245 250;
   --color-foreground-muted:     160 160 175;
   --color-foreground-subtle:    110 110 125;
   --color-border:               38 38 48;
   --color-border-muted:         28 28 36;
+  --color-border-glow:          16 185 129;
+  --color-accent:               16 185 129;
+  --color-accent-hover:         52 211 153;
+  --color-accent-muted:         6 78 59;
+  --color-success:              52 211 153;
+  --color-success-muted:        16 185 129;
+  --color-warning:              251 191 36;
+  --color-warning-muted:        245 158 11;
+  --color-error:                248 113 113;
+  --color-error-muted:          239 68 68;
+  --color-secondary:            21 21 27;
+  --color-tertiary:             28 28 36;
+}
+
+.light {
+  /* Crisp modern light theme palette */
+  --color-background:           248 250 252;     /* slate-50 canvas #f8fafc */
+  --color-background-secondary: 255 255 255;     /* pure white card surface #ffffff */
+  --color-background-tertiary:  241 245 249;     /* slate-100 elevated / hover #f1f5f9 */
+  --color-background-glass:     255 255 255;
+
+  --color-foreground:           15 23 42;        /* slate-900 high contrast dark text #0f172a */
+  --color-foreground-muted:     71 85 105;       /* slate-600 readable secondary text #475569 */
+  --color-foreground-subtle:    148 163 184;     /* slate-400 tertiary label #94a3b8 */
+
+  --color-border:               226 232 240;     /* slate-200 clean border #e2e8f0 */
+  --color-border-muted:         241 245 249;     /* slate-100 faint line #f1f5f9 */
+  --color-border-glow:          16 185 129;
+
+  --color-accent:               16 185 129;      /* emerald-600 */
+  --color-accent-hover:         5 150 105;       /* emerald-700 */
+  --color-accent-muted:         209 250 229;     /* emerald-100 */
+
+  --color-success:              16 185 129;
+  --color-success-muted:        5 150 105;
+  --color-warning:              217 119 6;       /* amber-600 */
+  --color-warning-muted:        180 83 9;
+  --color-error:                225 29 72;       /* rose-600 */
+  --color-error-muted:          190 18 60;
+
+  --color-secondary:            241 245 249;
+  --color-tertiary:             248 250 252;
 }
 
 /* ── Base ──────────────────────────────────────────────────────────────────── */
@@ -99,15 +143,25 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
 
 .scrollbar-wide {
   scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+.dark .scrollbar-wide {
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 .scrollbar-wide::-webkit-scrollbar {
@@ -115,14 +169,20 @@ body {
   height: 10px;
 }
 .scrollbar-wide::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.16);
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 .scrollbar-wide::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.3);
   background-clip: content-box;
+}
+.dark .scrollbar-wide::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+.dark .scrollbar-wide::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
 }
 
 /* ── Typography ───────────────────────────────────────────────────────────── */
@@ -144,8 +204,14 @@ h1, h2, h3, h4 {
            text-zinc-950 font-semibold shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30;
   }
 
+  .btn-secondary {
+    @apply btn bg-slate-100 dark:bg-zinc-800/60 hover:bg-slate-200 dark:hover:bg-zinc-700/60
+           text-slate-800 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700/50;
+  }
+
   .btn-ghost {
-    @apply btn bg-transparent hover:bg-white/[0.06] text-zinc-400 hover:text-white border border-transparent;
+    @apply btn bg-transparent hover:bg-slate-100 dark:hover:bg-white/[0.06]
+           text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white border border-transparent;
   }
 
   .btn-danger {
@@ -153,43 +219,45 @@ h1, h2, h3, h4 {
   }
 
   .btn-outline {
-    @apply btn border border-zinc-800 hover:border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800/80 text-zinc-300 hover:text-white backdrop-blur-sm;
+    @apply btn border border-slate-300 dark:border-zinc-800 hover:border-slate-400 dark:hover:border-zinc-700
+           bg-white dark:bg-zinc-900/60 hover:bg-slate-100 dark:hover:bg-zinc-800/80
+           text-slate-800 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white backdrop-blur-sm;
   }
 
   .input {
-    @apply w-full bg-zinc-900/80 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm
-           text-zinc-100 placeholder-zinc-500 outline-none
+    @apply w-full bg-white dark:bg-zinc-900/80 border border-slate-300 dark:border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm
+           text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 outline-none
            focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20
            transition-all duration-200;
   }
 
   .card {
-    @apply bg-zinc-900/70 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-md
-           shadow-xl shadow-black/20 hover:border-zinc-700/80 transition-all duration-200;
+    @apply bg-white dark:bg-zinc-900/70 border border-slate-200 dark:border-zinc-800/80 rounded-xl p-5 backdrop-blur-md
+           shadow-sm dark:shadow-xl dark:shadow-black/20 hover:border-slate-300 dark:hover:border-zinc-700/80 transition-all duration-200;
   }
 
   .badge {
     @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-sm transition-all;
   }
 
-  .badge-green  { @apply badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/20; }
-  .badge-red    { @apply badge bg-rose-500/10 text-rose-400 border border-rose-500/20; }
-  .badge-yellow { @apply badge bg-amber-500/10 text-amber-400 border border-amber-500/20; }
-  .badge-blue   { @apply badge bg-sky-500/10 text-sky-400 border border-sky-500/20; }
-  .badge-gray   { @apply badge bg-zinc-800/60 text-zinc-400 border border-zinc-700/50; }
+  .badge-green  { @apply badge bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20; }
+  .badge-red    { @apply badge bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20; }
+  .badge-yellow { @apply badge bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20; }
+  .badge-blue   { @apply badge bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20; }
+  .badge-gray   { @apply badge bg-slate-100 dark:bg-zinc-800/60 text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700/50; }
 
   .sidebar-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-zinc-400
-           hover:bg-white/[0.06] hover:text-zinc-100 cursor-pointer transition-all duration-150
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-zinc-400
+           hover:bg-slate-200/60 dark:hover:bg-white/[0.06] hover:text-slate-900 dark:hover:text-zinc-100 cursor-pointer transition-all duration-150
            select-none relative;
   }
 
   .sidebar-item.active {
-    @apply bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 shadow-sm shadow-emerald-500/5;
+    @apply bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/20 shadow-sm shadow-emerald-500/5;
   }
 
   .section-heading {
-    @apply text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3;
+    @apply text-xs font-bold text-slate-500 dark:text-zinc-500 uppercase tracking-widest mb-3;
   }
 }
 
