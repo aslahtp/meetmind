@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Mic,
   CalendarDays,
@@ -14,6 +14,7 @@ import {
   MessageCircle,
   Zap,
   Flame,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
 import NotionIcon from './NotionIcon.jsx';
@@ -94,7 +95,7 @@ function sessionDisplayTitle(session) {
   return 'Untitled Meeting';
 }
 
-function SessionCard({ session, onClick, onDelete }) {
+function SessionCard({ session, onClick, onDelete, isDeleting }) {
   const notes = session.notes;
   const sentimentObj = SENTIMENT_BADGE[notes?.sentiment] || { cls: 'badge-gray', Icon: MessageCircle };
   const SentimentIcon = sentimentObj.Icon;
@@ -106,110 +107,126 @@ function SessionCard({ session, onClick, onDelete }) {
   const isError = session.status === 'error';
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left card bg-white dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800/80 hover:bg-slate-50 dark:hover:bg-zinc-800/50 hover:border-slate-300 dark:hover:border-zinc-700/80 transition-all duration-200 group relative overflow-hidden shadow-sm dark:shadow-none"
+    <div
+      className={`w-full transition-all ${
+        isDeleting ? 'card-deleting pointer-events-none' : ''
+      }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <h3 className="font-semibold text-base text-slate-900 dark:text-zinc-100 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-              {sessionDisplayTitle(session)}
-            </h3>
+      <button
+        onClick={onClick}
+        disabled={isDeleting}
+        className="w-full text-left card bg-white dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800/80 hover:bg-slate-50 dark:hover:bg-zinc-800/50 hover:border-slate-300 dark:hover:border-zinc-700/80 transition-all duration-200 group relative overflow-hidden shadow-sm dark:shadow-none"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <h3 className="font-semibold text-base text-slate-900 dark:text-zinc-100 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                {sessionDisplayTitle(session)}
+              </h3>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-zinc-400">
+              <span className="flex items-center gap-1 text-slate-500 dark:text-zinc-400">
+                <CalendarDays size={12} strokeWidth={2} />
+                {formatDate(session.started_at)}
+              </span>
+              {startTime && (
+                <>
+                  <span className="text-slate-300 dark:text-zinc-600">·</span>
+                  <span className="flex items-center gap-1">
+                    <Clock size={12} strokeWidth={2} />
+                    {startTime}
+                  </span>
+                </>
+              )}
+              {duration != null && (
+                <>
+                  <span className="text-slate-300 dark:text-zinc-600">·</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-transparent font-mono text-[11px]">
+                    <Timer size={10} strokeWidth={2} />
+                    {duration}
+                  </span>
+                </>
+              )}
+              {session.meeting_url && (
+                <>
+                  <span className="text-slate-300 dark:text-zinc-600">·</span>
+                  <span className="text-emerald-600 dark:text-emerald-400/80 truncate max-w-[150px]">
+                    {new URL(session.meeting_url).hostname.replace('www.', '')}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-zinc-400">
-            <span className="flex items-center gap-1 text-slate-500 dark:text-zinc-400">
-              <CalendarDays size={12} strokeWidth={2} />
-              {formatDate(session.started_at)}
-            </span>
-            {startTime && (
-              <>
-                <span className="text-slate-300 dark:text-zinc-600">·</span>
-                <span className="flex items-center gap-1">
-                  <Clock size={12} strokeWidth={2} />
-                  {startTime}
-                </span>
-              </>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {session.status === 'complete' && notes?.sentiment && (
+              <span className={sentimentObj.cls}>
+                <SentimentIcon size={12} strokeWidth={2} />
+                <span className="capitalize">{notes.sentiment}</span>
+              </span>
             )}
-            {duration != null && (
-              <>
-                <span className="text-slate-300 dark:text-zinc-600">·</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-transparent font-mono text-[11px]">
-                  <Timer size={10} strokeWidth={2} />
-                  {duration}
-                </span>
-              </>
+            {session.status !== 'complete' && (
+              <span className={statusInfo.cls}>{statusInfo.label}</span>
             )}
-            {session.meeting_url && (
-              <>
-                <span className="text-slate-300 dark:text-zinc-600">·</span>
-                <span className="text-emerald-600 dark:text-emerald-400/80 truncate max-w-[150px]">
-                  {new URL(session.meeting_url).hostname.replace('www.', '')}
-                </span>
-              </>
-            )}
+            <div
+              role="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(session);
+              }}
+              className={`p-1.5 rounded-lg transition-all ${
+                isDeleting
+                  ? 'opacity-100 bg-rose-500/20 text-rose-500'
+                  : 'opacity-0 group-hover:opacity-100 hover:bg-rose-500/20 text-slate-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400'
+              }`}
+              title="Delete session"
+            >
+              {isDeleting ? (
+                <Loader2 size={14} className="animate-spin text-rose-500" strokeWidth={2.5} />
+              ) : (
+                <Trash2 size={14} strokeWidth={2} />
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {session.status === 'complete' && notes?.sentiment && (
-            <span className={sentimentObj.cls}>
-              <SentimentIcon size={12} strokeWidth={2} />
-              <span className="capitalize">{notes.sentiment}</span>
-            </span>
-          )}
-          {session.status !== 'complete' && (
-            <span className={statusInfo.cls}>{statusInfo.label}</span>
-          )}
-          <div
-            role="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(session);
-            }}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500/20 text-slate-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400"
-            title="Delete session"
-          >
-            <Trash2 size={14} strokeWidth={2} />
+        {isError && (
+          <p className="mt-2.5 text-rose-600 dark:text-rose-400/90 text-xs flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 rounded-md p-2">
+            <AlertCircle size={14} strokeWidth={2} className="flex-shrink-0" />
+            Recording was interrupted or needs retry. Click to view details.
+          </p>
+        )}
+
+        {session.status === 'complete' && (
+          <div className="flex items-center gap-4 mt-3.5 pt-3 border-t border-slate-200 dark:border-zinc-800/60 text-xs text-slate-500 dark:text-zinc-400">
+            {actionCount > 0 && (
+              <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400/90 font-medium">
+                <ListChecks size={13} strokeWidth={2} />
+                {actionCount} action item{actionCount !== 1 ? 's' : ''}
+              </span>
+            )}
+            {session.notion_page_url && (
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
+                <NotionIcon size={14} />
+                Notion Synced
+              </span>
+            )}
+            {(notes?.topics?.length || notes?.key_points?.length) > 0 && (
+              <span className="text-slate-400 dark:text-zinc-500">
+                {(notes.topics?.length || notes.key_points.length)} topic{(notes.topics?.length || notes.key_points.length) !== 1 ? 's' : ''}
+              </span>
+            )}
           </div>
-        </div>
-      </div>
-
-      {isError && (
-        <p className="mt-2.5 text-rose-600 dark:text-rose-400/90 text-xs flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 rounded-md p-2">
-          <AlertCircle size={14} strokeWidth={2} className="flex-shrink-0" />
-          Recording was interrupted or needs retry. Click to view details.
-        </p>
-      )}
-
-      {session.status === 'complete' && (
-        <div className="flex items-center gap-4 mt-3.5 pt-3 border-t border-slate-200 dark:border-zinc-800/60 text-xs text-slate-500 dark:text-zinc-400">
-          {actionCount > 0 && (
-            <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400/90 font-medium">
-              <ListChecks size={13} strokeWidth={2} />
-              {actionCount} action item{actionCount !== 1 ? 's' : ''}
-            </span>
-          )}
-          {session.notion_page_url && (
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
-              <NotionIcon size={14} />
-              Notion Synced
-            </span>
-          )}
-          {(notes?.topics?.length || notes?.key_points?.length) > 0 && (
-            <span className="text-slate-400 dark:text-zinc-500">
-              {(notes.topics?.length || notes.key_points.length)} topic{(notes.topics?.length || notes.key_points.length) !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-      )}
-    </button>
+        )}
+      </button>
+    </div>
   );
 }
 
 export default function Dashboard({ onOpenSession }) {
   const { sessions, refreshSessions, startRecording, isRecording } = useApp();
+  const [deletingIds, setDeletingIds] = useState(new Set());
 
   const metrics = useMemo(() => {
     const completed = sessions.filter((s) => s.status === 'complete');
@@ -226,13 +243,22 @@ export default function Dashboard({ onOpenSession }) {
   }, [sessions]);
 
   const handleDelete = async (session) => {
+    if (deletingIds.has(session.id)) return;
     if (window.confirm('Are you sure you want to delete this session? This cannot be undone.')) {
-      try {
-        await window.meetmind.sessions.delete(session.id);
-        refreshSessions();
-      } catch (err) {
-        window.alert('Failed to delete session: ' + err.message);
-      }
+      setDeletingIds((prev) => new Set(prev).add(session.id));
+      setTimeout(async () => {
+        try {
+          await window.meetmind.sessions.delete(session.id);
+          refreshSessions();
+        } catch (err) {
+          window.alert('Failed to delete session: ' + err.message);
+          setDeletingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(session.id);
+            return next;
+          });
+        }
+      }, 480);
     }
   };
 
@@ -359,6 +385,7 @@ export default function Dashboard({ onOpenSession }) {
             session={session}
             onClick={() => onOpenSession(session)}
             onDelete={handleDelete}
+            isDeleting={deletingIds.has(session.id)}
           />
         ))}
       </div>

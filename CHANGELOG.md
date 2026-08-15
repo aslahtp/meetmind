@@ -6,6 +6,26 @@ updated: 2026-08-15
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## v2.0.18
+
+- **Animated Card Deletion in Dashboard** — added a multi-phase exit animation with crimson glow, slide-and-swish dissolve, height collapse, and active spinner feedback when deleting a meeting card.
+
+## v2.0.17
+
+- **Floating Glassmorphic Tooltips for Output Modes** — replaced the static text box with sleek floating hover popovers directly on the JSON and Markdown toggle buttons.
+
+## v2.0.16
+
+- **Tooltips & Helper Explanations for Note Output Formats** — added descriptive tooltips and a context helper banner in Settings clarifying the distinction between JSON (structured data schema, rich cards, Notion database sync) and Markdown (prose meeting minutes, action items table, Notion child pages).
+
+## v2.0.15
+
+- **Updated Default Markdown System Prompt** — configured the comprehensive Executive Assistant & Meeting Documentation Specialist prompt with structured headers, action items table, and strict H1 heading guidelines as the default Markdown system prompt.
+
+## v2.0.14
+
+- **Restored AI System Prompt & Transcription Guidance in Settings** — restored the Gemini System Prompt editor with JSON vs Markdown output switcher and Reset to Default control, plus the optional AssemblyAI domain terms guidance prompt.
+
 ## v2.0.13
 
 - **3-Second Auto-Refresh in Live Mode** — added automatic 3-second background polling synchronization in the Logs Viewer when Live Mode is active, complementing instant IPC event streaming.

@@ -29,6 +29,7 @@ import {
   Moon,
   Sun,
   Monitor,
+  Braces,
 } from 'lucide-react';
 import NotionIcon from './NotionIcon.jsx';
 import GoogleCloudIcon from './GoogleCloudIcon.jsx';
@@ -168,6 +169,40 @@ const ONBOARDING_STEPS = [
 ];
 
 // ── Components ────────────────────────────────────────────────────────────────
+
+function Tooltip({ content, children, side = 'top' }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+    >
+      {children}
+      {open && (
+        <div
+          className={`absolute ${
+            side === 'top'
+              ? 'bottom-full left-1/2 -translate-x-1/2 mb-2'
+              : 'top-full left-1/2 -translate-x-1/2 mt-2'
+          } z-50 pointer-events-none w-64 p-2.5 rounded-lg bg-slate-900/95 dark:bg-zinc-900/95 text-slate-100 dark:text-zinc-200 text-xs leading-relaxed shadow-xl border border-slate-700/80 dark:border-zinc-700/80 backdrop-blur-md text-left fade-in`}
+        >
+          {content}
+          <div
+            className={`absolute left-1/2 -translate-x-1/2 border-4 border-transparent ${
+              side === 'top'
+                ? 'top-full -mt-0.5 border-t-slate-900/95 dark:border-t-zinc-900/95'
+                : 'bottom-full -mb-0.5 border-b-slate-900/95 dark:border-b-zinc-900/95'
+            }`}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PasswordInput({ value, onChange, placeholder, id }) {
   const [show, setShow] = useState(false);
@@ -314,6 +349,7 @@ export default function Settings({ onSave }) {
     googleApiKey: '',
     sarvamApiKey: '',
     assemblyAiApiKey: '',
+    assemblyAiPrompt: '',
     geminiApiKey: '',
     geminiModel: 'gemini-3.7-flash',
     notionApiKey: '',
@@ -323,12 +359,16 @@ export default function Settings({ onSave }) {
     minSpeakers: 1,
     maxSpeakers: 6,
     systemPrompt: '',
+    geminiSystemPrompt: '',
     promptOutputMode: 'json',
+    noteOutputMode: 'json',
     autoLaunch: false,
     autoCheckUpdates: true,
   });
 
   const [initialForm, setInitialForm] = useState(null);
+  const [defaultSystemPrompt, setDefaultSystemPrompt] = useState('');
+  const [defaultMdSystemPrompt, setDefaultMdSystemPrompt] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testingStt, setTestingStt] = useState(false);
@@ -363,6 +403,7 @@ export default function Settings({ onSave }) {
           googleApiKey: cfg.googleApiKey || '',
           sarvamApiKey: cfg.sarvamApiKey || '',
           assemblyAiApiKey: cfg.assemblyAiApiKey || '',
+          assemblyAiPrompt: cfg.assemblyAiPrompt || '',
           geminiApiKey: cfg.geminiApiKey || '',
           geminiModel: cfg.geminiModel || cfg.selectedModel || 'gemini-3.7-flash',
           notionApiKey: cfg.notionApiKey || cfg.notionToken || '',
@@ -372,12 +413,28 @@ export default function Settings({ onSave }) {
           minSpeakers: cfg.minSpeakers || 1,
           maxSpeakers: cfg.maxSpeakers || 6,
           systemPrompt: cfg.systemPrompt || cfg.geminiSystemPrompt || '',
+          geminiSystemPrompt: cfg.geminiSystemPrompt || cfg.systemPrompt || '',
           promptOutputMode: cfg.promptOutputMode || cfg.noteOutputMode || 'json',
+          noteOutputMode: cfg.noteOutputMode || cfg.promptOutputMode || 'json',
           autoLaunch: cfg.autoLaunch || false,
           autoCheckUpdates: cfg.autoCheckUpdates !== false,
         };
         setForm(loadedForm);
         setInitialForm(loadedForm);
+      }
+
+      if (window.meetmind.gemini?.getDefaultSystemPrompt) {
+        try {
+          const defP = await window.meetmind.gemini.getDefaultSystemPrompt();
+          if (defP) setDefaultSystemPrompt(defP);
+        } catch {}
+      }
+
+      if (window.meetmind.gemini?.getMdDefaultSystemPrompt) {
+        try {
+          const defMdP = await window.meetmind.gemini.getMdDefaultSystemPrompt();
+          if (defMdP) setDefaultMdSystemPrompt(defMdP);
+        } catch {}
       }
 
       if (window.meetmind.updater) {
@@ -618,6 +675,25 @@ export default function Settings({ onSave }) {
                   onChange={(val) => handleChange('assemblyAiApiKey', val)}
                   placeholder="assemblyai_key_..."
                 />
+
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                      Transcription Guidance / Key Terms (Optional)
+                    </label>
+                    <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">AssemblyAI Prompt</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={form.assemblyAiPrompt || ''}
+                    onChange={(e) => handleChange('assemblyAiPrompt', e.target.value)}
+                    placeholder="e.g. Malayalam, Kubernetes, MeetMind, Aslah, API tokens..."
+                    className="input font-mono text-xs"
+                  />
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-500">
+                    Specify custom domain terms, names, or languages to improve speech recognition accuracy.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -741,6 +817,119 @@ export default function Settings({ onSave }) {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* System Prompt & Output Mode */}
+            <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-zinc-800/80">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                    System Prompt &amp; Output Structure
+                  </label>
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-500 mt-0.5">
+                    Customize the instructions and formatting sent to Gemini for generating meeting notes.
+                  </p>
+                </div>
+
+                {/* Output Mode Switcher */}
+                <div className="inline-flex p-0.5 rounded-lg bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                  <Tooltip
+                    content={
+                      <div>
+                        <p className="font-semibold text-emerald-400 mb-0.5">JSON (Structured)</p>
+                        <p className="text-[11px] text-slate-300 dark:text-zinc-300">
+                          Outputs strongly typed schema with discrete summary, key topics, decisions, and action items. Best for Notion Databases.
+                        </p>
+                      </div>
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleChange('promptOutputMode', 'json');
+                        handleChange('noteOutputMode', 'json');
+                      }}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                        (form.promptOutputMode || form.noteOutputMode) !== 'markdown'
+                          ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-200/80 dark:border-zinc-700'
+                          : 'text-slate-500 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-zinc-300'
+                      }`}
+                    >
+                      <Braces size={12} strokeWidth={2} />
+                      JSON (Structured)
+                    </button>
+                  </Tooltip>
+
+                  <Tooltip
+                    content={
+                      <div>
+                        <p className="font-semibold text-sky-400 mb-0.5">Markdown Mode</p>
+                        <p className="text-[11px] text-slate-300 dark:text-zinc-300">
+                          Outputs executive meeting minutes in Markdown with headings, bullet points, and an action items table. Best for Notion Pages.
+                        </p>
+                      </div>
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleChange('promptOutputMode', 'markdown');
+                        handleChange('noteOutputMode', 'markdown');
+                      }}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                        (form.promptOutputMode || form.noteOutputMode) === 'markdown'
+                          ? 'bg-white dark:bg-zinc-800 text-sky-600 dark:text-sky-400 shadow-sm border border-slate-200/80 dark:border-zinc-700'
+                          : 'text-slate-500 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-zinc-300'
+                      }`}
+                    >
+                      <FileText size={12} strokeWidth={2} />
+                      Markdown
+                    </button>
+                  </Tooltip>
+                </div>
+              </div>
+
+              {/* Textarea */}
+              <div className="space-y-2">
+                <textarea
+                  value={
+                    form.systemPrompt !== undefined && form.systemPrompt !== ''
+                      ? form.systemPrompt
+                      : ((form.promptOutputMode || form.noteOutputMode) === 'markdown'
+                          ? defaultMdSystemPrompt
+                          : defaultSystemPrompt)
+                  }
+                  onChange={(e) => {
+                    handleChange('systemPrompt', e.target.value);
+                    handleChange('geminiSystemPrompt', e.target.value);
+                  }}
+                  rows={8}
+                  placeholder="Enter custom instructions for meeting notes generation..."
+                  className="input resize-y font-mono text-xs leading-relaxed bg-white dark:bg-zinc-900/90 text-slate-800 dark:text-zinc-200"
+                />
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[11px] text-slate-400 dark:text-zinc-500">
+                    {form.systemPrompt && form.systemPrompt.trim() !== ''
+                      ? 'Custom prompt active'
+                      : 'Using default system prompt'}
+                  </span>
+
+                  {form.systemPrompt && form.systemPrompt.trim() !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleChange('systemPrompt', '');
+                        handleChange('geminiSystemPrompt', '');
+                      }}
+                      className="btn-ghost text-xs px-2 py-1 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 flex items-center gap-1.5"
+                    >
+                      <RotateCcw size={12} strokeWidth={2} />
+                      Reset to Default
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </section>

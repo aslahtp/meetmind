@@ -304,8 +304,44 @@ h1, h2, h3, h4 {
   50% { opacity: 0.6; transform: scale(1.05); }
 }
 
-.glow-orb {
-  animation: glowPulse 3s ease-in-out infinite;
+/* ── Card Delete Animation ────────────────────────────────────────────────── */
+@keyframes cardDelete {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    max-height: 250px;
+    margin-bottom: 0.75rem;
+    filter: blur(0px);
+  }
+  20% {
+    transform: scale(0.98) translateX(-6px);
+    opacity: 0.95;
+    border-color: rgba(244, 63, 94, 0.6);
+    box-shadow: 0 0 24px -4px rgba(244, 63, 94, 0.4);
+  }
+  50% {
+    transform: scale(0.92) translateX(30px) rotate(1.5deg);
+    opacity: 0.4;
+    filter: blur(1px);
+  }
+  100% {
+    transform: scale(0.7) translateX(100px) rotate(4deg);
+    opacity: 0;
+    filter: blur(6px);
+    max-height: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-width: 0;
+    overflow: hidden;
+  }
+}
+
+.card-deleting {
+  animation: cardDelete 0.48s cubic-bezier(0.32, 0, 0.15, 1) forwards;
+  pointer-events: none !important;
+  will-change: transform, opacity, max-height, margin;
 }
 
 /* ── Titlebar drag region ─────────────────────────────────────────────────── */
