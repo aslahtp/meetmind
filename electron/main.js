@@ -159,6 +159,14 @@ function createMainWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    logger.setLogEmitter(null);
+  });
+
+  // Forward live logs from main process to renderer
+  logger.setLogEmitter((entry) => {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+      mainWindow.webContents.send('log:entry', entry);
+    }
   });
 
   // Auto-approve system audio loopback capture (no picker dialog).

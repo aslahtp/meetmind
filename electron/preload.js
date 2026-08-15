@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('meetmind', {
   // Logs
   logs: {
     get: (options) => ipcRenderer.invoke('logs:get', options),
+    getHistory: (options) => ipcRenderer.invoke('logs:get', options),
     clear: () => ipcRenderer.invoke('logs:clear'),
     openFolder: () => ipcRenderer.invoke('logs:openFolder'),
   },
@@ -111,6 +112,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'ws:recording-requested',
       'sessions:durations-updated',
       'updater:status',
+      'log:entry',
     ];
     if (validChannels.includes(channel)) {
       const subscription = (_event, ...args) => callback(...args);

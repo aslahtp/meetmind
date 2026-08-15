@@ -6,6 +6,26 @@ updated: 2026-08-15
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## v2.0.13
+
+- **3-Second Auto-Refresh in Live Mode** — added automatic 3-second background polling synchronization in the Logs Viewer when Live Mode is active, complementing instant IPC event streaming.
+
+## v2.0.12
+
+- **Icon-Only Header Action Bar in Logs Viewer** — redesigned top action bar with icon-only buttons (`Live Mode` toggle, `Refresh`, `Open Folder`, `Export`, `Copy`, `Clear`) and informative tooltips for a clean, compact toolbar.
+
+## v2.0.11
+
+- **Single-Row Logs Viewer Toolbar** — formatted filter chips, search bar, and controls with non-wrapping layout rules (`whitespace-nowrap`, `shrink-0`) so all elements stay aligned on a single row.
+
+## v2.0.10
+
+- **Hide Extension Logs Option** — added a persistent `"Hide Extension Logs"` filter toggle in the Logs Viewer toolbar to suppress Chrome extension heartbeat and WebSocket status logs when debugging application-level events.
+
+## v2.0.9
+
+- **Real-Time Log Streaming & Structured Viewer** — wired `log:entry` live IPC event streaming from main process logger to the renderer; added structured log parsing and `getHistory` fallback in `logger.js` and `preload.js` so all diagnostics, errors, and system events show up in the Logs page across dev and production.
+
 ## v2.0.8
 
 - **Multi-Version Release Notes Generator** — created `scripts/generate-release-notes.js` to reliably parse and bundle all changelog entries between the new release and the last published release tag on GitHub, eliminating shell string escaping issues in CI/CD.
