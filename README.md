@@ -1,15 +1,26 @@
-![Electron.js](https://img.shields.io/badge/Electron-191970?style=for-the-badge&logo=Electron&logoColor=white)
-![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
-![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)
-![FFmpeg](https://shields.io/badge/FFmpeg-%23171717.svg?logo=ffmpeg&style=for-the-badge&labelColor=171717&logoColor=5cb85c)
-![Google Gemini](https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white)
-![Notion](https://img.shields.io/badge/Notion-%23000000.svg?style=for-the-badge&logo=notion&logoColor=white)
-![SQLite](https://img.shields.io/badge/sqlite-%2307405e.svg?style=for-the-badge&logo=sqlite&logoColor=white)
-![Google Chrome](https://img.shields.io/badge/Google%20Chrome-4285F4?style=for-the-badge&logo=GoogleChrome&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
+<div align="center">
 
 # MeetMind
+
+[![Build](https://github.com/aslahtp/meetmind/actions/workflows/release.yml/badge.svg)](https://github.com/aslahtp/meetmind/actions/workflows/release.yml)
+[![Version](https://img.shields.io/badge/version-2.0.18-F05032?style=flat-square&logo=git)](https://github.com/aslahtp/meetmind/releases)
+[![License](https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNjQiIHdpZHRoPSI2NCIgdmlld0JveD0iLTEzLjI4IC0yMS43NzkgMzIgMzIiPjxwYXRoIGQ9Ik0yLjcyLTIwLjgwNmMtOC41NzIgMC0xNS41MiA2Ljk1LTE1LjUyIDE1LjUyIDAgNi42NTMgNC4xODggMTIuMzI3IDEwLjA3IDE0LjUzNEwuODQ1LS4yOWMtMi4wMjItLjc2LTMuNDYyLTIuNzEtMy40NjItNC45OTYgMC0yLjk0NiAyLjM5LTUuMzM1IDUuMzM1LTUuMzM1czUuMzM1IDIuMzkgNS4zMzUgNS4zMzVjMCAyLjI4Ny0xLjQ0IDQuMjM3LTMuNDYyIDQuOTk2TDguMTcgOS4yNWM1Ljg4My0yLjIwNyAxMC4wNy03Ljg4IDEwLjA3LTE0LjUzNCAwLTguNTctNi45NS0xNS41Mi0xNS41Mi0xNS41MnoiIGZpbGw9IiM0MGFhNTQiIHN0cm9rZT0iIzIwNTUyYSIgc3Ryb2tlLXdpZHRoPSIuOTU5IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgODggODgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgaGVpZ2h0PSI4OCIgd2lkdGg9Ijg4Ij48cGF0aCBkPSJtMCAxMi40MDIgMzUuNjg3LTQuODYuMDE2IDM0LjQyMy0zNS42Ny4yMDN6bTM1LjY3IDMzLjUyOS4wMjggMzQuNDUzTC4wMjggNzUuNDguMDI2IDQ1Ljd6bTQuMzI2LTM5LjAyNUw4Ny4zMTQgMHY0MS41MjdsLTQ3LjMxOC4zNzZ6bTQ3LjMyOSAzOS4zNDktLjAxMSA0MS4zNC00Ny4zMTgtNi42NzgtLjA2Ni0zNC43Mzl6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==)](https://github.com/aslahtp/meetmind)
+
+[![Electron](https://img.shields.io/badge/Electron-33-47848f?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-6-646cff?style=flat-square&logo=vite)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06B6D4?style=flat-square&logo=tailwindcss)](https://tailwindcss.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-5fa04e?style=flat-square&logo=nodedotjs)](https://nodejs.org/)
+
+[![Gemini](https://img.shields.io/badge/Gemini_API-4285F4?style=flat-square&logo=googlegemini&logoColor=white)](https://aistudio.google.com/)
+[![AssemblyAI](https://img.shields.io/badge/AssemblyAI-f97316?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyBoZWlnaHQ9IjFlbSIgc3R5bGU9ImZsZXg6bm9uZTtsaW5lLWhlaWdodDoxIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIxZW0iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHRpdGxlPkFzc2VtYmx5QUk8L3RpdGxlPjxwYXRoIGQ9Ik0xMC41OTUgMS41YTMuNjk1IDMuNjk1IDAgMDAtMy40NDQgMi4zNTVMMCAyMi4yNmg1LjQzMmw1LjYyOS0xNC40ODZoLjAwMmEuOTYuOTYgMCAwMTEuNzgyIDBoLjc1VjQuODM1aC0xLjM5M0wxMy40OTggMS41aC0yLjkwMnoiIGZpbGw9IndoaXRlIj48L3BhdGg+PHBhdGggZD0iTTcuMTUxIDMuODU1YTMuNjk1IDMuNjk1IDAgMDEzLjI2LTIuMzVsLS4wMDItLjAwNUgxMy40MDVjMS41MjQgMCAyLjg5My45MzYgMy40NDQgMi4zNTVMMjQgMjIuMjZoLTUuNTI1TDExLjU0IDQuNDEzYTIuNTI4IDIuNTI4IDAgMDAtNC42MDkuMDA2bC4yMi0uNTY0eiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjcpIj48L3BhdGg+PC9zdmc+&logoColor=white)](https://www.assemblyai.com/)
+[![Sarvam AI](https://img.shields.io/badge/Sarvam_AI-10b981?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNTMgMjUwIj48ZyBmaWxsPSIjZmZmIj48cGF0aCBkPSJtMjUyIDEwOS0xLTMtMTQtMTctMS0yLTEyLTEwLTEtMWgtMXYtMWwtMS0xNS0xLTItNy0yMi0xLTMtMS0xaC0xbC0zLTEtMTAtMy0xMS0yaC0yMGwtMTEtMTEtMi0xLTIyLTE0aC0ybC0zIDEtMjAgMTFoLTFsLTEgMS0xMyAxMS0xNS0xaC0zbC0yMyAzLTMgMS0xIDF2MWwtMiAyLTggMjEtMSAyLTMgMTctMTQgMTFMMiA5OWwtMSAyLTEgMXYxbDEgMyA3IDIyIDEgMnYxbDggMTMtNCAxNnYybC0xIDIzIDEgM3YxbDEgMSAyIDIgMTkgMTJoMWwxIDEgMTYgNSA3IDE1IDEgMiAxNSAxOCAyIDJ2MWg1bDEwLTEgMTEtMiAxLTFoMmwxNi02IDE1IDdoMmwyMiA1aDRsMS0xIDE3LTE3IDEtMSAxLTIgNS04di0xbDMtNXYtMWgybDE0LTQgMS0xaDFsMjAtMTEgMS0xIDItMXYtMmwxLTF2LTFsMS0yM3YtMmwtMi04LTEtN3YtMWwtMS0xaDF2LTFoMWw3LTExIDEtMSAxLTIgOC0yMXYtMmwxLTF6bS0zOC0yOHYybC0zIDE2djFsLTEgMy0yIDYtMTgtMTMtMS0xaC0xbC0yLTF2LTFsMS0zLTEtMjEgNyAyaDFsMyAxIDE0IDZ6bS0yNSA1NC01IDUgNCA5IDUgMTl2MWwtMSAxLTE5IDRoLTJsLTggMS0yIDctMSAyLTggMTctMSAyLTEtMS0xOC05LTEtMS03LTUtNiA0LTIgMS0xNyA4LTIgMXYtMWgtMWwtNy0xOHYtMmwtMi04aC02bC0zLTFoLTFsLTktMi05LTNoLTFsLTEtMXYtMmw2LTE4IDEtMSAxLTMgMi01LTQtNC0xLTEtMS0xLTYtOC01LTgtMS0yIDItMSAxNS05IDEtMSAyLTEgNi0zdi05bDItMTl2LTJoNGwxNyAyIDIgMSA4IDIgNC03aDF2LTFsMTQtMTMgMS0xIDIgMSAxMyAxNHYxbDEgMSA0IDYgNy0xIDEtMWgxcTExLTIgMjAtMWgxbDEgMnYyMWwtMSA3IDcgNCAyIDEgMTUgMTAgMSAxIDEgMS0xIDFxLTkgMTMtMTIgMTV6TTY3IDg4djRoLTJsLTIgMS0xIDEtMTYgMTAtMS02aC0xdi0zbC0yLTE2di0zbDMtMSAxNi02IDMtMSA0LTF6bTExNi01M2gybDIwIDR2MWw3IDE5djNsMSAydjZsLTEzLTUtMy0xLTExLTItMy05LTEtMy04LTE1em0tMTkgMSAxIDJoMWw4IDE1IDEgMyAyIDUtMjIgMmgtMmwtMSAxLTEtMi0xLTItMTQtMTUgNi0zaDFsMy0xdi0xbDE1LTR6bS01NS0xNiAxLTFoMWwxOC0xMGgxbDE4IDExIDEgMiA3IDYtMTMgNS0zIDEtMiAxLTggNC04LTUtMy0xaC0xbC0xNy03ek05NCAzNmwxLTJoM2wxNyA2djFoMmwxIDEgNCAyaC0xbC0xNSAxNXYxaC0xbC0xIDJoLTFsLTMtMS0xOS0zIDQtOXpNNDMgNTZsMS0yIDgtMTkgMjEtM2gxM2wtOCAxMy0yIDMtNCAxMGgtMWwtOSAyLTMgMS0xNyA2em0tMjYgNzF2LTFsLTEtMS02LTE5di0xbDEtMXE2LTkgMTMtMTVsMTAtOCAyIDE2IDEgNCAzIDEwdjFxMCAxIDAgMGwtNiA3LTEgMS0xIDItOSAxNXptMjQgNzAtMS0xaC0xbC0xOC0xMXYtMjJsMS0yIDItMTAgMTMgMTIgMSAxIDEgMSA4IDUgMSAxdjE0bDMgMTZ6bTE0LTU1LTYgMTktNS0zLTEtMS0xLTEtMTItMTEtMi0yIDEtMyA5LTE0IDEtMSAxLTIgMy00IDUgOCA3IDggMSAyIDEgMS0xIDN6bTYgNjEtMS0zLTMtMTZ2LTlsOCAyIDExIDNoNHYybDEgMnEzIDEwIDggMTlsLTYgMWgtNmwtMTMtMXptNDQgMzItMiAxaC0xbC0xMCAyLTEwIDFoLTFsLTEyLTE2LTEtMmgtMWwtNC05IDE4IDFoM2wxMC0yIDcgOSAxNCAxMnptMjItOS0zIDItMi0yLTEzLTEwLTItMi00LTYgMjAtOSAxLTEgMSAxaDFsMSAxIDE5IDEwLTMgNC0yIDEtMSAxem01Ni0xMC00IDctMSAyLTEgMS0xMyAxNGgtMXEtMTEgMC0yMC00aC0ybC05LTQgMTQtMTAgMS0yIDEtMSA3LTcgMTAgMmg0em0xMS0zM3Y0bC00IDE2LTEgM3YxaC0yMWwtMS0xLTgtMSA5LTE5IDEtMnYtMWgybDItMSAyMS00em0yLTM3LTItNCAxLTEgMi0xIDEzLTE3IDQgNCAxIDEgMSAzIDEgMSA3IDE0djFsMSAxdjFoLTFsLTEgMXYxbC0xMyAxMC0zIDItNiAzem0zMiA0NC0xOCAxMGgtMWwtMSAxLTggMiAzLTE1IDEtNHYtMTBsOS01IDMtMiAxMi05djFsMSA4djJ6bTE2LTc5LTggMjAtMSAxdjFsLTQgNy03LTEzdi0xbC0yLTItNy05IDQtOSAxLTN2LTFsMy0xNSA3IDYgMSAyIDEgMXoiLz48cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Im0xMzUgMTM0LTkgNy04LTctNy05IDctOSA4LTcgOSA3IDcgOXoiIGNsaXAtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=)](https://dashboard.sarvam.ai/)
+[![Google STT](https://img.shields.io/badge/Google_STT-4285f4?style=flat-square&logo=googlecloud&logoColor=white)](https://cloud.google.com/speech-to-text)
+[![Notion](https://img.shields.io/badge/Notion-000000?style=flat-square&logo=notion)](https://www.notion.so/)
+[![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-MV3-4285F4?style=flat-square&logo=googlechrome)](https://developer.chrome.com/docs/extensions/)
+
+</div>
 
 AI-powered meeting notes for Windows. Records system audio + microphone, transcribes with **Google Speech-to-Text (v1/v2)**, **AssemblyAI**, or **Sarvam AI**, generates structured notes or executive-grade Markdown with Gemini, and uploads to Notion — automatically triggered from Google Meet or Zoom via a Chrome extension.
 
@@ -44,7 +55,7 @@ Electron Main Process
          ↕ IPC (contextBridge)
 React Renderer (Vite + Tailwind CSS with CSS variable dark/light theming)
     ├── Dashboard, NoteViewer (JSON / Markdown support), TranscriptViewer, Settings
-    
+  
 GitHub Actions CI/CD (.github/workflows/release.yml)
     ├── electron-builder → MeetMind Setup 1.x.x.exe + installer blockmap
     └── build-extension.js → meetmind-extension.zip → GitHub Release assets
@@ -54,14 +65,14 @@ GitHub Actions CI/CD (.github/workflows/release.yml)
 
 ## Prerequisites
 
-| Requirement              | Notes                                                              |
-| ------------------------ | ------------------------------------------------------------------ |
-| Windows 10/11 x64        | Required for WASAPI/dshow audio capture                            |
+| Requirement              | Notes                                                             |
+| ------------------------ | ----------------------------------------------------------------- |
+| Windows 10/11 x64        | Required for WASAPI/dshow audio capture                           |
 | Node.js 20+              | [nodejs.org](https://nodejs.org)                                   |
-| FFmpeg for Windows       | See [setup instructions](#ffmpeg-setup)                            |
-| Google Cloud API key     | Required only if using Google Speech-to-Text                       |
-| AssemblyAI API key       | Optional alternative to Google STT                                 |
-| Sarvam AI API key        | Optional STT provider; strong Malayalam–English code-switching     |
+| FFmpeg for Windows       | See[setup instructions](#ffmpeg-setup)                             |
+| Google Cloud API key     | Required only if using Google Speech-to-Text                      |
+| AssemblyAI API key       | Optional alternative to Google STT                                |
+| Sarvam AI API key        | Optional STT provider; strong Malayalam–English code-switching   |
 | Gemini API key           | [aistudio.google.com](https://aistudio.google.com/app/apikey)      |
 | Notion integration token | [notion.so/my-integrations](https://www.notion.so/my-integrations) |
 
@@ -215,15 +226,15 @@ meetmind/
 
 ## Available Scripts
 
-| Script                   | Description                                                                        |
-| ------------------------ | ---------------------------------------------------------------------------------- |
+| Script                     | Description                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------- |
 | `npm run dev`            | Prebuilds icons/extension, then starts Electron + Vite dev server concurrently     |
 | `npm run build`          | Build renderer, zip extension, and compile Windows NSIS installer                  |
 | `npm run build:renderer` | Build renderer bundle only (Vite)                                                  |
 | `npm run build:electron` | Package Electron application executable only                                       |
 | `npm run build:dir`      | Build unpacked Windows binary directory                                            |
-| `npm run build:ext`      | Package Chrome extension into `dist/meetmind-extension.zip` (`Extension/` root)    |
-| `npm run generate-icons` | Generate PNG and ICO icons from `assets/icons/icon.svg`                            |
+| `npm run build:ext`      | Package Chrome extension into`dist/meetmind-extension.zip` (`Extension/` root) |
+| `npm run generate-icons` | Generate PNG and ICO icons from`assets/icons/icon.svg`                           |
 
 ---
 
@@ -265,14 +276,14 @@ Output files in `dist/`:
 
 ## Gemini Models
 
-| Model ID                 | Label                         | Best for                       |
-| ------------------------ | ----------------------------- | ------------------------------ |
+| Model ID                   | Label                         | Best for                                   |
+| -------------------------- | ----------------------------- | ------------------------------------------ |
 | `gemini-3.7-flash`       | Gemini 3.7 Flash              | Default & recommended — fast, top quality |
-| `gemini-3.6-flash`       | Gemini 3.6 Flash              | High quality Flash model       |
-| `gemini-3.5-flash-lite`  | Gemini 3.5 Flash Lite         | Fast, highly cost-effective    |
-| `gemini-3.5-flash`       | Gemini 3.5 Flash              | Balanced quality and speed     |
-| `gemini-3.1-flash-lite`  | Gemini 3.1 Flash Lite         | Lightweight summaries          |
-| `gemini-3.1-pro-preview` | Gemini 3.1 Pro (Experimental) | Long or complex meetings       |
+| `gemini-3.6-flash`       | Gemini 3.6 Flash              | High quality Flash model                   |
+| `gemini-3.5-flash-lite`  | Gemini 3.5 Flash Lite         | Fast, highly cost-effective                |
+| `gemini-3.5-flash`       | Gemini 3.5 Flash              | Balanced quality and speed                 |
+| `gemini-3.1-flash-lite`  | Gemini 3.1 Flash Lite         | Lightweight summaries                      |
+| `gemini-3.1-pro-preview` | Gemini 3.1 Pro (Experimental) | Long or complex meetings                   |
 
 ---
 
