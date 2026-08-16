@@ -22,7 +22,8 @@
 
 AI-powered meeting notes for Windows. Records system audio + microphone, transcribes with **Google Speech-to-Text (v1/v2)**, **AssemblyAI**, or **Sarvam AI**, generates structured notes or executive-grade Markdown with Gemini, and uploads to Notion — automatically triggered from Google Meet or Zoom via a Chrome extension.
 
-> [!TIP] **How to use this for free?**
+> [!TIP] 
+> **How to use this for free?**
 > You can run MeetMind entirely for free! **Gemini** has a generous free tier which is more than enough for a moderate amount of meetings per day. For transcription, **AssemblyAI's** $50 signup credits will likely be enough for a lifetime if only used for MeetMind.
 
 ---
