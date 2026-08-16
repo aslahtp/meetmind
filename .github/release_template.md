@@ -31,4 +31,12 @@
 2. Open Chrome -> `chrome://extensions`
 3. Enable **Developer Mode** (top right)
 4. Click **Load unpacked**
-5. Select the `meetmind-chrome-extension` folder
+5. Select the extracted extension folder
+
+## Quick Start
+
+1. Open the **MeetMind** desktop app.
+2. Join a meeting on **Google Meet** or **Zoom** in Chrome.
+3. Click the floating MeetMind overlay button to start recording.
+4. When finished, stop recording — MeetMind will automatically transcribe the audio, generate structured notes with Gemini, and sync to Notion.
+
