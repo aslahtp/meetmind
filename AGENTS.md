@@ -18,6 +18,31 @@ For every change beyond a minor fix (typo, comment, formatting), update both fil
 
 Skip this process only for changes that touch no functionality: comments, formatting, whitespace, or internal documentation.
 
+## Codebase Architecture
+
+Three artifacts build from this one repo: the Electron desktop app, its React renderer, and a Chrome MV3 extension (`extension/`) that bridges Google Meet/Zoom to the desktop app.
+
+- **Main process** (`electron/main.js`) owns the window/tray, all `ipcMain` handlers, the recording state machine, and `runProcessingPipeline()` (transcribe → generate notes → optional Notion upload). `electron/preload.js` exposes this surface to the renderer as `window.meetmind.*` (contextIsolation on, nodeIntegration off) — grouped by feature: `window`, `recording`, `sessions`, `notion`, `models`, `gemini`, `api` (connection tests), `processing`, `capture`, `updater`, `ffmpeg`.
+- **Audio capture** has two paths: the primary path has the renderer capture system audio via Electron's display-media loopback + mic via Web Audio, streaming chunks to main over `capture:chunk` IPC which appends them to an in-progress `.webm` on disk; on stop, `convertWebmToWav()` (`electron/audio/recorder.js`, ffmpeg-backed) produces the final `.wav`. If renderer capture fails to start, `handleStartRecording()` falls back to direct ffmpeg dshow capture (mic + Stereo Mix).
+- **Processing pipeline** (`runProcessingPipeline` in `main.js`): Stage 1 transcription (`electron/services/transcription.js`) is pluggable — Google STT v1/v2, AssemblyAI, or Sarvam AI (`saaras:v3`, needed for English/Malayalam code-switching) selected via `config.sttService`. Stage 2 (`electron/services/gemini.js`) turns the transcript into structured JSON notes or executive Markdown, depending on `noteOutputMode`. Stage 3 (`electron/services/notion.js`) is optional and only runs if a Notion token + page ID are configured. Progress is pushed to the renderer (`processing:progress`) and to the extension (WS broadcast) at each stage.
+- **Persistence**: `electron/db/sessions.js` uses `sql.js` (SQLite compiled to WASM) held in memory and rewritten to a single file on every mutation — there's no migration system, schema is `CREATE TABLE IF NOT EXISTS`. `electron/utils/config.js` wraps `electron-store` for settings/API keys.
+- **Desktop ↔ extension bridge**: `electron/websocket-server.js` runs a local WS server, scanning ports 39842–39852 until one is free, and only accepts connections with a `chrome-extension://` origin. The extension's service worker (`extension/background.js`) probes the same port range, sends `START_RECORDING`/`STOP_RECORDING`/`APP_STATUS`, and relays `RECORDING_STARTED`/`PROCESSING_PROGRESS`/`PROCESSING_COMPLETE` broadcasts to the floating overlay injected into Meet/Zoom tabs by `extension/content.js` + `extension/overlay/`.
+- **Renderer** (`renderer/app.jsx`): no router, just view-state switching between `Dashboard.jsx` (session list), `NoteViewer.jsx`/`TranscriptViewer.jsx` (a completed session), `Settings.jsx` (API keys, service selection, FFmpeg install flow, onboarding), and `LogsViewer.jsx` (tails `electron/utils/logger.js` output via the `log:entry` IPC event).
+- **Build/package**: Vite builds the renderer into `dist/renderer/`; `scripts/build-extension.js` zips `extension/` into `dist/meetmind-extension.zip`; `electron-builder.yml` packages the Windows NSIS installer, pulling ffmpeg in as `extraResources` (never bundled in the asar) — it's either committed locally to `assets/ffmpeg/` or downloaded at runtime via the `ffmpeg:install` IPC handler, which fetches a build from gyan.dev.
+
+## Commands
+
+No lint or test script exists in this repo — verify changes by running the app (`npm run dev`) and exercising the affected flow directly.
+
+- `npm install` — install dependencies (Node 20+, Windows only)
+- `npm run dev` — full dev loop: regenerates icons + rebuilds the Chrome extension (`predev`), then runs Vite and Electron concurrently. Renderer serves at http://localhost:5173; Electron opens DevTools automatically in dev
+- `npm run dev:renderer` — Vite dev server only
+- `npm run dev:electron` — Electron only (expects `dev:renderer` already running on :5173)
+- `npm run build:ext` — rebuild just `dist/meetmind-extension.zip` from `extension/` via `scripts/build-extension.js`
+- `npm run build:dir` — production renderer build + unpacked Electron app under `dist/desktop/` (fast iteration, skips installer packaging)
+- `npm run build` — full production build: Vite build + electron-builder NSIS installer (`dist/desktop/MeetMind-Setup-X.Y.Z.exe`). Requires `assets/ffmpeg/ffmpeg.exe`, `assets/ffmpeg/ffprobe.exe`, and `assets/icons/icon.ico` to already exist (not committed — download FFmpeg from the app's Settings screen or gyan.dev/ffmpeg/builds)
+- `npm run generate-icons` — regenerate `assets/icons/*` from the source icon
+
 ## Learned Workspace Facts
 
 - MeetMind renderer uses React + Tailwind; theming is driven by CSS variables in `renderer/styles/globals.css` and Tailwind `darkMode: 'class'` with `<html class="dark">` in `renderer/index.html`.
