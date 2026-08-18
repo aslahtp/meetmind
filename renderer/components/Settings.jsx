@@ -1217,22 +1217,29 @@ export default function Settings({ onSave }) {
                   return (
                     <div
                       key={key}
-                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800/80"
+                      className="flex flex-col px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800/80 gap-1"
                     >
-                      <div>
-                        <span className="text-xs font-mono font-semibold text-slate-800 dark:text-zinc-200">{label}</span>
-                        <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-2" dangerouslySetInnerHTML={{ __html: desc }} />
-                      </div>
-                      {stat?.found ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-mono text-slate-400 dark:text-zinc-500">
-                            {stat.version && stat.version !== 'unknown' ? stat.version : ''}
-                            {stat.source === 'bundled' ? ' (bundled)' : ' (system)'}
-                          </span>
-                          <CheckCircle2 size={14} className="text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-mono font-semibold text-slate-800 dark:text-zinc-200">{label}</span>
+                          <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-2" dangerouslySetInnerHTML={{ __html: desc }} />
                         </div>
-                      ) : (
-                        <XCircle size={14} className="text-rose-500 dark:text-rose-400 flex-shrink-0" />
+                        {stat?.found ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-mono text-slate-400 dark:text-zinc-500">
+                              {stat.version && stat.version !== 'unknown' ? stat.version : ''}
+                              {stat.source === 'bundled' ? ' (bundled)' : ' (system)'}
+                            </span>
+                            <CheckCircle2 size={14} className="text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
+                          </div>
+                        ) : (
+                          <XCircle size={14} className="text-rose-500 dark:text-rose-400 flex-shrink-0" />
+                        )}
+                      </div>
+                      {stat?.found && stat.path && (
+                        <p className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 truncate" title={stat.path}>
+                          {stat.path}
+                        </p>
                       )}
                     </div>
                   );
