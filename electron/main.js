@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Readable } = require('stream');
@@ -103,6 +103,15 @@ function focusMainWindow() {
 
 // ── Window ──────────────────────────────────────────────────────────────────
 
+// Window background painted before the renderer's first frame — must match the
+// theme the renderer is about to apply, otherwise the window flashes.
+function resolveStartupBackgroundColor(themeSetting) {
+  const effective = themeSetting === 'system'
+    ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
+    : (themeSetting === 'light' ? 'light' : 'dark');
+  return effective === 'light' ? '#f8fafc' : '#0c0c0f';  // matches --color-background
+}
+
 function createMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -111,12 +120,18 @@ function createMainWindow() {
     return mainWindow;
   }
 
+  // Pass the saved theme into the renderer's argv so preload can apply it before
+  // first paint without any IPC round-trip (which would otherwise mean either a
+  // visible light→dark flash, or a blocking sendSync).
+  const savedTheme = getConfig().theme || 'dark';
+  const backgroundColor = resolveStartupBackgroundColor(savedTheme);
+
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 720,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#0c0c0f',
+    backgroundColor,
     frame: false,            // Custom titlebar in renderer — no native frame at all
     backgroundMaterial: 'none',
     webPreferences: {
@@ -125,6 +140,7 @@ function createMainWindow() {
       nodeIntegration: false,
       sandbox: false,
       backgroundThrottling: false,
+      additionalArguments: [`--meetmind-theme=${savedTheme}`],
     },
     show: false,
     icon: getAppIconPath(),

@@ -67,6 +67,7 @@ function App() {
   const [view, setView] = useState('dashboard');           // 'dashboard' | 'session' | 'settings' | 'logs'
   const [selectedSession, setSelectedSession] = useState(null);
   const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
   const [config, setConfigState] = useState(null);
   const [theme, setThemeState] = useState('dark');         // 'dark' | 'light' | 'system'
   const [isRecording, setIsRecording] = useState(false);
@@ -169,20 +170,35 @@ function App() {
 
   // Load config and sessions on mount
   useEffect(() => {
+    // Never let the loading state strand the UI: if the bridge is missing or a
+    // call rejects/never settles, fall through to the real view rather than
+    // leaving placeholders on screen forever.
+    const failsafe = setTimeout(() => setSessionsLoading(false), 5000);
+
     async function init() {
       if (!window.meetmind) return;
-      const cfg = await window.meetmind.config.get();
-      setConfigState(cfg);
-      const initialTheme = ['light', 'dark', 'system'].includes(cfg?.theme) ? cfg.theme : 'dark';
-      setThemeState(initialTheme);
-      applyTheme(initialTheme);
+      try {
+        const cfg = await window.meetmind.config.get();
+        setConfigState(cfg);
+        const initialTheme = ['light', 'dark', 'system'].includes(cfg?.theme) ? cfg.theme : 'dark';
+        setThemeState(initialTheme);
+        applyTheme(initialTheme);
 
-      if (!hasSttApiKey(cfg) || !cfg?.geminiApiKey?.trim()) setShowOnboarding(true);
+        if (!hasSttApiKey(cfg) || !cfg?.geminiApiKey?.trim()) setShowOnboarding(true);
 
-      const list = await window.meetmind.sessions.list();
-      setSessions(list);
+        const list = await window.meetmind.sessions.list();
+        setSessions(list);
+      } catch (err) {
+        console.error('Startup load failed:', err);
+      }
     }
-    init();
+
+    init().finally(() => {
+      clearTimeout(failsafe);
+      setSessionsLoading(false);
+    });
+
+    return () => clearTimeout(failsafe);
   }, []);
 
   // Listen for system theme changes when theme is set to 'system'
@@ -347,7 +363,7 @@ function App() {
   const ctx = {
     view, setView,
     selectedSession, setSelectedSession,
-    sessions, setSessions, refreshSessions,
+    sessions, setSessions, refreshSessions, sessionsLoading,
     config, setConfigState, updateConfig,
     theme, setTheme, toggleTheme,
     isRecording, recordingSessionId,

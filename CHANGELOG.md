@@ -6,6 +6,21 @@ updated: 2026-08-18
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [2.4.0] - 2026-08-18
+
+### Added
+- Dashboard shows skeleton placeholders (sized to match the real header, stat tiles, and session cards) when the initial session list is slow to load. Loads that finish quickly (the normal case) go straight to content, so the skeleton never appears as a flash of its own.
+
+### Fixed
+- Eliminated the light/dark theme flash on startup: main passes the saved theme to the renderer via `additionalArguments` and preload applies it to `<html>` before first paint. The window's own `backgroundColor` now also follows the saved theme instead of always being dark.
+- Startup no longer leaves the dashboard stuck on placeholders if a config/session IPC call fails or never settles — the loading state now clears on every path, with a failsafe timeout.
+- Preload now exposes the `window.meetmind` bridge before doing any cosmetic startup work, and the theme code can no longer throw. Previously a failure there aborted the whole preload script, leaving the app with no session list, no saved settings, and dead window controls while in-app navigation still worked.
+
+## [2.3.1] - 2026-08-18
+
+### Fixed
+- Sidebar nav items no longer shift by a couple pixels when switching pages — the active item's border was only reserved on `.active`, changing its box height relative to inactive items.
+
 ## [2.3.0] - 2026-08-18
 
 ### Added

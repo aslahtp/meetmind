@@ -224,9 +224,104 @@ function SessionCard({ session, onClick, onDelete, isDeleting }) {
   );
 }
 
+function SkeletonBlock({ className = '' }) {
+  return <div className={`bg-slate-200 dark:bg-zinc-800 animate-pulse ${className}`} />;
+}
+
+function StatTileSkeleton() {
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5">
+      <div className="flex items-center justify-between mb-2">
+        <SkeletonBlock className="h-3 w-20 rounded" />
+        <SkeletonBlock className="w-7 h-7 rounded-lg" />
+      </div>
+      <SkeletonBlock className="h-7 w-12 rounded mb-1.5" />
+      <SkeletonBlock className="h-3 w-24 rounded" />
+    </div>
+  );
+}
+
+function SessionCardSkeleton() {
+  return (
+    <div className="w-full">
+      {/* Matches the .card padding/border/radius of a real SessionCard so it occupies the same footprint */}
+      <div className="card cursor-default">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <SkeletonBlock className="h-4 w-56 rounded mb-2.5" />
+            <div className="flex items-center gap-2">
+              <SkeletonBlock className="h-3 w-24 rounded" />
+              <SkeletonBlock className="h-3 w-16 rounded" />
+              <SkeletonBlock className="h-3 w-14 rounded" />
+            </div>
+          </div>
+          <SkeletonBlock className="h-[22px] w-20 rounded-full flex-shrink-0" />
+        </div>
+        <div className="flex items-center gap-4 mt-3.5 pt-3 border-t border-slate-200 dark:border-zinc-800/60">
+          <SkeletonBlock className="h-3 w-24 rounded" />
+          <SkeletonBlock className="h-3 w-20 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40">
+      {/* Top Header */}
+      <div className="flex items-center justify-between px-6 pt-3 pb-3 border-b border-slate-200 dark:border-zinc-800/80 flex-shrink-0">
+        <div>
+          <SkeletonBlock className="h-6 w-44 rounded mb-2" />
+          <SkeletonBlock className="h-3 w-32 rounded" />
+        </div>
+        <div className="flex items-center gap-2.5">
+          <SkeletonBlock className="h-8 w-8 rounded-lg" />
+          <SkeletonBlock className="h-8 w-28 rounded-lg" />
+          <SkeletonBlock className="h-8 w-32 rounded-lg" />
+        </div>
+      </div>
+
+      {/* Overview Stats Bar */}
+      <div className="grid grid-cols-4 gap-3 px-6 pt-4 pb-2 flex-shrink-0">
+        <StatTileSkeleton />
+        <StatTileSkeleton />
+        <StatTileSkeleton />
+        <StatTileSkeleton />
+      </div>
+
+      {/* Session list */}
+      <div className="flex-1 overflow-y-auto px-6 py-3 space-y-3">
+        <SessionCardSkeleton />
+        <SessionCardSkeleton />
+        <SessionCardSkeleton />
+      </div>
+    </div>
+  );
+}
+
+// Sessions come from a local SQLite file and normally load in well under 100ms.
+// Showing the skeleton instantly would just swap one flash for another, so only
+// reveal it if loading is actually slow enough to look like a hang.
+const SKELETON_DELAY_MS = 160;
+
+function useDelayedFlag(active, delayMs) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!active) {
+      setVisible(false);
+      return;
+    }
+    const t = setTimeout(() => setVisible(true), delayMs);
+    return () => clearTimeout(t);
+  }, [active, delayMs]);
+  return visible;
+}
+
 export default function Dashboard({ onOpenSession }) {
-  const { sessions, refreshSessions, startRecording, isRecording } = useApp();
+  const { sessions, refreshSessions, startRecording, isRecording, sessionsLoading } = useApp();
   const [deletingIds, setDeletingIds] = useState(new Set());
+  const showSkeleton = useDelayedFlag(sessionsLoading, SKELETON_DELAY_MS);
 
   const metrics = useMemo(() => {
     const completed = sessions.filter((s) => s.status === 'complete');
@@ -278,6 +373,13 @@ export default function Dashboard({ onOpenSession }) {
   useEffect(() => {
     refreshSessions();
   }, []);
+
+  // While loading, render the skeleton only once it's been slow enough to warrant
+  // one; before that show nothing, so a fast load goes straight to real content
+  // without any intermediate flash.
+  if (sessionsLoading) {
+    return showSkeleton ? <DashboardSkeleton /> : <div className="h-full bg-slate-50 dark:bg-zinc-950/40" />;
+  }
 
   if (sessions.length === 0) {
     return <EmptyState onRecord={startRecording} />;

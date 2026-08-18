@@ -1,5 +1,33 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Apply the theme class to <html> before the page's own scripts run, so the
+// renderer never paints the wrong theme while the async config:get round-trip is
+// in flight. Main passes the saved theme via webPreferences.additionalArguments,
+// so this reads argv only — no IPC, nothing that can block or deadlock startup.
+//
+// This runs *after* exposeInMainWorld below and can never throw: preload executes
+// before the document is parsed, so documentElement may not exist yet. Losing the
+// theme costs a brief flash; losing the bridge takes out sessions, settings, and
+// the custom titlebar's window controls with it.
+function applyStartupThemeClass() {
+  const root = document && document.documentElement;
+  if (!root) return false;
+
+  let effective = 'dark';
+  try {
+    const arg = (process.argv || []).find((a) => a.startsWith('--meetmind-theme='));
+    const configured = arg ? arg.split('=')[1] : 'dark';
+    const themeSetting = ['light', 'dark', 'system'].includes(configured) ? configured : 'dark';
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    effective = themeSetting === 'system' ? (prefersDark ? 'dark' : 'light') : themeSetting;
+  } catch {
+    effective = 'dark';
+  }
+
+  root.classList.add(effective === 'light' ? 'light' : 'dark');
+  return true;
+}
+
 contextBridge.exposeInMainWorld('meetmind', {
   // Window controls (frameless window)
   window: {
@@ -137,3 +165,13 @@ contextBridge.exposeInMainWorld('meetmind', {
     ipcRenderer.removeListener(channel, callback);
   },
 });
+
+// Bridge is up — now the cosmetic part, isolated so a failure here can't affect it.
+try {
+  if (!applyStartupThemeClass()) {
+    // <html> didn't exist yet; retry at the earliest point it must.
+    document.addEventListener('DOMContentLoaded', () => {
+      try { applyStartupThemeClass(); } catch { /* theme is cosmetic — never fatal */ }
+    }, { once: true });
+  }
+} catch { /* theme is cosmetic — never fatal */ }
