@@ -6,6 +6,18 @@ updated: 2026-08-18
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [2.3.0] - 2026-08-18
+
+### Added
+- Post-update integrity check: after an update installs, MeetMind verifies bundled FFmpeg/FFprobe are actually present and shows a "Repair Now" banner in Settings if they're missing, instead of failing silently mid-recording.
+- Updates now require an explicit "Download Update" and "Restart & Install" click each — nothing downloads or installs itself in the background anymore.
+- Background update checks pause automatically after 3 consecutive failures (shown in Settings) and resume as soon as a manual "Check for Updates" succeeds, instead of retrying silently forever.
+- Update download progress (percent, transferred/total, speed) now shows live in Settings, matching the FFmpeg install progress UI.
+
+### Fixed
+- Settings' "You're up to date" and update-error messages never rendered because they checked status/field names (`up-to-date`, `.error`) that didn't match what the updater actually reports (`not-available`, `.errorMessage`).
+- Live updater status (checking/available/downloading/downloaded/error) now pushes to Settings in real time instead of only refreshing on the screen's own button clicks, so a background check or download is reflected immediately.
+
 ## [2.2.1] - 2026-08-18
 
 ### Fixed

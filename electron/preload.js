@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld('meetmind', {
   // Auto updater
   updater: {
     check: () => ipcRenderer.invoke('updater:check'),
+    download: () => ipcRenderer.invoke('updater:download'),
     install: () => ipcRenderer.invoke('updater:install'),
     getStatus: () => ipcRenderer.invoke('updater:get-status'),
   },

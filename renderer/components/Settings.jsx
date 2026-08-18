@@ -32,6 +32,7 @@ import {
   Braces,
   Download,
   Terminal,
+  AlertTriangle,
 } from 'lucide-react';
 import NotionIcon from './NotionIcon.jsx';
 import GoogleCloudIcon from './GoogleCloudIcon.jsx';
@@ -453,6 +454,18 @@ export default function Settings({ onSave }) {
     load();
   }, []);
 
+  // Live updater state (checking/downloading/downloaded/error) pushed from the main process,
+  // so progress and status reflect background checks too — not just ones this screen triggered.
+  useEffect(() => {
+    if (!window.meetmind?.on) return;
+    const unsubscribe = window.meetmind.on('updater:status', (status) => {
+      setUpdaterStatus(status);
+      if (status?.status !== 'checking') setCheckingUpdates(false);
+      if (status?.status !== 'downloading') setDownloadingUpdate(false);
+    });
+    return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
+  }, []);
+
   const handleChange = (key, val) => {
     setForm((prev) => ({ ...prev, [key]: val }));
   };
@@ -519,8 +532,9 @@ export default function Settings({ onSave }) {
     if (!window.meetmind?.updater) return;
     setCheckingUpdates(true);
     try {
-      const status = await window.meetmind.updater.check();
-      setUpdaterStatus(status);
+      // Result state is picked up via the live 'updater:status' subscription; this call
+      // just kicks the check off (and never triggers a download — that's a separate step).
+      await window.meetmind.updater.check();
     } finally {
       setCheckingUpdates(false);
     }
@@ -530,7 +544,10 @@ export default function Settings({ onSave }) {
     if (!window.meetmind?.updater) return;
     setDownloadingUpdate(true);
     try {
-      await window.meetmind.updater.check();
+      const result = await window.meetmind.updater.download();
+      if (result && result.success === false) {
+        setUpdaterStatus((prev) => ({ ...prev, status: 'error', errorMessage: result.error }));
+      }
     } finally {
       setDownloadingUpdate(false);
     }
@@ -1383,12 +1400,35 @@ export default function Settings({ onSave }) {
           </div>
 
           <div className="p-4 rounded-xl border border-slate-200 dark:border-[#333] bg-white dark:bg-[rgb(var(--color-tertiary))] space-y-3 shadow-sm dark:shadow-none">
+            {/* Post-update integrity warning — surfaces a broken release (e.g. missing bundled
+                FFmpeg) right after it installs, instead of failing silently mid-recording. */}
+            {updaterStatus?.postUpdateCheck && !updaterStatus.postUpdateCheck.ok && (
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/60 space-y-2">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                  <AlertTriangle size={13} />
+                  Update to v{updaterStatus.postUpdateCheck.version} is missing required files
+                </p>
+                <p className="text-[11px] text-amber-700 dark:text-amber-400/90">
+                  {updaterStatus.postUpdateCheck.missing.join(', ')} could not be found after updating. Audio recording won&apos;t work until this is repaired.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleInstallFfmpeg}
+                  disabled={installingFfmpeg}
+                  className="btn-outline text-xs px-3 py-1.5"
+                >
+                  <RotateCcw size={12} strokeWidth={2} />
+                  Repair Now
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-slate-900 dark:text-zinc-200">
                   Current Version: <span className="font-mono text-emerald-600 dark:text-emerald-400">v{appVersion || (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '')}</span>
                 </p>
-                {updaterStatus?.updateInfo?.version && (
+                {updaterStatus?.updateInfo?.version && updaterStatus.status !== 'not-available' && (
                   <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
                     Latest Available: <span className="font-mono text-emerald-600 dark:text-emerald-400">v{updaterStatus.updateInfo.version}</span>
                   </p>
@@ -1399,7 +1439,7 @@ export default function Settings({ onSave }) {
                 <button
                   type="button"
                   onClick={handleCheckUpdates}
-                  disabled={checkingUpdates}
+                  disabled={checkingUpdates || downloadingUpdate}
                   className="btn-outline text-xs px-3 py-1.5"
                 >
                   {checkingUpdates ? (
@@ -1422,14 +1462,8 @@ export default function Settings({ onSave }) {
                     disabled={downloadingUpdate}
                     className="btn-primary text-xs px-3 py-1.5"
                   >
-                    {downloadingUpdate ? (
-                      <>
-                        <Loader2 size={12} strokeWidth={2} className="spinner" />
-                        Downloading…
-                      </>
-                    ) : (
-                      'Download Update'
-                    )}
+                    <Download size={12} strokeWidth={2} />
+                    Download Update
                   </button>
                 )}
 
@@ -1445,15 +1479,54 @@ export default function Settings({ onSave }) {
               </div>
             </div>
 
-            {updaterStatus?.status === 'up-to-date' && (
+            {/* Download progress */}
+            {updaterStatus?.status === 'downloading' && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-700 dark:text-zinc-300">
+                    Downloading v{updaterStatus.updateInfo?.version}…
+                  </p>
+                  <span className="text-[11px] font-mono text-slate-400 dark:text-zinc-500">
+                    {updaterStatus.downloadProgress?.percent ?? 0}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-300"
+                    style={{ width: `${updaterStatus.downloadProgress?.percent ?? 0}%` }}
+                  />
+                </div>
+                {updaterStatus.downloadProgress?.total > 0 && (
+                  <p className="text-[10px] text-slate-400 dark:text-zinc-500">
+                    {(updaterStatus.downloadProgress.transferred / 1024 / 1024).toFixed(1)} MB / {(updaterStatus.downloadProgress.total / 1024 / 1024).toFixed(1)} MB
+                    {updaterStatus.downloadProgress.bytesPerSecond > 0 && ` · ${(updaterStatus.downloadProgress.bytesPerSecond / 1024 / 1024).toFixed(1)} MB/s`}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {updaterStatus?.status === 'downloaded' && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 size={13} /> v{updaterStatus.updateInfo?.version} downloaded and verified — restart to install.
+              </p>
+            )}
+
+            {updaterStatus?.status === 'not-available' && (
               <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 size={13} /> You are running the latest version of MeetMind.
               </p>
             )}
 
-            {updaterStatus?.error && (
+            {updaterStatus?.status === 'error' && updaterStatus?.errorMessage && (
               <p className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                <XCircle size={13} /> {updaterStatus.error}
+                <XCircle size={13} /> {updaterStatus.errorMessage}
+              </p>
+            )}
+
+            {updaterStatus?.backgroundChecksSuspended && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400/90 flex items-center gap-1.5">
+                <AlertTriangle size={12} />
+                Automatic update checks paused after repeated failures — use "Check for Updates" to retry.
               </p>
             )}
           </div>

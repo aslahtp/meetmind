@@ -11,7 +11,7 @@ const { transcribeAudio, testGoogleSTT, testAssemblyAI, testSarvam } = require('
 const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/gemini');
 const { uploadToNotion, testNotionConnection } = require('./services/notion');
 const { testGeminiConnection } = require('./services/gemini');
-const { initializeAutoUpdater, checkForUpdates, quitAndInstall, getUpdaterState } = require('./services/updater');
+const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState } = require('./services/updater');
 const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -254,7 +254,6 @@ function createTray() {
 function updateTrayMenu() {
   if (!tray) return;
   const updaterState = getUpdaterState();
-  const updateDownloaded = updaterState.status === 'downloaded';
 
   const menuItems = [
     {
@@ -264,10 +263,16 @@ function updateTrayMenu() {
     { type: 'separator' },
   ];
 
-  if (updateDownloaded) {
+  if (updaterState.status === 'downloaded') {
     menuItems.push({
       label: `✨ Restart to Update (v${updaterState.updateInfo?.version || ''})`,
       click: () => { quitAndInstall(); },
+    });
+    menuItems.push({ type: 'separator' });
+  } else if (updaterState.status === 'available') {
+    menuItems.push({
+      label: `⬇ Download Update (v${updaterState.updateInfo?.version || ''})`,
+      click: async () => { focusMainWindow(); await downloadUpdate(); },
     });
     menuItems.push({ type: 'separator' });
   }
@@ -907,6 +912,7 @@ function registerIpcHandlers() {
 
   // ── Auto updater ──────────────────────────────────────────────────────────
   ipcMain.handle('updater:check', (_e) => checkForUpdates(true));
+  ipcMain.handle('updater:download', (_e) => downloadUpdate());
   ipcMain.handle('updater:install', (_e) => quitAndInstall());
   ipcMain.handle('updater:get-status', (_e) => getUpdaterState());
   ipcMain.handle('app:version', (_e) => app.getVersion());
