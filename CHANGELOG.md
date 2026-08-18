@@ -6,6 +6,11 @@ updated: 2026-08-18
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [2.2.1] - 2026-08-18
+
+### Fixed
+- Release workflow now downloads real FFmpeg/FFprobe binaries into `assets/ffmpeg/` before packaging; previously the CI-built installer shipped without them (the folder is gitignored and never populated on a fresh checkout), so every GitHub-released build — including auto-updates — reported FFmpeg as missing despite `npm run dev` working locally.
+
 ## [2.2.0] - 2026-08-18
 
 ### Added

@@ -67,6 +67,28 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Download FFmpeg Binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path assets/ffmpeg | Out-Null
+
+          $zipPath = Join-Path $env:RUNNER_TEMP "ffmpeg.zip"
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $zipPath -UserAgent "MeetMind-CI/1.0"
+
+          $extractDir = Join-Path $env:RUNNER_TEMP "ffmpeg-extracted"
+          Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
+
+          $ffmpegExe = Get-ChildItem -Path $extractDir -Filter "ffmpeg.exe" -Recurse | Select-Object -First 1
+          $ffprobeExe = Get-ChildItem -Path $extractDir -Filter "ffprobe.exe" -Recurse | Select-Object -First 1
+          if (-not $ffmpegExe -or -not $ffprobeExe) {
+            throw "Could not locate ffmpeg.exe/ffprobe.exe in the downloaded archive."
+          }
+
+          Copy-Item $ffmpegExe.FullName -Destination "assets/ffmpeg/ffmpeg.exe" -Force
+          Copy-Item $ffprobeExe.FullName -Destination "assets/ffmpeg/ffprobe.exe" -Force
+          Write-Host "FFmpeg binaries staged in assets/ffmpeg/ for packaging."
+
       - name: Build Desktop App and Extension
         run: npm run build
         env:
