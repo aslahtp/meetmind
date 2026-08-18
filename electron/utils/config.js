@@ -122,6 +122,10 @@ const schema = {
     type: 'boolean',
     default: true,
   },
+  hideLogsInSidebar: {
+    type: 'boolean',
+    default: false,
+  },
 };
 
 const store = new Store({ schema, name: 'meetmind-config' });
@@ -185,6 +189,7 @@ function getConfig() {
     minSpeakers:               store.get('minSpeakers') || 1,
     maxSpeakers:               store.get('maxSpeakers') || 6,
     autoCheckUpdates:          store.get('autoCheckUpdates') !== false,
+    hideLogsInSidebar:         store.get('hideLogsInSidebar') || false,
   };
 }
 

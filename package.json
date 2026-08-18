@@ -1,6 +1,6 @@
 {
   "name": "meetmind",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "AI meeting notes — transcribe, summarize, and upload to Notion",
   "repository": {
     "type": "git",
