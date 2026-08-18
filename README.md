@@ -51,7 +51,8 @@ AI-powered meeting notes for Windows. Records system audio + microphone, transcr
    - **Google STT**: Enter your Google Cloud API key and Project ID.
    - **Sarvam AI STT**: Paste your Sarvam AI API key.
 4. Add your **Gemini API Key** ([Get it from Google AI Studio](https://aistudio.google.com/app/apikey)).
-5. Configure **Audio Devices** (System Audio + Microphone) and run a quick test recording.
+5. Under **System Dependencies**, click **Download & Install FFmpeg** if it is not already installed.
+6. Configure **Audio Devices** (System Audio + Microphone) and run a quick test recording.
 
 ### Browser Extension
 
@@ -74,7 +75,9 @@ npm install
 
 ### 2. FFmpeg Setup
 
-Download FFmpeg for Windows from [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/) (essentials build), and place the executables in:
+You can let the app install FFmpeg automatically by running it and clicking **Download & Install FFmpeg** under Settings → System Dependencies.
+
+Alternatively, for manual setup, download FFmpeg from [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/) (essentials build) and place the executables in:
 
 ```bash
 assets/ffmpeg/ffmpeg.exe
