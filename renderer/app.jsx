@@ -469,7 +469,7 @@ function TitleBar() {
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar() {
-  const { view, setView, isRecording, startRecording, theme, toggleTheme } = useApp();
+  const { view, setView, isRecording, startRecording, theme, toggleTheme, config } = useApp();
 
   const themeDisplay = theme === 'system' ? 'System' : theme === 'light' ? 'Light' : 'Dark';
 
@@ -501,13 +501,15 @@ function Sidebar() {
           <SettingsIcon size={16} strokeWidth={2} />
           Settings
         </button>
-        <button
-          className={`sidebar-item w-full ${view === 'logs' ? 'active' : ''}`}
-          onClick={() => setView('logs')}
-        >
-          <Terminal size={16} strokeWidth={2} />
-          Logs
-        </button>
+        {!config?.hideLogsInSidebar && (
+          <button
+            className={`sidebar-item w-full ${view === 'logs' ? 'active' : ''}`}
+            onClick={() => setView('logs')}
+          >
+            <Terminal size={16} strokeWidth={2} />
+            Logs
+          </button>
+        )}
       </nav>
 
       {/* Theme toggle in sidebar */}

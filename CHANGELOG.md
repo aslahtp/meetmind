@@ -6,6 +6,11 @@ updated: 2026-08-18
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [2.2.0] - 2026-08-18
+
+### Added
+- **Hide Logs toggle in Settings** — Added a preference to remove the Logs viewer button from the sidebar menu to reduce clutter.
+
 ## [2.1.1] - 2026-08-18
 
 ### Fixed

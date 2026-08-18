@@ -366,6 +366,7 @@ export default function Settings({ onSave }) {
     noteOutputMode: 'json',
     autoLaunch: false,
     autoCheckUpdates: true,
+    hideLogsInSidebar: false,
   });
 
   const [initialForm, setInitialForm] = useState(null);
@@ -424,6 +425,7 @@ export default function Settings({ onSave }) {
           noteOutputMode: cfg.noteOutputMode || cfg.promptOutputMode || 'json',
           autoLaunch: cfg.autoLaunch || false,
           autoCheckUpdates: cfg.autoCheckUpdates !== false,
+          hideLogsInSidebar: cfg.hideLogsInSidebar || false,
         };
         setForm(loadedForm);
         setInitialForm(loadedForm);
@@ -1163,6 +1165,27 @@ export default function Settings({ onSave }) {
                 <span
                   className={`block w-4 h-4 rounded-full bg-white transition-transform ${
                     form.autoCheckUpdates !== false ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Hide Logs in Sidebar */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium text-slate-900 dark:text-zinc-100">Hide Logs from Sidebar</h4>
+                <p className="text-xs text-slate-500 dark:text-[#555]">Remove the logs viewer from the sidebar menu</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleChange('hideLogsInSidebar', !form.hideLogsInSidebar)}
+                className={`w-11 h-6 rounded-full transition-colors relative ${
+                  form.hideLogsInSidebar ? 'bg-emerald-600 dark:bg-green-600' : 'bg-slate-300 dark:bg-[#333]'
+                }`}
+              >
+                <span
+                  className={`block w-4 h-4 rounded-full bg-white transition-transform ${
+                    form.hideLogsInSidebar ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
               </button>
