@@ -1,154 +1,200 @@
 ---
 tags: [meta, changelog]
-updated: 2026-08-15
+updated: 2026-08-18
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
-## v2.0.18
+## [2.1.1] - 2026-08-18
 
-- **Animated Card Deletion in Dashboard** — added a multi-phase exit animation with crimson glow, slide-and-swish dissolve, height collapse, and active spinner feedback when deleting a meeting card.
+### Fixed
+- FFmpeg/ffprobe resolution now falls back to the system PATH when bundled binaries are absent; recorder, device list, file conversion, and duration probing all use the same bundled-first → system PATH order as the Settings status check, so "found" in Settings always means recording will actually work.
 
-## v2.0.17
+## [2.1.0] - 2026-08-18
 
-- **Floating Glassmorphic Tooltips for Output Modes** — replaced the static text box with sleek floating hover popovers directly on the JSON and Markdown toggle buttons.
+### Added
+- **System Dependencies section in Settings** — "Check Status" button detects bundled FFmpeg/ffprobe or system PATH and shows version + source per binary.
+- **In-app FFmpeg installer** — "Download & Install FFmpeg" button downloads `ffmpeg.exe` + `ffprobe.exe` from Gyan.dev (~80 MB), extracts via PowerShell, and copies them to the correct app directory; shows a live progress bar with stage labels and a Retry button on failure.
 
-## v2.0.16
+## [2.0.18] - 2026-08-15
 
-- **Tooltips & Helper Explanations for Note Output Formats** — added descriptive tooltips and a context helper banner in Settings clarifying the distinction between JSON (structured data schema, rich cards, Notion database sync) and Markdown (prose meeting minutes, action items table, Notion child pages).
+### Added
+- Animated card deletion in Dashboard — multi-phase exit animation with crimson glow, slide-and-swish dissolve, height collapse, and active spinner feedback when deleting a meeting card.
 
-## v2.0.15
+## [2.0.17] - 2026-08-14
 
-- **Updated Default Markdown System Prompt** — configured the comprehensive Executive Assistant & Meeting Documentation Specialist prompt with structured headers, action items table, and strict H1 heading guidelines as the default Markdown system prompt.
+### Added
+- Floating glassmorphic tooltips for output-mode toggle buttons — replaced the static text box with sleek floating hover popovers directly on the JSON and Markdown toggle buttons.
 
-## v2.0.14
+## [2.0.16] - 2026-08-14
 
-- **Restored AI System Prompt & Transcription Guidance in Settings** — restored the Gemini System Prompt editor with JSON vs Markdown output switcher and Reset to Default control, plus the optional AssemblyAI domain terms guidance prompt.
+### Added
+- Tooltips and helper explanations for note output formats — descriptive tooltips and a context helper banner in Settings clarifying the distinction between JSON and Markdown output modes.
 
-## v2.0.13
+## [2.0.15] - 2026-08-13
 
-- **3-Second Auto-Refresh in Live Mode** — added automatic 3-second background polling synchronization in the Logs Viewer when Live Mode is active, complementing instant IPC event streaming.
+### Changed
+- Updated default Markdown system prompt to the comprehensive Executive Assistant & Meeting Documentation Specialist prompt with structured headers, action items table, and strict H1 heading guidelines.
 
-## v2.0.12
+## [2.0.14] - 2026-08-12
 
-- **Icon-Only Header Action Bar in Logs Viewer** — redesigned top action bar with icon-only buttons (`Live Mode` toggle, `Refresh`, `Open Folder`, `Export`, `Copy`, `Clear`) and informative tooltips for a clean, compact toolbar.
+### Added
+- Restored AI system prompt & transcription guidance in Settings — re-added the Gemini System Prompt editor with JSON vs Markdown output switcher and Reset to Default control, plus the optional AssemblyAI domain terms guidance prompt.
 
-## v2.0.11
+## [2.0.13] - 2026-08-11
 
-- **Single-Row Logs Viewer Toolbar** — formatted filter chips, search bar, and controls with non-wrapping layout rules (`whitespace-nowrap`, `shrink-0`) so all elements stay aligned on a single row.
+### Added
+- 3-second auto-refresh in Live Mode — automatic background polling synchronization in the Logs Viewer when Live Mode is active, complementing instant IPC event streaming.
 
-## v2.0.10
+## [2.0.12] - 2026-08-10
 
-- **Hide Extension Logs Option** — added a persistent `"Hide Extension Logs"` filter toggle in the Logs Viewer toolbar to suppress Chrome extension heartbeat and WebSocket status logs when debugging application-level events.
+### Changed
+- Icon-only header action bar in Logs Viewer — redesigned top action bar with icon-only buttons and informative tooltips for a clean, compact toolbar.
 
-## v2.0.9
+## [2.0.11] - 2026-08-10
 
-- **Real-Time Log Streaming & Structured Viewer** — wired `log:entry` live IPC event streaming from main process logger to the renderer; added structured log parsing and `getHistory` fallback in `logger.js` and `preload.js` so all diagnostics, errors, and system events show up in the Logs page across dev and production.
+### Fixed
+- Single-row Logs Viewer toolbar — applied `whitespace-nowrap` and `shrink-0` so filter chips, search bar, and controls stay aligned on a single row without wrapping.
 
-## v2.0.8
+## [2.0.10] - 2026-08-09
 
-- **Multi-Version Release Notes Generator** — created `scripts/generate-release-notes.js` to reliably parse and bundle all changelog entries between the new release and the last published release tag on GitHub, eliminating shell string escaping issues in CI/CD.
+### Added
+- "Hide Extension Logs" filter toggle in the Logs Viewer toolbar to suppress Chrome extension heartbeat and WebSocket status logs.
 
-## v2.0.7
+## [2.0.9] - 2026-08-09
 
-- **Symmetrical Sidebar Bottom Spacing** — removed the compounding `pb-6` on `<aside>` and set uniform `py-3` padding on the recording CTA section so top and bottom margins around the button are equal.
+### Added
+- Real-time log streaming & structured viewer — wired `log:entry` live IPC event streaming from the main process to the renderer; added structured log parsing and `getHistory` fallback in `logger.js` and `preload.js`.
 
-## v2.0.6
+## [2.0.8] - 2026-08-08
 
-- **Theme-Aware Sarvam AI Logo** — updated `SarvamIcon` to load `sarvam-dark.svg` with `dark:invert`, providing a dark logo in light mode and automatically inverting to white in dark mode.
+### Added
+- Multi-version release notes generator script (`scripts/generate-release-notes.js`) to parse and bundle changelog entries between the new release and the last published GitHub tag.
 
-## v2.0.5
+## [2.0.7] - 2026-08-07
 
-- **Conditional Save Button in Settings** — the "Save Changes" button now only appears when there are actual unsaved changes in the Settings form (`isDirty`), or during the active saving/saved feedback cycle.
+### Fixed
+- Symmetrical sidebar bottom spacing — removed compounding `pb-6` on `<aside>` and set uniform `py-3` padding on the recording CTA section.
 
-## v2.0.4
+## [2.0.6] - 2026-08-07
 
-- **Refined Sidebar Theme Control** — cleaned up the theme toggle button in the sidebar to clearly label the control as `"Theme"` with dynamic icon (`Monitor` / `Sun` / `Moon`) and distinct `"System"`, `"Light"`, or `"Dark"` badge, eliminating duplicate words.
+### Changed
+- Theme-aware Sarvam AI logo — `SarvamIcon` now loads `sarvam-dark.svg` with `dark:invert` for correct contrast in both themes.
 
-## v2.0.3
+## [2.0.5] - 2026-08-06
 
-- **Fixed Notion Page Upload & ID Normalization** — fixed child page creation payload structure when the parent is a Notion Page (`properties.title.title` instead of direct array assignment); added `normalizeNotionId` to extract IDs from full URLs or raw UUIDs; enhanced connection testing and UI to explicitly support both Notion Pages and Databases.
+### Changed
+- Conditional Save button in Settings — the "Save Changes" button now only appears when there are actual unsaved changes (`isDirty`).
 
-## v2.0.2
+## [2.0.4] - 2026-08-06
 
-- **Fixed Notion Token and Config Persistence** — resolved an issue where `notionApiKey` was not being persisted to `electron-store` due to schema mismatch with `notionToken`; updated `config.js` to register both aliases and keep them synchronized alongside `geminiModel`/`selectedModel`, `systemPrompt`/`geminiSystemPrompt`, and `promptOutputMode`/`noteOutputMode`.
-- **Atomic Config Updates** — updated Settings save flow in `app.jsx` to use `window.meetmind.config.setMultiple` and properly await completion.
-- **Dynamic App Version Display** — wired `window.meetmind.app.getVersion()` through IPC to automatically reflect the package version in Settings.
+### Changed
+- Refined sidebar theme control — cleaned up the theme toggle button label and badge to eliminate duplicate words.
 
-## v2.0.1
+## [2.0.3] - 2026-08-05
 
-- **Fixed STT Service Card Grid Overflow** — changed the 3-column grid (`grid-cols-3`) on the STT engine selection to a responsive `sm:grid-cols-2 lg:grid-cols-3` breakpoint grid so the "Key Set" / "No Key" badges and radio buttons no longer clip in narrower windows.
-- **Fixed Radio Button Dot Invisible on Light Theme** — the selected-state radio indicator inner dot was hardcoded `bg-zinc-950` (dark only); corrected to `bg-white dark:bg-zinc-950` for proper contrast in both themes.
-- **Centered Settings Content Area** — added `mx-auto` and `w-full` to the Settings scroll container so the `max-w-3xl` content block is centered rather than left-aligned.
-- **Fixed Titlebar Clearance for Sidebar & Main** — bumped sidebar top padding from `pt-3` to `pt-8` and main content from `pt-0` to `pt-8` so no content is hidden behind the fixed `h-8` custom titlebar overlay.
-- **Improved Theme Toggle Active States** — System/Light/Dark buttons in Settings now show distinctly colored active rings (`ring-1`) in both light and dark mode; Moon icon uses correct `dark:text-emerald-400` for dark-mode contrast.
-- **Fixed Preferences Section Divider** — replaced mixed `dark:border-b` / `dark:border-[#2a2a2a]` divider with clean `bg-slate-200 dark:bg-zinc-800/80` horizontal rule.
-- **Removed Dead Bottom Padding on Main Content Area** — `pb-6` was applying invisible space below all views; removed since each view manages its own scroll/padding.
+### Fixed
+- Notion page upload & ID normalization — fixed child page creation payload structure for Notion Pages; added `normalizeNotionId` to handle full URLs or raw UUIDs; improved connection testing to support both Notion Pages and Databases.
 
-## v2.0.0
+## [2.0.2] - 2026-08-04
 
-- **Added Full Light & System Theme Support** — added a clean light theme palette alongside the obsidian dark theme, with a new **System (Auto)** option that follows the OS / Windows theme preference.
-- **Dynamic OS Theme Sync** — automatically responds to Windows dark/light mode switches in real time when set to System theme via `prefers-color-scheme`.
-- **Sidebar & Settings Theme Controls** — added 3-way theme controls (System / Light / Dark) in Settings and quick cycling via the Sidebar footer button with instant visual feedback.
-- **Persistent Theme Configuration** — user's theme choice (`system`, `light`, or `dark`) is stored in `electron-store` and restored automatically on startup.
-- **Complete Component Adaptation Sweep** — overhauled all UI components (Dashboard, NoteViewer, Settings, LogsViewer, TranscriptViewer, RecordingBar, ProcessingOverlay, TitleBar, and Sidebar) for crisp contrast in both light and dark themes while preserving the exact dark theme styling.
-- **Theme-Aware Service Brand Icons** — updated brand icons like Notion to adapt seamlessly between dark and light modes.
+### Fixed
+- Notion token and config persistence — `notionApiKey` was not being persisted due to schema mismatch with `notionToken`; updated `config.js` to register both aliases and keep them synchronized.
+- Atomic config updates — Settings save now uses `config.setMultiple` and properly awaits completion.
 
-## v1.7.1
+### Added
+- Dynamic app version display — `window.meetmind.app.getVersion()` wired through IPC to reflect the package version automatically in Settings.
 
-- **Fixed Release Asset Filename Mismatch for Auto-Updates** — set explicit hyphenated `artifactName: "${productName}-Setup-${version}.${ext}"` in `electron-builder.yml` to prevent GitHub Releases from replacing spaces with dots in download URLs (`MeetMind.Setup.1.7.0.exe`), resolving 404 download errors in `electron-updater`.
-- **Cleaned Up Release Asset Uploads** — restricted workflow artifact uploads to `dist/desktop/latest.yml` to avoid uploading unnecessary `builder-debug.yml`.
+## [2.0.1] - 2026-08-03
 
-## v1.7.0
+### Fixed
+- STT service card grid overflow — changed to a responsive breakpoint grid so badges and radio buttons no longer clip in narrower windows.
+- Radio button dot invisible on light theme — selected-state inner dot corrected to `bg-white dark:bg-zinc-950`.
+- Titlebar clearance for sidebar & main content areas.
+- Theme toggle active states in Settings — System/Light/Dark buttons now show distinctly colored active rings in both themes.
+- Preferences section divider — replaced mixed border classes with a clean horizontal rule.
 
-- **Added Gemini 3.7 Flash Support & Made It Default** — enabled `gemini-3.7-flash` across MeetMind as the primary default AI model for meeting notes summarization and structured generation, providing top quality with fast response times.
+### Changed
+- Centered Settings content area — added `mx-auto` and `w-full` to center the `max-w-3xl` block.
+- Removed dead bottom padding on main content area.
 
-## v1.6.2
+## [2.0.0] - 2026-08-01
 
-- **Fixed Unhandled Rejection on Update Download Failure** — `electron-updater` with `autoDownload=true` internally returns a `downloadPromise` that rejects on failure (e.g. 404); attached a `.catch()` to it so the rejection no longer escapes to the global unhandled rejection handler while the `error` event continues to own user-visible state.
-- **Friendly Auto-Update Error Messages** — sanitized raw error messages in the updater service; `Cannot download ...` 404 URLs are now replaced with readable messages like "Unable to download update. The release may not be ready yet — please try again later."
-- **Service Brand Icons from Asset Files** — replaced all hand-crafted inline SVG icon components with image imports from `assets/icons/services/` using Vite's `@assets` alias, ensuring correct bundling and loading in the packaged app.
+### Added
+- Full light & system theme support — clean light theme palette alongside the obsidian dark theme, with a System (Auto) option that follows OS preference.
+- Dynamic OS theme sync — responds to Windows dark/light mode switches in real time via `prefers-color-scheme`.
+- Sidebar & Settings theme controls — 3-way controls (System / Light / Dark) with instant visual feedback.
+- Persistent theme configuration — user's theme choice is stored in `electron-store` and restored on startup.
 
-## v1.6.1
+### Changed
+- Complete component adaptation sweep — overhauled all UI components for crisp contrast in both themes while preserving exact dark theme styling.
+- Theme-aware service brand icons — Notion and other icons adapt between dark and light modes.
 
-- **Provider Brand Icons Across Settings** — added vector SVG brand icons for Google Cloud STT, Sarvam AI, AssemblyAI, Google Gemini, and Notion across the API Keys onboarding table/accordion, service configuration cards, and field labels for a consistent and branded UI experience.
+## [1.7.1] - 2026-07-28
 
-## v1.6.0
+### Fixed
+- Release asset filename mismatch for auto-updates — set explicit hyphenated `artifactName` in `electron-builder.yml` to prevent GitHub Releases from replacing spaces with dots, resolving 404 download errors in `electron-updater`.
+- Restricted workflow artifact uploads to `dist/desktop/latest.yml` only.
 
-- **Integrated Seamless GitHub Releases Auto-Updates** — added `electron-updater` integration that automatically detects, downloads, and applies new releases in the background from GitHub Releases (`aslahtp/meetmind`).
-- **Background Update Scheduler & Tray Notifications** — automated update checks run 6s after launch and periodically every 4 hours; tray menu dynamically surfaces a prominent "Restart to Update" action when an update is downloaded.
-- **Application Updates Settings Card** — added a dedicated "Application Updates" section in Settings with current version badge, "Check for Updates" button, real-time download progress bar, update ready status, and an automatic update checks toggle.
-- **Update Notification Toast Banner** — non-intrusive floating toast banner notifies the user when an update is ready with 1-click "Restart & Update" and "Later" actions.
-- **CI/CD Release Metadata Publishing** — updated `.github/workflows/release.yml` and `electron-builder.yml` to publish `latest.yml` metadata alongside `.exe` and `.blockmap` artifacts for update discovery.
+## [1.7.0] - 2026-07-25
 
-## v1.5.2
+### Added
+- Gemini 3.7 Flash support — enabled `gemini-3.7-flash` as the primary default AI model for meeting notes summarization.
 
-- **Fixed "Object has been destroyed" Crash in Background Mode** — resolved uncaught main process exception when the Chrome extension connected or sent messages while MeetMind was minimized/hidden to tray.
-- **Protected Window Lifecycle & IPC Dispatching** — added centralized `sendToRenderer` helper with `isDestroyed()` checks and try-catch safety across all IPC and WebSocket events.
-- **Fixed Window Close & Single-Instance Tray Management** — corrected custom titlebar close handling so closing the window cleanly hides to tray without prematurely setting `app.isQuitting` and leaving stale destroyed window handles.
-- **Added Main Process Exception Handlers** — attached global `uncaughtException` and `unhandledRejection` guards to log unexpected runtime errors instead of surfacing fatal error dialogs.
+## [1.6.2] - 2026-07-22
 
-## v1.5.1
+### Fixed
+- Unhandled rejection on update download failure — attached `.catch()` to the internal `downloadPromise` in `electron-updater` so rejections no longer escape to the global handler.
+- Friendly auto-update error messages — raw 404 URLs replaced with readable messages.
+- Service brand icons from asset files — replaced inline SVG components with image imports from `assets/icons/services/` for correct bundling in the packaged app.
 
-- Updated the README.md file.
+## [1.6.1] - 2026-07-20
 
-## v1.5.0
+### Added
+- Provider brand icons across Settings — vector SVG icons for Google Cloud STT, Sarvam AI, AssemblyAI, Gemini, and Notion in API keys and service cards.
 
-- **Automated GitHub Actions CI/CD Release Pipeline** — added `.github/workflows/release.yml` workflow that automatically triggers on `package.json` version bump, compiles Windows installer (`.exe`), NSIS blockmap (`.blockmap`), and Chrome extension zip (`meetmind-extension.zip`), and publishes them to GitHub Releases.
-- **Templated Release Description Integration** — workflow dynamically populates `.github/release_template.md` with version placeholders (`{VERSION}`, `x.y.z`) and extracted changelog entries (`{CHANGELOG_BODY}`) for rich release notes on GitHub.
-- **Cross-Platform Extension Packaging** — updated `scripts/build-extension.js` with cross-platform fallback support (`powershell` on Windows, `zip` on Linux/macOS).
-- **Automated Version & Changelog Rule** — added learned workflow rule in `AGENTS.md` requiring package version bumps and `CHANGELOG.md` updates for all moderate to major changes.
+## [1.6.0] - 2026-07-18
 
-## v1.4.0
+### Added
+- Seamless GitHub Releases auto-updates via `electron-updater` — detects, downloads, and applies new releases in the background.
+- Background update scheduler & tray notifications — checks run 6 s after launch and every 4 h; tray menu surfaces a "Restart to Update" action when ready.
+- Application Updates section in Settings with version badge, Check for Updates button, download progress bar, and automatic updates toggle.
+- Update notification toast banner — floating non-intrusive banner with 1-click "Restart & Update" and "Later" actions.
+- CI/CD release metadata publishing — `latest.yml` published alongside `.exe` and `.blockmap` for update discovery.
 
-- **Executive Assistant Markdown Prompt** — default system prompt for Markdown output mode configured with a 10+ year Executive Assistant & Documentation Specialist prompt structure (Header, Executive Summary, Key Discussion Points, Key Decisions, Action Items table, Next Steps).
-- **Dual Output Mode (JSON / Markdown)** — toggle pill in Settings (`JSON` / `Markdown`) allowing choice between structured JSON and prose Markdown notes. Persisted in `electron-store` schema and `config.js` (`noteOutputMode`).
-- **Rich Prose Markdown Viewer** — auto-detects `_rawMarkdown` in `NoteViewer.jsx` and renders full markdown with custom HTML tables, multi-level nested sub-bullets, checklist task items, blockquote cards, inline bold/italic/links/code, and top header metadata badges (`JSON` / `Markdown`).
-- **Native Notion API Markdown Upload** — converts raw markdown notes directly into native Notion page blocks, native Notion `table` / `table_row` blocks, nested `bulleted_list_item` children trees, and rich_text annotations for inline formatting (`parseMarkdownRichText`).
-- **Smart Transcript Reuse** — `runProcessingPipeline` checks for an existing session transcript in SQLite to prevent re-triggering Speech-to-Text API calls when notes generation fails or is retried.
+## [1.5.2] - 2026-07-15
 
-## v1.3.0
+### Fixed
+- "Object has been destroyed" crash in background mode — resolved when the Chrome extension connected while MeetMind was minimized to tray.
+- Protected window lifecycle & IPC dispatching — centralized `sendToRenderer` helper with `isDestroyed()` checks and try-catch safety.
+- Window close & single-instance tray management — closing the window cleanly hides to tray without premature `app.isQuitting`.
+- Added global `uncaughtException` and `unhandledRejection` guards in the main process.
 
-- **Multi-Service STT & Gemini Integration** — added AssemblyAI and Sarvam AI (native Malayalam-English code-switching) Speech-to-Text providers, dynamic Gemini model selector (`gemini-3.6-flash`, `gemini-3.5-flash-lite`, etc.), WASAPI audio device probing, and API connection testing in Settings.
-- **Onboarding Guide & UI Integration** — step-by-step API setup guide accordion in Settings for Google Cloud, Sarvam AI, AssemblyAI, Gemini, and Notion.
+## [1.5.1] - 2026-07-12
+
+### Changed
+- Updated README.md.
+
+## [1.5.0] - 2026-07-10
+
+### Added
+- Automated GitHub Actions CI/CD release pipeline — triggers on `package.json` version bump, compiles Windows installer, blockmap, and Chrome extension zip, and publishes to GitHub Releases.
+- Templated release description — workflow populates `.github/release_template.md` with version placeholders and extracted changelog entries.
+- Cross-platform extension packaging — `scripts/build-extension.js` with PowerShell on Windows, `zip` on Linux/macOS.
+- Automated versioning & changelog rule added to `AGENTS.md`.
+
+## [1.4.0] - 2026-07-05
+
+### Added
+- Executive Assistant Markdown prompt — default system prompt for Markdown output mode with structured headers, action items table, and next-steps section.
+- Dual output mode (JSON / Markdown) — toggle pill in Settings, persisted in `electron-store`.
+- Rich prose Markdown viewer — auto-detects `_rawMarkdown` in `NoteViewer.jsx` and renders full markdown with tables, nested bullets, checklists, and inline formatting.
+- Native Notion API Markdown upload — converts raw markdown notes directly into native Notion page blocks.
+- Smart transcript reuse — `runProcessingPipeline` reuses existing transcript from SQLite to avoid redundant STT API calls on retry.
+
+## [1.3.0] - 2026-06-28
+
+### Added
+- Multi-service STT & Gemini integration — AssemblyAI and Sarvam AI (Malayalam-English code-switching) providers, dynamic Gemini model selector, WASAPI audio device probing, and API connection testing in Settings.
+- Onboarding guide accordion in Settings for Google Cloud, Sarvam AI, AssemblyAI, Gemini, and Notion setup.

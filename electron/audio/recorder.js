@@ -4,7 +4,7 @@ const fs = require('fs');
 const { app } = require('electron');
 const { EventEmitter } = require('events');
 
-const { getFfmpegPath, getFfprobePath, validateFfmpegExists } = require('./ffmpeg-path');
+const { getFfmpegPath, getFfprobePath, resolveFfmpegPath, resolveFfprobePath, validateFfmpegExists } = require('./ffmpeg-path');
 const {
   buildAmixFilter,
   buildSingleDeviceArgs,
@@ -29,9 +29,9 @@ let wasapiKnownUnsupported = false;
 // ── Device enumeration ────────────────────────────────────────────────────────
 
 async function listAudioDevices() {
-  const ffmpegPath = getFfmpegPath();
+  const ffmpegPath = resolveFfmpegPath();
 
-  if (!fs.existsSync(ffmpegPath)) {
+  if (!ffmpegPath) {
     logger.warn('FFmpeg not found, cannot list devices');
     return { system: [], mic: [], error: 'FFmpeg not found' };
   }
@@ -181,8 +181,8 @@ function _spawnFFmpegRecording(sessionId, systemDevice, micDevice, outputPath, f
  * Used to diagnose silent devices before a real recording.
  */
 async function probeAudioDevice(device, durationSec = 3) {
-  const ffmpegPath = getFfmpegPath();
-  if (!fs.existsSync(ffmpegPath)) {
+  const ffmpegPath = resolveFfmpegPath();
+  if (!ffmpegPath) {
     return { device, peak: 0, isSilent: true, error: 'FFmpeg not found' };
   }
 
@@ -235,7 +235,8 @@ async function startRecording(sessionId) {
     throw new Error('Recording already in progress');
   }
 
-  const ffmpegPath = validateFfmpegExists();
+  const ffmpegPath = resolveFfmpegPath();
+  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System Dependencies.');
   const config = getConfig();
 
   let systemDevice = config.systemAudioDevice;
@@ -380,7 +381,8 @@ async function stopRecording() {
  * suitable for the STT pipeline.
  */
 async function convertWebmToWav(webmPath, wavPath) {
-  const ffmpegPath = validateFfmpegExists();
+  const ffmpegPath = resolveFfmpegPath();
+  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System Dependencies.');
 
   return new Promise((resolve, reject) => {
     const args = [
@@ -415,7 +417,8 @@ async function convertWebmToWav(webmPath, wavPath) {
  * built-in demuxers/decoders for the source format.
  */
 async function convertFileToWav(inputPath, wavPath) {
-  const ffmpegPath = validateFfmpegExists();
+  const ffmpegPath = resolveFfmpegPath();
+  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System Dependencies.');
 
   return new Promise((resolve, reject) => {
     const args = [
@@ -452,9 +455,9 @@ async function convertFileToWav(inputPath, wavPath) {
 function getMediaDurationSeconds(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null;
 
-  const ffprobePath = getFfprobePath();
-  if (!fs.existsSync(ffprobePath)) {
-    logger.warn('ffprobe not found, cannot probe media duration', { ffprobePath });
+  const ffprobePath = resolveFfprobePath();
+  if (!ffprobePath) {
+    logger.warn('ffprobe not found, cannot probe media duration');
     return null;
   }
 

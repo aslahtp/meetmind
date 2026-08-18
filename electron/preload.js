@@ -98,6 +98,17 @@ contextBridge.exposeInMainWorld('meetmind', {
     getVersion: () => ipcRenderer.invoke('app:version'),
   },
 
+  // FFmpeg
+  ffmpeg: {
+    check: () => ipcRenderer.invoke('ffmpeg:check'),
+    install: () => ipcRenderer.invoke('ffmpeg:install'),
+    onProgress: (callback) => {
+      const sub = (_e, data) => callback(data);
+      ipcRenderer.on('ffmpeg:install-progress', sub);
+      return () => ipcRenderer.removeListener('ffmpeg:install-progress', sub);
+    },
+  },
+
   // Event listeners
   on: (channel, callback) => {
     const validChannels = [

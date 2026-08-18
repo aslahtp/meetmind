@@ -30,6 +30,8 @@ import {
   Sun,
   Monitor,
   Braces,
+  Download,
+  Terminal,
 } from 'lucide-react';
 import NotionIcon from './NotionIcon.jsx';
 import GoogleCloudIcon from './GoogleCloudIcon.jsx';
@@ -381,6 +383,10 @@ export default function Settings({ onSave }) {
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [downloadingUpdate, setDownloadingUpdate] = useState(false);
   const [appVersion, setAppVersion] = useState(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '');
+  const [ffmpegStatus, setFfmpegStatus] = useState(null); // null | { ffmpeg, ffprobe }
+  const [checkingFfmpeg, setCheckingFfmpeg] = useState(false);
+  const [installingFfmpeg, setInstallingFfmpeg] = useState(false);
+  const [ffmpegInstallProgress, setFfmpegInstallProgress] = useState(null); // { stage, percent, message }
 
   const isDirty = useMemo(() => {
     if (!initialForm) return false;
@@ -527,6 +533,46 @@ export default function Settings({ onSave }) {
       setDownloadingUpdate(false);
     }
   };
+
+  const handleCheckFfmpeg = async () => {
+    if (!window.meetmind?.ffmpeg) return;
+    setCheckingFfmpeg(true);
+    setFfmpegStatus(null);
+    try {
+      const result = await window.meetmind.ffmpeg.check();
+      setFfmpegStatus(result);
+    } catch (err) {
+      setFfmpegStatus({ ffmpeg: { found: false }, ffprobe: { found: false }, error: err.message });
+    } finally {
+      setCheckingFfmpeg(false);
+    }
+  };
+
+  const handleInstallFfmpeg = async () => {
+    if (!window.meetmind?.ffmpeg || installingFfmpeg) return;
+    setInstallingFfmpeg(true);
+    setFfmpegInstallProgress({ stage: 'download', percent: 0, message: 'Preparing…' });
+    try {
+      const result = await window.meetmind.ffmpeg.install();
+      if (result.success) {
+        // Re-check status after successful install
+        const checked = await window.meetmind.ffmpeg.check();
+        setFfmpegStatus(checked);
+      }
+    } catch (err) {
+      setFfmpegInstallProgress({ stage: 'error', percent: 0, message: err.message });
+    } finally {
+      setInstallingFfmpeg(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!window.meetmind?.ffmpeg?.onProgress) return;
+    const unsub = window.meetmind.ffmpeg.onProgress((data) => {
+      setFfmpegInstallProgress(data);
+    });
+    return () => unsub && unsub();
+  }, []);
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40 fade-in">
@@ -1121,6 +1167,181 @@ export default function Settings({ onSave }) {
                 />
               </button>
             </div>
+          </div>
+        </section>
+
+        {/* System Dependencies Section */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Terminal size={16} className="text-emerald-600 dark:text-emerald-400" />
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-zinc-100 tracking-tight">System Dependencies</h2>
+          </div>
+
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-[#333] bg-white dark:bg-[rgb(var(--color-tertiary))] space-y-4 shadow-sm dark:shadow-none">
+            {/* Header row with check button */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium text-slate-900 dark:text-zinc-100">FFmpeg &amp; FFprobe</h4>
+                <p className="text-xs text-slate-500 dark:text-[#555] mt-0.5">
+                  Required for audio capture, conversion, duration detection, and system audio mixing
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCheckFfmpeg}
+                disabled={checkingFfmpeg}
+                className="btn-outline text-xs px-3 py-1.5 flex-shrink-0"
+              >
+                {checkingFfmpeg ? (
+                  <>
+                    <Loader2 size={12} strokeWidth={2} className="spinner" />
+                    Checking…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={12} strokeWidth={2} />
+                    Check Status
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Per-binary status rows */}
+            {ffmpegStatus && (
+              <div className="space-y-2">
+                {[
+                  { key: 'ffmpeg', label: 'ffmpeg', desc: 'Audio capture &amp; conversion' },
+                  { key: 'ffprobe', label: 'ffprobe', desc: 'Media duration detection' },
+                ].map(({ key, label, desc }) => {
+                  const stat = ffmpegStatus[key];
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800/80"
+                    >
+                      <div>
+                        <span className="text-xs font-mono font-semibold text-slate-800 dark:text-zinc-200">{label}</span>
+                        <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-2" dangerouslySetInnerHTML={{ __html: desc }} />
+                      </div>
+                      {stat?.found ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono text-slate-400 dark:text-zinc-500">
+                            {stat.version && stat.version !== 'unknown' ? stat.version : ''}
+                            {stat.source === 'bundled' ? ' (bundled)' : ' (system)'}
+                          </span>
+                          <CheckCircle2 size={14} className="text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
+                        </div>
+                      ) : (
+                        <XCircle size={14} className="text-rose-500 dark:text-rose-400 flex-shrink-0" />
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Show install guide if either is missing */}
+                {(!ffmpegStatus.ffmpeg?.found || !ffmpegStatus.ffprobe?.found) && (
+                  <div className="pt-1 space-y-3">
+                    <p className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                      <XCircle size={13} />
+                      One or more binaries missing — audio features may not work
+                    </p>
+
+                    {/* Install progress */}
+                    {installingFfmpeg || ffmpegInstallProgress ? (
+                      <div className="p-3 rounded-lg bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-700/60 space-y-2">
+                        {ffmpegInstallProgress?.stage === 'error' ? (
+                          <div className="space-y-2">
+                            <p className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                              <XCircle size={13} />
+                              Install failed
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono break-all">
+                              {ffmpegInstallProgress.message}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => { setFfmpegInstallProgress(null); handleInstallFfmpeg(); }}
+                              className="btn-outline text-xs px-3 py-1.5"
+                            >
+                              <RotateCcw size={12} strokeWidth={2} />
+                              Retry
+                            </button>
+                          </div>
+                        ) : ffmpegInstallProgress?.stage === 'done' ? (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                            <CheckCircle2 size={13} />
+                            {ffmpegInstallProgress.message}
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-slate-700 dark:text-zinc-300">
+                                {ffmpegInstallProgress?.message || 'Preparing\u2026'}
+                              </p>
+                              <span className="text-[11px] font-mono text-slate-400 dark:text-zinc-500">
+                                {ffmpegInstallProgress?.percent ?? 0}%
+                              </span>
+                            </div>
+                            {/* Progress bar */}
+                            <div className="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-300"
+                                style={{ width: `${ffmpegInstallProgress?.percent ?? 0}%` }}
+                              />
+                            </div>
+                            <p className="text-[10px] text-slate-400 dark:text-zinc-500">
+                              {ffmpegInstallProgress?.stage === 'download' && 'Downloading from gyan.dev (~80 MB)\u2026'}
+                              {ffmpegInstallProgress?.stage === 'extract' && 'Extracting archive\u2026'}
+                              {ffmpegInstallProgress?.stage === 'copy' && 'Installing to app directory\u2026'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-lg bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-700/60 space-y-3">
+                        {/* Primary: in-app installer */}
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200">Install automatically</p>
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                            Downloads ffmpeg &amp; ffprobe from <span className="font-mono">gyan.dev</span> (~80 MB) and installs them into the app directory.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleInstallFfmpeg}
+                            className="btn-primary text-xs px-4 py-2"
+                          >
+                            <Download size={13} strokeWidth={2} />
+                            Download &amp; Install FFmpeg
+                          </button>
+                        </div>
+
+                        <div className="h-px bg-slate-200 dark:bg-zinc-800" />
+
+                        {/* Secondary: winget */}
+                        <div className="space-y-1">
+                          <p className="text-[11px] font-medium text-slate-600 dark:text-zinc-300">Or install via Windows Package Manager</p>
+                          <code className="block text-[11px] font-mono bg-slate-900 dark:bg-zinc-950 text-emerald-400 px-3 py-1.5 rounded-lg select-all">
+                            winget install Gyan.FFmpeg
+                          </code>
+                          <p className="text-[10px] text-slate-400 dark:text-zinc-500">Run in PowerShell or Command Prompt, then restart MeetMind and re-check.</p>
+                        </div>
+
+                        <div className="h-px bg-slate-200 dark:bg-zinc-800" />
+
+                        <button
+                          type="button"
+                          onClick={() => window.meetmind.shell.openExternal('https://ffmpeg.org/download.html')}
+                          className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline"
+                        >
+                          <ExternalLink size={11} />
+                          Official FFmpeg download page
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
 

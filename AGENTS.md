@@ -1,6 +1,22 @@
-## Learned User Preferences
+## Versioning and Changelog
 
-- For every changes (apart from minor changes), bump the version number (1.0.0 for major, 0.1.0 for moderate and 0.0.1 for minor changes)in `package.json` and document the changes under a new version heading in `CHANGELOG.md`. Keep the changelog concise and avoid duplicate or near-duplicate points.
+For every change beyond a minor fix (typo, comment, formatting), update both files below in the same commit/PR:
+
+1. **`package.json`** - Bump the `version` field using semantic versioning (`MAJOR.MINOR.PATCH`):
+
+   - **Major (X.0.0):** Breaking changes, incompatible API changes, or removal of existing functionality.
+   - **Minor (0.X.0):** New features or moderate changes that are backward-compatible.
+   - **Patch (0.0.X):** Bug fixes, small tweaks, or internal changes with no user-facing behavior change.
+   - Each number resets the ones to its right on bump (e.g. minor bump: `2.0.18` -> `2.1.0`; major bump: `2.1.5` -> `3.0.0`; patch bump: `2.0.18` -> `2.0.19`).
+2. **`CHANGELOG.md`** - Add a new heading for the version, following [Keep a Changelog](https://keepachangelog.com/) format:
+
+   - Place the newest version at the top, directly below the `# Changelog` title.
+   - Use the format: `## [X.Y.Z] - YYYY-MM-DD`
+   - Group entries under `Added`, `Changed`, `Fixed`, or `Removed` as applicable.
+   - Write concise, single-line bullet points. No duplicate or near-duplicate entries; if a later change supersedes an earlier unreleased entry, edit the original instead of adding a new line.
+   - Do not log purely internal changes (refactors, comment updates) unless they affect behavior or the public API.
+
+Skip this process only for changes that touch no functionality: comments, formatting, whitespace, or internal documentation.
 
 ## Learned Workspace Facts
 

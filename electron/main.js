@@ -910,6 +910,177 @@ function registerIpcHandlers() {
   ipcMain.handle('updater:install', (_e) => quitAndInstall());
   ipcMain.handle('updater:get-status', (_e) => getUpdaterState());
   ipcMain.handle('app:version', (_e) => app.getVersion());
+
+  // ── FFmpeg check ──────────────────────────────────────────────────────────
+  ipcMain.handle('ffmpeg:check', () => {
+    const { getFfmpegPath, getFfprobePath } = require('./audio/ffmpeg-path');
+    const { spawnSync } = require('child_process');
+
+    function probeBinary(bundledPath, systemName) {
+      // 1. Bundled binary
+      if (fs.existsSync(bundledPath)) {
+        try {
+          const result = spawnSync(bundledPath, ['-version'], { encoding: 'utf8', timeout: 5000 });
+          const versionLine = (result.stdout || result.stderr || '').split('\n')[0] || '';
+          const match = versionLine.match(/version ([^\s]+)/i);
+          return {
+            found: true,
+            source: 'bundled',
+            path: bundledPath,
+            version: match ? match[1] : 'unknown',
+          };
+        } catch {
+          return { found: true, source: 'bundled', path: bundledPath, version: 'unknown' };
+        }
+      }
+
+      // 2. System PATH fallback
+      try {
+        const result = spawnSync(systemName, ['-version'], { encoding: 'utf8', timeout: 5000 });
+        const output = result.stdout || result.stderr || '';
+        if (result.status === 0 || output.includes('version')) {
+          const versionLine = output.split('\n')[0] || '';
+          const match = versionLine.match(/version ([^\s]+)/i);
+          return {
+            found: true,
+            source: 'system',
+            path: systemName,
+            version: match ? match[1] : 'unknown',
+          };
+        }
+      } catch {
+        // not on PATH
+      }
+
+      return { found: false, source: null, path: null, version: null };
+    }
+
+    return {
+      ffmpeg: probeBinary(getFfmpegPath(), 'ffmpeg'),
+      ffprobe: probeBinary(getFfprobePath(), 'ffprobe'),
+    };
+  });
+
+  // ── FFmpeg install ─────────────────────────────────────────────────────────
+  ipcMain.handle('ffmpeg:install', async () => {
+    const https = require('https');
+    const os = require('os');
+    const { spawnSync } = require('child_process');
+    const { getFfmpegPath, getFfprobePath } = require('./audio/ffmpeg-path');
+
+    // Where to install
+    const targetDir = app.isPackaged
+      ? path.join(process.resourcesPath, 'ffmpeg')
+      : path.join(app.getAppPath(), 'assets', 'ffmpeg');
+
+    const tmpRoot = path.join(os.tmpdir(), `meetmind-ffmpeg-${Date.now()}`);
+    const zipPath = path.join(tmpRoot, 'ffmpeg.zip');
+    const extractDir = path.join(tmpRoot, 'extracted');
+
+    const sendProgress = (stage, percent, message) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ffmpeg:install-progress', { stage, percent, message });
+      }
+    };
+
+    try {
+      fs.mkdirSync(tmpRoot, { recursive: true });
+      fs.mkdirSync(targetDir, { recursive: true });
+
+      // ── 1. Download ────────────────────────────────────────────────────────
+      sendProgress('download', 0, 'Starting download…');
+      const DOWNLOAD_URL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip';
+
+      await new Promise((resolve, reject) => {
+        let fileStream = null;
+
+        function doGet(url, redirectsLeft = 8) {
+          const mod = url.startsWith('https') ? require('https') : require('http');
+          mod.get(url, { headers: { 'User-Agent': 'MeetMind-Installer/1.0' } }, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
+              return doGet(res.headers.location, redirectsLeft - 1);
+            }
+            if (res.statusCode !== 200) {
+              return reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+            }
+
+            const total = parseInt(res.headers['content-length'] || '0', 10);
+            let downloaded = 0;
+            fileStream = fs.createWriteStream(zipPath);
+
+            res.on('data', (chunk) => {
+              downloaded += chunk.length;
+              const mb = (downloaded / 1024 / 1024).toFixed(1);
+              const pct = total > 0 ? Math.round((downloaded / total) * 65) : 0;
+              sendProgress('download', pct, `Downloading… ${mb} MB${total > 0 ? ` / ${(total / 1024 / 1024).toFixed(0)} MB` : ''}`);
+            });
+
+            res.pipe(fileStream);
+            fileStream.on('finish', () => { fileStream.close(); resolve(); });
+            fileStream.on('error', reject);
+            res.on('error', reject);
+          }).on('error', reject);
+        }
+
+        doGet(DOWNLOAD_URL);
+      });
+
+      // ── 2. Extract ─────────────────────────────────────────────────────────
+      sendProgress('extract', 68, 'Extracting archive…');
+      fs.mkdirSync(extractDir, { recursive: true });
+
+      const extract = spawnSync(
+        'powershell',
+        ['-NoProfile', '-NonInteractive', '-Command',
+          `Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${extractDir}" -Force`],
+        { timeout: 120_000, encoding: 'utf8' }
+      );
+
+      if (extract.status !== 0) {
+        throw new Error(`Extraction failed:\n${(extract.stderr || extract.stdout || '').trim()}`);
+      }
+
+      // ── 3. Find binaries ───────────────────────────────────────────────────
+      sendProgress('copy', 88, 'Locating binaries…');
+
+      function findAll(dir, names) {
+        const found = {};
+        function walk(d) {
+          for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+            const full = path.join(d, entry.name);
+            if (entry.isDirectory()) {
+              walk(full);
+            } else if (names.includes(entry.name.toLowerCase())) {
+              found[entry.name.toLowerCase()] = full;
+            }
+          }
+        }
+        walk(dir);
+        return found;
+      }
+
+      const binaries = findAll(extractDir, ['ffmpeg.exe', 'ffprobe.exe']);
+      if (!binaries['ffmpeg.exe']) throw new Error('ffmpeg.exe not found in downloaded archive');
+      if (!binaries['ffprobe.exe']) throw new Error('ffprobe.exe not found in downloaded archive');
+
+      // ── 4. Copy ────────────────────────────────────────────────────────────
+      sendProgress('copy', 93, 'Installing binaries…');
+      fs.copyFileSync(binaries['ffmpeg.exe'],  path.join(targetDir, 'ffmpeg.exe'));
+      fs.copyFileSync(binaries['ffprobe.exe'], path.join(targetDir, 'ffprobe.exe'));
+
+      sendProgress('done', 100, 'FFmpeg installed successfully!');
+      logger.info('FFmpeg installed', { targetDir });
+      return { success: true };
+
+    } catch (err) {
+      logger.error('FFmpeg install failed', { error: err.message });
+      sendProgress('error', 0, err.message);
+      return { success: false, error: err.message };
+    } finally {
+      try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
+    }
+  });
 }
 
 function resolveSessionAudioPath(sessionId) {
