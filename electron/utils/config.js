@@ -126,6 +126,26 @@ const schema = {
     type: 'boolean',
     default: false,
   },
+  googleCalendarClientId: {
+    type: 'string',
+    default: '',
+  },
+  googleCalendarClientSecret: {
+    type: 'string',
+    default: '',
+  },
+  googleCalendarRefreshToken: {
+    type: 'string',
+    default: '',
+  },
+  googleCalendarEnabled: {
+    type: 'boolean',
+    default: false,
+  },
+  googleCalendarEmail: {
+    type: 'string',
+    default: '',
+  },
 };
 
 const store = new Store({ schema, name: 'meetmind-config' });
@@ -190,6 +210,11 @@ function getConfig() {
     maxSpeakers:               store.get('maxSpeakers') || 6,
     autoCheckUpdates:          store.get('autoCheckUpdates') !== false,
     hideLogsInSidebar:         store.get('hideLogsInSidebar') || false,
+    googleCalendarClientId:    store.get('googleCalendarClientId') || '',
+    googleCalendarClientSecret: store.get('googleCalendarClientSecret') || '',
+    googleCalendarRefreshToken: store.get('googleCalendarRefreshToken') || '',
+    googleCalendarEnabled:     store.get('googleCalendarEnabled') || false,
+    googleCalendarEmail:       store.get('googleCalendarEmail') || '',
   };
 }
 

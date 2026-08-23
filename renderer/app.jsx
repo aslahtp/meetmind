@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import {
   Mic,
   LayoutGrid,
+  List,
   Settings as SettingsIcon,
   Terminal,
   X,
@@ -19,6 +20,7 @@ import {
 import './styles/globals.css';
 
 import Dashboard from './components/Dashboard.jsx';
+import Meetings from './components/Meetings.jsx';
 import NoteViewer from './components/NoteViewer.jsx';
 import Settings from './components/Settings.jsx';
 import LogsViewer from './components/LogsViewer.jsx';
@@ -64,8 +66,9 @@ function applyTheme(themeSetting) {
 }
 
 function App() {
-  const [view, setView] = useState('dashboard');           // 'dashboard' | 'session' | 'settings' | 'logs'
+  const [view, setView] = useState('dashboard');           // 'dashboard' | 'meetings' | 'session' | 'settings' | 'logs'
   const [selectedSession, setSelectedSession] = useState(null);
+  const [sessionOrigin, setSessionOrigin] = useState('dashboard');
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [config, setConfigState] = useState(null);
@@ -299,6 +302,7 @@ function App() {
   };
 
   const openSession = (session) => {
+    setSessionOrigin(view === 'meetings' ? 'meetings' : 'dashboard');
     setSelectedSession(session);
     setView('session');
   };
@@ -390,12 +394,19 @@ function App() {
           )}
           <div className="flex-1 overflow-hidden min-h-0">
             {view === 'dashboard' && (
-              <Dashboard onOpenSession={openSession} />
+              <Dashboard
+                onOpenSession={openSession}
+                onNavigateToSettings={() => setView('settings')}
+                onNavigateToMeetings={() => setView('meetings')}
+              />
+            )}
+            {view === 'meetings' && (
+              <Meetings onOpenSession={openSession} />
             )}
             {view === 'session' && selectedSession && (
               <NoteViewer
                 session={selectedSession}
-                onBack={() => setView('dashboard')}
+                onBack={() => setView(sessionOrigin)}
                 onRefresh={async () => {
                   const updated = await window.meetmind.sessions.get(selectedSession.id);
                   setSelectedSession(updated);
@@ -509,6 +520,13 @@ function Sidebar() {
         >
           <LayoutGrid size={16} strokeWidth={2} />
           Dashboard
+        </button>
+        <button
+          className={`sidebar-item w-full ${view === 'meetings' ? 'active' : ''}`}
+          onClick={() => setView('meetings')}
+        >
+          <List size={16} strokeWidth={2} />
+          Meetings
         </button>
         <button
           className={`sidebar-item w-full ${view === 'settings' ? 'active' : ''}`}

@@ -35,6 +35,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import NotionIcon from './NotionIcon.jsx';
+import GoogleCalendarIcon from './GoogleCalendarIcon.jsx';
 import GoogleCloudIcon from './GoogleCloudIcon.jsx';
 import GeminiIcon from './GeminiIcon.jsx';
 import SarvamIcon from './SarvamIcon.jsx';
@@ -167,6 +168,19 @@ const ONBOARDING_STEPS = [
       { text: 'Copy the "Internal Integration Secret" and paste in the API Key field below' },
       { text: 'Open your target Notion page or database → "..." menu → "Connect to" → select "MeetMind"' },
       { text: 'Copy the Page ID, Database ID, or full Notion URL and paste in the field below', hint: 'You can paste the 32-character ID or the full URL directly from your browser' },
+    ],
+  },
+  {
+    id: 'google-calendar',
+    title: '5. Connect Google Calendar (Optional)',
+    desc: 'See upcoming meetings on your Dashboard and get recording prompts',
+    icon: GoogleCalendarIcon,
+    steps: [
+      { text: 'Go to Google Cloud Console Credentials', url: 'https://console.cloud.google.com/apis/credentials' },
+      { text: 'Enable the Google Calendar API in your project', url: 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com', hint: 'Required: click "Enable" on this page for project 119097603796' },
+      { text: 'Go to Credentials → "+ Create Credentials" → "OAuth client ID" → Application type: "Desktop app"' },
+      { text: 'Copy the Client ID and Client Secret, paste them in the fields below' },
+      { text: 'Click "Connect Google Calendar" to authorize access' },
     ],
   },
 ];
@@ -368,6 +382,8 @@ export default function Settings({ onSave }) {
     autoLaunch: false,
     autoCheckUpdates: true,
     hideLogsInSidebar: false,
+    googleCalendarClientId: '',
+    googleCalendarClientSecret: '',
   });
 
   const [initialForm, setInitialForm] = useState(null);
@@ -389,6 +405,9 @@ export default function Settings({ onSave }) {
   const [checkingFfmpeg, setCheckingFfmpeg] = useState(false);
   const [installingFfmpeg, setInstallingFfmpeg] = useState(false);
   const [ffmpegInstallProgress, setFfmpegInstallProgress] = useState(null); // { stage, percent, message }
+  const [calendarStatus, setCalendarStatus] = useState({ connected: false, email: '' });
+  const [connectingCalendar, setConnectingCalendar] = useState(false);
+  const [calendarError, setCalendarError] = useState(null);
 
   const isDirty = useMemo(() => {
     if (!initialForm) return false;
@@ -427,6 +446,8 @@ export default function Settings({ onSave }) {
           autoLaunch: cfg.autoLaunch || false,
           autoCheckUpdates: cfg.autoCheckUpdates !== false,
           hideLogsInSidebar: cfg.hideLogsInSidebar || false,
+          googleCalendarClientId: cfg.googleCalendarClientId || '',
+          googleCalendarClientSecret: cfg.googleCalendarClientSecret || '',
         };
         setForm(loadedForm);
         setInitialForm(loadedForm);
@@ -452,6 +473,18 @@ export default function Settings({ onSave }) {
       }
     }
     load();
+  }, []);
+
+  // Load calendar connection status
+  useEffect(() => {
+    async function loadCalendarStatus() {
+      if (!window.meetmind?.calendar?.getStatus) return;
+      try {
+        const status = await window.meetmind.calendar.getStatus();
+        setCalendarStatus(status);
+      } catch {}
+    }
+    loadCalendarStatus();
   }, []);
 
   // Live updater state (checking/downloading/downloaded/error) pushed from the main process,
@@ -1080,6 +1113,132 @@ export default function Settings({ onSave }) {
                     </span>
                   )}
                 </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Google Calendar */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <GoogleCalendarIcon size={16} className="text-indigo-500 dark:text-indigo-400" />
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-zinc-100 tracking-tight">Google Calendar</h2>
+            {calendarStatus.connected && (
+              <span className="badge-green text-[10px] ml-1">
+                <CheckCircle2 size={10} /> Connected
+              </span>
+            )}
+          </div>
+
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-[#333] bg-white dark:bg-[rgb(var(--color-tertiary))] space-y-4 shadow-sm dark:shadow-none">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                  OAuth Client ID
+                </label>
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                  onClick={(e) => { e.preventDefault(); window.meetmind.shell.openExternal('https://console.cloud.google.com/apis/credentials'); }}
+                >
+                  Google Cloud Console <ExternalLink size={10} />
+                </a>
+              </div>
+              <input
+                type="text"
+                value={form.googleCalendarClientId}
+                onChange={(e) => handleChange('googleCalendarClientId', e.target.value.trim())}
+                placeholder="xxxxxxxxx.apps.googleusercontent.com"
+                className="input font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                OAuth Client Secret
+              </label>
+              <PasswordInput
+                id="gcal-secret"
+                value={form.googleCalendarClientSecret}
+                onChange={(val) => handleChange('googleCalendarClientSecret', val)}
+                placeholder="GOCSPX-..."
+              />
+            </div>
+
+            <div className="pt-2 flex items-center gap-3 flex-wrap">
+              {calendarStatus.connected ? (
+                <>
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 size={13} />
+                    Connected as {calendarStatus.email || 'Google account'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await window.meetmind.calendar.disconnect();
+                        setCalendarStatus({ connected: false, email: '' });
+                        setCalendarError(null);
+                      } catch (err) {
+                        setCalendarError(err.message);
+                      }
+                    }}
+                    className="btn-ghost text-xs px-3 py-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
+                  >
+                    Disconnect
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!form.googleCalendarClientId || !form.googleCalendarClientSecret) {
+                      setCalendarError('Enter your OAuth Client ID and Client Secret first.');
+                      return;
+                    }
+                    setConnectingCalendar(true);
+                    setCalendarError(null);
+                    try {
+                      // Save credentials first so the main process can use them
+                      await window.meetmind.config.setMultiple({
+                        googleCalendarClientId: form.googleCalendarClientId,
+                        googleCalendarClientSecret: form.googleCalendarClientSecret,
+                      });
+                      const result = await window.meetmind.calendar.auth();
+                      if (result.success) {
+                        setCalendarStatus({ connected: true, email: result.email || '' });
+                      } else {
+                        setCalendarError(result.error || 'Connection failed');
+                      }
+                    } catch (err) {
+                      setCalendarError(err.message);
+                    } finally {
+                      setConnectingCalendar(false);
+                    }
+                  }}
+                  disabled={connectingCalendar}
+                  className="btn-outline text-xs px-3.5 py-1.5"
+                >
+                  {connectingCalendar ? (
+                    <>
+                      <Loader2 size={12} strokeWidth={2} className="spinner" />
+                      Connecting…
+                    </>
+                  ) : (
+                    <>
+                      <GoogleCalendarIcon size={13} className="text-indigo-500" />
+                      Connect Google Calendar
+                    </>
+                  )}
+                </button>
+              )}
+
+              {calendarError && (
+                <span className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                  <XCircle size={13} /> {calendarError}
+                </span>
               )}
             </div>
           </div>

@@ -115,6 +115,14 @@ contextBridge.exposeInMainWorld('meetmind', {
     sendAudioData: (buffer) => ipcRenderer.send('capture:audio-data', buffer),
   },
 
+  // Google Calendar
+  calendar: {
+    auth: () => ipcRenderer.invoke('calendar:auth'),
+    disconnect: () => ipcRenderer.invoke('calendar:disconnect'),
+    getEvents: () => ipcRenderer.invoke('calendar:events'),
+    getStatus: () => ipcRenderer.invoke('calendar:status'),
+  },
+
   // Auto updater
   updater: {
     check: () => ipcRenderer.invoke('updater:check'),
@@ -152,6 +160,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'ws:recording-requested',
       'sessions:durations-updated',
       'updater:status',
+      'calendar:meeting-starting',
       'log:entry',
     ];
     if (validChannels.includes(channel)) {

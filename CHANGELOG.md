@@ -1,10 +1,25 @@
 ---
 tags: [meta, changelog]
-updated: 2026-08-19
+updated: 2026-08-23
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [2.6.0] - 2026-08-23
+
+### Added
+- New "Meetings" sidebar page listing every recorded session, with the same toolbar as before (refresh, import file, new recording, per-card delete).
+
+### Changed
+- Dashboard now shows only the 5 most recent meetings, with a "View all" link to the new Meetings page; the stats bar and Google Calendar "Upcoming Meetings" widget continue to reflect the full session history.
+
+## [2.5.0] - 2026-08-23
+
+### Added
+- Google Calendar integration: connect via OAuth 2.0 in Settings, view upcoming meetings on the Dashboard in a collapsible "Upcoming Meetings" section, and receive system notifications with a "Start Recording" prompt when a scheduled meeting begins.
+- New `UpcomingMeetings` dashboard component showing today's and tomorrow's events grouped by day, with Join and Record buttons for live/upcoming meetings.
+- Google Calendar setup guide in Settings onboarding (step 5) with OAuth Client ID/Secret fields and Connect/Disconnect flow.
 
 ## [2.4.1] - 2026-08-19
 

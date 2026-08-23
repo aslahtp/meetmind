@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Readable } = require('stream');
@@ -12,6 +12,7 @@ const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT, DEFAULT
 const { uploadToNotion, testNotionConnection } = require('./services/notion');
 const { testGeminiConnection } = require('./services/gemini');
 const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState } = require('./services/updater');
+const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEvents, startEventPoller, stopEventPoller } = require('./services/google-calendar');
 const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -1103,6 +1104,57 @@ function registerIpcHandlers() {
       try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
     }
   });
+
+  // ── Google Calendar ──────────────────────────────────────────────────────
+  ipcMain.handle('calendar:auth', async () => {
+    const config = getConfig();
+    try {
+      const result = await startAuthFlow(config);
+      // Persist the refresh token and email
+      setMultipleConfig({
+        googleCalendarRefreshToken: result.refreshToken,
+        googleCalendarEnabled: true,
+        googleCalendarEmail: result.email || '',
+      });
+
+      // Start the event poller now that we're connected
+      const updatedConfig = getConfig();
+      startCalendarPoller(updatedConfig);
+
+      return { success: true, email: result.email };
+    } catch (err) {
+      logger.error('Google Calendar auth failed', { error: err.message });
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('calendar:disconnect', () => {
+    disconnectCalendar();
+    setMultipleConfig({
+      googleCalendarRefreshToken: '',
+      googleCalendarEnabled: false,
+      googleCalendarEmail: '',
+    });
+    return { success: true };
+  });
+
+  ipcMain.handle('calendar:events', async () => {
+    const config = getConfig();
+    try {
+      const events = await fetchUpcomingEvents(config);
+      return { success: true, events };
+    } catch (err) {
+      return { success: false, error: err.message, events: [] };
+    }
+  });
+
+  ipcMain.handle('calendar:status', () => {
+    const config = getConfig();
+    return {
+      connected: isCalendarConnected(config),
+      email: config.googleCalendarEmail || '',
+    };
+  });
 }
 
 function resolveSessionAudioPath(sessionId) {
@@ -1380,6 +1432,9 @@ app.whenReady().then(async () => {
 
   app.setLoginItemSettings({ openAtLogin: config.autoLaunch });
 
+  // Start calendar event poller if connected
+  startCalendarPoller(config);
+
   app.on('activate', () => {
     focusMainWindow();
   });
@@ -1395,5 +1450,34 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   stopWebSocketServer();
+  stopEventPoller();
   logger.info('MeetMind shutting down');
 });
+
+// ── Calendar Event Poller ─────────────────────────────────────────────────────
+
+function startCalendarPoller(config) {
+  if (!isCalendarConnected(config)) return;
+
+  startEventPoller(config, (event) => {
+    logger.info('Calendar meeting starting', { title: event.title, start: event.start });
+
+    // System notification
+    if (Notification.isSupported()) {
+      const notif = new Notification({
+        title: 'Meeting Starting',
+        body: `"${event.title}" is starting now.${event.meetingLink ? ' Click to start recording.' : ''}`,
+        icon: nativeImage.createFromPath(
+          path.join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'assets', 'icons', 'icon.png')
+        ),
+      });
+      notif.on('click', () => {
+        focusMainWindow();
+      });
+      notif.show();
+    }
+
+    // Notify the renderer so it can show an in-app prompt
+    sendToRenderer('calendar:meeting-starting', event);
+  });
+}
