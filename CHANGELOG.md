@@ -6,6 +6,14 @@ updated: 2026-08-23
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [2.7.0] - 2026-08-24
+
+### Added
+- `react-markdown` + `remark-gfm` dependency for full CommonMark + GFM rendering in the per-meeting Markdown notes view.
+
+### Changed
+- Per-meeting page: replaced the hand-rolled markdown parser with `react-markdown`, giving proper spacing for headings, paragraphs, lists, blockquotes, tables, code blocks, task lists, and inline formatting.
+
 ## [2.6.2] - 2026-08-24
 
 ### Changed

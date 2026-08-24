@@ -12,6 +12,7 @@ import {
   Zap,
   Flame,
   ListChecks,
+  Video,
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
 import NotionIcon from './NotionIcon.jsx';
@@ -145,14 +146,7 @@ export function SessionCard({ session, onClick, onDelete, isDeleting }) {
                   </span>
                 </>
               )}
-              {session.meeting_url && (
-                <>
-                  <span className="text-slate-300 dark:text-zinc-600">·</span>
-                  <span className="text-emerald-600 dark:text-emerald-400/80 truncate max-w-[150px]">
-                    {new URL(session.meeting_url).hostname.replace('www.', '')}
-                  </span>
-                </>
-              )}
+
             </div>
           </div>
 
@@ -209,6 +203,19 @@ export function SessionCard({ session, onClick, onDelete, isDeleting }) {
                 Notion Synced
               </span>
             )}
+            {session.meeting_url && (() => {
+              let hostname = '';
+              try { hostname = new URL(session.meeting_url).hostname.replace('www.', ''); } catch {}
+              const isGoogleMeet = hostname === 'meet.google.com';
+              return (
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400/80 font-medium">
+                  {isGoogleMeet
+                    ? <img src="icons/google-meet.png" alt="Google Meet" className="w-3.5 h-3.5 object-contain" />
+                    : <Video size={12} strokeWidth={2} />}
+                  {hostname}
+                </span>
+              );
+            })()}
             {(notes?.topics?.length || notes?.key_points?.length) > 0 && (
               <span className="text-slate-400 dark:text-zinc-500">
                 {(notes.topics?.length || notes.key_points.length)} topic{(notes.topics?.length || notes.key_points.length) !== 1 ? 's' : ''}
