@@ -35,7 +35,7 @@ const STATUS_BADGE = {
 export function formatDate(isoString) {
   if (!isoString) return '';
   const d = new Date(isoString);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export function formatStartTime(isoString) {

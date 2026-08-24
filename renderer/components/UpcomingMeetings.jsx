@@ -62,7 +62,7 @@ function getDayLabel(dateStr) {
 
 function getMeetingPlatform(url) {
   if (!url) return null;
-  if (url.includes('meet.google.com')) return { name: 'Google Meet', color: 'text-emerald-500 dark:text-emerald-400' };
+  if (url.includes('meet.google.com')) return { name: 'Google Meet', color: 'text-emerald-500 dark:text-emerald-400', icon: 'icons/google-meet.png' };
   if (url.includes('zoom.us') || url.includes('zoom.com')) return { name: 'Zoom', color: 'text-blue-500 dark:text-blue-400' };
   if (url.includes('teams.microsoft.com') || url.includes('teams.live.com')) return { name: 'Teams', color: 'text-violet-500 dark:text-violet-400' };
   return { name: 'Video Call', color: 'text-sky-500 dark:text-sky-400' };
@@ -143,7 +143,9 @@ function EventCard({ event, onStartRecording, isRecording }) {
                 <>
                   <span className="text-slate-300 dark:text-zinc-600">·</span>
                   <span className={`flex items-center gap-1 font-medium ${platform.color}`}>
-                    <Video size={11} strokeWidth={2} />
+                    {platform.icon
+                      ? <img src={platform.icon} alt={platform.name} className="w-3 h-3 object-contain" />
+                      : <Video size={11} strokeWidth={2} />}
                     {platform.name}
                   </span>
                 </>
