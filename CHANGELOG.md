@@ -6,6 +6,16 @@ updated: 2026-08-23
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [2.6.2] - 2026-08-24
+
+### Changed
+- Dashboard: replaced the "Action Items" stat card with "This Week" — total recording time from the current Mon–Sun week.
+
+## [2.6.1] - 2026-08-24
+
+### Changed
+- Dashboard: upcoming meetings and past session cards now share a single scrollable list; the upcoming meetings section is no longer a fixed block above the scroll area.
+
 ## [2.6.0] - 2026-08-23
 
 ### Added

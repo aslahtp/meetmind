@@ -5,7 +5,7 @@ import {
   RefreshCw,
   Upload,
   Users,
-  ListChecks,
+  CalendarDays,
   X,
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
@@ -75,15 +75,22 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   const [meetingToast, setMeetingToast] = useState(null);
 
   const metrics = useMemo(() => {
-    const completed = sessions.filter((s) => s.status === 'complete');
     const totalSecs = sessions.reduce((acc, s) => acc + (getSessionDuration(s) || 0), 0);
-    const actionItemsCount = completed.reduce((acc, s) => acc + (s.notes?.action_items?.length || 0), 0);
     const notionCount = sessions.filter((s) => s.notion_page_url).length;
+
+    // This week: Monday 00:00 → Sunday 23:59
+    const now = new Date();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+    const weekSecs = sessions
+      .filter((s) => s.started_at && new Date(s.started_at) >= monday)
+      .reduce((acc, s) => acc + (getSessionDuration(s) || 0), 0);
 
     return {
       totalMeetings: sessions.length,
       totalMinutes: Math.round(totalSecs / 60),
-      actionItems: actionItemsCount,
+      weekMinutes: Math.round(weekSecs / 60),
       notionSynced: notionCount,
     };
   }, [sessions]);
@@ -128,10 +135,9 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
       {/* Top Header */}
       <div className="flex items-center justify-between px-6 pt-3 pb-3 border-b border-slate-200 dark:border-zinc-800/80 bg-slate-50/80 dark:bg-transparent backdrop-blur-md flex-shrink-0 titlebar-drag select-none">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Recent Meetings</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Dashboard</h1>
           <p className="text-slate-500 dark:text-zinc-400 text-xs mt-0.5">
             {sessions.length} meeting{sessions.length !== 1 ? 's' : ''} recorded
-            {sessions.some((s) => s.status === 'error') && ' · Action required'}
             {sessions.length > 5 && (
               <>
                 {' · '}
@@ -201,17 +207,21 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
           <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">total audio captured</p>
         </div>
 
-        {/* Action Items */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-amber-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        {/* This Week */}
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-rose-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Action Items</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-              <ListChecks size={13} strokeWidth={2} className="text-amber-500 dark:text-amber-400" />
+            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">This Week</span>
+            <div className="w-7 h-7 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center flex-shrink-0">
+              <CalendarDays size={13} strokeWidth={2} className="text-rose-500 dark:text-rose-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-amber-500 dark:text-amber-400 tracking-tight">{metrics.actionItems}</div>
-          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">tasks extracted</p>
+          <div className="text-2xl font-bold text-rose-500 dark:text-rose-400 tracking-tight">
+            {metrics.weekMinutes >= 60
+              ? `${Math.floor(metrics.weekMinutes / 60)}h ${metrics.weekMinutes % 60}m`
+              : `${metrics.weekMinutes}m`}
+          </div>
+          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">recorded this week</p>
         </div>
 
         {/* Notion Synced */}
@@ -228,54 +238,63 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
         </div>
       </div>
 
-      {/* Upcoming Meetings (Google Calendar) */}
-      <UpcomingMeetings
-        onNavigateToSettings={onNavigateToSettings}
-        onStartRecording={handleRecordFromCalendar}
-        isRecording={isRecording}
-      />
+      {/* Scrollable content: upcoming meetings + past sessions */}
+      <div className="flex-1 overflow-y-auto px-6 py-3 space-y-3">
+        {/* Upcoming Meetings (Google Calendar) */}
+        <UpcomingMeetings
+          onNavigateToSettings={onNavigateToSettings}
+          onStartRecording={handleRecordFromCalendar}
+          isRecording={isRecording}
+          className=""
+        />
 
-      {/* Meeting starting toast */}
-      {meetingToast && !isRecording && (
-        <div className="mx-6 mt-2 fade-in">
-          <div className="relative overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/5 px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                  <Mic size={15} className="text-emerald-500 dark:text-emerald-400" />
+        {/* Meeting starting toast */}
+        {meetingToast && !isRecording && (
+          <div className="fade-in">
+            <div className="relative overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/5 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <Mic size={15} className="text-emerald-500 dark:text-emerald-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 dark:text-zinc-200 truncate">
+                      "{meetingToast.title}" is starting now
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">Would you like to start recording?</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-800 dark:text-zinc-200 truncate">
-                    "{meetingToast.title}" is starting now
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">Would you like to start recording?</p>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      handleRecordFromCalendar(meetingToast);
+                      setMeetingToast(null);
+                    }}
+                    className="btn-primary text-xs px-3 py-1.5"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-950" />
+                    Start Recording
+                  </button>
+                  <button
+                    onClick={() => setMeetingToast(null)}
+                    className="btn-ghost p-1 text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300"
+                  >
+                    <X size={14} strokeWidth={2} />
+                  </button>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  onClick={() => {
-                    handleRecordFromCalendar(meetingToast);
-                    setMeetingToast(null);
-                  }}
-                  className="btn-primary text-xs px-3 py-1.5"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-950" />
-                  Start Recording
-                </button>
-                <button
-                  onClick={() => setMeetingToast(null)}
-                  className="btn-ghost p-1 text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300"
-                >
-                  <X size={14} strokeWidth={2} />
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Session list */}
-      <div className="flex-1 overflow-y-auto px-6 py-3 space-y-3">
+        {/* Divider between upcoming and past sessions */}
+        <div className="flex items-center gap-3 pt-1">
+          <div className="flex-1 h-px bg-slate-200 dark:bg-zinc-800/60" />
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-600">Recent Recordings</span>
+          <div className="flex-1 h-px bg-slate-200 dark:bg-zinc-800/60" />
+        </div>
+
+        {/* Past session cards */}
         {recentSessions.map((session) => (
           <SessionCard
             key={session.id}

@@ -203,7 +203,7 @@ function SkeletonEvent() {
   );
 }
 
-export default function UpcomingMeetings({ onNavigateToSettings, onStartRecording, isRecording }) {
+export default function UpcomingMeetings({ onNavigateToSettings, onStartRecording, isRecording, className = '' }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -267,7 +267,7 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
   // Don't render the section at all if not connected
   if (!loading && !connected) {
     return (
-      <div className="mx-6 mt-3">
+      <div className={className}>
         <button
           onClick={onNavigateToSettings}
           className="w-full rounded-xl border border-dashed border-slate-300 dark:border-zinc-700/60 bg-white/50 dark:bg-zinc-900/30 px-4 py-3 text-left hover:border-indigo-500/40 hover:bg-indigo-500/5 dark:hover:bg-indigo-500/5 transition-all group"
@@ -292,7 +292,7 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
   }
 
   return (
-    <div className="mx-6 mt-3">
+    <div className={className}>
       {/* Section header */}
       <div className="flex items-center justify-between mb-2">
         <button
