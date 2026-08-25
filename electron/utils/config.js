@@ -146,6 +146,10 @@ const schema = {
     type: 'string',
     default: '',
   },
+  dashboardRecentLimit: {
+    type: 'number',
+    default: 5,
+  },
 };
 
 const store = new Store({ schema, name: 'meetmind-config' });
@@ -215,6 +219,7 @@ function getConfig() {
     googleCalendarRefreshToken: store.get('googleCalendarRefreshToken') || '',
     googleCalendarEnabled:     store.get('googleCalendarEnabled') || false,
     googleCalendarEmail:       store.get('googleCalendarEmail') || '',
+    dashboardRecentLimit:      store.get('dashboardRecentLimit') || 5,
   };
 }
 

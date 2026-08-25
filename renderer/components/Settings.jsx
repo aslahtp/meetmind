@@ -384,6 +384,7 @@ export default function Settings({ onSave }) {
     hideLogsInSidebar: false,
     googleCalendarClientId: '',
     googleCalendarClientSecret: '',
+    dashboardRecentLimit: 5,
   });
 
   const [initialForm, setInitialForm] = useState(null);
@@ -448,6 +449,7 @@ export default function Settings({ onSave }) {
           hideLogsInSidebar: cfg.hideLogsInSidebar || false,
           googleCalendarClientId: cfg.googleCalendarClientId || '',
           googleCalendarClientSecret: cfg.googleCalendarClientSecret || '',
+          dashboardRecentLimit: cfg.dashboardRecentLimit || 5,
         };
         setForm(loadedForm);
         setInitialForm(loadedForm);
@@ -1365,6 +1367,33 @@ export default function Settings({ onSave }) {
                   }`}
                 />
               </button>
+            </div>
+
+            <div className="h-px bg-slate-200 dark:bg-zinc-800/80" />
+
+            {/* Dashboard Recent Meetings Limit */}
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <h4 className="text-sm font-medium text-slate-900 dark:text-zinc-100">Recent Meetings on Dashboard</h4>
+                <p className="text-xs text-slate-500 dark:text-[#555]">Number of recent meetings shown on the Dashboard</p>
+              </div>
+
+              <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                {[5, 10, 15].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => handleChange('dashboardRecentLimit', n)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      form.dashboardRecentLimit === n
+                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm ring-1 ring-emerald-500/20'
+                        : 'text-slate-500 dark:text-zinc-500 hover:text-slate-900 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>

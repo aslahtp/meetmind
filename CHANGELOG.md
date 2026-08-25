@@ -6,6 +6,14 @@ updated: 2026-08-23
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [2.8.0] - 2026-08-25
+
+### Added
+
+- Dashboard: configurable number of recent meetings shown (5 / 10 / 15) via Settings → Preferences & Appearance.
+- Dashboard: "View All Meetings" button below the recent session cards, shown when sessions exceed the configured limit.
+- `dashboardRecentLimit` persisted config key (default: 5).
+
 ## [2.7.0] - 2026-08-24
 
 ### Added

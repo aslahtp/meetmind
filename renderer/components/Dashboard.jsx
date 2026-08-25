@@ -7,6 +7,7 @@ import {
   Users,
   CalendarDays,
   X,
+  ChevronRight,
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
 import NotionIcon from './NotionIcon.jsx';
@@ -69,10 +70,12 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavigateToMeetings }) {
-  const { sessions, refreshSessions, startRecording, isRecording, sessionsLoading } = useApp();
+  const { sessions, refreshSessions, startRecording, isRecording, sessionsLoading, config } = useApp();
   const { deletingIds, handleDelete, handleUploadAudio } = useSessionActions();
   const showSkeleton = useDelayedFlag(sessionsLoading, SKELETON_DELAY_MS);
   const [meetingToast, setMeetingToast] = useState(null);
+
+  const recentLimit = config?.dashboardRecentLimit || 5;
 
   const metrics = useMemo(() => {
     const totalSecs = sessions.reduce((acc, s) => acc + (getSessionDuration(s) || 0), 0);
@@ -95,7 +98,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
     };
   }, [sessions]);
 
-  const recentSessions = sessions.slice(0, 5);
+  const recentSessions = sessions.slice(0, recentLimit);
 
   useEffect(() => {
     refreshSessions();
@@ -138,7 +141,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Dashboard</h1>
           <p className="text-slate-500 dark:text-zinc-400 text-xs mt-0.5">
             {sessions.length} meeting{sessions.length !== 1 ? 's' : ''} recorded
-            {sessions.length > 5 && (
+            {sessions.length > recentLimit && (
               <>
                 {' · '}
                 <button
@@ -304,6 +307,33 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
             isDeleting={deletingIds.has(session.id)}
           />
         ))}
+
+        {/* View all meetings CTA */}
+        {sessions.length > recentLimit && (
+          <button
+            onClick={onNavigateToMeetings}
+            className="group w-full flex items-center justify-between px-4 py-3 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700/70 bg-white/50 dark:bg-zinc-900/30 hover:border-emerald-500/50 hover:bg-emerald-500/5 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/5 transition-all duration-200"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700/60 flex items-center justify-center group-hover:border-emerald-500/30 group-hover:bg-emerald-500/10 transition-all duration-200">
+                <Users size={13} strokeWidth={2} className="text-slate-400 dark:text-zinc-500 group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition-colors" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                  View All Meetings
+                </p>
+                <p className="text-[10px] text-slate-400 dark:text-zinc-500">
+                  {sessions.length - recentLimit} more session{sessions.length - recentLimit !== 1 ? 's' : ''} not shown
+                </p>
+              </div>
+            </div>
+            <ChevronRight
+              size={15}
+              strokeWidth={2}
+              className="text-slate-300 dark:text-zinc-600 group-hover:text-emerald-500 dark:group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all duration-200"
+            />
+          </button>
+        )}
       </div>
     </div>
   );
