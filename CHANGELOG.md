@@ -1,10 +1,16 @@
 ---
 tags: [meta, changelog]
-updated: 2026-08-23
+updated: 2026-08-26
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [2.9.0] - 2026-08-26
+
+### Added
+
+- Settings → Notion Integration: toggle to include or omit the full meeting transcript when uploading to Notion. Notes and summaries are always uploaded. Defaults to on.
 
 ## [2.8.0] - 2026-08-25
 
