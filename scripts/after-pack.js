@@ -7,9 +7,14 @@ const { execFileSync } = require('child_process');
 /**
  * Embed MeetMind icon + version metadata into the Windows exe.
  * Needed because signAndEditExecutable is false (avoids winCodeSign symlink errors).
+ * rcedit is a Windows binary, so skip it on non-Windows hosts.
  */
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== 'win32') return;
+  if (process.platform !== 'win32') {
+    console.warn('[afterPack] Skipping rcedit on non-Windows host.');
+    return;
+  }
 
   const productName = context.packager.appInfo.productFilename || 'MeetMind';
   const exePath = path.join(context.appOutDir, `${productName}.exe`);

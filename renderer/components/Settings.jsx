@@ -371,6 +371,7 @@ export default function Settings({ onSave }) {
     geminiModel: 'gemini-3.7-flash',
     notionApiKey: '',
     notionDatabaseId: '',
+    notionUploadTranscript: true,
     language: 'ml-IN',
     enableDiarization: true,
     minSpeakers: 1,
@@ -436,6 +437,7 @@ export default function Settings({ onSave }) {
           geminiModel: cfg.geminiModel || cfg.selectedModel || 'gemini-3.7-flash',
           notionApiKey: cfg.notionApiKey || cfg.notionToken || '',
           notionDatabaseId: cfg.notionDatabaseId || cfg.notionPageId || '',
+          notionUploadTranscript: cfg.notionUploadTranscript !== false,
           language: cfg.language || 'ml-IN',
           enableDiarization: cfg.enableDiarization ?? true,
           minSpeakers: cfg.minSpeakers || 1,
@@ -1079,6 +1081,31 @@ export default function Settings({ onSave }) {
               <p className="text-[11px] text-slate-500 dark:text-zinc-500">
                 Paste the 32-character ID or full Notion URL of the target page or database. Make sure you have connected your MeetMind integration from the page/database "..." menu.
               </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <div>
+                <h4 className="text-sm font-medium text-slate-900 dark:text-zinc-100">Upload Transcript</h4>
+                <p className="text-xs text-slate-500 dark:text-[#555]">
+                  Include the full meeting transcript as a collapsible section on the Notion page. Notes and summaries are always uploaded.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.notionUploadTranscript}
+                aria-label="Upload transcript to Notion"
+                onClick={() => handleChange('notionUploadTranscript', !form.notionUploadTranscript)}
+                className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ml-4 ${
+                  form.notionUploadTranscript ? 'bg-emerald-600 dark:bg-green-600' : 'bg-slate-300 dark:bg-[#333]'
+                }`}
+              >
+                <span
+                  className={`block w-4 h-4 rounded-full bg-white transition-transform ${
+                    form.notionUploadTranscript ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
             </div>
 
             <div className="pt-2 flex items-center gap-3">
