@@ -12,6 +12,10 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 - Settings → Notion Integration: toggle to include or omit the full meeting transcript when uploading to Notion. Notes and summaries are always uploaded. Defaults to on.
 
+### Fixed
+
+- Release notes generator now parses Keep a Changelog headings (`## [X.Y.Z] - YYYY-MM-DD`) so GitHub Releases include the real changelog instead of a fallback placeholder.
+
 ## [2.8.0] - 2026-08-25
 
 ### Added

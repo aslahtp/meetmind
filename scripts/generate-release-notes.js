@@ -41,13 +41,11 @@ function getPreviousTag(currentTag) {
 }
 
 function parseChangelogSections(content) {
-  // Matches headers like "## v2.0.7" or "## 2.0.7"
-  const sectionRegex = /^##\s+v?(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)\s*$/gm;
-  const sections = [];
-  let match;
+  const headerRe = /^##\s+(?:\[)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)\]?(?:\s+[-–—]\s+.*)?\s*$/gm;
   const matches = [];
+  let match;
 
-  while ((match = sectionRegex.exec(content)) !== null) {
+  while ((match = headerRe.exec(content)) !== null) {
     matches.push({
       version: match[1],
       index: match.index,
@@ -55,13 +53,13 @@ function parseChangelogSections(content) {
     });
   }
 
+  const sections = [];
   for (let i = 0; i < matches.length; i++) {
     const cur = matches[i];
     const next = matches[i + 1];
-    const rawBody = content.substring(
-      cur.index + cur.headerLength,
-      next ? next.index : content.length
-    ).trim();
+    const rawBody = content
+      .substring(cur.index + cur.headerLength, next ? next.index : content.length)
+      .trim();
 
     sections.push({
       version: cur.version,
@@ -73,48 +71,58 @@ function parseChangelogSections(content) {
   return sections;
 }
 
+function collectSectionsUntilPrevious(sections, prevTag) {
+  const prevVer = prevTag ? String(prevTag).replace(/^v/, '') : null;
+  const targetSections = [];
+
+  for (const s of sections) {
+    if (prevVer && s.version === prevVer) break;
+    targetSections.push(s);
+  }
+
+  return targetSections;
+}
+
+function renderChangelogBody(targetSections, currentVer) {
+  if (!targetSections.length) {
+    return `- Release updates for v${currentVer}`;
+  }
+  if (targetSections.length === 1) {
+    return targetSections[0].body || `- Release updates for v${currentVer}`;
+  }
+  return targetSections
+    .map((s) => `### v${s.version}\n\n${s.body}`)
+    .join('\n\n')
+    .trim();
+}
+
 function extractChangelogBody(currentVer, prevTag) {
   if (!fs.existsSync(changelogPath)) {
-    return `- Release updates for v${currentVer}`;
+    throw new Error(`CHANGELOG.md not found at ${changelogPath}`);
   }
 
   const content = fs.readFileSync(changelogPath, 'utf8');
   const sections = parseChangelogSections(content);
 
   if (sections.length === 0) {
-    return `- Release updates for v${currentVer}`;
+    throw new Error(
+      'CHANGELOG.md has no version headings. Expected Keep a Changelog format: "## [X.Y.Z] - YYYY-MM-DD".'
+    );
   }
 
-  const prevVer = prevTag ? prevTag.replace(/^v/, '') : null;
-  const targetSections = [];
-
-  for (const s of sections) {
-    // If we've reached the previous release, stop
-    if (prevVer && s.version === prevVer) {
-      break;
-    }
-    targetSections.push(s);
+  const current = sections.find((s) => s.version === currentVer);
+  if (!current) {
+    throw new Error(
+      `CHANGELOG.md has no section for v${currentVer}. Add a heading like "## [${currentVer}] - YYYY-MM-DD".`
+    );
   }
 
-  // If no sections matched or targetSections is empty, fallback to the first section
+  const targetSections = collectSectionsUntilPrevious(sections, prevTag);
   if (targetSections.length === 0) {
-    const matching = sections.find((s) => s.version === currentVer) || sections[0];
-    return matching.body || `- Release updates for v${currentVer}`;
+    return current.body || `- Release updates for v${currentVer}`;
   }
 
-  // If only 1 version section is in scope:
-  if (targetSections.length === 1) {
-    return targetSections[0].body || `- Release updates for v${currentVer}`;
-  }
-
-  // If multiple versions accumulated between releases:
-  // Render each with a sub-heading:
-  // ### v2.0.7
-  // - points...
-  return targetSections
-    .map((s) => `### v${s.version}\n\n${s.body}`)
-    .join('\n\n')
-    .trim();
+  return renderChangelogBody(targetSections, currentVer);
 }
 
 function generateReleaseNotes() {
@@ -125,13 +133,16 @@ function generateReleaseNotes() {
   console.log(`Generating release notes for ${currentTag} (previous release tag: ${prevTag || 'none'})...`);
 
   const changelogBody = extractChangelogBody(version, prevTag);
+  if (!changelogBody.trim() || changelogBody.trim() === `- Release updates for v${version}`) {
+    throw new Error(`Changelog body for v${version} was empty or fell back to a placeholder.`);
+  }
 
   let template = '## Changelog\n\n{CHANGELOG_BODY}\n\n## Downloads\n\n- `MeetMind Setup x.y.z.exe`';
   if (fs.existsSync(templatePath)) {
     template = fs.readFileSync(templatePath, 'utf8');
   }
 
-  template = template.replace(/^\uFEFF/, ''); // strip BOM if any
+  template = template.replace(/^\uFEFF/, '');
   const output = template
     .replace(/{VERSION}/g, version)
     .replace(/x\.y\.z/g, version)
@@ -141,8 +152,71 @@ function generateReleaseNotes() {
   console.log(`✓ release_notes.md generated successfully (${output.length} bytes).`);
 }
 
+function assert(condition, message) {
+  if (!condition) throw new Error(`self-test failed: ${message}`);
+}
+
+function selfTest() {
+  const sample = `---
+tags: [meta, changelog]
+---
+# Changelog
+
+Intro text that must not become a section.
+
+## [2.9.0] - 2026-08-26
+
+### Added
+
+- New toggle.
+
+## [2.8.0] - 2026-08-25
+
+### Added
+
+- Dashboard limit.
+
+## v2.0.8
+
+- Legacy header.
+
+## 1.5.0
+
+- Unprefixed header.
+`;
+
+  const sections = parseChangelogSections(sample);
+  assert(sections.length === 4, `expected 4 sections, got ${sections.length}`);
+  assert(sections[0].version === '2.9.0', `first version ${sections[0].version}`);
+  assert(sections[0].body.includes('### Added'), 'Keep a Changelog category heading should be kept');
+  assert(sections[0].body.includes('New toggle.'), '2.9.0 body missing');
+  assert(!sections[0].body.includes('Dashboard limit.'), '2.9.0 body leaked into next section');
+  assert(sections[1].version === '2.8.0', `second version ${sections[1].version}`);
+  assert(sections[2].version === '2.0.8', `legacy v-prefix not parsed: ${sections[2].version}`);
+  assert(sections[3].version === '1.5.0', `unprefixed header not parsed: ${sections[3].version}`);
+
+  const untilPrev = collectSectionsUntilPrevious(sections, 'v2.8.0');
+  assert(untilPrev.length === 1 && untilPrev[0].version === '2.9.0', 'should stop at previous tag');
+
+  const multi = collectSectionsUntilPrevious(sections, 'v2.0.8');
+  assert(multi.map((s) => s.version).join(',') === '2.9.0,2.8.0', 'should include all versions after previous tag');
+
+  const rendered = renderChangelogBody(untilPrev, '2.9.0');
+  assert(rendered.includes('New toggle.'), 'rendered body missing current notes');
+  assert(!rendered.includes('Dashboard limit.'), 'rendered body included previous release');
+
+  console.log('✓ generate-release-notes self-test passed');
+}
+
 if (require.main === module) {
+  selfTest();
   generateReleaseNotes();
 }
 
-module.exports = { generateReleaseNotes, extractChangelogBody };
+module.exports = {
+  generateReleaseNotes,
+  extractChangelogBody,
+  parseChangelogSections,
+  collectSectionsUntilPrevious,
+  selfTest,
+};
