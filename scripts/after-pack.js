@@ -4,43 +4,17 @@ const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 
-function resolveWineBin() {
-  if (process.env.WINE) return process.env.WINE;
-  for (const cmd of ['wine64', 'wine']) {
-    try {
-      execFileSync(cmd, ['--version'], { stdio: 'ignore' });
-      return cmd;
-    } catch {
-      // try next
-    }
-  }
-  return null;
-}
-
-function runRcedit(rceditBin, args) {
-  if (process.platform === 'win32') {
-    execFileSync(rceditBin, args, { stdio: 'inherit' });
-    return;
-  }
-
-  const wineBin = resolveWineBin();
-  if (!wineBin) {
-    console.warn('[afterPack] Skipping rcedit: wine is required to edit Windows executables on this host.');
-    return;
-  }
-
-  execFileSync(wineBin, [rceditBin, ...args], {
-    stdio: 'inherit',
-    env: { ...process.env, WINEDEBUG: process.env.WINEDEBUG || '-all' },
-  });
-}
-
 /**
  * Embed MeetMind icon + version metadata into the Windows exe.
  * Needed because signAndEditExecutable is false (avoids winCodeSign symlink errors).
+ * rcedit is a Windows binary, so skip it on non-Windows hosts.
  */
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== 'win32') return;
+  if (process.platform !== 'win32') {
+    console.warn('[afterPack] Skipping rcedit on non-Windows host.');
+    return;
+  }
 
   const productName = context.packager.appInfo.productFilename || 'MeetMind';
   const exePath = path.join(context.appOutDir, `${productName}.exe`);
@@ -69,7 +43,7 @@ exports.default = async function afterPack(context) {
   const version = context.packager.appInfo.version || '1.0.0';
   console.log(`[afterPack] Embedding icon into ${exePath}`);
 
-  runRcedit(rceditBin, [
+  execFileSync(rceditBin, [
     exePath,
     '--set-icon', iconPath,
     '--set-version-string', 'FileDescription', 'MeetMind',
@@ -78,5 +52,5 @@ exports.default = async function afterPack(context) {
     '--set-version-string', 'OriginalFilename', `${productName}.exe`,
     '--set-file-version', version,
     '--set-product-version', version,
-  ]);
+  ], { stdio: 'inherit' });
 };
