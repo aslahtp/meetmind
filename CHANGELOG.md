@@ -6,6 +6,16 @@ updated: 2026-09-17
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [2.11.0] - 2026-09-17
+
+### Added
+
+- Gemini: added `gemini-3.8-flash`, now the default note-generation model.
+
+### Removed
+
+- Gemini: dropped `gemini-3.6-flash`, `gemini-3.5-flash`, and `gemini-3.1-flash-lite` from the selectable model list. Existing configs pointing at these are automatically migrated to a supported model.
+
 ## [2.10.0] - 2026-09-18
 
 ### Added

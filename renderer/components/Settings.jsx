@@ -79,25 +79,18 @@ const STT_SERVICES = [
 
 const GEMINI_MODELS = [
   {
-    id: 'gemini-3.7-flash',
-    name: 'Gemini 3.7 Flash',
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
     badge: 'Default',
     badgeClass: 'badge-green',
     description: 'Fast, high-quality reasoning and structured generation. Best overall balance of speed and accuracy.',
   },
   {
-    id: 'gemini-3.6-flash',
-    name: 'Gemini 3.6 Flash',
+    id: 'gemini-3.7-flash',
+    name: 'Gemini 3.7 Flash',
     badge: 'Stable',
     badgeClass: 'badge-blue',
-    description: 'Reliable previous-generation Flash model. Good fallback if 3.7 is unavailable.',
-  },
-  {
-    id: 'gemini-3.5-flash',
-    name: 'Gemini 3.5 Flash',
-    badge: 'Fast',
-    badgeClass: 'badge-yellow',
-    description: 'Efficient summarization with strong multilingual support for code-switched transcripts.',
+    description: 'Reliable previous-generation Flash model. Good fallback if 3.8 is unavailable.',
   },
   {
     id: 'gemini-3.5-flash-lite',
@@ -105,13 +98,6 @@ const GEMINI_MODELS = [
     badge: 'Lite',
     badgeClass: 'badge-gray',
     description: 'Lightweight and ultra-fast. Best for short meetings or low-latency note generation.',
-  },
-  {
-    id: 'gemini-3.1-flash-lite',
-    name: 'Gemini 3.1 Flash Lite',
-    badge: 'Legacy',
-    badgeClass: 'badge-gray',
-    description: 'Previous lite model for standard meeting summarization tasks.',
   },
   {
     id: 'gemini-3.1-pro-preview',
@@ -368,7 +354,7 @@ export default function Settings({ onSave }) {
     assemblyAiApiKey: '',
     assemblyAiPrompt: '',
     geminiApiKey: '',
-    geminiModel: 'gemini-3.7-flash',
+    geminiModel: 'gemini-3.8-flash',
     secondaryGeminiModel: '',
     notionApiKey: '',
     notionDatabaseId: '',
@@ -435,7 +421,7 @@ export default function Settings({ onSave }) {
           assemblyAiApiKey: cfg.assemblyAiApiKey || '',
           assemblyAiPrompt: cfg.assemblyAiPrompt || '',
           geminiApiKey: cfg.geminiApiKey || '',
-          geminiModel: cfg.geminiModel || cfg.selectedModel || 'gemini-3.7-flash',
+          geminiModel: cfg.geminiModel || cfg.selectedModel || 'gemini-3.8-flash',
           secondaryGeminiModel: cfg.secondaryGeminiModel || '',
           notionApiKey: cfg.notionApiKey || cfg.notionToken || '',
           notionDatabaseId: cfg.notionDatabaseId || cfg.notionPageId || '',
