@@ -607,13 +607,38 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     sendProgress('generating', 60);
 
     // Stage 2: Gemini notes (60–85%)
-    const notes = await generateMeetingNotes(transcript, config.selectedModel, config.geminiApiKey, resolveSystemPrompt(config));
+    const notes = await generateMeetingNotes(
+      transcript,
+      config.selectedModel,
+      config.geminiApiKey,
+      resolveSystemPrompt(config),
+      config.secondaryGeminiModel || ''
+    );
+
+    // Track which model was actually used (primary or fallback)
+    const modelUsed = notes._modelUsed || config.selectedModel;
+    const usedFallback = modelUsed !== config.selectedModel;
+
+    // Stamp metadata into the notes blob so the renderer can display it
+    notes._geminiModel = modelUsed;
+    notes._sttService  = config.sttService || 'google';
+
     db.updateSession(sessionId, {
       notes: JSON.stringify(notes),
       title: notes.meeting_title || notes.title || 'Untitled Meeting',
       status: 'complete',
     });
     sendProgress('complete', 85);
+
+    // Notify the renderer if the fallback model was used
+    if (usedFallback) {
+      sendToRenderer('gemini:fallback-used', {
+        sessionId,
+        primaryModel: config.selectedModel,
+        fallbackModel: modelUsed,
+      });
+      logger.info('Fallback Gemini model was used', { primaryModel: config.selectedModel, fallbackModel: modelUsed });
+    }
 
     // Stage 3: Notion upload (85–100%) — optional, only if configured
     let notionUrl = null;

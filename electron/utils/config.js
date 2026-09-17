@@ -46,6 +46,10 @@ const schema = {
     type: 'string',
     default: DEFAULT_GEMINI_MODEL,
   },
+  secondaryGeminiModel: {
+    type: 'string',
+    default: '',
+  },
   systemAudioDevice: {
     type: 'string',
     default: '',
@@ -194,6 +198,7 @@ function getConfig() {
     notionPageId:              notionDbId,
     selectedModel,
     geminiModel:               selectedModel,
+    secondaryGeminiModel:      store.get('secondaryGeminiModel') || '',
     systemAudioDevice:         store.get('systemAudioDevice') || '',
     micDevice:                 store.get('micDevice') || '',
     autoLaunch:                store.get('autoLaunch') ?? true,

@@ -369,6 +369,7 @@ export default function Settings({ onSave }) {
     assemblyAiPrompt: '',
     geminiApiKey: '',
     geminiModel: 'gemini-3.7-flash',
+    secondaryGeminiModel: '',
     notionApiKey: '',
     notionDatabaseId: '',
     language: 'ml-IN',
@@ -434,6 +435,7 @@ export default function Settings({ onSave }) {
           assemblyAiPrompt: cfg.assemblyAiPrompt || '',
           geminiApiKey: cfg.geminiApiKey || '',
           geminiModel: cfg.geminiModel || cfg.selectedModel || 'gemini-3.7-flash',
+          secondaryGeminiModel: cfg.secondaryGeminiModel || '',
           notionApiKey: cfg.notionApiKey || cfg.notionToken || '',
           notionDatabaseId: cfg.notionDatabaseId || cfg.notionPageId || '',
           language: cfg.language || 'ml-IN',
@@ -885,6 +887,33 @@ export default function Settings({ onSave }) {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Fallback (Secondary) Model */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                  Fallback Model
+                </label>
+                <span className="badge-gray text-[10px] py-0 px-1.5">Auto-retry</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-zinc-500">
+                If the primary model fails (e.g. rate limit or outage), MeetMind retries automatically with this
+                model. Leave as <span className="font-mono">None</span> to disable fallback.
+              </p>
+              <select
+                id="secondary-gemini-model"
+                value={form.secondaryGeminiModel || ''}
+                onChange={(e) => handleChange('secondaryGeminiModel', e.target.value)}
+                className="input text-xs"
+              >
+                <option value="">None (disabled)</option>
+                {GEMINI_MODELS.filter((m) => m.id !== form.geminiModel).map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name} — {model.badge}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="pt-2 flex items-center gap-3">

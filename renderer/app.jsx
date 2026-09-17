@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Mic,
@@ -16,6 +16,9 @@ import {
   Sun,
   Moon,
   Monitor,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
 } from 'lucide-react';
 import './styles/globals.css';
 
@@ -32,6 +35,74 @@ export const AppContext = createContext(null);
 
 export function useApp() {
   return useContext(AppContext);
+}
+
+// ── Toast System ──────────────────────────────────────────────────────────────
+
+const TOAST_ICONS = {
+  warning: AlertTriangle,
+  info:    Info,
+  success: CheckCircle2,
+};
+
+const TOAST_STYLES = {
+  warning: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  info:    'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300',
+  success: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+};
+
+function Toast({ id, message, type = 'info', onDismiss }) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    // Trigger slide-in on next frame
+    const enterTimer = requestAnimationFrame(() => setVisible(true));
+    // Auto-dismiss after 5 s
+    const exitTimer = setTimeout(() => {
+      setVisible(false);
+      setTimeout(() => onDismiss(id), 300);
+    }, 5000);
+    return () => {
+      cancelAnimationFrame(enterTimer);
+      clearTimeout(exitTimer);
+    };
+  }, [id, onDismiss]);
+
+  const Icon = TOAST_ICONS[type] || Info;
+  const style = TOAST_STYLES[type] || TOAST_STYLES.info;
+
+  return (
+    <div
+      className={`flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg backdrop-blur-md max-w-sm w-full transition-all duration-300 ${style} ${
+        visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'
+      }`}
+      role="alert"
+    >
+      <Icon size={16} className="flex-shrink-0 mt-0.5" strokeWidth={2} />
+      <p className="text-xs font-medium leading-snug flex-1">{message}</p>
+      <button
+        type="button"
+        onClick={() => { setVisible(false); setTimeout(() => onDismiss(id), 300); }}
+        className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+        aria-label="Dismiss"
+      >
+        <X size={13} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+function ToastContainer({ toasts, onDismiss }) {
+  if (!toasts.length) return null;
+  return (
+    <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none">
+      {toasts.map((t) => (
+        <div key={t.id} className="pointer-events-auto">
+          <Toast id={t.id} message={t.message} type={t.type} onDismiss={onDismiss} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ── Root App ──────────────────────────────────────────────────────────────────
@@ -78,6 +149,16 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [updaterState, setUpdaterState] = useState(null);
   const [showUpdateBanner, setShowUpdateBanner] = useState(true);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = useCallback((message, type = 'info') => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setToasts((prev) => [...prev.slice(-2), { id, message, type }]); // max 3 visible
+  }, []);
+
+  const dismissToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const keysNotSet = !hasSttApiKey(config) || !config?.geminiApiKey?.trim();
 
@@ -276,6 +357,13 @@ function App() {
       }
     });
 
+    const unsubFallback = window.meetmind.on('gemini:fallback-used', ({ primaryModel, fallbackModel }) => {
+      addToast(
+        `Primary model (${primaryModel}) failed — switched to ${fallbackModel} automatically.`,
+        'warning'
+      );
+    });
+
     // Check initial updater status
     window.meetmind.updater?.getStatus().then((status) => {
       if (status) {
@@ -293,8 +381,9 @@ function App() {
       unsubError?.();
       unsubDurations?.();
       unsubUpdater?.();
+      unsubFallback?.();
     };
-  }, []);
+  }, [addToast]);
 
   const refreshSessions = async () => {
     const list = await window.meetmind.sessions.list();
@@ -373,6 +462,7 @@ function App() {
     isRecording, recordingSessionId,
     startRecording, stopRecording,
     openSession,
+    addToast,
   };
 
   return (
@@ -446,6 +536,9 @@ function App() {
           onClose={() => setShowUpdateBanner(false)}
         />
       )}
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </AppContext.Provider>
   );
 }

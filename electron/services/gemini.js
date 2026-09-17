@@ -302,7 +302,7 @@ function normalizeNotes(notes) {
   return notes;
 }
 
-async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPrompt) {
+async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPrompt, secondaryModelId) {
   if (!apiKey) throw new Error('Gemini API key is required');
 
   const selectedModel = resolveModelId(modelId);
@@ -316,18 +316,41 @@ async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPro
   // expect a plain markdown response instead of structured JSON.
   const isMarkdownMode = !effectivePrompt.includes('"$schema"') && !effectivePrompt.includes('json\n{');
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: selectedModel,
-    systemInstruction: effectivePrompt,
-  });
+  async function callModel(model) {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const genModel = genAI.getGenerativeModel({
+      model,
+      systemInstruction: effectivePrompt,
+    });
 
-  const prompt = isMarkdownMode
-    ? `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate the meeting notes as instructed.`
-    : `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate structured meeting notes in JSON format as specified.`;
+    const prompt = isMarkdownMode
+      ? `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate the meeting notes as instructed.`
+      : `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate structured meeting notes in JSON format as specified.`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
+    const result = await genModel.generateContent(prompt);
+    return result.response.text().trim();
+  }
+
+  let text;
+  let modelUsed = selectedModel;
+
+  try {
+    text = await callModel(selectedModel);
+  } catch (primaryErr) {
+    const secondaryModel = resolveModelId(secondaryModelId);
+    const hasSecondary = secondaryModelId && AVAILABLE_MODELS.includes(secondaryModelId) && secondaryModelId !== selectedModel;
+    if (!hasSecondary) {
+      throw primaryErr;
+    }
+    logger.warn('Primary Gemini model failed, retrying with secondary', {
+      primaryModel: selectedModel,
+      secondaryModel,
+      error: primaryErr.message,
+    });
+    text = await callModel(secondaryModel);
+    modelUsed = secondaryModel;
+    logger.info('Secondary Gemini model succeeded', { secondaryModel });
+  }
 
   // If this is a markdown-mode prompt, return immediately as raw markdown.
   if (isMarkdownMode) {
@@ -339,8 +362,8 @@ async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPro
     // Derive a title from the first # heading if present
     const titleMatch = mdText.match(/^#\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : 'Meeting Notes';
-    logger.info('Meeting notes generated (markdown mode)', { title });
-    return { _rawMarkdown: mdText, title, meeting_title: title };
+    logger.info('Meeting notes generated (markdown mode)', { title, modelUsed });
+    return { _rawMarkdown: mdText, title, meeting_title: title, _modelUsed: modelUsed };
   }
 
   // JSON mode — strip markdown code fences if present
@@ -352,12 +375,14 @@ async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPro
   try {
     const parsedNotes = JSON.parse(jsonText);
     const notes = normalizeNotes(parsedNotes);
+    notes._modelUsed = modelUsed;
 
     logger.info('Meeting notes generated', {
       title: notes.title,
       actionItems: notes.action_items?.length || 0,
       topics: notes.topics?.length || 0,
       participants: notes.participants?.length || 0,
+      modelUsed,
     });
     return notes;
   } catch (err) {
@@ -380,6 +405,7 @@ async function generateMeetingNotes(transcript, modelId, apiKey, customSystemPro
       next_meeting: null,
       sentiment: 'neutral',
       _rawResponse: jsonText,
+      _modelUsed: modelUsed,
     };
     return fallback;
   }

@@ -161,6 +161,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'sessions:durations-updated',
       'updater:status',
       'calendar:meeting-starting',
+      'gemini:fallback-used',
       'log:entry',
     ];
     if (validChannels.includes(channel)) {
