@@ -47,6 +47,11 @@ jobs:
             echo "release_needed=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Verify changelog parsing for release notes
+        run: node scripts/generate-release-notes.js
+        env:
+          PREV_TAG: ${{ steps.version_check.outputs.prev_tag }}
+
   build-and-release:
     name: Build & Publish Release
     needs: check-version

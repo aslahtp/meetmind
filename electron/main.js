@@ -17,6 +17,12 @@ const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
 
+function uploadSessionToNotion(notes, transcript, config) {
+  return uploadToNotion(notes, transcript, config.notionPageId, config.notionToken, {
+    includeTranscript: config.notionUploadTranscript !== false,
+  });
+}
+
 // Top-level crash guards for main process
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught Exception in main process', {
@@ -645,7 +651,7 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     if (config.notionToken && config.notionPageId) {
       sendProgress('uploading', 85);
       db.updateSession(sessionId, { status: 'uploading' });
-      notionUrl = await uploadToNotion(notes, transcript, config.notionPageId, config.notionToken);
+      notionUrl = await uploadSessionToNotion(notes, transcript, config);
       db.updateSession(sessionId, { notion_page_url: notionUrl, status: 'complete' });
       sendProgress('complete', 100);
     }
@@ -850,7 +856,7 @@ function registerIpcHandlers() {
         typeof session.transcript === 'string'
           ? JSON.parse(session.transcript || '[]')
           : (session.transcript || []);
-      const url = await uploadToNotion(notes, transcript, config.notionPageId, config.notionToken);
+      const url = await uploadSessionToNotion(notes, transcript, config);
       db.updateSession(sessionId, { notion_page_url: url });
       return { success: true, url };
     } catch (err) {
@@ -942,7 +948,7 @@ function registerIpcHandlers() {
           typeof session.transcript === 'string'
             ? JSON.parse(session.transcript || '[]')
             : (session.transcript || []);
-        const url = await uploadToNotion(notes, transcript, config.notionPageId, config.notionToken);
+        const url = await uploadSessionToNotion(notes, transcript, config);
         db.updateSession(sessionId, { notion_page_url: url, status: 'complete' });
         return { success: true, url };
       } catch (err) {

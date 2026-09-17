@@ -1,18 +1,10 @@
 ---
 tags: [meta, changelog]
-updated: 2026-08-23
+updated: 2026-08-26
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
-
-## [2.9.0] - 2026-09-17
-
-### Added
-
-- Settings → Gemini AI section: **Fallback Model** dropdown — configure a secondary Gemini model that is used automatically when the primary model fails (e.g. rate limit, outage). Saved as `secondaryGeminiModel` in config.
-- Toast notification shown in the bottom-right corner when the fallback model is activated during processing, indicating which primary model failed and which secondary was used.
-- NoteViewer session header: two new metadata pills — **Gemini model** (violet, with Sparkles icon) and **STT service** (teal, with Mic icon) — showing which model generated the notes and which transcription service was used. Stored in the notes JSON as `_geminiModel` and `_sttService`; absent for sessions recorded before this version.
 
 ## [2.8.0] - 2026-08-25
 

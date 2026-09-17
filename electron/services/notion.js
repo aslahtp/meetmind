@@ -439,7 +439,7 @@ function buildBlocksFromMarkdown(markdown) {
 
 // ── Build page content ────────────────────────────────────────────────────────
 
-function buildBlocks(notes, transcript) {
+function buildBlocks(notes, transcript, { includeTranscript = true } = {}) {
   let blocks = [];
 
   if (notes && notes._rawMarkdown) {
@@ -546,37 +546,39 @@ function buildBlocks(notes, transcript) {
 
 
   // ── Transcript heading (Toggle H2) ──────────────────────────────────────────
-  blocks.push(dividerBlock());
+  if (includeTranscript) {
+    blocks.push(dividerBlock());
 
-  const transcriptBlocks = [];
-  if (transcript?.length > 0) {
-    let currentChunk = '';
-    for (const seg of transcript) {
-      const line = `${seg.speaker || 'Speaker'}: ${seg.text}`;
+    const transcriptBlocks = [];
+    if (transcript?.length > 0) {
+      let currentChunk = '';
+      for (const seg of transcript) {
+        const line = `${seg.speaker || 'Speaker'}: ${seg.text}`;
 
-      if (currentChunk.length + line.length > 1900) {
-        if (currentChunk) transcriptBlocks.push(paragraphBlock(currentChunk.trim()));
-        currentChunk = line + '\n';
-      } else {
-        currentChunk += line + '\n';
+        if (currentChunk.length + line.length > 1900) {
+          if (currentChunk) transcriptBlocks.push(paragraphBlock(currentChunk.trim()));
+          currentChunk = line + '\n';
+        } else {
+          currentChunk += line + '\n';
+        }
       }
+      if (currentChunk) {
+        transcriptBlocks.push(paragraphBlock(currentChunk.trim()));
+      }
+    } else {
+      transcriptBlocks.push(paragraphBlock('No transcript available.'));
     }
-    if (currentChunk) {
-      transcriptBlocks.push(paragraphBlock(currentChunk.trim()));
-    }
-  } else {
-    transcriptBlocks.push(paragraphBlock('No transcript available.'));
-  }
 
-  blocks.push({
-    object: 'block',
-    type: 'heading_2',
-    heading_2: {
-      rich_text: richText('Transcript'),
-      is_toggleable: true,
-      children: transcriptBlocks.slice(0, NOTION_BLOCK_LIMIT),
-    },
-  });
+    blocks.push({
+      object: 'block',
+      type: 'heading_2',
+      heading_2: {
+        rich_text: richText('Transcript'),
+        is_toggleable: true,
+        children: transcriptBlocks.slice(0, NOTION_BLOCK_LIMIT),
+      },
+    });
+  }
 
   return blocks;
 }
@@ -635,7 +637,7 @@ async function getDatabaseTitleKey(notion, databaseId) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-async function uploadToNotion(notes, transcript, parentId, notionToken) {
+async function uploadToNotion(notes, transcript, parentId, notionToken, options = {}) {
   if (!notionToken) throw new Error('Notion token is required');
   if (!parentId) throw new Error('Notion parent page/database ID is required. Paste it from the Notion URL into Settings.');
 
@@ -672,7 +674,8 @@ async function uploadToNotion(notes, transcript, parentId, notionToken) {
     },
   ];
 
-  logger.info('Uploading to Notion', { parentId: cleanParentId, title: meetingTitle });
+  const includeTranscript = options.includeTranscript !== false;
+  logger.info('Uploading to Notion', { parentId: cleanParentId, title: meetingTitle, includeTranscript });
 
   const { type: parentType, id: resolvedId } = await detectParentType(notion, cleanParentId);
   logger.info('Notion parent type detected', { parentType, resolvedId });
@@ -702,7 +705,7 @@ async function uploadToNotion(notes, transcript, parentId, notionToken) {
   const pageId = page.id;
   logger.info('Notion page created', { pageId, url: page.url });
 
-  const blocks = buildBlocks(notes, transcript);
+  const blocks = buildBlocks(notes, transcript, { includeTranscript });
   await appendBlocks(notion, pageId, blocks);
 
   logger.info('Notion upload complete', { pageId, blockCount: blocks.length });

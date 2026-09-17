@@ -154,6 +154,10 @@ const schema = {
     type: 'number',
     default: 5,
   },
+  notionUploadTranscript: {
+    type: 'boolean',
+    default: true,
+  },
 };
 
 const store = new Store({ schema, name: 'meetmind-config' });
@@ -225,6 +229,7 @@ function getConfig() {
     googleCalendarEnabled:     store.get('googleCalendarEnabled') || false,
     googleCalendarEmail:       store.get('googleCalendarEmail') || '',
     dashboardRecentLimit:      store.get('dashboardRecentLimit') || 5,
+    notionUploadTranscript:    store.get('notionUploadTranscript') !== false,
   };
 }
 
