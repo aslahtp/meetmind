@@ -6,6 +6,12 @@ updated: 2026-09-17
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [2.12.0] - 2026-09-22
+
+### Added
+
+- Dashboard: "Paste Transcript" button opens a modal to create a meeting session from pasted text, skipping STT and generating AI notes directly via Gemini.
+
 ## [2.11.0] - 2026-09-17
 
 ### Added

@@ -8,8 +8,10 @@ import {
   CalendarDays,
   X,
   ChevronRight,
+  ClipboardList,
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
+import PasteTranscriptModal from './PasteTranscriptModal.jsx';
 import NotionIcon from './NotionIcon.jsx';
 import UpcomingMeetings from './UpcomingMeetings.jsx';
 import SessionCard, {
@@ -74,6 +76,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   const { deletingIds, handleDelete, handleUploadAudio } = useSessionActions();
   const showSkeleton = useDelayedFlag(sessionsLoading, SKELETON_DELAY_MS);
   const [meetingToast, setMeetingToast] = useState(null);
+  const [showPasteModal, setShowPasteModal] = useState(false);
 
   const recentLimit = config?.dashboardRecentLimit || 5;
 
@@ -134,7 +137,8 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40 fade-in">
+    <>
+      <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40 fade-in">
       {/* Top Header */}
       <div className="flex items-center justify-between px-6 pt-3 pb-3 border-b border-slate-200 dark:border-zinc-800/80 bg-slate-50/80 dark:bg-transparent backdrop-blur-md flex-shrink-0 titlebar-drag select-none">
         <div>
@@ -161,6 +165,14 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
             title="Refresh list"
           >
             <RefreshCw size={15} strokeWidth={2} />
+          </button>
+          <button
+            onClick={() => setShowPasteModal(true)}
+            className="btn-outline text-xs px-3.5 py-2"
+            title="Create meeting from pasted transcript"
+          >
+            <ClipboardList size={14} strokeWidth={2} />
+            Paste Transcript
           </button>
           <button
             onClick={handleUploadAudio}
@@ -336,5 +348,10 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
         )}
       </div>
     </div>
+
+    {showPasteModal && (
+      <PasteTranscriptModal onClose={() => setShowPasteModal(false)} />
+    )}
+  </>
   );
 }

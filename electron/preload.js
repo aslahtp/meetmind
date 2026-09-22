@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('meetmind', {
     get: (id) => ipcRenderer.invoke('session:get', id),
     delete: (id) => ipcRenderer.invoke('session:delete', id),
     openRecording: (id) => ipcRenderer.invoke('session:open-recording', id),
+    createFromTranscript: (opts) => ipcRenderer.invoke('session:create-from-transcript', opts),
   },
 
   // Notion

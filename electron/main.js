@@ -958,6 +958,112 @@ function registerIpcHandlers() {
     return { success: false, error: 'Unknown stage' };
   });
 
+  // Create a session from a pasted transcript (skip STT, go straight to Gemini)
+  ipcMain.handle('session:create-from-transcript', async (_e, { title, transcriptText }) => {
+    const { v4: uuidv4 } = require('uuid');
+
+    if (!transcriptText || !transcriptText.trim()) {
+      return { success: false, error: 'Transcript text is empty.' };
+    }
+
+    const config = getConfig();
+    if (!config.geminiApiKey?.trim()) {
+      return { success: false, error: 'Gemini API key is not configured. Please add it in Settings.' };
+    }
+
+    const sessionId = uuidv4();
+    const now = new Date().toISOString();
+
+    // Convert raw text into the standard segment array expected by generateMeetingNotes and NoteViewer.
+    // Split on blank lines (paragraph boundaries); each paragraph becomes one segment.
+    const paragraphs = transcriptText
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const transcript = paragraphs.map((text, i) => ({
+      speaker:        'Speaker',
+      text,
+      start_time:     i * 5,   // synthetic offset — 5 s apart so timestamps are non-zero
+      offset_seconds: i * 5,
+    }));
+
+    db.createSession({
+      id:         sessionId,
+      title:      title || 'Pasted Transcript',
+      started_at: now,
+      status:     'generating',
+    });
+
+    // Run Gemini + optional Notion upload asynchronously so the IPC call returns immediately
+    // and the renderer can listen on processing:progress / processing:complete as usual.
+    (async () => {
+      const sendProgress = (stage, percent) => {
+        sendToRenderer('processing:progress', { stage, percent });
+        broadcastToExtension({ type: 'PROCESSING_PROGRESS', stage, percent });
+      };
+
+      try {
+        // Save transcript immediately so the session is browsable right away
+        db.updateSession(sessionId, { transcript: JSON.stringify(transcript) });
+
+        sendProgress('generating', 60);
+
+        const notes = await generateMeetingNotes(
+          transcript,
+          config.selectedModel,
+          config.geminiApiKey,
+          resolveSystemPrompt(config),
+          config.secondaryGeminiModel || ''
+        );
+
+        const modelUsed  = notes._modelUsed || config.selectedModel;
+        const usedFallback = modelUsed !== config.selectedModel;
+
+        notes._geminiModel = modelUsed;
+        notes._sttService  = 'none'; // no STT for pasted transcripts
+
+        db.updateSession(sessionId, {
+          notes:  JSON.stringify(notes),
+          title:  notes.meeting_title || notes.title || title || 'Pasted Transcript',
+          ended_at: new Date().toISOString(),
+          status: 'complete',
+        });
+        sendProgress('complete', 85);
+
+        if (usedFallback) {
+          sendToRenderer('gemini:fallback-used', {
+            sessionId,
+            primaryModel:  config.selectedModel,
+            fallbackModel: modelUsed,
+          });
+        }
+
+        // Optional Notion upload
+        let notionUrl = null;
+        if (config.notionToken && config.notionPageId) {
+          sendProgress('uploading', 85);
+          db.updateSession(sessionId, { status: 'uploading' });
+          notionUrl = await uploadSessionToNotion(notes, transcript, config);
+          db.updateSession(sessionId, { notion_page_url: notionUrl, status: 'complete' });
+          sendProgress('complete', 100);
+        }
+
+        sendToRenderer('processing:complete', { sessionId, notionUrl });
+        broadcastToExtension({ type: 'PROCESSING_COMPLETE', notionUrl, sessionId });
+        logger.info('Paste-transcript pipeline complete', { sessionId });
+      } catch (err) {
+        logger.error('Paste-transcript pipeline error', { sessionId, error: err.message });
+        db.updateSession(sessionId, { status: 'error' });
+        sendToRenderer('processing:error', { sessionId, error: err.message });
+        broadcastToExtension({ type: 'PROCESSING_ERROR', error: err.message });
+      }
+    })();
+
+    // Return immediately with the sessionId so the renderer can poll / listen
+    return { success: true, sessionId };
+  });
+
   // ── Auto updater ──────────────────────────────────────────────────────────
   ipcMain.handle('updater:check', (_e) => checkForUpdates(true));
   ipcMain.handle('updater:download', (_e) => downloadUpdate());
