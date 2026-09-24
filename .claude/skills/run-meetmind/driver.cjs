@@ -74,6 +74,68 @@ const TRANSCRIPT = [
   { speaker: 'Speaker 3', text: 'Payments vendor contract is still with legal, so that slips a week.', startTime: 25 },
 ];
 
+// A realistic Markdown-mode meeting, shaped like Gemini's default executive-minutes output
+// (header, summary, agenda, decisions, action-item table, next steps). Used for README shots.
+const LAUNCH_TRANSCRIPT = [
+  { speaker: 'Anjali Menon', text: 'Thanks for joining. Main goal today is a go or no-go on the Android and iOS launch for the 14th.', startTime: 4 },
+  { speaker: 'Rahul Nair', text: 'From engineering we are in good shape. Crash-free sessions are at 99.6 percent on the beta, and the payments flow passed QA yesterday.', startTime: 16 },
+  { speaker: 'Meera Joseph', text: 'Support is ready. We have the help centre articles and the in-app chat, but the Malayalam translations of the FAQ are still with the vendor.', startTime: 34 },
+  { speaker: 'Anjali Menon', text: 'Can we ship with English FAQ and add Malayalam in the first update?', startTime: 51 },
+  { speaker: 'Meera Joseph', text: 'Yes, as long as the in-app strings are translated. Those are done.', startTime: 58 },
+  { speaker: 'Rahul Nair', text: 'One risk: App Store review has been taking three to four days, so we should submit by Monday.', startTime: 66 },
+  { speaker: 'Arjun Das', text: 'Marketing is locked for the 14th. Press embargo lifts at 9 AM and the launch email goes out at 10.', startTime: 82 },
+  { speaker: 'Anjali Menon', text: 'Great. Then it is a go for the 14th. Rahul submits on Monday, Meera tracks the FAQ translations, and Arjun sends the final launch checklist.', startTime: 97 },
+];
+
+const LAUNCH_NOTES = {
+  meeting_title: 'Mobile app launch review',
+  attendees: ['Anjali Menon', 'Rahul Nair', 'Meera Joseph', 'Arjun Das'],
+  _geminiModel: 'gemini-3.8-flash',
+  _sttService: 'assemblyai',
+  _rawMarkdown: [
+    '# Mobile app launch review',
+    '',
+    '## Meeting Header',
+    '- **Platform:** Google Meet',
+    '- **Attendees:** Anjali Menon (Product Lead), Rahul Nair (Engineering), Meera Joseph (Customer Support), Arjun Das (Marketing)',
+    '- **Meeting Type:** Launch go/no-go review',
+    '',
+    '## Executive Summary',
+    'The team confirmed a **go** for the Android and iOS launch on the 14th. Engineering and support are ready; the only open item is the Malayalam FAQ translation, which will follow in the first update. The App Store submission must happen by Monday to absorb review time.',
+    '',
+    '## Agenda Items',
+    '### 1. Release readiness',
+    '- Crash-free sessions on the beta are at **99.6%**.',
+    '- The payments flow passed QA; no open blockers.',
+    '',
+    '### 2. Support and localisation',
+    '- Help-centre articles and in-app chat are live.',
+    '- In-app strings are translated to Malayalam; the FAQ translation is still with the vendor.',
+    '',
+    '### 3. Marketing',
+    '- Press embargo lifts at 9:00 AM on launch day; the launch email follows at 10:00 AM.',
+    '',
+    '## Key Decisions',
+    '1. Launch on the **14th** on both Android and iOS.',
+    '2. Ship with the English FAQ; add the Malayalam FAQ in the first update.',
+    '3. Submit the iOS build to the App Store by **Monday**.',
+    '',
+    '## Action Items',
+    '| Task | Owner | Deadline | Status |',
+    '| :--- | :--- | :--- | :--- |',
+    '| Submit iOS build to App Store review | Rahul Nair | Monday | Not started |',
+    '| Track Malayalam FAQ translation with the vendor | Meera Joseph | Before first update | In progress |',
+    '| Share the final launch-day checklist | Arjun Das | Friday | Not started |',
+    '| Confirm press embargo time with partners | Arjun Das | Thursday | Done |',
+    '',
+    '## Next Steps',
+    '- Final readiness check the day before launch.',
+    '- Post-launch review one week after release.',
+    '',
+    '> **Note:** Launch timing depends on App Store review; Rahul will flag any delay immediately.',
+  ].join('\n'),
+};
+
 const MARKDOWN_NOTES = {
   meeting_title: 'Weekly standup',
   // Exercises every Markdown feature the notes view and PDF export must render.
@@ -135,6 +197,7 @@ async function seedProfile({ fresh }) {
   add('demo-2', 'Hiring panel debrief', 60 * 26, 'error');
   add('demo-3', 'Design review', 20, 'generating', { transcript: JSON.stringify(TRANSCRIPT) });
   add('demo-4', 'Weekly standup', 60 * 50, 'complete', { notes: JSON.stringify(MARKDOWN_NOTES), transcript: JSON.stringify(TRANSCRIPT) });
+  add('demo-5', 'Mobile app launch review', 45, 'complete', { notes: JSON.stringify(LAUNCH_NOTES), transcript: JSON.stringify(LAUNCH_TRANSCRIPT), notion_page_url: 'https://notion.so/demo-launch' });
   fs.writeFileSync(dbPath, Buffer.from(db.export()));
 }
 

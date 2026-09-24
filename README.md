@@ -55,16 +55,16 @@ AI-powered meeting notes for Windows. Records system audio + microphone, transcr
 
 ## 📸 Screenshots
 
-| Meetings | Meeting notes |
+| Markdown meeting minutes | Decisions & action items |
 | :---: | :---: |
-| <img src="docs/screenshots/meetings.png" alt="Meetings list with search, status filters and processing states" width="400"> | <img src="docs/screenshots/meeting-summary.png" alt="Meeting summary with identified speakers" width="400"> |
-| Search and filter every recording, with live processing status | Speakers identified by name, with a confidence label on each |
-| **Action items** | **Transcript** |
-| <img src="docs/screenshots/action-items.png" alt="Action items with owners, due dates and priorities" width="400"> | <img src="docs/screenshots/transcript.png" alt="Searchable speaker-labelled transcript" width="400"> |
-| Action items with owner, due date and priority | Speaker-labelled transcript you can search and filter by speaker |
-| **Settings** | **Dark theme** |
-| <img src="docs/screenshots/settings.png" alt="Transcription settings with speech-to-text engine choices" width="400"> | <img src="docs/screenshots/meeting-summary-dark.png" alt="Meeting summary in the dark theme" width="400"> |
-| Pick a speech-to-text engine and add keys in tabbed settings | Full dark theme built from the same design tokens |
+| <img src="docs/screenshots/markdown-notes.png" alt="Markdown meeting minutes with a header, executive summary and agenda" width="400"> | <img src="docs/screenshots/markdown-action-items.png" alt="Key decisions and an action items table with owners, deadlines and status" width="400"> |
+| Executive-style minutes in Markdown: meeting header, summary and agenda | Numbered decisions and an action items table with owner, deadline and status |
+| **Transcript** | **Output format** |
+| <img src="docs/screenshots/transcript.png" alt="Searchable speaker-labelled transcript" width="400"> | <img src="docs/screenshots/output-format.png" alt="Notes settings with the Markdown output format selected" width="400"> |
+| Speaker-labelled transcript you can search and filter by speaker | Choose Markdown minutes or structured JSON notes, and edit the system prompt |
+| **Dark theme** | **JSON notes** |
+| <img src="docs/screenshots/markdown-notes-dark.png" alt="Markdown meeting minutes in the dark theme" width="400"> | <img src="docs/screenshots/json-notes.png" alt="Structured JSON notes with identified speakers and prioritised action items" width="400"> |
+| Full dark theme built from the same design tokens | The structured alternative: identified speakers and prioritised action items |
 
 ---
 
