@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
-import { createRoot } from 'react-dom/client';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Mic,
   X,
@@ -9,30 +8,21 @@ import {
   Moon,
   Monitor,
   ArrowUpCircle,
-  Loader2,
   LayoutDashboard,
   CalendarDays,
   Settings as SettingsIcon,
   ScrollText,
 } from 'lucide-react';
-import './styles/globals.css';
 
 import Dashboard from './components/Dashboard.jsx';
 import Meetings from './components/Meetings.jsx';
 import NoteViewer from './components/NoteViewer.jsx';
 import Settings from './components/Settings.jsx';
+import ProcessingIndicator from './components/ProcessingIndicator.jsx';
+import { AppContext, useApp, hasSttApiKey } from './lib/app-context.js';
 import LogsViewer from './components/LogsViewer.jsx';
 import RecordingBar from './components/RecordingBar.jsx';
 import { IconButton, StatusDot, useConfirmDialog } from './components/ui/index.jsx';
-import { STAGE_LABELS } from './lib/status.js';
-
-// ── App Context ───────────────────────────────────────────────────────────────
-
-export const AppContext = createContext(null);
-
-export function useApp() {
-  return useContext(AppContext);
-}
 
 // ── Toast System ──────────────────────────────────────────────────────────────
 
@@ -101,13 +91,6 @@ function ToastContainer({ toasts, onDismiss }) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-export function hasSttApiKey(cfg) {
-  const service = cfg?.sttService || 'google';
-  if (service === 'assemblyai') return !!cfg?.assemblyAiApiKey?.trim();
-  if (service === 'sarvam') return !!cfg?.sarvamApiKey?.trim();
-  return !!cfg?.googleApiKey?.trim();
-}
-
 const THEMES = ['light', 'dark', 'system'];
 
 function normalizeTheme(value) {
@@ -133,7 +116,7 @@ function applyTheme(themeSetting) {
 
 // ── Root App ──────────────────────────────────────────────────────────────────
 
-function App() {
+export default function App() {
   const [view, rawSetView] = useState('dashboard');        // 'dashboard' | 'meetings' | 'session' | 'settings' | 'logs'
   const [selectedSession, setSelectedSession] = useState(null);
   const [sessionOrigin, setSessionOrigin] = useState('dashboard');
@@ -602,9 +585,11 @@ function TopBar() {
   const activeView = view === 'session' ? null : view;
   const ThemeIcon = theme === 'system' ? Monitor : theme === 'dark' ? Moon : Sun;
   const themeLabel = theme === 'system' ? 'System' : theme === 'dark' ? 'Dark' : 'Light';
+  // The processing pill sizes itself to the free space this spacer represents.
+  const spacerRef = useRef(null);
 
   return (
-    <header className="titlebar-drag flex-shrink-0 h-64 flex items-center gap-24 pl-24 border-b border-ink bg-paper select-none">
+    <header className="titlebar-drag flex-shrink-0 h-64 flex items-center gap-16 lg:gap-24 pl-24 border-b border-ink bg-paper select-none">
       {/* Wordmark */}
       <div className="flex items-center gap-8 flex-shrink-0">
         <span className="tile w-32 h-32 inline-flex items-center justify-center" aria-hidden="true">
@@ -624,7 +609,7 @@ function TopBar() {
               type="button"
               onClick={() => setView(item.view)}
               aria-current={active ? 'page' : undefined}
-              className={`inline-flex items-center rounded-full px-16 py-8 text-caption font-medium transition-colors duration-200 ease-out border ${
+              className={`inline-flex items-center rounded-full px-8 lg:px-16 py-8 text-caption font-medium transition-colors duration-200 ease-out border ${
                 active
                   ? 'bg-ink text-paper border-ink'
                   : 'text-graphite border-transparent hover:text-ink'
@@ -646,30 +631,19 @@ function TopBar() {
         })}
       </nav>
 
-      <div className="flex-1" />
+      <div ref={spacerRef} className="flex-1" />
 
-      {/* Status + actions */}
-      <div className="titlebar-no-drag flex items-center gap-8">
-        {processing && (
-          <button
-            type="button"
-            onClick={() => openSessionById(processing.sessionId)}
-            disabled={!processing.sessionId}
-            className="pill hover:bg-ink/[0.06] disabled:cursor-default"
-            aria-label={`${STAGE_LABELS[processing.stage] || 'Processing'}, ${Math.round(processing.percent || 0)} percent. Open meeting.`}
-          >
-            <Loader2 size={14} strokeWidth={2} className="spinner text-graphite" aria-hidden="true" />
-            <span className="hidden lg:inline">{STAGE_LABELS[processing.stage] || 'Processing'}</span>
-            <span className="tabular text-graphite">{Math.round(processing.percent || 0)}%</span>
-          </button>
-        )}
-
+      {/* Status + actions: theme, then the live processing pill (animates in and out), then Record.
+          Spacing is per-item margins, not `gap`, so the collapsed pill slot leaves no extra space. */}
+      <div className="titlebar-no-drag flex items-center">
         <IconButton label={`Theme: ${themeLabel} (click to switch)`} onClick={toggleTheme}>
           <ThemeIcon size={16} strokeWidth={1.75} />
         </IconButton>
 
+        <ProcessingIndicator processing={processing} onOpen={openSessionById} spacerRef={spacerRef} />
+
         {!isRecording && (
-          <button type="button" onClick={startRecording} className="btn-ghost btn-sm">
+          <button type="button" onClick={startRecording} className="btn-ghost btn-sm ml-8">
             <span className="dot dot-sm dot-signal" aria-hidden="true" />
             Record
           </button>
@@ -725,8 +699,3 @@ function UpdateBanner({ version, onInstall, onClose }) {
     </div>
   );
 }
-
-// ── Mount ─────────────────────────────────────────────────────────────────────
-
-const root = createRoot(document.getElementById('root'));
-root.render(<App />);

@@ -6,16 +6,24 @@ updated: 2026-09-24
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
-## [3.3.1] - 2026-09-25
+## [3.4.0] - 2026-09-25
+
+### Added
+
+- Top-bar processing status animates in and out: it slides out from behind the Record button, fills with progress, eases between stage labels, briefly shows "Notes ready" or "Failed", then tucks away.
+- The status pill fits the space available: full label on wide windows, spinner and percentage on narrower ones, and the spinner alone at the smallest size (details in its tooltip).
 
 ### Fixed
 
 - Retrying a failed meeting reuses its saved transcript instead of running speech-to-text again; transcription only re-runs when there is no usable transcript.
 - Retry and Generate notes now work for meetings that have a transcript but no audio, such as pasted transcripts.
+- An expired or revoked Google Calendar connection no longer logs an error every minute: calendar sync pauses with one warning and a "reconnect in Settings" message until you reconnect.
+- The extension's 10-second status heartbeat is no longer written to the logs.
 
 ### Changed
 
-- Top bar: the theme switch now sits to the left of the Record button.
+- Top bar: the theme switch now sits to the left of the processing status and Record button.
+- Top bar fits at the minimum window width: tighter spacing below 1024px so the window controls are no longer pushed off the edge.
 - Dashboard bar: the meeting count is centred in the space between the greeting and the actions.
 
 ## [3.3.0] - 2026-09-25

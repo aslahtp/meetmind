@@ -2,3 +2,7 @@ allowBuilds:
   electron: true
   esbuild: true
 nodeLinker: hoisted
+# pnpm would otherwise reinstall before every `pnpm run` whenever package.json changes (even a
+# version bump). That reinstall replaces node_modules/electron, which fails while the app is
+# running and leaves Electron without its binary. Warn instead; run `pnpm install` yourself.
+verifyDepsBeforeRun: warn

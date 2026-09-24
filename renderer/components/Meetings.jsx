@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { RefreshCw, Upload, ClipboardList, Search, X, Mic } from 'lucide-react';
-import { useApp } from '../app.jsx';
+import { useApp } from '../lib/app-context.js';
 import PasteTranscriptModal from './PasteTranscriptModal.jsx';
 import { SessionList, SessionListSkeleton } from './SessionCard.jsx';
 import { PageHeader, IconButton, EmptyState, Skeleton, StatusDot } from './ui/index.jsx';

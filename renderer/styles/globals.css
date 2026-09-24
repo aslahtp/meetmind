@@ -310,12 +310,119 @@ h1, h2, h3, h4 {
   pointer-events: none !important;
 }
 
+/* ── Top-bar processing pill ───────────────────────────────────────────────
+   Enter: the slot widens (neighbours slide aside), then the pill glides out from behind the
+   Record button with a small springy overshoot, un-blurring as it lands.
+   Exit: the pill slips back toward Record first, then the slot closes behind it. */
+.proc-slot {
+  display: grid;
+  grid-template-columns: 0fr;
+  transition: grid-template-columns 280ms cubic-bezier(0.4, 0, 0.2, 1) 150ms;
+}
+.proc-slot.is-open {
+  grid-template-columns: 1fr;
+  transition: grid-template-columns 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.proc-slot-inner {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  justify-content: flex-end;
+  /* Vertical room for the focus ring, which overflow would clip. The gap before the pill
+     is a margin on the pill itself, so it collapses with the slot. */
+  padding: 4px 0;
+  margin: -4px 0;
+}
+.proc-pill {
+  @apply relative inline-flex items-center gap-8 rounded-full border border-ink bg-paper
+         px-16 py-4 text-caption font-medium text-ink whitespace-nowrap overflow-hidden
+         disabled:cursor-default;
+  isolation: isolate;
+  margin-left: 8px;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: translateX(28px) scale(0.9);
+  filter: blur(4px);
+  transition:
+    transform 220ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 170ms ease-in,
+    filter 170ms ease-in,
+    background-color 150ms ease-out;
+}
+.proc-slot.is-open .proc-pill {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition:
+    transform 460ms cubic-bezier(0.34, 1.4, 0.64, 1) 100ms,
+    opacity 260ms ease-out 100ms,
+    filter 260ms ease-out 100ms,
+    background-color 150ms ease-out;
+}
+.proc-pill:not(:disabled):hover { background-color: rgb(var(--color-ink) / 0.04); }
+/* The pill's width eases to its content's measured width when the label or percentage
+   changes length (e.g. "Transcribing" → "Writing notes" → "Notes ready"). */
+.proc-size {
+  display: inline-flex;
+  /* Clip to the animating width, with a little slack so the popping dot keeps its round edge. */
+  overflow: clip;
+  overflow-clip-margin: 4px;
+  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.proc-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* Invisible copies of each pill variant, measured to pick the one that fits the bar. */
+.proc-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  visibility: hidden;
+  pointer-events: none;
+}
+.proc-measure * { animation: none !important; }
+/* Progress fills the pill from the left; turns mint when done, red on failure. */
+.proc-fill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  transform-origin: left center;
+  background-color: rgb(var(--color-ink) / 0.08);
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1), background-color 300ms ease-out;
+}
+.proc-pill.is-done .proc-fill  { background-color: rgb(var(--color-mint) / 0.28); }
+.proc-pill.is-error .proc-fill { background-color: rgb(var(--color-signal) / 0.16); }
+
+/* Each new stage label rises into place. */
+@keyframes procLabelIn {
+  from { opacity: 0; transform: translateY(6px); filter: blur(2px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+.proc-label { display: inline-block; animation: procLabelIn 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* The outcome dot pops in. */
+@keyframes procPop {
+  0%   { transform: scale(0); }
+  70%  { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.proc-pop { animation: procPop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  .proc-slot, .proc-slot.is-open, .proc-pill, .proc-slot.is-open .proc-pill { transition-delay: 0ms !important; }
+  .proc-pill { filter: none; }
 }
 
 /* ── Titlebar drag region ─────────────────────────────────────────────────── */

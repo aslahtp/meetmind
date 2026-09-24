@@ -7,7 +7,7 @@ import {
   ArrowRight,
   ClipboardList,
 } from 'lucide-react';
-import { useApp, hasSttApiKey } from '../app.jsx';
+import { useApp, hasSttApiKey } from '../lib/app-context.js';
 import PasteTranscriptModal from './PasteTranscriptModal.jsx';
 import UpcomingMeetings from './UpcomingMeetings.jsx';
 import { SessionList, SessionListSkeleton } from './SessionCard.jsx';

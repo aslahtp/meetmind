@@ -1,6 +1,6 @@
 import React from 'react';
 import { Sun, Moon, Monitor } from 'lucide-react';
-import { useApp } from '../../app.jsx';
+import { useApp } from '../../lib/app-context.js';
 import { SegmentedControl, Switch } from '../ui/index.jsx';
 import { SettingsGroup, SettingRow, RowList } from './SettingsParts.jsx';
 

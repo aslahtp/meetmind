@@ -34,7 +34,7 @@ Three artifacts build from this one repo: the Electron desktop app, its React re
 
 No lint or test script exists in this repo — verify changes by running the app (`pnpm run dev`) and exercising the affected flow directly.
 
-The package manager is pnpm (pinned via `packageManager` in `package.json`); never use npm/npx or commit a `package-lock.json`. `pnpm-workspace.yaml` sets `nodeLinker: hoisted` so electron-builder sees a flat `node_modules`, and lists the dependencies allowed to run install scripts under `allowBuilds` (add new ones with `pnpm approve-builds <pkg>`).
+The package manager is pnpm (pinned via `packageManager` in `package.json`); never use npm/npx or commit a `package-lock.json`. `pnpm-workspace.yaml` sets `nodeLinker: hoisted` so electron-builder sees a flat `node_modules`, and lists the dependencies allowed to run install scripts under `allowBuilds` (add new ones with `pnpm approve-builds <pkg>`). `verifyDepsBeforeRun: warn` stops `pnpm run` from silently reinstalling after `package.json` changes, because that reinstall replaces `node_modules/electron` and breaks it if the app is running; run `pnpm install` explicitly with the app closed. If Electron reports it "failed to install correctly", run `pnpm rebuild electron`.
 
 - `pnpm install` — install dependencies (Node 20+, Windows only)
 - `pnpm run dev` — full dev loop: regenerates icons + rebuilds the Chrome extension (`predev`), then runs Vite and Electron concurrently. Renderer serves at http://localhost:5173; Electron opens DevTools automatically in dev

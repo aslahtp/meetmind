@@ -12,7 +12,7 @@ import {
   ChevronsDown,
   AlertCircle,
 } from 'lucide-react';
-import { useApp } from '../app.jsx';
+import { useApp } from '../lib/app-context.js';
 import { IconButton, SegmentedControl, Skeleton } from './ui/index.jsx';
 
 const MAX_LOGS = 2000;

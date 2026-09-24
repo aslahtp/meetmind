@@ -20,6 +20,13 @@ let cachedEvents = [];
 let lastFetchTime = 0;
 let activeAuthServer = null;
 let lastPollerError = null;
+// Refresh token Google rejected (revoked/expired). Retrying can't fix that, so calendar calls
+// short-circuit until the user reconnects (new token) or disconnects.
+let rejectedRefreshToken = null;
+// Concurrent fetches share one request instead of each hitting the API.
+const inflightFetches = new Map();
+
+const AUTH_EXPIRED_MESSAGE = 'Google Calendar authorization expired or invalid. Please reconnect in Settings.';
 
 const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
@@ -142,9 +149,12 @@ async function startAuthFlow(config) {
           settled = true;
           cleanup();
 
-          // Update the module-level client
+          // Update the module-level client; a fresh sign-in clears any earlier rejection.
           oAuth2Client = client;
           oAuth2Client._clientId = clientId;
+          rejectedRefreshToken = null;
+          cachedEvents = [];
+          lastFetchTime = 0;
 
           resolve({
             refreshToken: tokens.refresh_token,
@@ -198,6 +208,7 @@ function disconnectCalendar() {
   cachedEvents = [];
   lastFetchTime = 0;
   lastPollerError = null;
+  rejectedRefreshToken = null;
   stopEventPoller();
   logger.info('Google Calendar disconnected');
 }
@@ -219,6 +230,7 @@ function isCalendarConnected(config) {
  */
 async function fetchUpcomingEvents(config, hoursAhead = 36) {
   if (!isCalendarConnected(config)) return [];
+  if (isTokenRejected(config)) throw new Error(AUTH_EXPIRED_MESSAGE);
 
   // Return cache if fresh enough
   const now = Date.now();
@@ -226,6 +238,17 @@ async function fetchUpcomingEvents(config, hoursAhead = 36) {
     return cachedEvents;
   }
 
+  if (inflightFetches.has(hoursAhead)) return inflightFetches.get(hoursAhead);
+  const request = requestEvents(config, hoursAhead).finally(() => inflightFetches.delete(hoursAhead));
+  inflightFetches.set(hoursAhead, request);
+  return request;
+}
+
+function isTokenRejected(config) {
+  return !!rejectedRefreshToken && rejectedRefreshToken === config.googleCalendarRefreshToken;
+}
+
+async function requestEvents(config, hoursAhead) {
   const client = getOAuth2Client(config);
   if (!client) return [];
 
@@ -252,6 +275,18 @@ async function fetchUpcomingEvents(config, hoursAhead = 36) {
     return events;
   } catch (err) {
     const msg = err.message || String(err);
+
+    // Revoked/expired refresh token: permanent until the user reconnects. Say so once and stop
+    // calling Google (and polling) with this token, instead of failing every minute.
+    if (msg.includes('invalid_grant') || err.response?.data?.error === 'invalid_grant' || err.code === 401) {
+      if (!isTokenRejected(config)) {
+        rejectedRefreshToken = config.googleCalendarRefreshToken;
+        stopEventPoller();
+        logger.warn('Google Calendar authorization was revoked or has expired; calendar sync is paused until you reconnect in Settings', { error: msg });
+      }
+      throw new Error(AUTH_EXPIRED_MESSAGE);
+    }
+
     logger.error('Failed to fetch Google Calendar events', { error: msg });
 
     if (msg.includes('Google Calendar API has not been used') || msg.includes('it is disabled') || msg.includes('accessNotConfigured')) {
@@ -260,10 +295,7 @@ async function fetchUpcomingEvents(config, hoursAhead = 36) {
       throw new Error(`Google Calendar API is not enabled in your Google Cloud project. Please enable it in Google Cloud Console: ${url}`);
     }
 
-    // If token is expired/revoked, surface it clearly
-    if (err.code === 401 || err.code === 403 || msg.includes('invalid_grant')) {
-      throw new Error('Google Calendar authorization expired or invalid. Please reconnect in Settings.');
-    }
+    if (err.code === 403) throw new Error(AUTH_EXPIRED_MESSAGE);
     throw err;
   }
 }
@@ -318,6 +350,7 @@ function startEventPoller(config, onMeetingStart) {
   stopEventPoller();
 
   if (!isCalendarConnected(config)) return;
+  if (isTokenRejected(config)) return; // already known to be revoked; wait for a reconnect
 
   const notifiedEventIds = new Set();
 

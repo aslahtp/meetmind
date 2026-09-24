@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useApp } from '../app.jsx';
+import { useApp } from '../lib/app-context.js';
 import { PageHeader, SegmentedControl, StatusDot } from './ui/index.jsx';
 import GeneralSection from './settings/GeneralSection.jsx';
 import TranscriptionSection from './settings/TranscriptionSection.jsx';

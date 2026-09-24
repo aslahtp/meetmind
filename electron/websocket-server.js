@@ -147,7 +147,10 @@ async function startWebSocketServer(port, handlers) {
 }
 
 function handleExtensionMessage(message, ws, handlers) {
-  logger.debug('Received extension message', { type: message?.type });
+  // APP_STATUS is the extension's 10s heartbeat; logging it would flood the log.
+  if (message?.type !== 'APP_STATUS') {
+    logger.debug('Received extension message', { type: message?.type });
+  }
 
   try {
     switch (message.type) {

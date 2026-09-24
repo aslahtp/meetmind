@@ -1,6 +1,6 @@
 import React from 'react';
 import { Trash2, Loader2, ListChecks, Video, RotateCcw } from 'lucide-react';
-import { useApp } from '../app.jsx';
+import { useApp } from '../lib/app-context.js';
 import NotionIcon from './NotionIcon.jsx';
 import { IconButton, StatusPill, StatusDot, Skeleton } from './ui/index.jsx';
 import {

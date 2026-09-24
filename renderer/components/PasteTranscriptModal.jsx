@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Sparkles, Loader2, ClipboardPaste } from 'lucide-react';
-import { useApp } from '../app.jsx';
+import { useApp } from '../lib/app-context.js';
 import { Dialog, TextField, StatusDot } from './ui/index.jsx';
 import { STAGE_LABELS } from '../lib/status.js';
 

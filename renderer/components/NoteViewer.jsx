@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { FileText, Mic, Volume2, MicOff, Sparkles, Loader2 } from 'lucide-react';
-import { useApp } from '../app.jsx';
+import { useApp } from '../lib/app-context.js';
 import TranscriptViewer from './TranscriptViewer.jsx';
 import { NoteToolbar, NoteTitleBlock } from './note/NoteHeader.jsx';
 import SummaryJson from './note/SummaryJson.jsx';

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '../app.jsx';
+import { useApp } from './app-context.js';
 
 // Sessions come from a local SQLite file and normally load in well under 100ms.
 // Showing the skeleton instantly would just swap one flash for another, so only

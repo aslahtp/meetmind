@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useApp } from '../../app.jsx';
+import { useApp } from '../../lib/app-context.js';
 import NotionIcon from '../NotionIcon.jsx';
 import GoogleCalendarIcon from '../GoogleCalendarIcon.jsx';
 import { PasswordField, TextField, Switch, StatusDot } from '../ui/index.jsx';
