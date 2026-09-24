@@ -1,6 +1,11 @@
 <div align="center">
 
-# MeetMind
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/meetmind-wordmark-dark.png">
+    <img src="docs/brand/meetmind-wordmark-light.png" alt="MeetMind" width="288">
+  </picture>
+</h1>
 
 [![Build](https://github.com/aslahtp/meetmind/actions/workflows/release.yml/badge.svg)](https://github.com/aslahtp/meetmind/actions/workflows/release.yml)
 [![Version](https://img.shields.io/github/package-json/v/aslahtp/meetmind?style=flat-square&color=F05032&logo=git)](https://github.com/aslahtp/meetmind/releases/latest)
