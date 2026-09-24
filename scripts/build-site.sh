@@ -8,6 +8,7 @@ DATE=$(date -u +%Y-%m-%d)
 rm -rf "$OUT"
 mkdir -p "$OUT/brand" "$OUT/screenshots" "$OUT/fonts"
 cp site/index.html site/sitemap.xml llms.txt "$OUT/"
+cp site/google*.html "$OUT/"
 cp docs/brand/meetmind-wordmark-light.png docs/brand/meetmind-wordmark-dark.png "$OUT/brand/"
 cp docs/brand/social-preview.png "$OUT/og-image.png"
 cp docs/screenshots/*.png "$OUT/screenshots/"
