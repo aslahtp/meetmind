@@ -4,13 +4,14 @@ import {
   Copy,
   Check,
   RefreshCw,
+  FileDown,
   Loader2,
   ExternalLink,
   AlertTriangle,
 } from 'lucide-react';
 import { IconButton, SegmentedControl, StatusDot } from '../ui/index.jsx';
 import NotionIcon from '../NotionIcon.jsx';
-import { formatDate, formatTime } from '../../lib/format.js';
+import { metaText } from './meta.js';
 import { meetingHostname, meetingPlatform } from '../../lib/platform.js';
 
 const STT_SERVICE_LABELS = {
@@ -25,17 +26,6 @@ const SENTIMENT_LABELS = {
   mixed:    'Mixed',
   tense:    'Tense',
 };
-
-function metaText(session, notes, durationLabel) {
-  const attendees = notes?.attendees || [];
-  const parts = [
-    session.started_at && formatDate(session.started_at),
-    session.started_at && formatTime(session.started_at),
-    notes?.duration || durationLabel,
-    attendees.length > 0 && `${attendees.length} attendee${attendees.length !== 1 ? 's' : ''}`,
-  ].filter(Boolean);
-  return parts.join(' · ');
-}
 
 function metaChips(session, notes) {
   const sentiment = SENTIMENT_LABELS[notes?.sentiment];
@@ -96,6 +86,8 @@ export function NoteToolbar({
   onCopy,
   regenerating,
   onRegenerate,
+  exporting,
+  onExportPdf,
   notionUrl,
   uploading,
   onSyncNotion,
@@ -139,6 +131,16 @@ export function NoteToolbar({
               {regenerating
                 ? <Loader2 size={16} strokeWidth={2} className="spinner" />
                 : <RefreshCw size={16} strokeWidth={1.75} />}
+            </IconButton>
+
+            <IconButton
+              label={exporting ? 'Exporting PDF…' : 'Export as PDF'}
+              onClick={onExportPdf}
+              disabled={exporting}
+            >
+              {exporting
+                ? <Loader2 size={16} strokeWidth={2} className="spinner" />
+                : <FileDown size={16} strokeWidth={1.75} />}
             </IconButton>
 
             {notionUrl ? (

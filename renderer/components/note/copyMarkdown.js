@@ -40,7 +40,9 @@ export function buildNotesMarkdown(notes, session) {
     md += `\n`;
   }
 
-  if (notes.status_update) {
+  if (typeof notes.status_update === 'string' && notes.status_update.trim()) {
+    md += `## Status Update\n${notes.status_update.trim()}\n\n`;
+  } else if (notes.status_update) {
     md += `## Status Update\n`;
     if (notes.status_update.completion_estimate) {
       md += `- **Completion Estimate:** ${notes.status_update.completion_estimate}\n`;
@@ -55,7 +57,8 @@ export function buildNotesMarkdown(notes, session) {
   if (notes.action_items?.length) {
     md += `## Action Items\n`;
     notes.action_items.forEach((item) => {
-      md += `- [ ] ${actionItemText(item)}${item.owner ? ` (@${item.owner})` : ''}${item.due ? ` (Due: ${item.due})` : ''}\n`;
+      const priority = item.priority ? ` (Priority: ${item.priority[0].toUpperCase()}${item.priority.slice(1)})` : '';
+      md += `- [ ] ${actionItemText(item)}${item.owner ? ` (@${item.owner})` : ''}${item.due ? ` (Due: ${item.due})` : ''}${priority}\n`;
     });
     md += `\n`;
   }

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Braces, FileText, RotateCcw } from 'lucide-react';
-import { PasswordField, SegmentedControl } from '../ui/index.jsx';
-import { SettingsGroup, KeyGuide, TestAction, RadioCardGroup, ExternalLink } from './SettingsParts.jsx';
+import React, { useEffect, useState } from 'react';
+import { Braces, FileText, RotateCcw, FolderOpen } from 'lucide-react';
+import { PasswordField, SegmentedControl, Switch } from '../ui/index.jsx';
+import { SettingsGroup, SettingRow, KeyGuide, TestAction, RadioCardGroup, ExternalLink } from './SettingsParts.jsx';
 import { GEMINI_MODELS } from './data.js';
 
 const OUTPUT_MODES = [
@@ -17,6 +17,20 @@ const OUTPUT_MODE_HELP = {
 export default function NotesSection({ form, onChange, defaultSystemPrompt, defaultMdSystemPrompt }) {
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState(null);
+  const [downloadsDir, setDownloadsDir] = useState('');
+
+  // The default PDF folder is the Windows Downloads folder; shown when no custom folder is set.
+  useEffect(() => {
+    window.meetmind?.pdf?.defaultDir?.().then((dir) => setDownloadsDir(dir || '')).catch(() => {});
+  }, []);
+
+  const handleChoosePdfDir = async () => {
+    const res = await window.meetmind?.dialog?.chooseFolder?.({
+      title: 'Choose where to save PDFs',
+      defaultPath: form.pdfExportDir || downloadsDir || undefined,
+    });
+    if (res?.path) onChange('pdfExportDir', res.path);
+  };
 
   const outputMode = (form.promptOutputMode || form.noteOutputMode) === 'markdown' ? 'markdown' : 'json';
   const hasCustomPrompt = !!(form.systemPrompt && form.systemPrompt.trim() !== '');
@@ -149,6 +163,55 @@ export default function NotesSection({ form, onChange, defaultSystemPrompt, defa
             )}
           </div>
         </div>
+      </SettingsGroup>
+
+      <SettingsGroup
+        title="PDF export"
+        description="Where Export PDF on a meeting saves its notes, and what goes in the file."
+      >
+        <div>
+          <label htmlFor="pdf-export-dir" className="label">Save to</label>
+          <div className="flex items-center gap-8">
+            <input
+              id="pdf-export-dir"
+              type="text"
+              readOnly
+              value={form.pdfExportDir || downloadsDir}
+              title={form.pdfExportDir || downloadsDir}
+              placeholder="Downloads"
+              className="input flex-1 min-w-0 text-caption"
+            />
+            <button type="button" onClick={handleChoosePdfDir} className="btn-ghost btn-sm flex-shrink-0">
+              <FolderOpen size={14} strokeWidth={1.75} />
+              Browse…
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-16 mt-8">
+            <span className="hint">
+              {form.pdfExportDir ? 'Custom folder' : 'Your Downloads folder (default)'}
+              {' · Files are named date-time-title, e.g. 2026-09-25-1430-Weekly-standup.pdf'}
+            </span>
+            {form.pdfExportDir && (
+              <button type="button" onClick={() => onChange('pdfExportDir', '')} className="btn-quiet btn-sm">
+                <RotateCcw size={14} strokeWidth={1.75} />
+                Use Downloads
+              </button>
+            )}
+          </div>
+        </div>
+
+        <SettingRow
+          label="Include transcript"
+          description="Add the full speaker-labelled transcript, with timestamps, after the notes."
+          htmlFor="pdf-include-transcript"
+        >
+          <Switch
+            id="pdf-include-transcript"
+            label="Include transcript in PDF"
+            checked={!!form.pdfIncludeTranscript}
+            onChange={(v) => onChange('pdfIncludeTranscript', v)}
+          />
+        </SettingRow>
       </SettingsGroup>
     </div>
   );

@@ -76,7 +76,36 @@ const TRANSCRIPT = [
 
 const MARKDOWN_NOTES = {
   meeting_title: 'Weekly standup',
-  _rawMarkdown: '# Weekly standup\n\n## Updates\n- **Rahul:** API rate limiting merged\n- **Anjali:** onboarding copy review\n\n## Blockers\n1. Staging DB is slow\n\n> Next standup moves to 10:30.',
+  // Exercises every Markdown feature the notes view and PDF export must render.
+  _rawMarkdown: [
+    '# Weekly standup',
+    '',
+    '## Updates',
+    '- **Rahul:** API rate limiting merged',
+    '  - Limits are *per workspace*, configured in `limits.yml`',
+    '  - Dashboards updated',
+    '- **Anjali:** onboarding copy review',
+    '',
+    '## Blockers',
+    '1. Staging DB is slow',
+    '2. Waiting on ~~legal~~ vendor sign-off',
+    '',
+    '## Action items',
+    '- [ ] Profile the slow staging queries (Rahul)',
+    '- [x] Share the new onboarding copy (Anjali)',
+    '',
+    '## Release plan',
+    '| Item | Owner | Due |',
+    '| :--- | :---: | ---: |',
+    '| Rate limiting | Rahul | Fri |',
+    '| Onboarding copy | Anjali | Thu |',
+    '',
+    '```bash',
+    'pnpm run build:dir',
+    '```',
+    '',
+    '> Next standup moves to 10:30. See the [runbook](https://example.com/runbook).',
+  ].join('\n'),
 };
 
 // The app keeps sessions in <userData>/meetmind.db (sql.js). Main-process

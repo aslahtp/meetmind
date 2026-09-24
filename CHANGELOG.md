@@ -6,6 +6,17 @@ updated: 2026-09-24
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.5.0] - 2026-09-25
+
+### Added
+
+- Export PDF on a meeting page: saves the notes as `date-time-title.pdf` (e.g. `2026-09-25-1430-Weekly-standup.pdf`) with the same Markdown rendering as the app, including tables, task lists, code and links; an existing file is never overwritten.
+- Settings → Notes → PDF export: choose the save folder (Downloads by default) and whether to include the timestamped transcript.
+
+### Fixed
+
+- Copied Markdown now includes each action item's priority and plain-text status updates, which were previously dropped.
+
 ## [3.4.0] - 2026-09-25
 
 ### Added

@@ -58,6 +58,8 @@ const DEFAULT_FORM = {
   googleCalendarClientId: '',
   googleCalendarClientSecret: '',
   dashboardRecentLimit: 5,
+  pdfExportDir: '',
+  pdfIncludeTranscript: false,
 };
 
 function formFromConfig(cfg) {
@@ -87,6 +89,8 @@ function formFromConfig(cfg) {
     googleCalendarClientId: cfg.googleCalendarClientId || '',
     googleCalendarClientSecret: cfg.googleCalendarClientSecret || '',
     dashboardRecentLimit: cfg.dashboardRecentLimit || 5,
+    pdfExportDir: cfg.pdfExportDir || '',
+    pdfIncludeTranscript: cfg.pdfIncludeTranscript === true,
   };
 }
 

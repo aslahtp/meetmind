@@ -10,6 +10,7 @@ const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, conve
 const { transcribeAudio, testGoogleSTT, testAssemblyAI, testSarvam } = require('./services/transcription');
 const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/gemini');
 const { uploadToNotion, testNotionConnection } = require('./services/notion');
+const { exportPdf, buildPdfFileName, resolveExportDir } = require('./services/pdf-export');
 const { testGeminiConnection } = require('./services/gemini');
 const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState } = require('./services/updater');
 const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEvents, startEventPoller, stopEventPoller } = require('./services/google-calendar');
@@ -848,6 +849,48 @@ function registerIpcHandlers() {
       logger.error('Failed to open recording file', { sessionId, audioPath, error: err.message });
       return { success: false, error: err.message || 'Failed to open recording file.' };
     }
+  });
+
+  // ── Folder picker (shared) ─────────────────────────────────────────────────
+  ipcMain.handle('dialog:choose-folder', async (_e, opts = {}) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: typeof opts.title === 'string' ? opts.title : 'Choose a folder',
+      defaultPath: typeof opts.defaultPath === 'string' ? opts.defaultPath : undefined,
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || !result.filePaths?.[0]) return { cancelled: true };
+    return { path: result.filePaths[0] };
+  });
+
+  // ── PDF export ─────────────────────────────────────────────────────────────
+  ipcMain.handle('pdf:default-dir', () => app.getPath('downloads'));
+
+  // The renderer builds the HTML (so notes render exactly as in the app); the file name
+  // and folder are decided here so they have one source of truth.
+  ipcMain.handle('pdf:export', async (_e, sessionId, html) => {
+    const session = db.getSession(sessionId);
+    if (!session) return { success: false, error: 'Session not found' };
+    if (typeof html !== 'string' || !html.trim()) return { success: false, error: 'Nothing to export yet.' };
+
+    let notes = {};
+    try {
+      notes = typeof session.notes === 'string' ? JSON.parse(session.notes || '{}') : (session.notes || {});
+    } catch { /* fall back to the session title */ }
+    const title = notes?.meeting_title || notes?.title || session.title || 'Meeting Notes';
+    const config = getConfig();
+    return exportPdf({
+      html,
+      fileName: buildPdfFileName(session.started_at, title),
+      dir: resolveExportDir(config.pdfExportDir),
+    });
+  });
+
+  ipcMain.handle('pdf:reveal', (_e, filePath) => {
+    if (typeof filePath !== 'string' || !filePath.toLowerCase().endsWith('.pdf') || !fs.existsSync(filePath)) {
+      return { success: false, error: 'File not found.' };
+    }
+    shell.showItemInFolder(filePath);
+    return { success: true };
   });
 
   ipcMain.handle('notion:upload', async (_e, sessionId) => {

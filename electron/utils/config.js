@@ -158,6 +158,15 @@ const schema = {
     type: 'boolean',
     default: true,
   },
+  // PDF export: '' means the Windows Downloads folder (resolved when exporting).
+  pdfExportDir: {
+    type: 'string',
+    default: '',
+  },
+  pdfIncludeTranscript: {
+    type: 'boolean',
+    default: false,
+  },
 };
 
 const store = new Store({ schema, name: 'meetmind-config' });
@@ -233,6 +242,8 @@ function getConfig() {
     googleCalendarEmail:       store.get('googleCalendarEmail') || '',
     dashboardRecentLimit:      store.get('dashboardRecentLimit') || 5,
     notionUploadTranscript:    store.get('notionUploadTranscript') !== false,
+    pdfExportDir:              store.get('pdfExportDir') || '',
+    pdfIncludeTranscript:      store.get('pdfIncludeTranscript') === true,
   };
 }
 

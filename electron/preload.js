@@ -75,6 +75,18 @@ contextBridge.exposeInMainWorld('meetmind', {
     createFromTranscript: (opts) => ipcRenderer.invoke('session:create-from-transcript', opts),
   },
 
+  // Native dialogs
+  dialog: {
+    chooseFolder: (opts) => ipcRenderer.invoke('dialog:choose-folder', opts),
+  },
+
+  // PDF export
+  pdf: {
+    export: (sessionId, html) => ipcRenderer.invoke('pdf:export', sessionId, html),
+    reveal: (filePath) => ipcRenderer.invoke('pdf:reveal', filePath),
+    defaultDir: () => ipcRenderer.invoke('pdf:default-dir'),
+  },
+
   // Notion
   notion: {
     upload: (sessionId) => ipcRenderer.invoke('notion:upload', sessionId),

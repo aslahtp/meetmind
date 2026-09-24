@@ -110,6 +110,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const [regenerating, setRegenerating] = useState(false);
   const [starting, setStarting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [titleHidden, setTitleHidden] = useState(false);
   const scrollRef = useRef(null);
   const titleRef = useRef(null);
@@ -215,6 +216,34 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
     }
   };
 
+  // Builds the PDF here (same Markdown rendering as the app) and lets the main process save it
+  // to the configured folder (Downloads by default) as date-time-title.pdf.
+  const handleExportPdf = async () => {
+    if (!notes || exporting) return;
+    setExporting(true);
+    try {
+      // Loaded on demand: it pulls in react-dom/server and the embedded font.
+      const { buildPdfHtml } = await import('./note/pdfDocument.jsx');
+      const html = buildPdfHtml(session, notes, normalizedTranscript, {
+        includeTranscript: !!config?.pdfIncludeTranscript,
+      });
+      const result = await window.meetmind.pdf.export(session.id, html);
+      if (result?.success) {
+        const fileName = result.path.split(/[\\/]/).pop();
+        addToast(`Saved ${fileName}`, 'success', {
+          label: 'Show in folder',
+          onClick: () => window.meetmind.pdf.reveal(result.path),
+        });
+      } else {
+        addToast(result?.error || 'PDF export failed.', 'error');
+      }
+    } catch (err) {
+      addToast(`PDF export failed: ${err.message}`, 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleCopy = async () => {
     if (!notes) return;
     try {
@@ -260,6 +289,8 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
         notionUrl={notionUrl}
         uploading={uploading}
         onSyncNotion={handleSyncNotion}
+        exporting={exporting}
+        onExportPdf={handleExportPdf}
       />
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
