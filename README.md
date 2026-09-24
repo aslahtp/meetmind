@@ -2,6 +2,11 @@
 
 AI-powered meeting notes for Windows. Records system audio + microphone, transcribes with **Google Speech-to-Text (v1/v2)**, **AssemblyAI**, or **Sarvam AI**, generates structured notes or executive-grade Markdown with Gemini, and uploads to Notion — automatically triggered from Google Meet or Zoom via a Chrome extension.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark.png">
+  <img src="docs/screenshots/dashboard.png" alt="MeetMind dashboard with meeting stats and recent recordings" width="800">
+</picture>
+
 > [!TIP]
 > **How to use this for free?**
 > You can run MeetMind entirely for free! **Gemini** has a generous free tier which is more than enough for a moderate amount of meetings per day. For transcription, **AssemblyAI's** $50 signup credits will likely be enough for a lifetime if only used for MeetMind.
@@ -17,6 +22,21 @@ AI-powered meeting notes for Windows. Records system audio + microphone, transcr
 - **Native Notion Sync**: Converts generated notes directly into native Notion page blocks with rich formatting.
 - **Seamless Chrome Extension**: Floating overlay in Google Meet and Zoom with one-click recording and real-time status updates.
 - **Smart Retries & Caching**: SQLite-backed local storage reuses cached transcripts on processing retries to eliminate duplicate API calls.
+
+---
+
+## 📸 Screenshots
+
+| Meetings | Meeting notes |
+| :---: | :---: |
+| <img src="docs/screenshots/meetings.png" alt="Meetings list with search, status filters and processing states" width="400"> | <img src="docs/screenshots/meeting-summary.png" alt="Meeting summary with identified speakers" width="400"> |
+| Search and filter every recording, with live processing status | Speakers identified by name, with a confidence label on each |
+| **Action items** | **Transcript** |
+| <img src="docs/screenshots/action-items.png" alt="Action items with owners, due dates and priorities" width="400"> | <img src="docs/screenshots/transcript.png" alt="Searchable speaker-labelled transcript" width="400"> |
+| Action items with owner, due date and priority | Speaker-labelled transcript you can search and filter by speaker |
+| **Settings** | **Dark theme** |
+| <img src="docs/screenshots/settings.png" alt="Transcription settings with speech-to-text engine choices" width="400"> | <img src="docs/screenshots/meeting-summary-dark.png" alt="Meeting summary in the dark theme" width="400"> |
+| Pick a speech-to-text engine and add keys in tabbed settings | Full dark theme built from the same design tokens |
 
 ---
 
