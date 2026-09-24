@@ -553,6 +553,18 @@ async function handleStopRecording() {
   }
 }
 
+// True when the session already has a non-empty transcript the pipeline can reuse
+// instead of paying for speech-to-text again.
+function hasReusableTranscript(session) {
+  if (!session?.transcript) return false;
+  try {
+    const parsed = typeof session.transcript === 'string' ? JSON.parse(session.transcript) : session.transcript;
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function runProcessingPipeline(sessionId, audioPath, options = {}) {
   const sendProgress = (stage, percent) => {
     sendToRenderer('processing:progress', { stage, percent });
@@ -918,7 +930,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle('processing:run', async (_e, sessionId) => {
     const session = db.getSession(sessionId);
-    if (!session || !session.audio_path) {
+    // A saved transcript is enough (e.g. pasted transcripts have no audio).
+    if (!session || (!session.audio_path && !hasReusableTranscript(session))) {
       return { success: false, error: 'No audio file found for session' };
     }
     runProcessingPipeline(sessionId, session.audio_path);
@@ -929,11 +942,18 @@ function registerIpcHandlers() {
     const session = db.getSession(sessionId);
     if (!session) return { success: false, error: 'Session not found' };
 
-    if (stage === 'notes') {
+    // 'notes' and 'all' reuse the saved transcript when there is one, so a retry only re-runs
+    // the stages that failed; speech-to-text runs again only if no usable transcript exists.
+    // 'transcription' is the explicit "re-transcribe from the audio" request.
+    if (stage === 'notes' || stage === 'all') {
+      if (!session.audio_path && !hasReusableTranscript(session)) {
+        return { success: false, error: 'No audio file or transcript found for session' };
+      }
       runProcessingPipeline(sessionId, session.audio_path, { forceRetranscribe: false });
       return { success: true };
     }
-    if (stage === 'all' || stage === 'transcription') {
+    if (stage === 'transcription') {
+      if (!session.audio_path) return { success: false, error: 'No audio file found for session' };
       runProcessingPipeline(sessionId, session.audio_path, { forceRetranscribe: true });
       return { success: true };
     }

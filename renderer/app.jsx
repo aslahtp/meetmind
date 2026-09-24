@@ -664,16 +664,16 @@ function TopBar() {
           </button>
         )}
 
+        <IconButton label={`Theme: ${themeLabel} (click to switch)`} onClick={toggleTheme}>
+          <ThemeIcon size={16} strokeWidth={1.75} />
+        </IconButton>
+
         {!isRecording && (
           <button type="button" onClick={startRecording} className="btn-ghost btn-sm">
             <span className="dot dot-sm dot-signal" aria-hidden="true" />
             Record
           </button>
         )}
-
-        <IconButton label={`Theme: ${themeLabel} (click to switch)`} onClick={toggleTheme}>
-          <ThemeIcon size={16} strokeWidth={1.75} />
-        </IconButton>
       </div>
 
       <WindowControls />

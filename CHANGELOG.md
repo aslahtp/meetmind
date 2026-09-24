@@ -6,6 +6,18 @@ updated: 2026-09-24
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.3.1] - 2026-09-25
+
+### Fixed
+
+- Retrying a failed meeting reuses its saved transcript instead of running speech-to-text again; transcription only re-runs when there is no usable transcript.
+- Retry and Generate notes now work for meetings that have a transcript but no audio, such as pasted transcripts.
+
+### Changed
+
+- Top bar: the theme switch now sits to the left of the Record button.
+- Dashboard bar: the meeting count is centred in the space between the greeting and the actions.
+
 ## [3.3.0] - 2026-09-25
 
 ### Added

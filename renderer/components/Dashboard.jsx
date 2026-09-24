@@ -48,16 +48,15 @@ function StatStrip({ stats }) {
   );
 }
 
-// Slim sticky bar shared by the loaded and loading states.
+// Slim sticky bar shared by the loaded and loading states: greeting left, actions right, and
+// the meeting count centred in whatever space is left between them.
 function DashboardToolbar({ subtitle, actions }) {
   return (
     <header className="flex-shrink-0 border-b border-ink bg-paper">
-      <div className="w-full px-24 py-8 min-h-[56px] flex flex-wrap items-center gap-16">
-        <div className="flex-1 min-w-0 flex items-baseline gap-8">
-          <h1 className="text-body-sm font-medium text-ink flex-shrink-0">{greeting()}</h1>
-          {subtitle && <p className="text-caption text-graphite truncate">{subtitle}</p>}
-        </div>
-        {actions && <div className="flex items-center gap-8 flex-shrink-0">{actions}</div>}
+      <div className="w-full px-24 py-8 min-h-[56px] flex items-center gap-16">
+        <h1 className="flex-shrink-0 text-body-sm font-medium text-ink whitespace-nowrap">{greeting()}</h1>
+        <p className="flex-1 min-w-0 text-center text-caption text-graphite truncate">{subtitle}</p>
+        {actions && <div className="flex-shrink-0 flex items-center gap-8">{actions}</div>}
       </div>
     </header>
   );
