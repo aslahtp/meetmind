@@ -1,6 +1,6 @@
 /**
  * Generates MeetMind PNG + ICO icons from assets/icons/icon.svg
- * Run: npm run generate-icons
+ * Run: pnpm run generate-icons
  */
 
 'use strict';

@@ -6,7 +6,7 @@ updated: 2026-09-24
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
-## [2.13.0] - 2026-09-24
+## [3.0.0] - 2026-09-24
 
 ### Changed
 
@@ -15,6 +15,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 - Settings is split into tabs (General, Transcription, Notes, Integrations, System), with a "How to get a key" guide next to each API key field.
 - Light is now the default theme. The dark theme is derived from the same design tokens, and an explicitly saved Dark or System choice is kept.
 - Brand and platform logos are monochrome, and status is shown with dots and text instead of colored badges.
+- Development and release builds now use pnpm instead of npm (`pnpm install`, `pnpm run dev`, `pnpm run build`).
 
 ### Added
 

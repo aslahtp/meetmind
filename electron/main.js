@@ -64,7 +64,7 @@ if (!gotSingleInstanceLock) {
 }
 
 // Only the packaged app should own meetmind://.
-// Registering from `npm run dev` steals the handler and points it at electron.exe,
+// Registering from `pnpm run dev` steals the handler and points it at electron.exe,
 // so "Open App" from the extension fails after install.
 if (app.isPackaged) {
   app.setAsDefaultProtocolClient('meetmind');

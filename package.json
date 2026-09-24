@@ -1,18 +1,19 @@
 {
   "name": "meetmind",
-  "version": "2.13.0",
+  "version": "3.0.0",
   "description": "AI meeting notes — transcribe, summarize, and upload to Notion",
   "repository": {
     "type": "git",
     "url": "https://github.com/aslahtp/meetmind.git"
   },
   "main": "electron/main.js",
+  "packageManager": "pnpm@12.3.4",
   "scripts": {
-    "predev": "npm run generate-icons && npm run build:ext",
+    "predev": "pnpm run generate-icons && pnpm run build:ext",
     "dev": "concurrently \"vite\" \"cross-env NODE_ENV=development electron .\"",
     "dev:renderer": "vite",
     "dev:electron": "cross-env NODE_ENV=development electron .",
-    "prebuild": "npm run generate-icons && npm run build:ext",
+    "prebuild": "pnpm run generate-icons && pnpm run build:ext",
     "build": "vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml",
     "build:renderer": "vite build",
     "build:electron": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml",

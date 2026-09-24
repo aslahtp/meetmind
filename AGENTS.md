@@ -32,16 +32,18 @@ Three artifacts build from this one repo: the Electron desktop app, its React re
 
 ## Commands
 
-No lint or test script exists in this repo — verify changes by running the app (`npm run dev`) and exercising the affected flow directly.
+No lint or test script exists in this repo — verify changes by running the app (`pnpm run dev`) and exercising the affected flow directly.
 
-- `npm install` — install dependencies (Node 20+, Windows only)
-- `npm run dev` — full dev loop: regenerates icons + rebuilds the Chrome extension (`predev`), then runs Vite and Electron concurrently. Renderer serves at http://localhost:5173; Electron opens DevTools automatically in dev
-- `npm run dev:renderer` — Vite dev server only
-- `npm run dev:electron` — Electron only (expects `dev:renderer` already running on :5173)
-- `npm run build:ext` — rebuild just `dist/meetmind-extension.zip` from `extension/` via `scripts/build-extension.js`
-- `npm run build:dir` — production renderer build + unpacked Electron app under `dist/desktop/` (fast iteration, skips installer packaging)
-- `npm run build` — full production build: Vite build + electron-builder NSIS installer (`dist/desktop/MeetMind-Setup-X.Y.Z.exe`). Requires `assets/ffmpeg/ffmpeg.exe`, `assets/ffmpeg/ffprobe.exe`, and `assets/icons/icon.ico` to already exist (not committed — download FFmpeg from the app's Settings screen or gyan.dev/ffmpeg/builds)
-- `npm run generate-icons` — regenerate `assets/icons/*` from the source icon
+The package manager is pnpm (pinned via `packageManager` in `package.json`); never use npm/npx or commit a `package-lock.json`. `pnpm-workspace.yaml` sets `nodeLinker: hoisted` so electron-builder sees a flat `node_modules`, and lists the dependencies allowed to run install scripts under `allowBuilds` (add new ones with `pnpm approve-builds <pkg>`).
+
+- `pnpm install` — install dependencies (Node 20+, Windows only)
+- `pnpm run dev` — full dev loop: regenerates icons + rebuilds the Chrome extension (`predev`), then runs Vite and Electron concurrently. Renderer serves at http://localhost:5173; Electron opens DevTools automatically in dev
+- `pnpm run dev:renderer` — Vite dev server only
+- `pnpm run dev:electron` — Electron only (expects `dev:renderer` already running on :5173)
+- `pnpm run build:ext` — rebuild just `dist/meetmind-extension.zip` from `extension/` via `scripts/build-extension.js`
+- `pnpm run build:dir` — production renderer build + unpacked Electron app under `dist/desktop/` (fast iteration, skips installer packaging)
+- `pnpm run build` — full production build: Vite build + electron-builder NSIS installer (`dist/desktop/MeetMind-Setup-X.Y.Z.exe`). Requires `assets/ffmpeg/ffmpeg.exe`, `assets/ffmpeg/ffprobe.exe`, and `assets/icons/icon.ico` to already exist (not committed — download FFmpeg from the app's Settings screen or gyan.dev/ffmpeg/builds)
+- `pnpm run generate-icons` — regenerate `assets/icons/*` from the source icon
 
 ## Learned Workspace Facts
 

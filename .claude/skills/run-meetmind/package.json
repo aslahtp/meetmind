@@ -1,0 +1,8 @@
+{
+  "name": "run-meetmind-driver",
+  "private": true,
+  "description": "Agent driver dependencies for the run-meetmind skill (kept out of the app's package.json).",
+  "dependencies": {
+    "playwright-core": "^1.55.0"
+  }
+}

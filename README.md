@@ -71,7 +71,7 @@ AI-powered meeting notes for Windows. Records system audio + microphone, transcr
 ```bash
 git clone https://github.com/yourname/meetmind.git
 cd meetmind
-npm install
+pnpm install
 ```
 
 ### 2. FFmpeg Setup
@@ -88,7 +88,7 @@ assets/ffmpeg/ffprobe.exe
 ### 3. Run Application
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 This will automatically package the extension, start the Vite server, and launch Electron. 
@@ -113,7 +113,7 @@ On your first run, head over to the **Settings** screen in MeetMind and provide 
 To compile MeetMind for Windows, ensure `ffmpeg.exe` and `icon.ico` are placed in the `assets/` directory.
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 This will generate the Windows executable (`dist/desktop/MeetMind Setup X.Y.Z.exe`) and the Chrome extension zip (`dist/meetmind-extension.zip`).

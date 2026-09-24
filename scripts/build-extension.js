@@ -1,7 +1,7 @@
 /**
  * Packages the Chrome extension into dist/meetmind-extension.zip
  * with all files under an "Extension" folder.
- * Run: npm run build:ext
+ * Run: pnpm run build:ext
  */
 
 'use strict';

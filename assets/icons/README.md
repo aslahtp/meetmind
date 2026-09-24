@@ -5,7 +5,7 @@ Source: `icon.svg`
 Generate all sizes + Windows `.ico` with:
 
 ```bash
-npm run generate-icons
+pnpm run generate-icons
 ```
 
 Produces:
