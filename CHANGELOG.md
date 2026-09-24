@@ -11,6 +11,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Added
 
 - Opening Settings → System now checks for app updates automatically (at most once a minute, and not while an update is already available, downloading or ready to install).
+- The selected page in the top bar now shows an icon next to its name, which slides in smoothly as you switch pages.
 
 ## [3.2.0] - 2026-09-24
 

@@ -10,6 +10,10 @@ import {
   Monitor,
   ArrowUpCircle,
   Loader2,
+  LayoutDashboard,
+  CalendarDays,
+  Settings as SettingsIcon,
+  ScrollText,
 } from 'lucide-react';
 import './styles/globals.css';
 
@@ -582,10 +586,10 @@ function App() {
 // ── Top bar (wordmark + navigation + window controls) ────────────────────────
 
 const NAV_ITEMS = [
-  { view: 'dashboard', label: 'Dashboard' },
-  { view: 'meetings',  label: 'Meetings' },
-  { view: 'settings',  label: 'Settings' },
-  { view: 'logs',      label: 'Logs' },
+  { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { view: 'meetings',  label: 'Meetings',  icon: CalendarDays },
+  { view: 'settings',  label: 'Settings',  icon: SettingsIcon },
+  { view: 'logs',      label: 'Logs',      icon: ScrollText },
 ];
 
 function TopBar() {
@@ -613,18 +617,29 @@ function TopBar() {
       <nav aria-label="Main" className="titlebar-no-drag flex items-center gap-4">
         {items.map((item) => {
           const active = activeView === item.view;
+          const Icon = item.icon;
           return (
             <button
               key={item.view}
               type="button"
               onClick={() => setView(item.view)}
               aria-current={active ? 'page' : undefined}
-              className={`rounded-full px-16 py-8 text-caption font-medium transition-colors duration-150 border ${
+              className={`inline-flex items-center rounded-full px-16 py-8 text-caption font-medium transition-colors duration-200 ease-out border ${
                 active
                   ? 'bg-ink text-paper border-ink'
-                  : 'text-graphite border-transparent hover:text-ink hover:border-ink'
+                  : 'text-graphite border-transparent hover:text-ink'
               }`}
             >
+              {/* Only the current page shows its icon. It stays mounted and its width, gap and
+                  opacity animate, so pills resize smoothly instead of snapping when it appears. */}
+              <span
+                aria-hidden="true"
+                className={`inline-flex items-center overflow-hidden transition-[max-width,margin-right,opacity] duration-200 ease-out ${
+                  active ? 'max-w-[14px] mr-8 opacity-100' : 'max-w-[0px] mr-0 opacity-0'
+                }`}
+              >
+                <Icon size={14} strokeWidth={1.75} className="flex-shrink-0" />
+              </span>
               {item.label}
             </button>
           );
