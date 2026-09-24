@@ -46,6 +46,10 @@ The package manager is pnpm (pinned via `packageManager` in `package.json`); nev
 - `pnpm run build` — full production build: Vite build + electron-builder NSIS installer (`dist/desktop/MeetMind-Setup-X.Y.Z.exe`). Requires `assets/ffmpeg/ffmpeg.exe`, `assets/ffmpeg/ffprobe.exe`, and `assets/icons/icon.ico` to already exist (not committed — download FFmpeg from the app's Settings screen or gyan.dev/ffmpeg/builds)
 - `pnpm run generate-icons` — regenerate `assets/icons/*` from the source icon
 
+## UI / UX Work
+
+**Before touching, modifying, or creating any UI or UX** — components, layouts, styles, animations, overlays, icons, or anything rendered on screen — you MUST first read [`DESIGN.md`](./DESIGN.md) in full. This file is the single source of truth for MeetMind's visual language, design tokens, component patterns, and interaction guidelines. Do not deviate from it without explicit user approval.
+
 ## Learned Workspace Facts
 
 - MeetMind renderer uses React + Tailwind; theming is driven by CSS variables in `renderer/styles/globals.css` and Tailwind `darkMode: 'class'` with `<html class="dark">` in `renderer/index.html`.
