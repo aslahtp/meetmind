@@ -26,7 +26,7 @@ let electron;
 try {
   ({ _electron: electron } = require(path.join(SKILL_DIR, 'node_modules/playwright-core')));
 } catch {
-  console.error('playwright-core missing. Run: pnpm install --ignore-workspace --dir .claude/skills/run-meetmind');
+  console.error('playwright-core missing. Run: pnpm install --dir .claude/skills/run-meetmind');
   process.exit(1);
 }
 

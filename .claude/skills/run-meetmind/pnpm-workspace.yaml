@@ -1,0 +1,3 @@
+# Separate workspace root so pnpm installs the driver here instead of into the app's lockfile.
+packages:
+  - .

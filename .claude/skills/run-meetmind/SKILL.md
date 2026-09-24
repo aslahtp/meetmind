@@ -19,7 +19,7 @@ The driver's own dependency (`playwright-core`) is installed inside the skill di
 
 ```bash
 pnpm install
-pnpm install --ignore-workspace --dir .claude/skills/run-meetmind
+pnpm install --dir .claude/skills/run-meetmind
 ```
 
 ## Build
@@ -78,7 +78,7 @@ Screenshots are written to `.claude/skills/run-meetmind/shots/<name>.png` (gitig
 
 ## Troubleshooting
 
-- `playwright-core missing` → `pnpm install --ignore-workspace --dir .claude/skills/run-meetmind`.
+- `playwright-core missing` → `pnpm install --dir .claude/skills/run-meetmind`.
 - `dist/renderer missing` → `pnpm exec vite build`.
 - `Not isolated: userData=...` → the `--user-data-dir` switch wasn't honoured. Don't launch through `pnpm run dev`; use the driver.
 - `ERR click <x> - locator.click: Timeout 10000ms exceeded` → the button is hidden, overlaid or behind a dialog. Try `fclick` / `dclick`, or `ss` to see the current state.
