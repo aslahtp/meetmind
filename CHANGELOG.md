@@ -21,7 +21,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 ### Changed
 
-- The meeting toolbar's Notion control is one pill: "Open in Notion" plus a labelled "Update" that confirms before replacing the page, instead of an unlabelled Notion logo button.
+- The meeting toolbar's Notion control is one pill marked by the Notion logo, with "Open" and a labelled "Update" that confirms before replacing the page, instead of an unlabelled Notion logo button.
 
 ## [3.4.0] - 2026-09-25
 

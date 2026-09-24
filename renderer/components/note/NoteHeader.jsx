@@ -7,10 +7,9 @@ import {
   FileDown,
   CloudUpload,
   Loader2,
-  ExternalLink,
   AlertTriangle,
 } from 'lucide-react';
-import { IconButton, SegmentedControl, StatusDot } from '../ui/index.jsx';
+import { IconButton, SegmentedControl } from '../ui/index.jsx';
 import NotionIcon from '../NotionIcon.jsx';
 import { metaText } from './meta.js';
 import { meetingHostname, meetingPlatform } from '../../lib/platform.js';
@@ -145,18 +144,17 @@ export function NoteToolbar({
             </IconButton>
 
             {notionUrl ? (
-              // One pill, two halves: open the page, or replace it with the current notes.
+              // One Notion pill, marked by the logo: open the page, or replace it with the current notes.
               <div role="group" aria-label="Notion page" className="inline-flex items-stretch rounded-full border border-ink">
                 <button
                   type="button"
                   onClick={() => window.meetmind.shell.openExternal(notionUrl)}
                   className="inline-flex items-center gap-8 rounded-l-full pl-16 pr-8 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06]"
-                  title="Open the Notion page"
+                  title="Open in Notion"
+                  aria-label="Open in Notion"
                 >
-                  <StatusDot tone="ok" />
-                  <span className="hidden lg:inline">Open in Notion</span>
-                  <span className="lg:hidden">Notion</span>
-                  <ExternalLink size={14} strokeWidth={1.75} />
+                  <NotionIcon size={16} />
+                  <span>Open</span>
                 </button>
                 <span className="w-px my-4 bg-ink/30" aria-hidden="true" />
                 <button
@@ -170,7 +168,7 @@ export function NoteToolbar({
                   {uploading
                     ? <Loader2 size={14} strokeWidth={2} className="spinner" />
                     : <CloudUpload size={14} strokeWidth={1.75} />}
-                  <span className="hidden lg:inline">{uploading ? 'Updating…' : 'Update'}</span>
+                  <span>{uploading ? 'Updating…' : 'Update'}</span>
                 </button>
               </div>
             ) : (
