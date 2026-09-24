@@ -17,7 +17,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 - Retrying a failed meeting reuses its saved transcript instead of running speech-to-text again; transcription only re-runs when there is no usable transcript.
 - Retry and Generate notes now work for meetings that have a transcript but no audio, such as pasted transcripts.
-- An expired or revoked Google Calendar connection no longer logs an error every minute: calendar sync pauses with one warning and a "reconnect in Settings" message until you reconnect.
+- An expired or revoked Google Calendar connection no longer logs an error every minute: after one warning, the app retries Google once a day (showing "reconnect in Settings" in between) and resumes sync on its own if the connection works again.
 - The extension's 10-second status heartbeat is no longer written to the logs.
 
 ### Changed

@@ -20,9 +20,12 @@ let cachedEvents = [];
 let lastFetchTime = 0;
 let activeAuthServer = null;
 let lastPollerError = null;
-// Refresh token Google rejected (revoked/expired). Retrying can't fix that, so calendar calls
-// short-circuit until the user reconnects (new token) or disconnects.
+// Refresh token Google rejected (revoked/expired) and when. Calls with that token fail fast
+// without contacting Google, and are retried for real once a day, so sync resumes by itself if
+// the token recovers; reconnecting (new token) or disconnecting clears it straight away.
 let rejectedRefreshToken = null;
+let rejectedAt = 0;
+const AUTH_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 // Concurrent fetches share one request instead of each hitting the API.
 const inflightFetches = new Map();
 
@@ -153,6 +156,7 @@ async function startAuthFlow(config) {
           oAuth2Client = client;
           oAuth2Client._clientId = clientId;
           rejectedRefreshToken = null;
+          rejectedAt = 0;
           cachedEvents = [];
           lastFetchTime = 0;
 
@@ -209,6 +213,7 @@ function disconnectCalendar() {
   lastFetchTime = 0;
   lastPollerError = null;
   rejectedRefreshToken = null;
+  rejectedAt = 0;
   stopEventPoller();
   logger.info('Google Calendar disconnected');
 }
@@ -244,8 +249,11 @@ async function fetchUpcomingEvents(config, hoursAhead = 36) {
   return request;
 }
 
+// True while this token is inside its once-a-day retry window after Google rejected it.
 function isTokenRejected(config) {
-  return !!rejectedRefreshToken && rejectedRefreshToken === config.googleCalendarRefreshToken;
+  return !!rejectedRefreshToken
+    && rejectedRefreshToken === config.googleCalendarRefreshToken
+    && Date.now() - rejectedAt < AUTH_RETRY_INTERVAL_MS;
 }
 
 async function requestEvents(config, hoursAhead) {
@@ -270,19 +278,24 @@ async function requestEvents(config, hoursAhead) {
     const events = (res.data.items || []).map(normalizeEvent).filter(Boolean);
     cachedEvents = events;
     lastFetchTime = Date.now();
+    if (rejectedRefreshToken) {
+      rejectedRefreshToken = null;
+      rejectedAt = 0;
+      logger.info('Google Calendar authorization works again; sync resumed');
+    }
 
     logger.info('Fetched Google Calendar events', { count: events.length });
     return events;
   } catch (err) {
     const msg = err.message || String(err);
 
-    // Revoked/expired refresh token: permanent until the user reconnects. Say so once and stop
-    // calling Google (and polling) with this token, instead of failing every minute.
+    // Revoked/expired refresh token: warn once, then back off to one real attempt a day with
+    // this token (the poller keeps running) instead of failing every minute.
     if (msg.includes('invalid_grant') || err.response?.data?.error === 'invalid_grant' || err.code === 401) {
       if (!isTokenRejected(config)) {
         rejectedRefreshToken = config.googleCalendarRefreshToken;
-        stopEventPoller();
-        logger.warn('Google Calendar authorization was revoked or has expired; calendar sync is paused until you reconnect in Settings', { error: msg });
+        rejectedAt = Date.now();
+        logger.warn('Google Calendar authorization was revoked or has expired; retrying once a day until you reconnect in Settings', { error: msg });
       }
       throw new Error(AUTH_EXPIRED_MESSAGE);
     }
@@ -350,7 +363,6 @@ function startEventPoller(config, onMeetingStart) {
   stopEventPoller();
 
   if (!isCalendarConnected(config)) return;
-  if (isTokenRejected(config)) return; // already known to be revoked; wait for a reconnect
 
   const notifiedEventIds = new Set();
 
