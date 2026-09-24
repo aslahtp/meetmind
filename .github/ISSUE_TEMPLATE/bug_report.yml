@@ -1,0 +1,68 @@
+name: Bug report
+description: Something in MeetMind is not working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting a bug. Please remove API keys and any private meeting content before submitting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: MeetMind version
+      description: Shown in Settings → System.
+      placeholder: "3.5.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Recording / audio capture
+        - Transcription (speech-to-text)
+        - Note generation (Gemini)
+        - Notion sync
+        - Google Calendar
+        - PDF / Markdown export
+        - Chrome extension (Google Meet / Zoom)
+        - Installer / updates / FFmpeg
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: stt
+    attributes:
+      label: Speech-to-text engine
+      options:
+        - AssemblyAI
+        - Google Cloud Speech-to-Text
+        - Sarvam AI
+        - Not relevant
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Copy from the in-app Logs page. This will be formatted as code.
+      render: text

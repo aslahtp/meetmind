@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeetMind — Free open-source AI meeting notes app for Windows</title>
+  <meta name="description" content="MeetMind records Google Meet, Zoom and any call on Windows, transcribes it with AssemblyAI, Google STT or Sarvam AI, and writes meeting minutes with Gemini. Free, open source, no meeting bot, syncs to Notion.">
+  <meta name="keywords" content="AI meeting notes, meeting transcription, meeting minutes, AI note taker, Windows, Google Meet, Zoom, Notion, Gemini, AssemblyAI, Sarvam AI, Malayalam, open source, Otter alternative">
+  <meta name="author" content="Aslah">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#f8f5ed" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1813" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://aslahtp.github.io/meetmind/">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="icon-256.png">
+  <link rel="preload" href="fonts/DMSans-Variable.woff2" as="font" type="font/woff2" crossorigin>
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="MeetMind">
+  <meta property="og:title" content="MeetMind — Open-source AI meeting notes for Windows">
+  <meta property="og:description" content="Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini and sync the minutes to Notion. Free, open source, no meeting bot.">
+  <meta property="og:url" content="https://aslahtp.github.io/meetmind/">
+  <meta property="og:image" content="https://aslahtp.github.io/meetmind/og-image.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="MeetMind: AI meeting notes for Windows, with the app dashboard">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MeetMind — Open-source AI meeting notes for Windows">
+  <meta name="twitter:description" content="Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini and sync the minutes to Notion. Free, open source, no meeting bot.">
+  <meta name="twitter:image" content="https://aslahtp.github.io/meetmind/og-image.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://aslahtp.github.io/meetmind/#app",
+        "name": "MeetMind",
+        "description": "Open-source AI meeting notes app for Windows. Records system audio and microphone, transcribes with AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI, generates meeting minutes with Google Gemini, and syncs them to Notion. A Chrome extension adds one-click recording to Google Meet and Zoom.",
+        "url": "https://aslahtp.github.io/meetmind/",
+        "applicationCategory": "BusinessApplication",
+        "applicationSubCategory": "Meeting notes and transcription",
+        "operatingSystem": "Windows 10, Windows 11",
+        "softwareVersion": "__VERSION__",
+        "downloadUrl": "https://github.com/aslahtp/meetmind/releases/latest",
+        "installUrl": "https://github.com/aslahtp/meetmind/releases/latest",
+        "releaseNotes": "https://github.com/aslahtp/meetmind/blob/main/CHANGELOG.md",
+        "screenshot": "https://aslahtp.github.io/meetmind/screenshots/dashboard.png",
+        "image": "https://aslahtp.github.io/meetmind/og-image.png",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "author": { "@type": "Person", "name": "Aslah", "url": "https://github.com/aslahtp" },
+        "featureList": [
+          "Records system audio and microphone together on Windows",
+          "Transcription with AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI",
+          "Speaker diarization",
+          "English and Malayalam code-switching with Sarvam AI saaras:v3",
+          "AI meeting minutes with Google Gemini: summary, decisions and action items",
+          "Chrome extension for Google Meet and Zoom",
+          "Google Calendar reminders to start recording",
+          "Notion sync",
+          "PDF and Markdown export",
+          "Local SQLite storage, no account or bot"
+        ],
+        "sameAs": ["https://github.com/aslahtp/meetmind"]
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://aslahtp.github.io/meetmind/#source",
+        "name": "MeetMind source code",
+        "codeRepository": "https://github.com/aslahtp/meetmind",
+        "programmingLanguage": ["JavaScript", "React"],
+        "runtimePlatform": "Electron",
+        "license": "https://opensource.org/licenses/MIT",
+        "targetProduct": { "@id": "https://aslahtp.github.io/meetmind/#app" }
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://aslahtp.github.io/meetmind/#faq",
+        "mainEntity": [
+          { "@type": "Question", "name": "Is MeetMind free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you connect, and both Gemini (free tier) and AssemblyAI (signup credit) can be used at no cost for moderate use." } },
+          { "@type": "Question", "name": "Does a bot join my meeting?", "acceptedAnswer": { "@type": "Answer", "text": "No. MeetMind records the audio playing on your own computer plus your microphone, so no extra participant appears in Google Meet, Zoom or Teams." } },
+          { "@type": "Question", "name": "Which meeting apps does MeetMind work with?", "acceptedAnswer": { "@type": "Answer", "text": "Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and Webex. The Chrome extension adds a one-click record button for Google Meet and Zoom in the browser." } },
+          { "@type": "Question", "name": "Does MeetMind work on macOS or Linux?", "acceptedAnswer": { "@type": "Answer", "text": "Not currently. MeetMind is built for Windows 10 and 11 because it relies on Windows audio loopback capture." } },
+          { "@type": "Question", "name": "Where is my meeting data stored?", "acceptedAnswer": { "@type": "Answer", "text": "Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to Gemini, using your own API keys." } },
+          { "@type": "Question", "name": "Which languages does MeetMind support?", "acceptedAnswer": { "@type": "Answer", "text": "Language support depends on the speech-to-text engine you choose. For meetings that mix English and Malayalam, Sarvam AI's saaras:v3 model handles code-switching within a sentence." } },
+          { "@type": "Question", "name": "How is MeetMind different from Otter.ai or Fireflies.ai?", "acceptedAnswer": { "@type": "Answer", "text": "Hosted note takers such as Otter.ai and Fireflies.ai are subscription services that typically join calls as a bot and keep recordings on their servers. MeetMind is an open-source desktop app that records locally without a bot, lets you choose the transcription provider, stores notes on your machine, and costs nothing beyond your own API usage." } },
+          { "@type": "Question", "name": "Can MeetMind make notes from a recording I already have?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript to generate notes without speech-to-text." } }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    @font-face {
+      font-family: 'DM Sans';
+      src: url('fonts/DMSans-Variable.woff2') format('woff2');
+      font-weight: 100 1000;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --paper: #f8f5ed;
+      --ink: #000000;
+      --graphite: #707070;
+      --sunshine: #ffda6e;
+      --sunshine-deep: #f5ca50;
+      --mint: #6ece9d;
+      --font: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --paper: #1a1813;
+        --ink: #f8f5ed;
+        --graphite: #a8a296;
+        color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --paper: #1a1813;
+      --ink: #f8f5ed;
+      --graphite: #a8a296;
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font);
+      font-feature-settings: "ss03", "ss04";
+      font-size: 18px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+    img { max-width: 100%; height: auto; display: block; }
+    :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 4px; }
+
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+    @media (min-width: 720px) { .wrap { padding: 0 32px; } }
+
+    header.top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 24px 0;
+    }
+    header.top .brand img { height: 36px; width: auto; }
+    header.top nav { display: flex; gap: 24px; font-size: 16px; font-weight: 500; }
+    header.top nav a { text-decoration: none; color: var(--graphite); }
+    header.top nav a:hover { color: var(--ink); }
+    @media (max-width: 560px) { header.top nav .hide-sm { display: none; } }
+
+    section { padding: 64px 0; }
+    .center { text-align: center; }
+
+    .badge {
+      display: inline-flex; align-items: center;
+      border: 1px solid var(--ink); border-radius: 9999px;
+      font-size: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.286em;
+      overflow: hidden;
+    }
+    .badge .num {
+      display: grid; place-items: center; width: 32px; height: 32px;
+      border-right: 1px solid var(--ink); letter-spacing: 0;
+    }
+    .badge .label { padding: 0 16px 0 calc(16px + 0.286em); }
+    .badge .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mint); margin-left: 12px; }
+
+    h1, h2, h3 { font-weight: 500; }
+    h1 {
+      font-size: clamp(40px, 7vw, 64px); line-height: 1.15; letter-spacing: -0.016em;
+      max-width: 960px; margin: 32px auto 16px;
+    }
+    h2 {
+      font-size: clamp(32px, 5vw, 48px); line-height: 1.2; letter-spacing: -0.016em;
+      margin: 32px auto 16px; max-width: 880px;
+    }
+    h3 { font-size: 24px; line-height: 1.35; margin-bottom: 8px; }
+    .sub { color: var(--graphite); max-width: 640px; margin: 0 auto; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 32px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 16px 24px; border-radius: 24px; border: 1px solid var(--ink);
+      font-weight: 500; font-size: 16px; text-decoration: none; color: var(--ink);
+      transition: background-color .15s ease;
+    }
+    .btn-primary { background: var(--sunshine); border-color: var(--sunshine); color: #000; }
+    .btn-primary:hover { background: var(--sunshine-deep); border-color: var(--sunshine-deep); }
+    .btn-ghost:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+    .meta { margin-top: 16px; font-size: 14px; color: var(--graphite); }
+
+    .frame { border: 1px solid var(--ink); border-radius: 12px; overflow: hidden; margin: 48px auto 0; max-width: 1000px; }
+
+    .grid { display: grid; gap: 24px; margin-top: 48px; }
+    @media (min-width: 720px) { .grid-2 { grid-template-columns: 1fr 1fr; } .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1000px) { .grid-4 { grid-template-columns: repeat(4, 1fr); } }
+    .card { border: 1px solid var(--ink); border-radius: 24px; padding: 32px; text-align: left; }
+    .card p { color: var(--graphite); }
+    .step-num {
+      display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 9999px;
+      border: 1px solid var(--ink); font-size: 14px; font-weight: 500; margin-bottom: 16px;
+    }
+
+    .definition { max-width: 820px; margin: 0 auto; font-size: 20px; }
+    .definition p + p { margin-top: 16px; color: var(--graphite); font-size: 18px; }
+
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 24px; }
+    .tag { border: 1px solid var(--ink); border-radius: 9999px; padding: 6px 14px; font-size: 14px; font-weight: 500; }
+
+    .shots figure { text-align: left; }
+    .shots figure img { border: 1px solid var(--ink); border-radius: 12px; }
+    .shots figcaption { color: var(--graphite); font-size: 16px; margin-top: 12px; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 48px; text-align: left; font-size: 16px; }
+    .table-wrap { border: 1px solid var(--ink); border-radius: 24px; overflow-x: auto; margin-top: 48px; }
+    .table-wrap table { margin-top: 0; }
+    th, td { padding: 16px 24px; border-bottom: 1px solid color-mix(in srgb, var(--graphite) 45%, transparent); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    th { font-weight: 500; }
+    td { color: var(--graphite); }
+    td:first-child { color: var(--ink); font-weight: 500; }
+
+    .faq { max-width: 820px; margin: 48px auto 0; text-align: left; }
+    .faq details { border-top: 1px solid var(--ink); padding: 24px 0; }
+    .faq details:last-child { border-bottom: 1px solid var(--ink); }
+    .faq summary { cursor: pointer; font-size: 20px; font-weight: 500; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary::after { content: "+"; font-weight: 400; }
+    .faq details[open] summary::after { content: "–"; }
+    .faq details p { color: var(--graphite); margin-top: 12px; }
+
+    .tile {
+      width: 64px; height: 64px; border-radius: 16px; border: 1px solid var(--ink);
+      display: grid; place-items: center; margin: 0 auto;
+    }
+    .tile svg { width: 32px; height: 32px; }
+
+    footer { border-top: 1px solid var(--ink); padding: 32px 0 48px; font-size: 14px; color: var(--graphite); }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 16px 32px; justify-content: space-between; }
+    footer nav { display: flex; flex-wrap: wrap; gap: 24px; }
+
+    .wordmark-dark { display: none; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .wordmark-light { display: none; }
+      :root:not([data-theme="light"]) .wordmark-dark { display: block; }
+    }
+    :root[data-theme="dark"] .wordmark-light { display: none; }
+    :root[data-theme="dark"] .wordmark-dark { display: block; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <a class="brand" href="./" aria-label="MeetMind home">
+        <img class="wordmark-light" src="brand/meetmind-wordmark-light.png" alt="MeetMind" width="115" height="36">
+        <img class="wordmark-dark" src="brand/meetmind-wordmark-dark.png" alt="MeetMind" width="115" height="36">
+      </a>
+      <nav aria-label="Primary">
+        <a class="hide-sm" href="#features">Features</a>
+        <a class="hide-sm" href="#faq">FAQ</a>
+        <a href="https://github.com/aslahtp/meetmind">GitHub</a>
+      </nav>
+    </header>
+  </div>
+
+  <main>
+    <section class="center" style="padding-top: 48px;">
+      <div class="wrap">
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Open source · Windows</span></span>
+        <h1>AI meeting notes for Windows, without a meeting bot</h1>
+        <p class="sub">MeetMind records Google Meet, Zoom or any call on your PC, transcribes it with AssemblyAI, Google Speech-to-Text or Sarvam AI, and writes clear meeting minutes with Gemini — then syncs them to Notion.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest">Download for Windows</a>
+          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind">View source on GitHub</a>
+        </div>
+        <p class="meta">Version __VERSION__ · Windows 10 &amp; 11 · MIT license</p>
+        <div class="frame">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard-dark.png">
+            <img src="screenshots/dashboard.png" alt="MeetMind dashboard with meeting stats and a list of recent recorded meetings" width="1500" height="1000" fetchpriority="high">
+          </picture>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="what">
+      <div class="wrap center">
+        <span class="badge"><span class="num">1</span><span class="label">What it is</span></span>
+        <h2 id="what">What is MeetMind?</h2>
+        <div class="definition">
+          <p><strong>MeetMind is a free, open-source desktop app for Windows that turns online meetings into written meeting notes.</strong> It records your computer's system audio and your microphone together, transcribes the recording with the speech-to-text service you choose, and uses Google Gemini to write a speaker-labelled summary with decisions and action items.</p>
+          <p>Because recording happens on your own PC, nothing joins the call as a participant, and it works with any app that plays sound: Google Meet, Zoom, Microsoft Teams, Slack, Discord or a file you already have. Notes stay in a local database and can be exported to PDF, copied as Markdown or synced to Notion.</p>
+        </div>
+        <div class="tags" aria-label="Works with">
+          <span class="tag">Google Meet</span><span class="tag">Zoom</span><span class="tag">Microsoft Teams</span><span class="tag">Slack</span><span class="tag">Discord</span><span class="tag">Notion</span><span class="tag">Google Calendar</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="how">
+      <div class="wrap center">
+        <span class="badge"><span class="num">2</span><span class="label">How it works</span></span>
+        <h2 id="how">From call to minutes in four steps</h2>
+        <ol class="grid grid-4" style="list-style: none;">
+          <li class="card"><span class="step-num">1</span><h3>Record</h3><p>Click the MeetMind button in Google Meet or Zoom, press Record in the app, or accept the reminder when a calendar meeting starts.</p></li>
+          <li class="card"><span class="step-num">2</span><h3>Transcribe</h3><p>AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI returns a transcript with speaker labels.</p></li>
+          <li class="card"><span class="step-num">3</span><h3>Summarize</h3><p>Gemini writes an executive summary, agenda, key decisions and an action items table with owners and deadlines.</p></li>
+          <li class="card"><span class="step-num">4</span><h3>Share</h3><p>Search the notes in the app, export a PDF, copy Markdown, or sync a formatted page to Notion.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="features" aria-labelledby="features-h">
+      <div class="wrap center">
+        <span class="badge"><span class="num">3</span><span class="label">Features</span></span>
+        <h2 id="features-h">Everything a meeting note taker needs</h2>
+        <div class="grid grid-2">
+          <div class="card"><h3>System audio + microphone</h3><p>Records both sides of any call on Windows through WASAPI loopback, with FFmpeg installed from inside the app.</p></div>
+          <div class="card"><h3>Your choice of speech-to-text</h3><p>AssemblyAI, Google Cloud Speech-to-Text v1/v2 or Sarvam AI, all with speaker diarization.</p></div>
+          <div class="card"><h3>English–Malayalam code-switching</h3><p>Accurate transcripts of mixed-language meetings with Sarvam AI's <code>saaras:v3</code> model.</p></div>
+          <div class="card"><h3>AI minutes with Gemini</h3><p>Executive-style Markdown or structured JSON notes, an editable prompt, and an automatic fallback model.</p></div>
+          <div class="card"><h3>Google Meet &amp; Zoom extension</h3><p>A floating Chrome overlay with one-click recording and live processing status.</p></div>
+          <div class="card"><h3>Notion, PDF &amp; Markdown</h3><p>Native Notion pages with tables and to-dos, dated PDF exports, and one-click Markdown copy.</p></div>
+          <div class="card"><h3>Google Calendar reminders</h3><p>See upcoming meetings on the dashboard and get a prompt to start recording when one begins.</p></div>
+          <div class="card"><h3>Local-first and private</h3><p>No account and no MeetMind server. Recordings, transcripts and notes stay in a local SQLite database.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="shots">
+      <div class="wrap center">
+        <span class="badge"><span class="num">4</span><span class="label">Screenshots</span></span>
+        <h2 id="shots">Meeting minutes you can actually use</h2>
+        <div class="grid grid-2 shots">
+          <figure><img src="screenshots/markdown-notes.png" alt="Markdown meeting minutes with a header, executive summary and agenda" width="1500" height="1000" loading="lazy"><figcaption>Executive-style minutes: header, summary and agenda.</figcaption></figure>
+          <figure><img src="screenshots/markdown-action-items.png" alt="Key decisions and an action items table with owners, deadlines and status" width="1500" height="1000" loading="lazy"><figcaption>Numbered decisions and an action items table.</figcaption></figure>
+          <figure><img src="screenshots/transcript.png" alt="Searchable, speaker-labelled meeting transcript" width="1500" height="1000" loading="lazy"><figcaption>Speaker-labelled transcript you can search and filter.</figcaption></figure>
+          <figure><img src="screenshots/json-notes.png" alt="Structured JSON notes with identified speakers and prioritised action items" width="1500" height="1000" loading="lazy"><figcaption>Structured notes with speakers and prioritised action items.</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="compare">
+      <div class="wrap center">
+        <span class="badge"><span class="num">5</span><span class="label">Compare</span></span>
+        <h2 id="compare">MeetMind vs. hosted AI note takers</h2>
+        <p class="sub">An open-source alternative to subscription tools such as Otter.ai and Fireflies.ai.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"></th><th scope="col">MeetMind</th><th scope="col">Typical hosted note taker</th></tr></thead>
+            <tbody>
+              <tr><td>Price</td><td>Free app; pay only for your own API usage</td><td>Monthly subscription per seat</td></tr>
+              <tr><td>How it records</td><td>Local system audio + mic, no bot</td><td>A bot joins the call as a participant</td></tr>
+              <tr><td>Where data lives</td><td>Your PC (SQLite), optional Notion</td><td>The vendor's cloud</td></tr>
+              <tr><td>Transcription</td><td>AssemblyAI, Google STT or Sarvam AI — your choice</td><td>Vendor's own engine</td></tr>
+              <tr><td>Source code</td><td>Open source (MIT)</td><td>Closed source</td></tr>
+              <tr><td>Platform</td><td>Windows 10/11</td><td>Web, mobile and desktop</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-h">
+      <div class="wrap center">
+        <span class="badge"><span class="num">6</span><span class="label">FAQ</span></span>
+        <h2 id="faq-h">Frequently asked questions</h2>
+        <div class="faq">
+          <details open><summary>Is MeetMind free?</summary><p>Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you connect, and both Gemini (free tier) and AssemblyAI (signup credit) can be used at no cost for moderate use.</p></details>
+          <details><summary>Does a bot join my meeting?</summary><p>No. MeetMind records the audio playing on your own computer plus your microphone, so no extra participant appears in Google Meet, Zoom or Teams.</p></details>
+          <details><summary>Which meeting apps does MeetMind work with?</summary><p>Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and Webex. The Chrome extension adds a one-click record button for Google Meet and Zoom in the browser.</p></details>
+          <details><summary>Does MeetMind work on macOS or Linux?</summary><p>Not currently. MeetMind is built for Windows 10 and 11 because it relies on Windows audio loopback capture.</p></details>
+          <details><summary>Where is my meeting data stored?</summary><p>Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to Gemini, using your own API keys.</p></details>
+          <details><summary>Which languages does MeetMind support?</summary><p>Language support depends on the speech-to-text engine you choose. For meetings that mix English and Malayalam, Sarvam AI's <code>saaras:v3</code> model handles code-switching within a sentence.</p></details>
+          <details><summary>How is MeetMind different from Otter.ai or Fireflies.ai?</summary><p>Hosted note takers such as Otter.ai and Fireflies.ai are subscription services that typically join calls as a bot and keep recordings on their servers. MeetMind is an open-source desktop app that records locally without a bot, lets you choose the transcription provider, stores notes on your machine, and costs nothing beyond your own API usage.</p></details>
+          <details><summary>Can MeetMind make notes from a recording I already have?</summary><p>Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript to generate notes without speech-to-text.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="center" aria-labelledby="cta">
+      <div class="wrap">
+        <div class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></svg>
+        </div>
+        <h2 id="cta">Ready for your next meeting?</h2>
+        <p class="sub">Install MeetMind, add a Gemini key and a speech-to-text key, and your next call becomes searchable minutes.</p>
+        <div class="actions">
+          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind/releases/latest">Download the latest release</a>
+          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind#-install">Read the setup guide</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>MeetMind · MIT license · Built by <a href="https://github.com/aslahtp">Aslah</a></span>
+      <nav aria-label="Footer">
+        <a href="https://github.com/aslahtp/meetmind">GitHub</a>
+        <a href="https://github.com/aslahtp/meetmind/releases">Releases</a>
+        <a href="https://github.com/aslahtp/meetmind/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/aslahtp/meetmind/issues">Issues</a>
+        <a href="llms.txt">llms.txt</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

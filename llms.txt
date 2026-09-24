@@ -1,0 +1,33 @@
+# MeetMind
+
+> MeetMind is a free, open-source (MIT) AI meeting notes app for Windows 10 and 11. It records system audio and the microphone together, transcribes the recording with AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI, uses Google Gemini to write meeting minutes (summary, decisions, action items), and optionally syncs them to Notion. A Chrome extension adds one-click recording to Google Meet and Zoom. No bot joins the meeting.
+
+Key facts:
+
+- Platform: Windows 10/11 desktop app (Electron, React). Not available for macOS or Linux.
+- Price: free; users bring their own API keys (Gemini free tier and AssemblyAI signup credit are enough for moderate use).
+- Recording: local capture of system audio (WASAPI loopback) plus microphone, so it works with Google Meet, Zoom, Microsoft Teams, Slack, Discord and any app that plays audio.
+- Transcription: AssemblyAI, Google Cloud Speech-to-Text v1/v2, or Sarvam AI `saaras:v3`, with speaker diarization. Sarvam AI supports English–Malayalam code-switching.
+- Notes: Gemini generates executive-style Markdown minutes or structured JSON notes; the system prompt is editable and a fallback model is used if the primary fails.
+- Output: in-app notes and searchable transcripts, PDF export, Markdown copy, Notion sync.
+- Privacy: recordings, transcripts and notes are stored locally in SQLite; there is no MeetMind server or account.
+- Integrations: Google Calendar (upcoming meetings and start-recording reminders), Notion, Chrome extension for Google Meet and Zoom.
+- Import: existing audio/video files (WAV, MP3, M4A, AAC, FLAC, OGG, Opus, WebM, MP4, MKV, MOV) or a pasted transcript.
+
+## Docs
+
+- [README](https://github.com/aslahtp/meetmind/blob/main/README.md): features, install steps, developer setup and FAQ
+- [Architecture overview](https://github.com/aslahtp/meetmind/blob/main/AGENTS.md): main process, audio capture, processing pipeline, persistence and the desktop–extension WebSocket bridge
+- [Changelog](https://github.com/aslahtp/meetmind/blob/main/CHANGELOG.md): release history
+- [Google Cloud Storage setup](https://github.com/aslahtp/meetmind/blob/main/docs/GCS-SETUP.md): required for long recordings with Google Speech-to-Text
+
+## Download
+
+- [Latest release](https://github.com/aslahtp/meetmind/releases/latest): Windows installer (`MeetMind-Setup-x.y.z.exe`) and Chrome extension (`meetmind-extension.zip`)
+- [Source code](https://github.com/aslahtp/meetmind)
+
+## Optional
+
+- [Website](https://aslahtp.github.io/meetmind/)
+- [Contributing guide](https://github.com/aslahtp/meetmind/blob/main/CONTRIBUTING.md)
+- [Security policy](https://github.com/aslahtp/meetmind/blob/main/SECURITY.md)

@@ -1,7 +1,34 @@
 {
   "name": "meetmind",
   "version": "3.5.0",
-  "description": "AI meeting notes — transcribe, summarize, and upload to Notion",
+  "description": "Open-source AI meeting notes app for Windows: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT or Sarvam AI, summarize with Gemini, and sync to Notion.",
+  "keywords": [
+    "ai-meeting-notes",
+    "meeting-notes",
+    "meeting-transcription",
+    "meeting-minutes",
+    "meeting-summary",
+    "ai-note-taker",
+    "speech-to-text",
+    "transcription",
+    "speaker-diarization",
+    "google-meet",
+    "zoom",
+    "notion",
+    "gemini",
+    "assemblyai",
+    "sarvam-ai",
+    "malayalam",
+    "electron",
+    "windows",
+    "chrome-extension",
+    "otter-alternative"
+  ],
+  "homepage": "https://aslahtp.github.io/meetmind/",
+  "bugs": {
+    "url": "https://github.com/aslahtp/meetmind/issues"
+  },
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/aslahtp/meetmind.git"
