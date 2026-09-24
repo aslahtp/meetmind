@@ -6,6 +6,12 @@ updated: 2026-09-24
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.3.0] - 2026-09-25
+
+### Added
+
+- Opening Settings → System now checks for app updates automatically (at most once a minute, and not while an update is already available, downloading or ready to install).
+
 ## [3.2.0] - 2026-09-24
 
 ### Changed

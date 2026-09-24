@@ -8,6 +8,9 @@ const BINARIES = [
   { key: 'ffprobe', label: 'ffprobe', desc: 'Media duration detection' },
 ];
 
+// Opening the System tab re-checks for updates, but not more than once a minute.
+const UPDATE_RECHECK_MS = 60 * 1000;
+
 const INSTALL_STAGE_HINT = {
   download: 'Downloading from gyan.dev (~80 MB)…',
   extract: 'Extracting archive…',
@@ -123,6 +126,26 @@ export default function SystemSection({ active }) {
       setCheckingUpdates(false);
     }
   };
+
+  // Check for updates each time the System tab opens, unless one ran moments ago or an
+  // update is already found/in progress (re-checking would hide its Download/Restart button).
+  useEffect(() => {
+    if (!active || !window.meetmind?.updater) return;
+    let cancelled = false;
+    (async () => {
+      let status = null;
+      try {
+        status = await window.meetmind.updater.getStatus();
+      } catch {}
+      if (cancelled) return;
+      if (status) setUpdaterStatus(status);
+      if (['checking', 'available', 'downloading', 'downloaded'].includes(status?.status)) return;
+      const last = status?.lastCheckTime ? new Date(status.lastCheckTime).getTime() : 0;
+      if (Date.now() - last < UPDATE_RECHECK_MS) return;
+      handleCheckUpdates();
+    })();
+    return () => { cancelled = true; };
+  }, [active]);
 
   const handleDownloadUpdate = async () => {
     if (!window.meetmind?.updater) return;
