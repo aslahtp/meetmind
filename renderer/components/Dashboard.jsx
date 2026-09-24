@@ -12,7 +12,6 @@ import PasteTranscriptModal from './PasteTranscriptModal.jsx';
 import UpcomingMeetings from './UpcomingMeetings.jsx';
 import { SessionList, SessionListSkeleton } from './SessionCard.jsx';
 import {
-  PageHeader,
   IconButton,
   StepBadge,
   EmptyState,
@@ -29,33 +28,57 @@ function greeting() {
   return 'Good evening';
 }
 
-function StatTile({ label, value, caption }) {
+// One bordered strip with hairline-separated cells instead of four tall cards.
+function StatStrip({ stats }) {
   return (
-    <div className="card-compact">
-      <p className="eyebrow">{label}</p>
-      <p className="text-heading font-medium text-ink mt-8 tabular">{value}</p>
-      <p className="text-caption text-graphite mt-4">{caption}</p>
-    </div>
+    <dl className="grid grid-cols-2 md:grid-cols-4 rounded-card border border-ink overflow-hidden mb-32">
+      {stats.map(({ label, value, caption }, i) => (
+        <div
+          key={label}
+          title={caption}
+          className={`px-24 py-16 border-ink ${i > 0 ? 'md:border-l' : ''} ${i % 2 === 1 ? 'border-l' : ''} ${
+            i >= 2 ? 'border-t md:border-t-0' : ''
+          }`}
+        >
+          <dt className="eyebrow">{label}</dt>
+          <dd className="text-subheading font-medium text-ink tabular mt-4">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// Slim sticky bar shared by the loaded and loading states.
+function DashboardToolbar({ subtitle, actions }) {
+  return (
+    <header className="flex-shrink-0 border-b border-ink bg-paper">
+      <div className="w-full px-24 py-8 min-h-[56px] flex flex-wrap items-center gap-16">
+        <div className="flex-1 min-w-0 flex items-baseline gap-8">
+          <h1 className="text-body-sm font-medium text-ink flex-shrink-0">{greeting()}</h1>
+          {subtitle && <p className="text-caption text-graphite truncate">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex items-center gap-8 flex-shrink-0">{actions}</div>}
+      </div>
+    </header>
   );
 }
 
 function DashboardSkeleton() {
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="page" aria-busy="true" aria-label="Loading dashboard">
-        <div className="mb-48">
-          <Skeleton className="h-32 w-[240px]" />
-          <Skeleton className="h-16 w-[160px] mt-8" />
+    <div className="h-full flex flex-col overflow-hidden">
+      <DashboardToolbar />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1200px] px-32 pt-24 pb-48" aria-busy="true" aria-label="Loading dashboard">
+          <div className="grid grid-cols-2 md:grid-cols-4 rounded-card border border-ink mb-32">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="px-24 py-16">
+                <Skeleton className="h-16 w-[60%]" />
+                <Skeleton className="h-24 w-[40%] mt-8" />
+              </div>
+            ))}
+          </div>
+          <SessionListSkeleton />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-16 mb-64">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="card-compact">
-              <Skeleton className="h-16 w-[60%]" />
-              <Skeleton className="h-32 w-[40%] mt-8" />
-            </div>
-          ))}
-        </div>
-        <SessionListSkeleton />
       </div>
     </div>
   );
@@ -67,7 +90,7 @@ function SetupCard({ config, onSetup }) {
   const notionDone = !!(config?.notionToken?.trim() && config?.notionPageId?.trim());
 
   return (
-    <section className="card mb-48" aria-labelledby="setup-heading">
+    <section className="card mb-32" aria-labelledby="setup-heading">
       <p className="eyebrow">Getting started</p>
       <h2 id="setup-heading" className="text-heading-sm font-medium text-ink mt-8">Finish setting up MeetMind</h2>
       <p className="text-body-sm text-graphite mt-8 max-w-[640px]">
@@ -88,7 +111,7 @@ function SetupCard({ config, onSetup }) {
 
 function MeetingStartingCallout({ event, onRecord, onDismiss }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-16 rounded-card border border-ink bg-sunshine text-on-sunshine px-24 py-16 mb-48 fade-in" role="status">
+    <div className="flex flex-wrap items-center justify-between gap-16 rounded-card border border-ink bg-sunshine text-on-sunshine px-24 py-16 mb-32 fade-in" role="status">
       <div className="flex items-center gap-16 min-w-0">
         <Mic size={18} strokeWidth={1.75} className="flex-shrink-0" />
         <div className="min-w-0">
@@ -195,12 +218,12 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
 
   const headerActions = (
     <>
-      <button type="button" onClick={openPaste} className="btn-ghost btn-sm">
-        <ClipboardList size={16} strokeWidth={1.75} />
+      <button type="button" onClick={openPaste} className="btn-ghost px-16 py-4 text-caption">
+        <ClipboardList size={14} strokeWidth={1.75} />
         Paste transcript
       </button>
-      <button type="button" onClick={handleUploadAudio} className="btn-ghost btn-sm">
-        <Upload size={16} strokeWidth={1.75} />
+      <button type="button" onClick={handleUploadAudio} className="btn-ghost px-16 py-4 text-caption">
+        <Upload size={14} strokeWidth={1.75} />
         Import audio
       </button>
       <IconButton label="Refresh meetings" onClick={handleRefresh} disabled={refreshing}>
@@ -211,99 +234,101 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
 
   return (
     <>
-      <div className="h-full overflow-y-auto">
-        <div className="page fade-in">
-          <PageHeader
-            title={greeting()}
-            subtitle={
-              hasSessions
-                ? `${sessions.length} meeting${sessions.length !== 1 ? 's' : ''} recorded`
-                : 'Your meeting notes will appear here.'
-            }
-            actions={headerActions}
-          />
+      <div className="h-full flex flex-col overflow-hidden fade-in">
+        <DashboardToolbar
+          subtitle={
+            hasSessions
+              ? `${sessions.length} meeting${sessions.length !== 1 ? 's' : ''} recorded`
+              : 'Your meeting notes will appear here.'
+          }
+          actions={headerActions}
+        />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1200px] px-32 pt-24 pb-48">
+            {keysNotSet && <SetupCard config={config} onSetup={onNavigateToSettings} />}
 
-          {keysNotSet && <SetupCard config={config} onSetup={onNavigateToSettings} />}
+            {meetingToast && !isRecording && (
+              <MeetingStartingCallout
+                event={meetingToast}
+                onRecord={() => {
+                  handleRecordFromCalendar(meetingToast);
+                  setMeetingToast(null);
+                }}
+                onDismiss={() => setMeetingToast(null)}
+              />
+            )}
 
-          {meetingToast && !isRecording && (
-            <MeetingStartingCallout
-              event={meetingToast}
-              onRecord={() => {
-                handleRecordFromCalendar(meetingToast);
-                setMeetingToast(null);
-              }}
-              onDismiss={() => setMeetingToast(null)}
-            />
-          )}
-
-          {sessionsError && (
-            <div className="card-compact flex flex-wrap items-center justify-between gap-16 mb-48" role="alert">
-              <p className="flex items-center gap-8 text-body-sm text-ink">
-                <StatusDot tone="error" />
-                Couldn't load your meetings: {sessionsError}
-              </p>
-              <button type="button" onClick={handleRefresh} className="btn-ghost btn-sm">
-                <RefreshCw size={14} strokeWidth={1.75} />
-                Retry
-              </button>
-            </div>
-          )}
-
-          {hasSessions ? (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-16 mb-64">
-                <StatTile label="Meetings" value={metrics.totalMeetings} caption="sessions recorded" />
-                <StatTile label="Recorded" value={formatMinutes(metrics.totalMinutes)} caption="total audio captured" />
-                <StatTile label="This week" value={formatMinutes(metrics.weekMinutes)} caption="recorded since Monday" />
-                <StatTile label="In Notion" value={metrics.notionSynced} caption="pages uploaded" />
+            {sessionsError && (
+              <div className="card-compact flex flex-wrap items-center justify-between gap-16 mb-32" role="alert">
+                <p className="flex items-center gap-8 text-body-sm text-ink">
+                  <StatusDot tone="error" />
+                  Couldn't load your meetings: {sessionsError}
+                </p>
+                <button type="button" onClick={handleRefresh} className="btn-ghost btn-sm">
+                  <RefreshCw size={14} strokeWidth={1.75} />
+                  Retry
+                </button>
               </div>
+            )}
 
-              <UpcomingMeetings
-                onNavigateToSettings={onNavigateToSettings}
-                onStartRecording={handleRecordFromCalendar}
-                isRecording={isRecording}
-                className="mb-64"
-              />
+            {hasSessions ? (
+              <>
+                <StatStrip
+                  stats={[
+                    { label: 'Meetings', value: metrics.totalMeetings, caption: 'Sessions recorded' },
+                    { label: 'Recorded', value: formatMinutes(metrics.totalMinutes), caption: 'Total audio captured' },
+                    { label: 'This week', value: formatMinutes(metrics.weekMinutes), caption: 'Recorded since Monday' },
+                    { label: 'In Notion', value: metrics.notionSynced, caption: 'Pages uploaded to Notion' },
+                  ]}
+                />
 
-              <section aria-labelledby="recent-heading">
-                <h2 id="recent-heading" className="eyebrow mb-16">Recent recordings</h2>
-                <SessionList sessions={recentSessions} onOpenSession={onOpenSession} />
-                {sessions.length > recentLimit && (
-                  <div className="flex justify-center mt-24">
-                    <button type="button" onClick={onNavigateToMeetings} className="btn-quiet btn-sm">
-                      View all {sessions.length} meetings
-                      <ArrowRight size={14} strokeWidth={1.75} />
+                <UpcomingMeetings
+                  onNavigateToSettings={onNavigateToSettings}
+                  onStartRecording={handleRecordFromCalendar}
+                  isRecording={isRecording}
+                  className="mb-32"
+                />
+
+                <section aria-labelledby="recent-heading">
+                  <h2 id="recent-heading" className="eyebrow mb-16">Recent recordings</h2>
+                  <SessionList sessions={recentSessions} onOpenSession={onOpenSession} />
+                  {sessions.length > recentLimit && (
+                    <div className="flex justify-center mt-24">
+                      <button type="button" onClick={onNavigateToMeetings} className="btn-quiet btn-sm">
+                        View all {sessions.length} meetings
+                        <ArrowRight size={14} strokeWidth={1.75} />
+                      </button>
+                    </div>
+                  )}
+                </section>
+              </>
+            ) : sessionsError ? null : (
+              <>
+                <EmptyState
+                  icon={<Mic size={28} strokeWidth={1.5} />}
+                  title="Record your first meeting"
+                  message="Start recording any online or in-person meeting. MeetMind transcribes it, writes the summary and pulls out the action items."
+                  action={
+                    <button
+                      type="button"
+                      onClick={startRecording}
+                      disabled={isRecording}
+                      className={keysNotSet ? 'btn-ink' : 'btn-sunshine'}
+                    >
+                      <span className={`dot dot-sm ${keysNotSet ? 'dot-signal' : 'dot-ink'}`} aria-hidden="true" />
+                      Start recording
                     </button>
-                  </div>
-                )}
-              </section>
-            </>
-          ) : sessionsError ? null : (
-            <>
-              <EmptyState
-                icon={<Mic size={28} strokeWidth={1.5} />}
-                title="Record your first meeting"
-                message="Start recording any online or in-person meeting. MeetMind transcribes it, writes the summary and pulls out the action items."
-                action={
-                  <button
-                    type="button"
-                    onClick={startRecording}
-                    disabled={isRecording}
-                    className={keysNotSet ? 'btn-ink' : 'btn-sunshine'}
-                  >
-                    <span className={`dot dot-sm ${keysNotSet ? 'dot-signal' : 'dot-ink'}`} aria-hidden="true" />
-                    Start recording
-                  </button>
-                }
-              />
-              <UpcomingMeetings
-                onNavigateToSettings={onNavigateToSettings}
-                onStartRecording={handleRecordFromCalendar}
-                isRecording={isRecording}
-                className="mt-48"
-              />
-            </>
-          )}
+                  }
+                />
+                <UpcomingMeetings
+                  onNavigateToSettings={onNavigateToSettings}
+                  onStartRecording={handleRecordFromCalendar}
+                  isRecording={isRecording}
+                  className="mt-32"
+                />
+              </>
+            )}
+          </div>
         </div>
       </div>
 

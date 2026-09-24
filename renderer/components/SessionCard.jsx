@@ -29,7 +29,7 @@ export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting }) 
 
   return (
     <article
-      className={`group relative card-compact transition-colors duration-150 hover:bg-ink/[0.03] ${
+      className={`group relative card-compact py-16 transition-colors duration-150 hover:bg-ink/[0.03] ${
         isDeleting ? 'card-deleting' : ''
       }`}
     >
@@ -69,12 +69,12 @@ export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting }) 
       </div>
 
       {isError && (
-        <div className="relative z-[1] flex flex-wrap items-center justify-between gap-16 mt-16 pt-16 rule">
+        <div className="relative z-[1] flex flex-wrap items-center justify-between gap-16 mt-16 pt-8 rule">
           <p className="flex items-center gap-8 text-caption text-ink">
             <StatusDot tone="error" />
             Processing failed. Open the meeting for details, or retry.
           </p>
-          <button type="button" className="btn-ghost btn-sm" onClick={() => onRetry(session)}>
+          <button type="button" className="btn-ghost px-16 py-4 text-caption" onClick={() => onRetry(session)}>
             <RotateCcw size={14} strokeWidth={1.75} />
             Retry
           </button>
@@ -82,7 +82,7 @@ export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting }) 
       )}
 
       {hasFooter && (
-        <div className="flex flex-wrap items-center gap-16 mt-16 pt-16 rule text-caption text-graphite">
+        <div className="flex flex-wrap items-center gap-16 mt-16 pt-8 rule text-caption text-graphite">
           {actionCount > 0 && (
             <span className="flex items-center gap-8 text-ink">
               <ListChecks size={16} strokeWidth={1.75} />
@@ -115,7 +115,7 @@ export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting }) 
 
 export function SessionCardSkeleton() {
   return (
-    <div className="card-compact" aria-hidden="true">
+    <div className="card-compact py-16" aria-hidden="true">
       <div className="flex items-start justify-between gap-16">
         <div className="flex-1 min-w-0">
           <Skeleton className="h-24 w-[45%]" />

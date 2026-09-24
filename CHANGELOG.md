@@ -15,6 +15,8 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 - Markdown notes no longer repeat the meeting title as their first heading.
 - Switching between Summary, Transcript and Audio starts at the top of the page.
 - Logs page header is now a single toolbar (level filter, search, and icon buttons for the extension-log filter, auto-scroll, live updates, reload, folder, copy, export and clear), and the log panel uses the full window width.
+- Dashboard: the greeting and Paste transcript / Import audio actions moved into a slim toolbar, the four stat cards became one compact strip, and section spacing is tighter so recent recordings start higher.
+- Meeting cards on the Dashboard and Meetings list are more compact.
 
 ## [3.0.0] - 2026-09-24
 
