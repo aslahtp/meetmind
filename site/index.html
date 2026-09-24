@@ -8,6 +8,7 @@
   <meta name="keywords" content="AI meeting notes, meeting transcription, meeting minutes, AI note taker, Windows, Google Meet, Zoom, Notion, Gemini, AssemblyAI, Sarvam AI, Malayalam, open source, Otter alternative">
   <meta name="author" content="Aslah">
   <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#f8f5ed" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1a1813" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://aslahtp.github.io/meetmind/">
@@ -95,25 +96,61 @@
   }
   </script>
 
+  <script>
+    // Apply a saved theme choice before first paint so there is no flash.
+    (function () {
+      try {
+        var t = localStorage.getItem('meetmind-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+
   <style>
     @font-face {
       font-family: 'DM Sans';
-      src: url('fonts/DMSans-Variable.woff2') format('woff2');
+      /* Second URL lets site/index.html render with the right font when opened unbuilt. */
+      src: url('fonts/DMSans-Variable.woff2') format('woff2'),
+           url('../extension/fonts/DMSans-Variable.woff2') format('woff2');
       font-weight: 100 1000;
       font-style: normal;
       font-display: swap;
     }
 
+    /* ── Tokens (DESIGN.md — "sunlit paper notebook") ─────────────────────── */
     :root {
       --paper: #f8f5ed;
       --ink: #000000;
       --graphite: #707070;
       --sunshine: #ffda6e;
       --sunshine-deep: #f5ca50;
+      --on-sunshine: #000000;
       --mint: #6ece9d;
-      --font: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --hairline-soft: color-mix(in srgb, var(--graphite) 45%, transparent);
+      --hover-wash: color-mix(in srgb, var(--ink) 6%, transparent);
+
+      --font: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --text-caption: 14px;
+      --text-body-sm: 16px;
+      --text-body: 18px;
+      --text-subheading: 20px;
+      --text-heading-sm: 24px;
+      --text-heading: 28px;
+      --text-display: clamp(40px, 7vw, 64px);
+      --tracking-display: -0.016em;
+      --tracking-badge: 0.286em;
+
+      --radius-tags: 9999px;
+      --radius-cards: 24px;
+      --radius-images: 12px;
+      --radius-buttons: 24px;
+
+      --page-max-width: 1200px;
+      --section-gap: 64px;
+      --card-padding: 32px;
       color-scheme: light;
     }
+    /* Derived dark theme: ink and paper swap roles, accents stay put. */
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
         --paper: #1a1813;
@@ -129,273 +166,516 @@
       color-scheme: dark;
     }
 
+    /* Show the right variant of theme-dependent assets (wordmark, toggle icon). */
+    .only-dark { display: none; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .only-light { display: none; }
+      :root:not([data-theme="light"]) .only-dark { display: block; }
+    }
+    :root[data-theme="dark"] .only-light { display: none; }
+    :root[data-theme="dark"] .only-dark { display: block; }
+
+    /* ── Base ─────────────────────────────────────────────────────────────── */
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
     body {
       background: var(--paper);
       color: var(--ink);
       font-family: var(--font);
       font-feature-settings: "ss03", "ss04";
-      font-size: 18px;
+      font-size: var(--text-body);
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
     a { color: inherit; }
     img { max-width: 100%; height: auto; display: block; }
+    code { font-family: inherit; font-weight: 500; color: var(--ink); }
     :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 4px; }
+    .icon { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-    .wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+    .skip {
+      position: absolute; left: 16px; top: -64px; z-index: 10;
+      background: var(--paper); border: 1px solid var(--ink); border-radius: var(--radius-buttons);
+      padding: 8px 16px; font-size: var(--text-body-sm); font-weight: 500; text-decoration: none;
+    }
+    .skip:focus { top: 16px; }
+
+    .wrap { max-width: var(--page-max-width); margin: 0 auto; padding: 0 16px; }
     @media (min-width: 720px) { .wrap { padding: 0 32px; } }
 
-    header.top {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 24px 0;
-    }
-    header.top .brand img { height: 36px; width: auto; }
-    header.top nav { display: flex; gap: 24px; font-size: 16px; font-weight: 500; }
-    header.top nav a { text-decoration: none; color: var(--graphite); }
-    header.top nav a:hover { color: var(--ink); }
-    @media (max-width: 560px) { header.top nav .hide-sm { display: none; } }
+    /* ── Header ───────────────────────────────────────────────────────────── */
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 0; }
+    .brand { display: block; flex: none; }
+    .brand img { height: 36px; width: auto; }
+    .top-nav { display: flex; align-items: center; gap: 8px; font-size: var(--text-body-sm); font-weight: 500; }
+    .top-nav a { text-decoration: none; color: var(--graphite); padding: 8px 12px; border-radius: var(--radius-tags); }
+    .top-nav a:hover { color: var(--ink); }
+    .top-nav .nav-github { display: inline-flex; align-items: center; gap: 8px; }
+    .icon-brand { fill: currentColor; stroke: none; width: 18px; height: 18px; }
+    @media (max-width: 720px) { .top-nav .hide-sm { display: none; } }
 
-    section { padding: 64px 0; }
+    .theme-toggle {
+      display: inline-grid; place-items: center; width: 40px; height: 40px; margin-left: 8px;
+      border: 1px solid var(--ink); border-radius: var(--radius-tags);
+      background: transparent; color: var(--ink); cursor: pointer;
+      transition: background-color .15s ease;
+    }
+    .theme-toggle:hover { background: var(--hover-wash); }
+    .theme-toggle[hidden] { display: none; }
+    .theme-toggle .icon { width: 18px; height: 18px; }
+
+    /* ── Sections & type ──────────────────────────────────────────────────── */
+    section { padding: 48px 0; }
+    @media (min-width: 720px) { section { padding: var(--section-gap) 0; } }
     .center { text-align: center; }
 
+    h1, h2, h3 { font-weight: 500; }
+    .display {
+      font-size: var(--text-display); line-height: 1.25; letter-spacing: var(--tracking-display);
+      max-width: 960px; margin: 32px auto 16px; text-wrap: balance;
+    }
+    h3 { font-size: var(--text-heading-sm); line-height: 1.35; margin-bottom: 8px; }
+    .sub { color: var(--graphite); max-width: 640px; margin: 0 auto; text-wrap: pretty; }
+    .caption { font-size: var(--text-caption); color: var(--graphite); }
+    .eyebrow {
+      font-size: var(--text-caption); font-weight: 500; text-transform: uppercase;
+      letter-spacing: var(--tracking-badge); color: var(--graphite);
+    }
+
+    /* ── Hero motion: staggered rise, live status ping ────────────────────── */
+    @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+    @keyframes ping { 0% { transform: scale(1); opacity: .8; } 80%, 100% { transform: scale(2.6); opacity: 0; } }
+    @media (prefers-reduced-motion: no-preference) {
+      .hero .rise { animation: rise .7s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 90ms); }
+      .hero .badge .dot { position: relative; }
+      .hero .badge .dot::after {
+        content: ""; position: absolute; inset: 0; border-radius: 50%;
+        border: 1px solid var(--mint); animation: ping 2.4s ease-out 1.2s infinite;
+      }
+    }
+
+    /* Numbered step badge + status badge */
     .badge {
-      display: inline-flex; align-items: center;
-      border: 1px solid var(--ink); border-radius: 9999px;
-      font-size: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.286em;
+      display: inline-flex; align-items: center; height: 32px;
+      border: 1px solid var(--ink); border-radius: var(--radius-tags);
+      font-size: var(--text-caption); font-weight: 500; text-transform: uppercase; letter-spacing: var(--tracking-badge);
       overflow: hidden;
     }
     .badge .num {
-      display: grid; place-items: center; width: 32px; height: 32px;
+      display: grid; place-items: center; width: 32px; height: 100%;
       border-right: 1px solid var(--ink); letter-spacing: 0;
     }
-    .badge .label { padding: 0 16px 0 calc(16px + 0.286em); }
-    .badge .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mint); margin-left: 12px; }
+    .badge .label { padding: 0 calc(16px - var(--tracking-badge)) 0 16px; }
+    .badge .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mint); margin-left: 14px; }
+    .badge .dot + .label { padding-left: 10px; }
 
-    h1, h2, h3 { font-weight: 500; }
-    h1 {
-      font-size: clamp(40px, 7vw, 64px); line-height: 1.15; letter-spacing: -0.016em;
-      max-width: 960px; margin: 32px auto 16px;
-    }
-    h2 {
-      font-size: clamp(32px, 5vw, 48px); line-height: 1.2; letter-spacing: -0.016em;
-      margin: 32px auto 16px; max-width: 880px;
-    }
-    h3 { font-size: 24px; line-height: 1.35; margin-bottom: 8px; }
-    .sub { color: var(--graphite); max-width: 640px; margin: 0 auto; }
-
+    /* Buttons */
     .actions { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 32px; }
     .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 16px 24px; border-radius: 24px; border: 1px solid var(--ink);
-      font-weight: 500; font-size: 16px; text-decoration: none; color: var(--ink);
-      transition: background-color .15s ease;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 16px 24px; border-radius: var(--radius-buttons); border: 1px solid var(--ink);
+      font-weight: 500; font-size: var(--text-body-sm); line-height: 1.25; text-decoration: none; color: var(--ink);
+      transition: background-color .15s ease, border-color .15s ease;
     }
-    .btn-primary { background: var(--sunshine); border-color: var(--sunshine); color: #000; }
+    .btn-primary { background: var(--sunshine); border-color: var(--sunshine); color: var(--on-sunshine); }
     .btn-primary:hover { background: var(--sunshine-deep); border-color: var(--sunshine-deep); }
-    .btn-ghost:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
-    .meta { margin-top: 16px; font-size: 14px; color: var(--graphite); }
+    .btn-ghost:hover { background: var(--hover-wash); }
+    @media (max-width: 480px) { .actions .btn { flex: 1 1 100%; } }
 
-    .frame { border: 1px solid var(--ink); border-radius: 12px; overflow: hidden; margin: 48px auto 0; max-width: 1000px; }
+    /* Image frame */
+    .frame { border: 1px solid var(--ink); border-radius: var(--radius-images); overflow: hidden; }
+    .hero-frame { margin: 48px auto 0; max-width: 1040px; }
 
-    .grid { display: grid; gap: 24px; margin-top: 48px; }
-    @media (min-width: 720px) { .grid-2 { grid-template-columns: 1fr 1fr; } .grid-4 { grid-template-columns: repeat(2, 1fr); } }
-    @media (min-width: 1000px) { .grid-4 { grid-template-columns: repeat(4, 1fr); } }
-    .card { border: 1px solid var(--ink); border-radius: 24px; padding: 32px; text-align: left; }
-    .card p { color: var(--graphite); }
-    .step-num {
-      display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 9999px;
-      border: 1px solid var(--ink); font-size: 14px; font-weight: 500; margin-bottom: 16px;
+    /* ── Works-with cloud ─────────────────────────────────────────────────── */
+    .cloud { padding-top: 0; }
+    .cloud-grid {
+      list-style: none; display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px 32px;
+      margin-top: 24px; font-size: var(--text-subheading); font-weight: 500;
     }
+    @media (min-width: 560px) { .cloud-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 1000px) { .cloud-grid { grid-template-columns: repeat(8, 1fr); } }
+    .cloud-grid li { white-space: nowrap; }
 
-    .definition { max-width: 820px; margin: 0 auto; font-size: 20px; }
-    .definition p + p { margin-top: 16px; color: var(--graphite); font-size: 18px; }
+    /* ── Stat strip (echoes the app's dashboard stats) ────────────────────── */
+    .stats {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px;
+      background: var(--ink); border: 1px solid var(--ink); border-radius: var(--radius-cards);
+      overflow: hidden; margin: 48px auto 0; max-width: 1040px; text-align: left;
+    }
+    @media (min-width: 860px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+    .stat { background: var(--paper); padding: 24px 32px; }
+    @media (max-width: 480px) { .stat { padding: 24px 16px 24px 24px; } .stat .eyebrow { letter-spacing: 0.2em; } }
+    .stat .value { display: block; font-size: var(--text-heading); line-height: 1.25; font-weight: 500; margin-top: 8px; }
+    .stat .note { display: block; font-size: var(--text-caption); color: var(--graphite); margin-top: 4px; }
 
-    .tags { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 24px; }
-    .tag { border: 1px solid var(--ink); border-radius: 9999px; padding: 6px 14px; font-size: 14px; font-weight: 500; }
+    .definition { max-width: 820px; margin: 0 auto; font-size: var(--text-subheading); }
+    .definition p + p { margin-top: 16px; color: var(--graphite); font-size: var(--text-body); }
 
-    .shots figure { text-align: left; }
-    .shots figure img { border: 1px solid var(--ink); border-radius: 12px; }
-    .shots figcaption { color: var(--graphite); font-size: 16px; margin-top: 12px; }
-
-    table { width: 100%; border-collapse: collapse; margin-top: 48px; text-align: left; font-size: 16px; }
-    .table-wrap { border: 1px solid var(--ink); border-radius: 24px; overflow-x: auto; margin-top: 48px; }
-    .table-wrap table { margin-top: 0; }
-    th, td { padding: 16px 24px; border-bottom: 1px solid color-mix(in srgb, var(--graphite) 45%, transparent); vertical-align: top; }
-    tr:last-child td { border-bottom: 0; }
-    th { font-weight: 500; }
-    td { color: var(--graphite); }
-    td:first-child { color: var(--ink); font-weight: 500; }
-
-    .faq { max-width: 820px; margin: 48px auto 0; text-align: left; }
-    .faq details { border-top: 1px solid var(--ink); padding: 24px 0; }
-    .faq details:last-child { border-bottom: 1px solid var(--ink); }
-    .faq summary { cursor: pointer; font-size: 20px; font-weight: 500; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
-    .faq summary::-webkit-details-marker { display: none; }
-    .faq summary::after { content: "+"; font-weight: 400; }
-    .faq details[open] summary::after { content: "–"; }
-    .faq details p { color: var(--graphite); margin-top: 12px; }
+    /* ── Cards ────────────────────────────────────────────────────────────── */
+    .grid { display: grid; gap: 24px; margin-top: 48px; text-align: left; }
+    @media (min-width: 720px) { .grid-2 { grid-template-columns: repeat(2, 1fr); gap: 24px 32px; } .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1040px) { .grid-4 { grid-template-columns: repeat(4, 1fr); } }
+    .card { border: 1px solid var(--ink); border-radius: var(--radius-cards); padding: var(--card-padding); background: var(--paper); }
+    .card p { color: var(--graphite); }
+    @media (max-width: 480px) { .card { padding: 24px; } }
 
     .tile {
-      width: 64px; height: 64px; border-radius: 16px; border: 1px solid var(--ink);
-      display: grid; place-items: center; margin: 0 auto;
+      width: 48px; height: 48px; border-radius: var(--radius-images); border: 1px solid var(--ink);
+      display: grid; place-items: center; margin-bottom: 24px;
     }
-    .tile svg { width: 32px; height: 32px; }
+    .tile .icon { width: 22px; height: 22px; }
 
-    footer { border-top: 1px solid var(--ink); padding: 32px 0 48px; font-size: 14px; color: var(--graphite); }
-    footer .wrap { display: flex; flex-wrap: wrap; gap: 16px 32px; justify-content: space-between; }
-    footer nav { display: flex; flex-wrap: wrap; gap: 24px; }
-
-    .wordmark-dark { display: none; }
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) .wordmark-light { display: none; }
-      :root:not([data-theme="light"]) .wordmark-dark { display: block; }
+    .steps { list-style: none; }
+    .steps .card { display: flex; flex-direction: column; }
+    .step-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .step-num {
+      display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: var(--radius-tags);
+      border: 1px solid var(--ink); font-size: var(--text-caption); font-weight: 500;
     }
-    :root[data-theme="dark"] .wordmark-light { display: none; }
-    :root[data-theme="dark"] .wordmark-dark { display: block; }
+    .step-head .icon { color: var(--graphite); }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--ink); border-radius: var(--radius-tags);
+      padding: 4px 12px; font-size: var(--text-caption); font-weight: 500; color: var(--ink);
+    }
+    .chip-dark { background: var(--ink); color: var(--paper); }
+
+    /* ── Data flow ────────────────────────────────────────────────────────── */
+    .flow {
+      list-style: none; display: grid; gap: 16px; margin: 48px auto 0; max-width: 1040px; text-align: left;
+      counter-reset: none;
+    }
+    @media (min-width: 900px) { .flow { grid-template-columns: repeat(4, 1fr); gap: 0 40px; } }
+    .flow li { position: relative; border: 1px solid var(--ink); border-radius: var(--radius-cards); padding: 24px; }
+    .flow .eyebrow { display: flex; align-items: center; gap: 8px; }
+    .flow .eyebrow .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mint); }
+    .flow strong { display: block; font-size: var(--text-subheading); font-weight: 500; margin-top: 8px; line-height: 1.35; }
+    .flow p { font-size: var(--text-body-sm); color: var(--graphite); margin-top: 4px; }
+    .flow li + li::before {
+      content: ""; position: absolute; background: var(--ink);
+      left: 50%; top: -17px; width: 1px; height: 16px;
+    }
+    @media (min-width: 900px) {
+      .flow li + li::before { left: -41px; top: 50%; width: 40px; height: 1px; }
+    }
+    .flow-note { margin-top: 24px; }
+
+    /* ── Screenshots ──────────────────────────────────────────────────────── */
+    .shots figure { text-align: left; }
+    .shots figcaption { color: var(--graphite); font-size: var(--text-body-sm); margin-top: 12px; }
+    .shot-feature { max-width: 1040px; margin: 48px auto 0; }
+    .shots .grid { max-width: 1040px; margin-left: auto; margin-right: auto; }
+
+    /* ── Compare ──────────────────────────────────────────────────────────── */
+    .table-wrap {
+      border: 1px solid var(--ink); border-radius: var(--radius-cards); overflow-x: auto;
+      margin: 48px auto 0; max-width: 1040px; -webkit-overflow-scrolling: touch;
+    }
+    table { width: 100%; min-width: 600px; border-collapse: collapse; text-align: left; font-size: var(--text-body-sm); }
+    th, td { padding: 16px 24px; border-bottom: 1px solid var(--hairline-soft); vertical-align: top; }
+    thead th { border-bottom-color: var(--ink); font-weight: 500; }
+    tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+    tbody th { font-weight: 500; width: 22%; }
+    td { color: var(--graphite); width: 39%; }
+    td.us { color: var(--ink); }
+    .col-us { display: inline-flex; align-items: center; gap: 8px; }
+    .col-us .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mint); }
+
+    /* ── FAQ ──────────────────────────────────────────────────────────────── */
+    .faq { max-width: 820px; margin: 48px auto 0; text-align: left; }
+    .faq details { border-top: 1px solid var(--ink); }
+    .faq details:last-child { border-bottom: 1px solid var(--ink); }
+    .faq summary {
+      cursor: pointer; font-size: var(--text-subheading); font-weight: 500; list-style: none;
+      display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 24px 0;
+    }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary .pm {
+      flex: none; display: grid; place-items: center; width: 32px; height: 32px;
+      border: 1px solid var(--ink); border-radius: var(--radius-tags);
+    }
+    .faq summary .pm .icon { width: 16px; height: 16px; transition: transform .15s ease; }
+    .faq details[open] summary .pm .icon { transform: rotate(45deg); }
+    .faq details p { color: var(--graphite); padding: 0 48px 24px 0; margin-top: -8px; }
+
+    /* ── CTA ──────────────────────────────────────────────────────────────── */
+    .cta { padding-bottom: 96px; }
+    .cta .tile { margin: 0 auto; width: 64px; height: 64px; border-radius: 16px; }
+    .cta .tile .icon { width: 28px; height: 28px; }
+
+    /* ── Footer ───────────────────────────────────────────────────────────── */
+    footer { border-top: 1px solid var(--ink); padding: 32px 0 48px; font-size: var(--text-caption); color: var(--graphite); }
+    footer .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px; justify-content: space-between; }
+    footer nav { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+    footer a { text-decoration: none; }
+    footer a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   </style>
 </head>
 <body>
+  <!-- Lucide icons (ISC), referenced with <use> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+    <symbol id="i-languages" viewBox="0 0 24 24"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></symbol>
+    <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+    <!-- GitHub mark (Octicons, MIT) — a filled glyph, not a stroked Lucide icon -->
+    <symbol id="i-github" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></symbol>
+  </svg>
+
+  <a class="skip" href="#main">Skip to content</a>
+
   <div class="wrap">
     <header class="top">
       <a class="brand" href="./" aria-label="MeetMind home">
-        <img class="wordmark-light" src="brand/meetmind-wordmark-light.png" alt="MeetMind" width="115" height="36">
-        <img class="wordmark-dark" src="brand/meetmind-wordmark-dark.png" alt="MeetMind" width="115" height="36">
+        <img class="only-light" src="brand/meetmind-wordmark-light.png" alt="MeetMind" width="115" height="36">
+        <img class="only-dark" src="brand/meetmind-wordmark-dark.png" alt="MeetMind" width="115" height="36">
       </a>
-      <nav aria-label="Primary">
+      <nav class="top-nav" aria-label="Primary">
+        <a class="hide-sm" href="#how-h">How it works</a>
         <a class="hide-sm" href="#features">Features</a>
         <a class="hide-sm" href="#faq">FAQ</a>
-        <a href="https://github.com/aslahtp/meetmind">GitHub</a>
+        <a class="nav-github" href="https://github.com/aslahtp/meetmind"><svg class="icon icon-brand" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch to dark theme" hidden>
+          <svg class="icon only-light" aria-hidden="true"><use href="#i-moon"/></svg>
+          <svg class="icon only-dark" aria-hidden="true"><use href="#i-sun"/></svg>
+        </button>
       </nav>
     </header>
   </div>
 
-  <main>
-    <section class="center" style="padding-top: 48px;">
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero center" style="padding-top: 32px;">
       <div class="wrap">
-        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Open source · Windows</span></span>
-        <h1>AI meeting notes for Windows, without a meeting bot</h1>
-        <p class="sub">MeetMind records Google Meet, Zoom or any call on your PC, transcribes it with AssemblyAI, Google Speech-to-Text or Sarvam AI, and writes clear meeting minutes with Gemini — then syncs them to Notion.</p>
-        <div class="actions">
-          <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest">Download for Windows</a>
-          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind">View source on GitHub</a>
+        <span class="badge rise" style="--i: 0;"><span class="dot" aria-hidden="true"></span><span class="label">Open source · Windows</span></span>
+        <h1 class="display rise" style="--i: 1;">AI meeting notes for Windows, without a meeting bot</h1>
+        <p class="sub rise" style="--i: 2;">MeetMind records Google Meet, Zoom or any call on your PC, transcribes it with AssemblyAI, Google Speech-to-Text or Sarvam AI, and writes clear meeting minutes with Gemini — then syncs them to Notion.</p>
+        <div class="actions rise" style="--i: 3;">
+          <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Windows</a>
+          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind"><svg class="icon icon-brand" aria-hidden="true"><use href="#i-github"/></svg>View source on GitHub</a>
         </div>
-        <p class="meta">Version __VERSION__ · Windows 10 &amp; 11 · MIT license</p>
-        <div class="frame">
+        <p class="caption rise" style="--i: 4; margin-top: 16px;">Version __VERSION__ · Windows 10 &amp; 11 · MIT license</p>
+        <div class="frame hero-frame rise" style="--i: 5;">
           <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard-dark.png">
+            <source data-dark-source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard-dark.png">
             <img src="screenshots/dashboard.png" alt="MeetMind dashboard with meeting stats and a list of recent recorded meetings" width="1500" height="1000" fetchpriority="high">
           </picture>
         </div>
       </div>
     </section>
 
-    <section aria-labelledby="what">
-      <div class="wrap center">
-        <span class="badge"><span class="num">1</span><span class="label">What it is</span></span>
-        <h2 id="what">What is MeetMind?</h2>
-        <div class="definition">
-          <p><strong>MeetMind is a free, open-source desktop app for Windows that turns online meetings into written meeting notes.</strong> It records your computer's system audio and your microphone together, transcribes the recording with the speech-to-text service you choose, and uses Google Gemini to write a speaker-labelled summary with decisions and action items.</p>
-          <p>Because recording happens on your own PC, nothing joins the call as a participant, and it works with any app that plays sound: Google Meet, Zoom, Microsoft Teams, Slack, Discord or a file you already have. Notes stay in a local database and can be exported to PDF, copied as Markdown or synced to Notion.</p>
-        </div>
-        <div class="tags" aria-label="Works with">
-          <span class="tag">Google Meet</span><span class="tag">Zoom</span><span class="tag">Microsoft Teams</span><span class="tag">Slack</span><span class="tag">Discord</span><span class="tag">Notion</span><span class="tag">Google Calendar</span>
-        </div>
+    <!-- Works with -->
+    <section class="cloud center" aria-labelledby="works-with">
+      <div class="wrap">
+        <p class="eyebrow" id="works-with">Works with any app that plays sound</p>
+        <ul class="cloud-grid">
+          <li>Google Meet</li><li>Zoom</li><li>Teams</li><li>Slack</li><li>Discord</li><li>Webex</li><li>Notion</li><li>Calendar</li>
+        </ul>
       </div>
     </section>
 
-    <section aria-labelledby="how">
+    <!-- 1 What it is -->
+    <section aria-labelledby="what">
+      <div class="wrap center">
+        <span class="badge"><span class="num">1</span><span class="label">What it is</span></span>
+        <h2 class="display" id="what">What is MeetMind?</h2>
+        <div class="definition">
+          <p><strong style="font-weight: 500;">MeetMind is a free, open-source desktop app for Windows that turns online meetings into written meeting notes.</strong> It records your computer's system audio and your microphone together, transcribes the recording with the speech-to-text service you choose, and uses Google Gemini to write a speaker-labelled summary with decisions and action items.</p>
+          <p>Because recording happens on your own PC, nothing joins the call as a participant, and it works with any app that plays sound: Google Meet, Zoom, Microsoft Teams, Slack, Discord or a file you already have. Notes stay in a local database and can be exported to PDF, copied as Markdown or synced to Notion.</p>
+        </div>
+        <dl class="stats">
+          <div class="stat"><dt class="eyebrow">Price</dt><dd><span class="value">$0</span><span class="note">MIT licensed, pay only your API usage</span></dd></div>
+          <div class="stat"><dt class="eyebrow">Bots</dt><dd><span class="value">None</span><span class="note">Nothing joins the call</span></dd></div>
+          <div class="stat"><dt class="eyebrow">STT engines</dt><dd><span class="value">3</span><span class="note">AssemblyAI, Google, Sarvam AI</span></dd></div>
+          <div class="stat"><dt class="eyebrow">Your data</dt><dd><span class="value">Local</span><span class="note">SQLite on your PC, no account</span></dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <!-- 2 How it works -->
+    <section aria-labelledby="how-h">
       <div class="wrap center">
         <span class="badge"><span class="num">2</span><span class="label">How it works</span></span>
-        <h2 id="how">From call to minutes in four steps</h2>
-        <ol class="grid grid-4" style="list-style: none;">
-          <li class="card"><span class="step-num">1</span><h3>Record</h3><p>Click the MeetMind button in Google Meet or Zoom, press Record in the app, or accept the reminder when a calendar meeting starts.</p></li>
-          <li class="card"><span class="step-num">2</span><h3>Transcribe</h3><p>AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI returns a transcript with speaker labels.</p></li>
-          <li class="card"><span class="step-num">3</span><h3>Summarize</h3><p>Gemini writes an executive summary, agenda, key decisions and an action items table with owners and deadlines.</p></li>
-          <li class="card"><span class="step-num">4</span><h3>Share</h3><p>Search the notes in the app, export a PDF, copy Markdown, or sync a formatted page to Notion.</p></li>
+        <h2 class="display" id="how-h">From call to minutes in four steps</h2>
+        <p class="sub">Start a recording however suits you. When you stop, MeetMind does the rest.</p>
+        <ol class="grid grid-4 steps">
+          <li class="card">
+            <div class="step-head"><span class="step-num">1</span><svg class="icon" aria-hidden="true"><use href="#i-mic"/></svg></div>
+            <h3>Record</h3>
+            <p>Click the MeetMind button in Google Meet or Zoom, press Record in the app, or accept the reminder when a calendar meeting starts.</p>
+          </li>
+          <li class="card">
+            <div class="step-head"><span class="step-num">2</span><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg></div>
+            <h3>Transcribe</h3>
+            <p>AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI returns a transcript with speaker labels.</p>
+          </li>
+          <li class="card">
+            <div class="step-head"><span class="step-num">3</span><svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg></div>
+            <h3>Summarize</h3>
+            <p>Gemini writes an executive summary, agenda, key decisions and an action items table with owners and deadlines.</p>
+          </li>
+          <li class="card">
+            <div class="step-head"><span class="step-num">4</span><svg class="icon" aria-hidden="true"><use href="#i-share"/></svg></div>
+            <h3>Share</h3>
+            <p>Search the notes in the app, export a PDF, copy Markdown, or sync a formatted page to Notion.</p>
+          </li>
         </ol>
       </div>
     </section>
 
+    <!-- 3 Features -->
     <section id="features" aria-labelledby="features-h">
       <div class="wrap center">
         <span class="badge"><span class="num">3</span><span class="label">Features</span></span>
-        <h2 id="features-h">Everything a meeting note taker needs</h2>
+        <h2 class="display" id="features-h">Everything a meeting note taker needs</h2>
         <div class="grid grid-2">
-          <div class="card"><h3>System audio + microphone</h3><p>Records both sides of any call on Windows through WASAPI loopback, with FFmpeg installed from inside the app.</p></div>
-          <div class="card"><h3>Your choice of speech-to-text</h3><p>AssemblyAI, Google Cloud Speech-to-Text v1/v2 or Sarvam AI, all with speaker diarization.</p></div>
-          <div class="card"><h3>English–Malayalam code-switching</h3><p>Accurate transcripts of mixed-language meetings with Sarvam AI's <code>saaras:v3</code> model.</p></div>
-          <div class="card"><h3>AI minutes with Gemini</h3><p>Executive-style Markdown or structured JSON notes, an editable prompt, and an automatic fallback model.</p></div>
-          <div class="card"><h3>Google Meet &amp; Zoom extension</h3><p>A floating Chrome overlay with one-click recording and live processing status.</p></div>
-          <div class="card"><h3>Notion, PDF &amp; Markdown</h3><p>Native Notion pages with tables and to-dos, dated PDF exports, and one-click Markdown copy.</p></div>
-          <div class="card"><h3>Google Calendar reminders</h3><p>See upcoming meetings on the dashboard and get a prompt to start recording when one begins.</p></div>
-          <div class="card"><h3>Local-first and private</h3><p>No account and no MeetMind server. Recordings, transcripts and notes stay in a local SQLite database.</p></div>
+          <div class="card">
+            <div class="tile" aria-hidden="true"><svg class="icon"><use href="#i-monitor"/></svg></div>
+            <h3>System audio + microphone</h3>
+            <p>Records both sides of any call on Windows through WASAPI loopback, with FFmpeg installed from inside the app.</p>
+          </div>
+          <div class="card">
+            <div class="tile" aria-hidden="true"><svg class="icon"><use href="#i-file"/></svg></div>
+            <h3>Your choice of speech-to-text</h3>
+            <p>AssemblyAI, Google Cloud Speech-to-Text v1/v2 or Sarvam AI, all with speaker diarization.</p>
+            <div class="chips"><span class="chip">AssemblyAI</span><span class="chip">Google STT</span><span class="chip">Sarvam AI</span></div>
+          </div>
+          <div class="card">
+            <div class="tile" aria-hidden="true"><svg class="icon"><use href="#i-languages"/></svg></div>
+            <h3>English–Malayalam code-switching</h3>
+            <p>Accurate transcripts of mixed-language meetings with Sarvam AI's <code>saaras:v3</code> model.</p>
+            <div class="chips"><span class="chip">English</span><span class="chip">മലയാളം</span><span class="chip chip-dark">Mixed in one sentence</span></div>
+          </div>
+          <div class="card">
+            <div class="tile" aria-hidden="true"><svg class="icon"><use href="#i-sparkles"/></svg></div>
+            <h3>AI minutes with Gemini</h3>
+            <p>Executive-style Markdown or structured JSON notes, an editable prompt, and an automatic fallback model.</p>
+          </div>
+          <div class="card">
+            <div class="tile" aria-hidden="true"><svg class="icon"><use href="#i-puzzle"/></svg></div>
+            <h3>Google Meet &amp; Zoom extension</h3>
+            <p>A floating Chrome overlay with one-click recording and live processing status.</p>
+          </div>
+          <div class="card">
+            <div class="tile" aria-hidden="true"><svg class="icon"><use href="#i-share"/></svg></div>
+            <h3>Notion, PDF &amp; Markdown</h3>
+            <p>Native Notion pages with tables and to-dos, dated PDF exports, and one-click Markdown copy.</p>
+          </div>
+          <div class="card">
+            <div class="tile" aria-hidden="true"><svg class="icon"><use href="#i-calendar"/></svg></div>
+            <h3>Google Calendar reminders</h3>
+            <p>See upcoming meetings on the dashboard and get a prompt to start recording when one begins.</p>
+          </div>
+          <div class="card">
+            <div class="tile" aria-hidden="true"><svg class="icon"><use href="#i-lock"/></svg></div>
+            <h3>Local-first and private</h3>
+            <p>No account and no MeetMind server. Recordings, transcripts and notes stay in a local SQLite database.</p>
+          </div>
         </div>
       </div>
     </section>
 
-    <section aria-labelledby="shots">
+    <!-- 4 Privacy / data flow -->
+    <section aria-labelledby="data-h">
       <div class="wrap center">
-        <span class="badge"><span class="num">4</span><span class="label">Screenshots</span></span>
-        <h2 id="shots">Meeting minutes you can actually use</h2>
-        <div class="grid grid-2 shots">
-          <figure><img src="screenshots/markdown-notes.png" alt="Markdown meeting minutes with a header, executive summary and agenda" width="1500" height="1000" loading="lazy"><figcaption>Executive-style minutes: header, summary and agenda.</figcaption></figure>
-          <figure><img src="screenshots/markdown-action-items.png" alt="Key decisions and an action items table with owners, deadlines and status" width="1500" height="1000" loading="lazy"><figcaption>Numbered decisions and an action items table.</figcaption></figure>
-          <figure><img src="screenshots/transcript.png" alt="Searchable, speaker-labelled meeting transcript" width="1500" height="1000" loading="lazy"><figcaption>Speaker-labelled transcript you can search and filter.</figcaption></figure>
-          <figure><img src="screenshots/json-notes.png" alt="Structured JSON notes with identified speakers and prioritised action items" width="1500" height="1000" loading="lazy"><figcaption>Structured notes with speakers and prioritised action items.</figcaption></figure>
+        <span class="badge"><span class="num">4</span><span class="label">Your data</span></span>
+        <h2 class="display" id="data-h">Where your meeting goes</h2>
+        <p class="sub">There is no MeetMind server in the middle. Each step talks directly to the provider you picked, using your own API keys.</p>
+        <ol class="flow">
+          <li><span class="eyebrow"><span class="dot" aria-hidden="true"></span>Stays local</span><strong>Your PC</strong><p>Records audio and keeps recordings, transcripts and notes in SQLite.</p></li>
+          <li><span class="eyebrow">Audio</span><strong>Speech-to-text you choose</strong><p>AssemblyAI, Google Cloud STT or Sarvam AI.</p></li>
+          <li><span class="eyebrow">Transcript</span><strong>Google Gemini</strong><p>Turns the transcript into minutes and action items.</p></li>
+          <li><span class="eyebrow">Optional</span><strong>Notion</strong><p>Only if you connect a token and a page.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 5 Screenshots -->
+    <section class="shots" aria-labelledby="shots">
+      <div class="wrap center">
+        <span class="badge"><span class="num">5</span><span class="label">Screenshots</span></span>
+        <h2 class="display" id="shots">Meeting minutes you can actually use</h2>
+        <figure class="shot-feature">
+          <div class="frame">
+            <picture>
+              <source data-dark-source media="(prefers-color-scheme: dark)" srcset="screenshots/markdown-notes-dark.png">
+              <img src="screenshots/markdown-notes.png" alt="Markdown meeting minutes with a header, executive summary and agenda" width="1500" height="1000" loading="lazy">
+            </picture>
+          </div>
+          <figcaption>Executive-style minutes: header, summary and agenda.</figcaption>
+        </figure>
+        <div class="grid grid-2">
+          <figure><img class="frame" src="screenshots/markdown-action-items.png" alt="Key decisions and an action items table with owners, deadlines and status" width="1500" height="1000" loading="lazy"><figcaption>Numbered decisions and an action items table.</figcaption></figure>
+          <figure><img class="frame" src="screenshots/transcript.png" alt="Searchable, speaker-labelled meeting transcript" width="1500" height="1000" loading="lazy"><figcaption>Speaker-labelled transcript you can search and filter.</figcaption></figure>
+          <figure><img class="frame" src="screenshots/json-notes.png" alt="Structured JSON notes with identified speakers and prioritised action items" width="1500" height="1000" loading="lazy"><figcaption>Structured notes with speakers and prioritised action items.</figcaption></figure>
+          <figure><img class="frame" src="screenshots/output-format.png" alt="Settings for choosing Markdown or JSON output and editing the Gemini system prompt" width="1500" height="1000" loading="lazy"><figcaption>Pick Markdown or JSON and edit the prompt Gemini uses.</figcaption></figure>
         </div>
       </div>
     </section>
 
+    <!-- 6 Compare -->
     <section aria-labelledby="compare">
       <div class="wrap center">
-        <span class="badge"><span class="num">5</span><span class="label">Compare</span></span>
-        <h2 id="compare">MeetMind vs. hosted AI note takers</h2>
+        <span class="badge"><span class="num">6</span><span class="label">Compare</span></span>
+        <h2 class="display" id="compare">MeetMind vs. hosted AI note takers</h2>
         <p class="sub">An open-source alternative to subscription tools such as Otter.ai and Fireflies.ai.</p>
-        <div class="table-wrap">
+        <div class="table-wrap" role="region" aria-labelledby="compare" tabindex="0">
           <table>
-            <thead><tr><th scope="col"></th><th scope="col">MeetMind</th><th scope="col">Typical hosted note taker</th></tr></thead>
+            <thead><tr><td></td><th scope="col"><span class="col-us"><span class="dot" aria-hidden="true"></span>MeetMind</span></th><th scope="col">Typical hosted note taker</th></tr></thead>
             <tbody>
-              <tr><td>Price</td><td>Free app; pay only for your own API usage</td><td>Monthly subscription per seat</td></tr>
-              <tr><td>How it records</td><td>Local system audio + mic, no bot</td><td>A bot joins the call as a participant</td></tr>
-              <tr><td>Where data lives</td><td>Your PC (SQLite), optional Notion</td><td>The vendor's cloud</td></tr>
-              <tr><td>Transcription</td><td>AssemblyAI, Google STT or Sarvam AI — your choice</td><td>Vendor's own engine</td></tr>
-              <tr><td>Source code</td><td>Open source (MIT)</td><td>Closed source</td></tr>
-              <tr><td>Platform</td><td>Windows 10/11</td><td>Web, mobile and desktop</td></tr>
+              <tr><th scope="row">Price</th><td class="us">Free app; pay only for your own API usage</td><td>Monthly subscription per seat</td></tr>
+              <tr><th scope="row">How it records</th><td class="us">Local system audio + mic, no bot</td><td>A bot joins the call as a participant</td></tr>
+              <tr><th scope="row">Where data lives</th><td class="us">Your PC (SQLite), optional Notion</td><td>The vendor's cloud</td></tr>
+              <tr><th scope="row">Transcription</th><td class="us">AssemblyAI, Google STT or Sarvam AI — your choice</td><td>Vendor's own engine</td></tr>
+              <tr><th scope="row">Source code</th><td class="us">Open source (MIT)</td><td>Closed source</td></tr>
+              <tr><th scope="row">Platform</th><td class="us">Windows 10/11</td><td>Web, mobile and desktop</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </section>
 
+    <!-- 7 FAQ -->
     <section id="faq" aria-labelledby="faq-h">
       <div class="wrap center">
-        <span class="badge"><span class="num">6</span><span class="label">FAQ</span></span>
-        <h2 id="faq-h">Frequently asked questions</h2>
+        <span class="badge"><span class="num">7</span><span class="label">FAQ</span></span>
+        <h2 class="display" id="faq-h">Frequently asked questions</h2>
         <div class="faq">
-          <details open><summary>Is MeetMind free?</summary><p>Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you connect, and both Gemini (free tier) and AssemblyAI (signup credit) can be used at no cost for moderate use.</p></details>
-          <details><summary>Does a bot join my meeting?</summary><p>No. MeetMind records the audio playing on your own computer plus your microphone, so no extra participant appears in Google Meet, Zoom or Teams.</p></details>
-          <details><summary>Which meeting apps does MeetMind work with?</summary><p>Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and Webex. The Chrome extension adds a one-click record button for Google Meet and Zoom in the browser.</p></details>
-          <details><summary>Does MeetMind work on macOS or Linux?</summary><p>Not currently. MeetMind is built for Windows 10 and 11 because it relies on Windows audio loopback capture.</p></details>
-          <details><summary>Where is my meeting data stored?</summary><p>Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to Gemini, using your own API keys.</p></details>
-          <details><summary>Which languages does MeetMind support?</summary><p>Language support depends on the speech-to-text engine you choose. For meetings that mix English and Malayalam, Sarvam AI's <code>saaras:v3</code> model handles code-switching within a sentence.</p></details>
-          <details><summary>How is MeetMind different from Otter.ai or Fireflies.ai?</summary><p>Hosted note takers such as Otter.ai and Fireflies.ai are subscription services that typically join calls as a bot and keep recordings on their servers. MeetMind is an open-source desktop app that records locally without a bot, lets you choose the transcription provider, stores notes on your machine, and costs nothing beyond your own API usage.</p></details>
-          <details><summary>Can MeetMind make notes from a recording I already have?</summary><p>Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript to generate notes without speech-to-text.</p></details>
+          <details open><summary>Is MeetMind free?<span class="pm" aria-hidden="true"><svg class="icon"><use href="#i-plus"/></svg></span></summary><p>Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you connect, and both Gemini (free tier) and AssemblyAI (signup credit) can be used at no cost for moderate use.</p></details>
+          <details><summary>Does a bot join my meeting?<span class="pm" aria-hidden="true"><svg class="icon"><use href="#i-plus"/></svg></span></summary><p>No. MeetMind records the audio playing on your own computer plus your microphone, so no extra participant appears in Google Meet, Zoom or Teams.</p></details>
+          <details><summary>Which meeting apps does MeetMind work with?<span class="pm" aria-hidden="true"><svg class="icon"><use href="#i-plus"/></svg></span></summary><p>Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and Webex. The Chrome extension adds a one-click record button for Google Meet and Zoom in the browser.</p></details>
+          <details><summary>Does MeetMind work on macOS or Linux?<span class="pm" aria-hidden="true"><svg class="icon"><use href="#i-plus"/></svg></span></summary><p>Not currently. MeetMind is built for Windows 10 and 11 because it relies on Windows audio loopback capture.</p></details>
+          <details><summary>Where is my meeting data stored?<span class="pm" aria-hidden="true"><svg class="icon"><use href="#i-plus"/></svg></span></summary><p>Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to Gemini, using your own API keys.</p></details>
+          <details><summary>Which languages does MeetMind support?<span class="pm" aria-hidden="true"><svg class="icon"><use href="#i-plus"/></svg></span></summary><p>Language support depends on the speech-to-text engine you choose. For meetings that mix English and Malayalam, Sarvam AI's <code>saaras:v3</code> model handles code-switching within a sentence.</p></details>
+          <details><summary>How is MeetMind different from Otter.ai or Fireflies.ai?<span class="pm" aria-hidden="true"><svg class="icon"><use href="#i-plus"/></svg></span></summary><p>Hosted note takers such as Otter.ai and Fireflies.ai are subscription services that typically join calls as a bot and keep recordings on their servers. MeetMind is an open-source desktop app that records locally without a bot, lets you choose the transcription provider, stores notes on your machine, and costs nothing beyond your own API usage.</p></details>
+          <details><summary>Can MeetMind make notes from a recording I already have?<span class="pm" aria-hidden="true"><svg class="icon"><use href="#i-plus"/></svg></span></summary><p>Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript to generate notes without speech-to-text.</p></details>
         </div>
       </div>
     </section>
 
-    <section class="center" aria-labelledby="cta">
+    <!-- CTA -->
+    <section class="cta center" aria-labelledby="cta">
       <div class="wrap">
-        <div class="tile" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></svg>
-        </div>
-        <h2 id="cta">Ready for your next meeting?</h2>
+        <div class="tile" aria-hidden="true"><svg class="icon"><use href="#i-mic"/></svg></div>
+        <h2 class="display" id="cta">Ready for your next meeting?</h2>
         <p class="sub">Install MeetMind, add a Gemini key and a speech-to-text key, and your next call becomes searchable minutes.</p>
         <div class="actions">
-          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind/releases/latest">Download the latest release</a>
-          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind#-install">Read the setup guide</a>
+          <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download the latest release</a>
+          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind#-install">Read the setup guide<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
         </div>
       </div>
     </section>
@@ -403,7 +683,7 @@
 
   <footer>
     <div class="wrap">
-      <span>MeetMind · MIT license · Built by <a href="https://github.com/aslahtp">Aslah</a></span>
+      <span>MeetMind · MIT license · Built by <a href="https://github.com/aslahtp" style="text-decoration: underline; text-underline-offset: 3px;">Aslah</a></span>
       <nav aria-label="Footer">
         <a href="https://github.com/aslahtp/meetmind">GitHub</a>
         <a href="https://github.com/aslahtp/meetmind/releases">Releases</a>
@@ -413,5 +693,46 @@
       </nav>
     </div>
   </footer>
+
+  <script>
+    // Theme toggle: follows the system until the visitor picks light or dark.
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('theme-toggle');
+      var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      var themeMetas = document.querySelectorAll('meta[name="theme-color"]');
+
+      function current() {
+        var t = root.getAttribute('data-theme');
+        return t === 'light' || t === 'dark' ? t : (darkQuery.matches ? 'dark' : 'light');
+      }
+
+      function sync() {
+        var theme = current();
+        var forced = root.hasAttribute('data-theme');
+        // <picture> sources only understand media queries, so pin them to the chosen theme.
+        document.querySelectorAll('source[data-dark-source]').forEach(function (s) {
+          s.media = forced ? (theme === 'dark' ? 'all' : 'not all') : '(prefers-color-scheme: dark)';
+        });
+        themeMetas.forEach(function (m) {
+          if (forced) m.setAttribute('content', theme === 'dark' ? '#1a1813' : '#f8f5ed');
+        });
+        var next = theme === 'dark' ? 'light' : 'dark';
+        btn.setAttribute('aria-label', 'Switch to ' + next + ' theme');
+        btn.title = 'Switch to ' + next + ' theme';
+      }
+
+      btn.addEventListener('click', function () {
+        var next = current() === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        try { localStorage.setItem('meetmind-theme', next); } catch (e) {}
+        sync();
+      });
+      darkQuery.addEventListener('change', sync);
+
+      btn.hidden = false;
+      sync();
+    })();
+  </script>
 </body>
 </html>
