@@ -1,32 +1,28 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-:root {
-  --color-background:           14 14 18;
-  --color-background-secondary: 21 21 27;
-  --color-background-tertiary:  28 28 36;
-  --color-foreground:           245 245 250;
-  --color-foreground-muted:     160 160 175;
-  --color-foreground-subtle:    110 110 125;
-  --color-border:               38 38 48;
-  --color-accent:               16 185 129;
-  --color-accent-hover:         52 211 153;
-  --color-success:              52 211 153;
-  --color-warning:              251 191 36;
-  --color-error:                239 68 68;
+/* DM Sans (OFL) — bundled subset that keeps the ss03/ss04 stylistic sets. */
+@font-face {
+  font-family: 'DM Sans';
+  src: url('../fonts/DMSans-Variable.woff2') format('woff2');
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: swap;
+}
 
-  --bg:          #0e0e12;
-  --bg-elevated: #15151b;
-  --border:      rgba(255, 255, 255, 0.10);
-  --border-glow: rgba(16, 185, 129, 0.22);
-  --text:        rgb(var(--color-foreground));
-  --text-muted:  rgb(var(--color-foreground-muted));
-  --text-subtle: rgb(var(--color-foreground-subtle));
-  --emerald:     rgb(var(--color-accent));
-  --emerald-soft: rgb(var(--color-accent-hover));
-  --red:         rgb(var(--color-error));
-  --yellow:      rgb(var(--color-warning));
-  --radius:      14px;
-  --shadow:      none;
+/* Design tokens — "sunlit paper notebook" (matches the desktop app). */
+:root {
+  --paper:         #f8f5ed;   /* Cream Paper — surface */
+  --ink:           #000000;   /* Ink — text + hairlines */
+  --graphite:      #707070;   /* Graphite — secondary text */
+  --sunshine:      #ffda6e;   /* Sunshine Highlight — the one primary action */
+  --sunshine-deep: #f5ca50;
+  --mint:          #6ece9d;   /* Mint Signal — status only */
+  --signal:        #c84132;   /* Signal red — recording / errors */
+  --ink-tint:      rgba(0, 0, 0, 0.06);
+
+  --radius-pill:   9999px;
+  --radius-tile:   12px;
+  --radius-input:  6px;
 }
 
 html, body {
@@ -36,13 +32,14 @@ html, body {
   padding: 0;
   background: transparent !important;
   background-color: transparent !important;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
-  color: var(--text);
+  font-family: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-feature-settings: "ss03", "ss04";
+  font-size: 14px;
+  color: var(--ink);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -55,7 +52,13 @@ body {
   width: 100%;
 }
 
+button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
 /* ── Pill ───────────────────────────────────────────────── */
+/* Floats above the meeting: a raised 2px ink border, never a shadow. */
 .pill {
   position: relative;
   display: flex;
@@ -66,10 +69,9 @@ body {
   min-height: 52px;
   max-height: 52px;
   box-sizing: border-box;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: none;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-pill);
   transition: border-color 0.2s ease;
 }
 
@@ -92,29 +94,22 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
   line-height: 1.2;
 }
 
 .pill-label.timer-label {
-  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
   font-variant-numeric: tabular-nums;
-  color: #fda4af;
-  letter-spacing: 0.02em;
-}
-
-.pill:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--ink);
 }
 
 .pill.recording-active {
-  border-color: rgba(239, 68, 68, 0.28);
+  border-color: var(--ink);
 }
 
-/* ── Brand mark ─────────────────────────────────────────── */
+/* ── Brand mark (bordered avatar tile) ──────────────────── */
 .brand-mark {
   position: relative;
   width: 28px;
@@ -124,25 +119,24 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
-  color: #09090b;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  color: var(--ink);
 }
 
 .brand-mark.muted {
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: none;
-  color: var(--text-subtle);
+  border-color: var(--graphite);
+  color: var(--graphite);
 }
 
 .brand-mark.recording {
-  background: linear-gradient(135deg, #ef4444 0%, #f43f5e 100%);
-  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
-  color: #fff;
+  background: var(--paper);
+  border-color: var(--signal);
+  color: var(--signal);
 }
 
 .brand-mark.success {
-  background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+  background: var(--paper);
 }
 
 .brand-mark.dock-size {
@@ -154,27 +148,26 @@ body {
 .brand-mark.offline::after {
   content: '';
   position: absolute;
-  bottom: -1px;
-  right: -1px;
-  width: 7px;
-  height: 7px;
+  bottom: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--yellow);
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.45);
-  border: 1.5px solid var(--bg);
+  background: var(--graphite);
+  border: 1.5px solid var(--paper);
 }
 
 .pill-label.offline-label {
   flex: 1 1 0;
   min-width: 0;
-  color: var(--yellow);
-  font-size: 11px;
+  color: var(--graphite);
+  font-size: 14px;
 }
 
 /* ── Status dot ─────────────────────────────────────────── */
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.45; transform: scale(0.78); }
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
 }
 
 .dot {
@@ -184,25 +177,10 @@ body {
   flex-shrink: 0;
 }
 
-.dot.idle {
-  background: var(--text-subtle);
-}
-
-.dot.recording {
-  background: var(--red);
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-.dot.offline {
-  background: var(--yellow);
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.45);
-}
-
-.dot.ready {
-  background: var(--emerald);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.55);
-}
+.dot.idle      { background: var(--graphite); }
+.dot.recording { background: var(--signal); animation: pulse 1.4s ease-in-out infinite; }
+.dot.offline   { background: var(--graphite); }
+.dot.ready     { background: var(--mint); }
 
 /* ── Waveform ───────────────────────────────────────────── */
 .waveform {
@@ -212,8 +190,8 @@ body {
   height: 16px;
   padding: 0 6px;
   border-radius: 6px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: transparent;
+  border: 1px solid var(--ink);
   flex-shrink: 0;
 }
 
@@ -221,7 +199,7 @@ body {
   width: 2px;
   height: 8px;
   border-radius: 1px;
-  background: #fb7185;
+  background: var(--ink);
   animation: wave 0.9s ease-in-out infinite;
 }
 
@@ -244,8 +222,8 @@ body {
 .spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(16, 185, 129, 0.15);
-  border-top-color: var(--emerald);
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-top-color: var(--ink);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -254,23 +232,22 @@ body {
 /* ── Progress ───────────────────────────────────────────── */
 .progress-bar-track {
   height: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: transparent;
+  border: 1px solid var(--ink);
   border-radius: 999px;
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981, #14b8a6);
+  background: var(--ink);
   border-radius: 999px;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.45);
   transition: width 0.4s ease;
 }
 
 .dismiss-bar {
   height: 100%;
-  background: linear-gradient(90deg, #10b981, #14b8a6);
+  background: var(--ink);
   border-radius: 999px;
   transition: width 1s linear;
 }
@@ -282,22 +259,22 @@ body {
   justify-content: center;
   gap: 6px;
   padding: 7px 12px;
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, color 0.15s ease;
-  border: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  border: 1px solid transparent;
   white-space: nowrap;
   outline: none;
-  letter-spacing: -0.01em;
 }
 
 .btn-icon {
   width: 32px;
   height: 32px;
   padding: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
 
@@ -307,50 +284,45 @@ body {
   height: 32px;
   padding: 0 10px;
   overflow: hidden;
-}
-
-.btn-fill {
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.btn:active {
-  transform: scale(0.97);
 }
 
 .btn svg {
   flex-shrink: 0;
 }
 
+/* Primary action — sunshine fill, black text. */
 .btn-start {
-  background: linear-gradient(135deg, #ef4444 0%, #f43f5e 100%);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.28);
+  background: var(--sunshine);
+  border-color: var(--sunshine);
+  color: #000000;
 }
 
 .btn-start:hover {
-  filter: brightness(1.08);
+  background: var(--sunshine-deep);
+  border-color: var(--sunshine-deep);
 }
 
+/* Stop — ink fill, cream text. */
 .btn-stop {
-  background: rgba(239, 68, 68, 0.16);
-  color: #fda4af;
-  border: 1px solid rgba(239, 68, 68, 0.32);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
 }
 
 .btn-stop:hover {
-  background: rgba(239, 68, 68, 0.28);
-  color: #fff;
+  background: #333333;
 }
 
 .btn-notion {
-  background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
-  color: #09090b;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.22);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
 }
 
 .btn-notion:hover {
-  filter: brightness(1.08);
+  background: #333333;
 }
 
 .notion-icon {
@@ -359,103 +331,96 @@ body {
 }
 
 .btn-ghost {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--ink);
 }
 
 .btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.09);
-  color: var(--text);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--ink-tint);
 }
 
 .btn-download {
-  background: rgba(16, 185, 129, 0.12);
-  color: var(--emerald-soft);
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--ink);
 }
 
 .btn-download:hover {
-  background: rgba(16, 185, 129, 0.2);
-  color: #fff;
+  background: var(--ink-tint);
 }
 
 /* ── Typography ─────────────────────────────────────────── */
 .timer {
-  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
-  font-size: 11px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  color: #fda4af;
-  letter-spacing: 0.04em;
+  font-weight: 500;
+  color: var(--ink);
   padding: 2px 6px;
-  border-radius: 6px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.22);
+  border-radius: var(--radius-input);
+  background: transparent;
+  border: 1px solid var(--ink);
   flex-shrink: 0;
 }
 
 .state-label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 14px;
+  font-weight: 500;
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text);
+  color: var(--ink);
 }
 
 .state-label.muted {
-  color: var(--text-muted);
-  font-weight: 500;
+  color: var(--graphite);
+  font-weight: 400;
 }
 
 .state-label.warning {
-  color: var(--yellow);
+  color: var(--signal);
 }
 
 .state-sub {
-  font-size: 11px;
-  color: var(--text-subtle);
+  font-size: 14px;
+  color: var(--graphite);
   line-height: 1.35;
 }
 
 .stage-text {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 14px;
+  color: var(--graphite);
   font-weight: 500;
 }
 
 .pct-text {
-  font-size: 11px;
-  color: var(--emerald-soft);
+  font-size: 14px;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
-  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
-  font-weight: 600;
+  font-weight: 500;
   flex-shrink: 0;
 }
 
 /* ── Success check ──────────────────────────────────────── */
 @keyframes checkIn {
-  from { transform: scale(0) rotate(-45deg); opacity: 0; }
-  to   { transform: scale(1) rotate(0deg);   opacity: 1; }
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
 }
 
 .check-icon {
   width: 22px;
   height: 22px;
-  background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+  background: var(--mint);
+  border: 1px solid var(--ink);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
-  animation: checkIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  color: #09090b;
+  animation: checkIn 0.25s ease-out;
+  color: #000000;
 }
 
 .check-icon svg {
@@ -495,18 +460,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--text-subtle);
+  border-radius: 50%;
+  color: var(--graphite);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .close-btn:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--border);
+  color: var(--ink);
+  border-color: var(--ink);
 }
 
 /* ── Meta chip ──────────────────────────────────────────── */
@@ -514,33 +478,31 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 500;
-  color: var(--text-subtle);
-  letter-spacing: 0.01em;
+  color: var(--graphite);
 }
 
-/* ── Minimize control ───────────────────────────────────── */
+/* ── Icon buttons ───────────────────────────────────────── */
 .icon-btn {
   width: 26px;
   height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
   border: 1px solid transparent;
-  border-radius: 7px;
-  color: var(--text-subtle);
+  border-radius: 50%;
+  color: var(--graphite);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
   padding: 0;
   flex-shrink: 0;
 }
 
 .icon-btn:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--border);
+  color: var(--ink);
+  border-color: var(--ink);
 }
 
 .icon-btn svg {
@@ -551,13 +513,15 @@ body {
 }
 
 .icon-btn-stop {
-  color: #fda4af;
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
 }
 
 .icon-btn-stop:hover {
-  background: rgba(239, 68, 68, 0.28);
-  color: #fff;
-  border-color: rgba(239, 68, 68, 0.32);
+  color: var(--paper);
+  background: var(--signal);
+  border-color: var(--signal);
 }
 
 .pill.has-controls {
@@ -578,41 +542,25 @@ body {
   padding: 8px 0 8px 6px;
   margin: 0;
   cursor: pointer;
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--paper);
+  border: 2px solid var(--ink);
   border-right: none;
   border-radius: 14px 0 0 14px;
-  box-shadow: none;
-  transition: background 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
+  transition: background 0.2s ease;
   color: inherit;
 }
 
 .dock:hover {
-  background: #1a1a22;
-  border-color: rgba(16, 185, 129, 0.45);
-  filter: brightness(1.12);
+  background: #efebe1;
 }
 
 .dock:active {
-  background: #22222c;
-  filter: brightness(1.05);
+  background: #e6e1d5;
 }
 
-.dock.recording-active {
-  border-color: rgba(239, 68, 68, 0.35);
-}
-
-.dock.recording-active:hover {
-  border-color: rgba(239, 68, 68, 0.55);
-  background: #1c1418;
-}
-
+.dock.recording-active,
 .dock.processing-active {
-  border-color: rgba(16, 185, 129, 0.3);
-}
-
-.dock.processing-active:hover {
-  border-color: rgba(16, 185, 129, 0.55);
+  border-color: var(--ink);
 }
 
 .dock-mark {
@@ -637,42 +585,25 @@ body {
 }
 
 .dock-status {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.dock-status.idle {
-  background: var(--emerald);
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.55);
-}
-
-.dock-status.recording {
-  background: var(--red);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-.dock-status.offline {
-  background: var(--yellow);
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.45);
-}
+.dock-status.idle      { background: var(--mint); }
+.dock-status.recording { background: var(--signal); animation: pulse 1.4s ease-in-out infinite; }
+.dock-status.offline   { background: var(--graphite); }
+.dock-status.complete  { background: var(--mint); }
 
 .dock-status.processing {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 2px solid rgba(16, 185, 129, 0.2);
-  border-top-color: var(--emerald);
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-top-color: var(--ink);
   background: transparent;
   animation: spin 0.7s linear infinite;
-  box-shadow: none;
-}
-
-.dock-status.complete {
-  background: var(--emerald);
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.55);
 }
 
 @keyframes dockIn {
@@ -684,4 +615,12 @@ body {
   padding: 0;
   width: 100%;
   height: 52px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

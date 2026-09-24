@@ -7,7 +7,7 @@ export default function GoogleCalendarIcon({ size = 16, className = '' }) {
       alt="Google Calendar"
       width={size}
       height={size}
-      className={`object-contain ${className}`}
+      className={`object-contain logo-mono ${className}`}
       style={{ width: size, height: size }}
     />
   );

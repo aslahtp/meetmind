@@ -13,15 +13,15 @@ function applyStartupThemeClass() {
   const root = document && document.documentElement;
   if (!root) return false;
 
-  let effective = 'dark';
+  let effective = 'light';
   try {
     const arg = (process.argv || []).find((a) => a.startsWith('--meetmind-theme='));
-    const configured = arg ? arg.split('=')[1] : 'dark';
-    const themeSetting = ['light', 'dark', 'system'].includes(configured) ? configured : 'dark';
+    const configured = arg ? arg.split('=')[1] : 'light';
+    const themeSetting = ['light', 'dark', 'system'].includes(configured) ? configured : 'light';
     const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     effective = themeSetting === 'system' ? (prefersDark ? 'dark' : 'light') : themeSetting;
   } catch {
-    effective = 'dark';
+    effective = 'light';
   }
 
   root.classList.add(effective === 'light' ? 'light' : 'dark');

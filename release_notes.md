@@ -21,14 +21,14 @@
 
 1. Install the Windows `.exe` from the Assets section below.
 2. Open MeetMind -> **Settings**.
-3. Under **System Dependencies**, click **Download & Install FFmpeg** to automatically install required audio binaries.
-4. Choose your **Transcription Service**:
+3. Open the **System** tab and click **Download & install FFmpeg** to automatically install required audio binaries.
+4. In the **Transcription** tab, choose your speech-to-text service:
    - For **AssemblyAI** (Recommended):
      - Paste your AssemblyAI API key.
      - (Optional) Add a short prompt to fine-tune behavior for English/Malayalam meetings.
    - For **Google STT**: Enter your Google Cloud API key and Project ID.
    - For **Sarvam AI STT**: Paste your Sarvam AI API key
-5. Configure **Audio Devices** (System + Microphone) and run a quick test recording.
+5. In the **Notes** tab, paste your Gemini API key, then click **Save changes** and run a quick test recording.
 
 ### Browser Extension
 

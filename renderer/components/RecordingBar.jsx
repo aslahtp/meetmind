@@ -1,78 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, Square } from 'lucide-react';
+import { formatClock } from '../lib/format.js';
 
-function formatDuration(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
-
-export default function RecordingBar({ sessionId, onStop }) {
-  const [elapsed, setElapsed] = useState(0);
+// Hairline band under the top bar while a recording is live. Elapsed time is
+// derived from the App-level start timestamp, so it survives remounts.
+export default function RecordingBar({ startedAt, onStop }) {
+  const [now, setNow] = useState(() => Date.now());
   const [stopping, setStopping] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setElapsed((prev) => prev + 1);
-    }, 1000);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
+  const elapsed = startedAt ? (now - startedAt) / 1000 : 0;
+
   const handleStop = async () => {
     setStopping(true);
-    await onStop?.();
+    try {
+      await onStop?.();
+    } finally {
+      setStopping(false);
+    }
   };
 
   return (
-    <div className="flex items-center justify-between px-6 py-3 bg-rose-500/10 dark:bg-rose-950/60 border-b border-rose-500/20 dark:border-rose-900/50 backdrop-blur-md flex-shrink-0 shadow-lg shadow-rose-950/10 fade-in">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className="recording-dot w-3 h-3 rounded-full bg-rose-500 flex-shrink-0 shadow-lg shadow-rose-500/50" />
-          <span className="text-rose-700 dark:text-rose-200 text-sm font-semibold tracking-wide">Live Recording</span>
+    <div className="flex-shrink-0 flex items-center justify-between gap-16 px-24 py-8 border-b border-ink bg-paper fade-in">
+      <div className="flex items-center gap-16 min-w-0">
+        <span className="dot dot-signal dot-live" aria-hidden="true" />
+        <span className="eyebrow text-signal">Recording</span>
+
+        <div className="flex items-center gap-4 h-16" aria-hidden="true">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <span
+              key={i}
+              className="wave-bar w-[2px] rounded-full bg-ink"
+              style={{ animationDelay: `${i * 0.12}s` }}
+            />
+          ))}
         </div>
 
-        {/* Audio Waveform Animation */}
-        <div className="flex items-center gap-1 h-5 px-2 py-0.5 rounded bg-rose-500/15 dark:bg-rose-900/40 border border-rose-500/20 dark:border-rose-800/40">
-          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '0ms' }} />
-          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '150ms' }} />
-          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '300ms' }} />
-          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '450ms' }} />
-          <div className="wave-bar w-1 bg-rose-500 dark:bg-rose-400 rounded-full" style={{ animationDelay: '200ms' }} />
-        </div>
-
-        <span className="text-rose-700 dark:text-rose-300 text-sm font-mono font-medium tracking-wider px-2.5 py-0.5 rounded bg-rose-500/10 dark:bg-rose-900/60 border border-rose-500/20 dark:border-rose-700/50 shadow-inner">
-          {formatDuration(elapsed)}
+        <span role="timer" aria-label="Recording time" className="tabular text-body-sm font-medium text-ink">
+          {formatClock(elapsed)}
         </span>
       </div>
 
-      <div className="flex items-center gap-3">
-        {sessionId && (
-          <span className="text-rose-600/70 dark:text-rose-400/60 text-xs font-mono hidden sm:block">
-            ID: {sessionId.slice(0, 8)}
-          </span>
+      <button type="button" onClick={handleStop} disabled={stopping} className="btn-ink btn-sm">
+        {stopping ? (
+          <>
+            <Loader2 size={14} strokeWidth={2} className="spinner" />
+            Finalizing…
+          </>
+        ) : (
+          <>
+            <Square size={12} strokeWidth={2} fill="currentColor" />
+            Stop recording
+          </>
         )}
-        <button
-          type="button"
-          onClick={handleStop}
-          disabled={stopping}
-          title="Stop recording"
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-600/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {stopping ? (
-            <>
-              <Loader2 size={16} strokeWidth={2} className="spinner" />
-              Finalizing…
-            </>
-          ) : (
-            <>
-              <Square size={12} strokeWidth={2.5} fill="currentColor" className="flex-shrink-0" />
-              Stop Recording
-            </>
-          )}
-        </button>
-      </div>
+      </button>
     </div>
   );
 }

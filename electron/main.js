@@ -115,8 +115,8 @@ function focusMainWindow() {
 function resolveStartupBackgroundColor(themeSetting) {
   const effective = themeSetting === 'system'
     ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
-    : (themeSetting === 'light' ? 'light' : 'dark');
-  return effective === 'light' ? '#f8fafc' : '#0c0c0f';  // matches --color-background
+    : (themeSetting === 'dark' ? 'dark' : 'light');
+  return effective === 'light' ? '#f8f5ed' : '#1a1813';  // matches --color-paper
 }
 
 function createMainWindow() {
@@ -130,7 +130,7 @@ function createMainWindow() {
   // Pass the saved theme into the renderer's argv so preload can apply it before
   // first paint without any IPC round-trip (which would otherwise mean either a
   // visible light→dark flash, or a blocking sendSync).
-  const savedTheme = getConfig().theme || 'dark';
+  const savedTheme = getConfig().theme || 'light';
   const backgroundColor = resolveStartupBackgroundColor(savedTheme);
 
   mainWindow = new BrowserWindow({

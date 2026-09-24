@@ -1,82 +1,125 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Mic,
-  Timer,
   RefreshCw,
   Upload,
-  Users,
-  CalendarDays,
   X,
-  ChevronRight,
+  ArrowRight,
   ClipboardList,
 } from 'lucide-react';
-import { useApp } from '../app.jsx';
+import { useApp, hasSttApiKey } from '../app.jsx';
 import PasteTranscriptModal from './PasteTranscriptModal.jsx';
-import NotionIcon from './NotionIcon.jsx';
 import UpcomingMeetings from './UpcomingMeetings.jsx';
-import SessionCard, {
-  SessionCardSkeleton,
-  SkeletonBlock,
+import { SessionList, SessionListSkeleton } from './SessionCard.jsx';
+import {
+  PageHeader,
+  IconButton,
+  StepBadge,
   EmptyState,
-  useDelayedFlag,
-  SKELETON_DELAY_MS,
-  useSessionActions,
-  getSessionDuration,
-} from './SessionCard.jsx';
+  Skeleton,
+  StatusDot,
+} from './ui/index.jsx';
+import { getSessionDuration, formatMinutes } from '../lib/format.js';
+import { useDelayedFlag, useSessionActions, SKELETON_DELAY_MS } from '../lib/hooks.js';
 
-function StatTileSkeleton() {
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function StatTile({ label, value, caption }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5">
-      <div className="flex items-center justify-between mb-2">
-        <SkeletonBlock className="h-3 w-20 rounded" />
-        <SkeletonBlock className="w-7 h-7 rounded-lg" />
-      </div>
-      <SkeletonBlock className="h-7 w-12 rounded mb-1.5" />
-      <SkeletonBlock className="h-3 w-24 rounded" />
+    <div className="card-compact">
+      <p className="eyebrow">{label}</p>
+      <p className="text-heading font-medium text-ink mt-8 tabular">{value}</p>
+      <p className="text-caption text-graphite mt-4">{caption}</p>
     </div>
   );
 }
 
 function DashboardSkeleton() {
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40">
-      {/* Top Header */}
-      <div className="flex items-center justify-between px-6 pt-3 pb-3 border-b border-slate-200 dark:border-zinc-800/80 flex-shrink-0">
-        <div>
-          <SkeletonBlock className="h-6 w-44 rounded mb-2" />
-          <SkeletonBlock className="h-3 w-32 rounded" />
+    <div className="h-full overflow-y-auto">
+      <div className="page" aria-busy="true" aria-label="Loading dashboard">
+        <div className="mb-48">
+          <Skeleton className="h-32 w-[240px]" />
+          <Skeleton className="h-16 w-[160px] mt-8" />
         </div>
-        <div className="flex items-center gap-2.5">
-          <SkeletonBlock className="h-8 w-8 rounded-lg" />
-          <SkeletonBlock className="h-8 w-28 rounded-lg" />
-          <SkeletonBlock className="h-8 w-32 rounded-lg" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-16 mb-64">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="card-compact">
+              <Skeleton className="h-16 w-[60%]" />
+              <Skeleton className="h-32 w-[40%] mt-8" />
+            </div>
+          ))}
+        </div>
+        <SessionListSkeleton />
+      </div>
+    </div>
+  );
+}
+
+function SetupCard({ config, onSetup }) {
+  const sttDone = hasSttApiKey(config);
+  const geminiDone = !!config?.geminiApiKey?.trim();
+  const notionDone = !!(config?.notionToken?.trim() && config?.notionPageId?.trim());
+
+  return (
+    <section className="card mb-48" aria-labelledby="setup-heading">
+      <p className="eyebrow">Getting started</p>
+      <h2 id="setup-heading" className="text-heading-sm font-medium text-ink mt-8">Finish setting up MeetMind</h2>
+      <p className="text-body-sm text-graphite mt-8 max-w-[640px]">
+        Add your API keys so recordings can be transcribed and turned into notes. Notion is optional.
+      </p>
+      <div className="flex flex-wrap items-center gap-8 mt-24">
+        <StepBadge n={1} done={sttDone}>Speech-to-text</StepBadge>
+        <StepBadge n={2} done={geminiDone}>Gemini</StepBadge>
+        <StepBadge n={3} done={notionDone}>Notion (optional)</StepBadge>
+      </div>
+      <button type="button" onClick={onSetup} className="btn-sunshine mt-32">
+        Set up keys
+        <ArrowRight size={16} strokeWidth={1.75} />
+      </button>
+    </section>
+  );
+}
+
+function MeetingStartingCallout({ event, onRecord, onDismiss }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-16 rounded-card border border-ink bg-sunshine text-on-sunshine px-24 py-16 mb-48 fade-in" role="status">
+      <div className="flex items-center gap-16 min-w-0">
+        <Mic size={18} strokeWidth={1.75} className="flex-shrink-0" />
+        <div className="min-w-0">
+          <p className="text-body-sm font-medium truncate">“{event.title}” is starting now</p>
+          <p className="text-caption">Want to record it?</p>
         </div>
       </div>
-
-      {/* Overview Stats Bar */}
-      <div className="grid grid-cols-4 gap-3 px-6 pt-4 pb-2 flex-shrink-0">
-        <StatTileSkeleton />
-        <StatTileSkeleton />
-        <StatTileSkeleton />
-        <StatTileSkeleton />
-      </div>
-
-      {/* Session list */}
-      <div className="flex-1 overflow-y-auto px-6 py-3 space-y-3">
-        <SessionCardSkeleton />
-        <SessionCardSkeleton />
-        <SessionCardSkeleton />
+      <div className="flex items-center gap-8 flex-shrink-0">
+        <button type="button" onClick={onRecord} className="btn-ink btn-sm">
+          <span className="dot dot-sm dot-signal" aria-hidden="true" />
+          Record
+        </button>
+        <IconButton label="Dismiss" onClick={onDismiss} className="text-on-sunshine hover:text-on-sunshine">
+          <X size={16} strokeWidth={1.75} />
+        </IconButton>
       </div>
     </div>
   );
 }
 
 export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavigateToMeetings }) {
-  const { sessions, refreshSessions, startRecording, isRecording, sessionsLoading, config } = useApp();
-  const { deletingIds, handleDelete, handleUploadAudio } = useSessionActions();
+  const {
+    sessions, refreshSessions, startRecording, isRecording, sessionsLoading, sessionsError,
+    config, keysNotSet,
+  } = useApp();
+  const { handleUploadAudio } = useSessionActions();
   const showSkeleton = useDelayedFlag(sessionsLoading, SKELETON_DELAY_MS);
   const [meetingToast, setMeetingToast] = useState(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const toastTimersRef = useRef([]);
 
   const recentLimit = config?.dashboardRecentLimit || 5;
 
@@ -95,8 +138,8 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
 
     return {
       totalMeetings: sessions.length,
-      totalMinutes: Math.round(totalSecs / 60),
-      weekMinutes: Math.round(weekSecs / 60),
+      totalMinutes: totalSecs / 60,
+      weekMinutes: weekSecs / 60,
       notionSynced: notionCount,
     };
   }, [sessions]);
@@ -113,10 +156,24 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
     const unsub = window.meetmind.on('calendar:meeting-starting', (event) => {
       setMeetingToast(event);
       // Auto-dismiss after 30 seconds
-      setTimeout(() => setMeetingToast((prev) => prev?.id === event.id ? null : prev), 30_000);
+      const t = setTimeout(() => setMeetingToast((prev) => (prev?.id === event.id ? null : prev)), 30_000);
+      toastTimersRef.current.push(t);
     });
-    return unsub;
+    return () => {
+      unsub?.();
+      toastTimersRef.current.forEach(clearTimeout);
+      toastTimersRef.current = [];
+    };
   }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshSessions();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleRecordFromCalendar = (event) => {
     if (event.meetingLink) {
@@ -125,233 +182,132 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
     startRecording();
   };
 
+  const openPaste = useCallback(() => setShowPasteModal(true), []);
+  const closePaste = useCallback(() => setShowPasteModal(false), []);
+
   // While loading, render the skeleton only once it's been slow enough to warrant
-  // one; before that show nothing, so a fast load goes straight to real content
-  // without any intermediate flash.
+  // one; before that show nothing, so a fast load goes straight to real content.
   if (sessionsLoading) {
-    return showSkeleton ? <DashboardSkeleton /> : <div className="h-full bg-slate-50 dark:bg-zinc-950/40" />;
+    return showSkeleton ? <DashboardSkeleton /> : <div className="h-full" />;
   }
 
-  if (sessions.length === 0) {
-    return <EmptyState onRecord={startRecording} />;
-  }
+  const hasSessions = sessions.length > 0;
+
+  const headerActions = (
+    <>
+      <button type="button" onClick={openPaste} className="btn-ghost btn-sm">
+        <ClipboardList size={16} strokeWidth={1.75} />
+        Paste transcript
+      </button>
+      <button type="button" onClick={handleUploadAudio} className="btn-ghost btn-sm">
+        <Upload size={16} strokeWidth={1.75} />
+        Import audio
+      </button>
+      <IconButton label="Refresh meetings" onClick={handleRefresh} disabled={refreshing}>
+        <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
+      </IconButton>
+    </>
+  );
 
   return (
     <>
-      <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40 fade-in">
-      {/* Top Header */}
-      <div className="flex items-center justify-between px-6 pt-3 pb-3 border-b border-slate-200 dark:border-zinc-800/80 bg-slate-50/80 dark:bg-transparent backdrop-blur-md flex-shrink-0 titlebar-drag select-none">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Dashboard</h1>
-          <p className="text-slate-500 dark:text-zinc-400 text-xs mt-0.5">
-            {sessions.length} meeting{sessions.length !== 1 ? 's' : ''} recorded
-            {sessions.length > recentLimit && (
-              <>
-                {' · '}
-                <button
-                  onClick={onNavigateToMeetings}
-                  className="titlebar-no-drag text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
-                >
-                  View all →
-                </button>
-              </>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2.5 titlebar-no-drag">
-          <button
-            onClick={refreshSessions}
-            className="btn-ghost p-2 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
-            title="Refresh list"
-          >
-            <RefreshCw size={15} strokeWidth={2} />
-          </button>
-          <button
-            onClick={() => setShowPasteModal(true)}
-            className="btn-outline text-xs px-3.5 py-2"
-            title="Create meeting from pasted transcript"
-          >
-            <ClipboardList size={14} strokeWidth={2} />
-            Paste Transcript
-          </button>
-          <button
-            onClick={handleUploadAudio}
-            className="btn-outline text-xs px-3.5 py-2"
-          >
-            <Upload size={14} strokeWidth={2} />
-            Import File
-          </button>
-          {!isRecording && (
-            <button onClick={startRecording} className="btn-primary text-xs px-4 py-2">
-              <span className="w-2 h-2 rounded-full bg-zinc-950" />
-              New Recording
-            </button>
+      <div className="h-full overflow-y-auto">
+        <div className="page fade-in">
+          <PageHeader
+            title={greeting()}
+            subtitle={
+              hasSessions
+                ? `${sessions.length} meeting${sessions.length !== 1 ? 's' : ''} recorded`
+                : 'Your meeting notes will appear here.'
+            }
+            actions={headerActions}
+          />
+
+          {keysNotSet && <SetupCard config={config} onSetup={onNavigateToSettings} />}
+
+          {meetingToast && !isRecording && (
+            <MeetingStartingCallout
+              event={meetingToast}
+              onRecord={() => {
+                handleRecordFromCalendar(meetingToast);
+                setMeetingToast(null);
+              }}
+              onDismiss={() => setMeetingToast(null)}
+            />
+          )}
+
+          {sessionsError && (
+            <div className="card-compact flex flex-wrap items-center justify-between gap-16 mb-48" role="alert">
+              <p className="flex items-center gap-8 text-body-sm text-ink">
+                <StatusDot tone="error" />
+                Couldn't load your meetings: {sessionsError}
+              </p>
+              <button type="button" onClick={handleRefresh} className="btn-ghost btn-sm">
+                <RefreshCw size={14} strokeWidth={1.75} />
+                Retry
+              </button>
+            </div>
+          )}
+
+          {hasSessions ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-16 mb-64">
+                <StatTile label="Meetings" value={metrics.totalMeetings} caption="sessions recorded" />
+                <StatTile label="Recorded" value={formatMinutes(metrics.totalMinutes)} caption="total audio captured" />
+                <StatTile label="This week" value={formatMinutes(metrics.weekMinutes)} caption="recorded since Monday" />
+                <StatTile label="In Notion" value={metrics.notionSynced} caption="pages uploaded" />
+              </div>
+
+              <UpcomingMeetings
+                onNavigateToSettings={onNavigateToSettings}
+                onStartRecording={handleRecordFromCalendar}
+                isRecording={isRecording}
+                className="mb-64"
+              />
+
+              <section aria-labelledby="recent-heading">
+                <h2 id="recent-heading" className="eyebrow mb-16">Recent recordings</h2>
+                <SessionList sessions={recentSessions} onOpenSession={onOpenSession} />
+                {sessions.length > recentLimit && (
+                  <div className="flex justify-center mt-24">
+                    <button type="button" onClick={onNavigateToMeetings} className="btn-quiet btn-sm">
+                      View all {sessions.length} meetings
+                      <ArrowRight size={14} strokeWidth={1.75} />
+                    </button>
+                  </div>
+                )}
+              </section>
+            </>
+          ) : sessionsError ? null : (
+            <>
+              <EmptyState
+                icon={<Mic size={28} strokeWidth={1.5} />}
+                title="Record your first meeting"
+                message="Start recording any online or in-person meeting. MeetMind transcribes it, writes the summary and pulls out the action items."
+                action={
+                  <button
+                    type="button"
+                    onClick={startRecording}
+                    disabled={isRecording}
+                    className={keysNotSet ? 'btn-ink' : 'btn-sunshine'}
+                  >
+                    <span className={`dot dot-sm ${keysNotSet ? 'dot-signal' : 'dot-ink'}`} aria-hidden="true" />
+                    Start recording
+                  </button>
+                }
+              />
+              <UpcomingMeetings
+                onNavigateToSettings={onNavigateToSettings}
+                onStartRecording={handleRecordFromCalendar}
+                isRecording={isRecording}
+                className="mt-48"
+              />
+            </>
           )}
         </div>
       </div>
 
-      {/* Overview Stats Bar */}
-      <div className="grid grid-cols-4 gap-3 px-6 pt-4 pb-2 flex-shrink-0">
-        {/* Meetings */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-violet-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Meetings</span>
-            <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
-              <Users size={13} strokeWidth={2} className="text-violet-500 dark:text-violet-400" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{metrics.totalMeetings}</div>
-          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">sessions recorded</p>
-        </div>
-
-        {/* Recorded Time */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-sky-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-sky-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Recorded Time</span>
-            <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center flex-shrink-0">
-              <Timer size={13} strokeWidth={2} className="text-sky-500 dark:text-sky-400" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-            {metrics.totalMinutes >= 60
-              ? `${Math.floor(metrics.totalMinutes / 60)}h ${metrics.totalMinutes % 60}m`
-              : `${metrics.totalMinutes}m`}
-          </div>
-          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">total audio captured</p>
-        </div>
-
-        {/* This Week */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-rose-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">This Week</span>
-            <div className="w-7 h-7 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center flex-shrink-0">
-              <CalendarDays size={13} strokeWidth={2} className="text-rose-500 dark:text-rose-400" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-rose-500 dark:text-rose-400 tracking-tight">
-            {metrics.weekMinutes >= 60
-              ? `${Math.floor(metrics.weekMinutes / 60)}h ${metrics.weekMinutes % 60}m`
-              : `${metrics.weekMinutes}m`}
-          </div>
-          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">recorded this week</p>
-        </div>
-
-        {/* Notion Synced */}
-        <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/60 px-4 py-3.5 group hover:border-emerald-500/30 hover:-translate-y-0.5 transition-all duration-200 cursor-default shadow-sm dark:shadow-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-500 dark:text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Notion Synced</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
-              <NotionIcon size={13} className="text-emerald-500 dark:text-emerald-400" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-emerald-500 dark:text-emerald-400 tracking-tight">{metrics.notionSynced}</div>
-          <p className="text-slate-400 dark:text-zinc-600 text-[10px] mt-0.5">pages uploaded</p>
-        </div>
-      </div>
-
-      {/* Scrollable content: upcoming meetings + past sessions */}
-      <div className="flex-1 overflow-y-auto px-6 py-3 space-y-3">
-        {/* Upcoming Meetings (Google Calendar) */}
-        <UpcomingMeetings
-          onNavigateToSettings={onNavigateToSettings}
-          onStartRecording={handleRecordFromCalendar}
-          isRecording={isRecording}
-          className=""
-        />
-
-        {/* Meeting starting toast */}
-        {meetingToast && !isRecording && (
-          <div className="fade-in">
-            <div className="relative overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/5 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                    <Mic size={15} className="text-emerald-500 dark:text-emerald-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800 dark:text-zinc-200 truncate">
-                      "{meetingToast.title}" is starting now
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">Would you like to start recording?</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      handleRecordFromCalendar(meetingToast);
-                      setMeetingToast(null);
-                    }}
-                    className="btn-primary text-xs px-3 py-1.5"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-950" />
-                    Start Recording
-                  </button>
-                  <button
-                    onClick={() => setMeetingToast(null)}
-                    className="btn-ghost p-1 text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300"
-                  >
-                    <X size={14} strokeWidth={2} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Divider between upcoming and past sessions */}
-        <div className="flex items-center gap-3 pt-1">
-          <div className="flex-1 h-px bg-slate-200 dark:bg-zinc-800/60" />
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-600">Recent Recordings</span>
-          <div className="flex-1 h-px bg-slate-200 dark:bg-zinc-800/60" />
-        </div>
-
-        {/* Past session cards */}
-        {recentSessions.map((session) => (
-          <SessionCard
-            key={session.id}
-            session={session}
-            onClick={() => onOpenSession(session)}
-            onDelete={handleDelete}
-            isDeleting={deletingIds.has(session.id)}
-          />
-        ))}
-
-        {/* View all meetings CTA */}
-        {sessions.length > recentLimit && (
-          <button
-            onClick={onNavigateToMeetings}
-            className="group w-full flex items-center justify-between px-4 py-3 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700/70 bg-white/50 dark:bg-zinc-900/30 hover:border-emerald-500/50 hover:bg-emerald-500/5 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700/60 flex items-center justify-center group-hover:border-emerald-500/30 group-hover:bg-emerald-500/10 transition-all duration-200">
-                <Users size={13} strokeWidth={2} className="text-slate-400 dark:text-zinc-500 group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition-colors" />
-              </div>
-              <div className="text-left">
-                <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-                  View All Meetings
-                </p>
-                <p className="text-[10px] text-slate-400 dark:text-zinc-500">
-                  {sessions.length - recentLimit} more session{sessions.length - recentLimit !== 1 ? 's' : ''} not shown
-                </p>
-              </div>
-            </div>
-            <ChevronRight
-              size={15}
-              strokeWidth={2}
-              className="text-slate-300 dark:text-zinc-600 group-hover:text-emerald-500 dark:group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all duration-200"
-            />
-          </button>
-        )}
-      </div>
-    </div>
-
-    {showPasteModal && (
-      <PasteTranscriptModal onClose={() => setShowPasteModal(false)} />
-    )}
-  </>
+      {showPasteModal && <PasteTranscriptModal onClose={closePaste} />}
+    </>
   );
 }

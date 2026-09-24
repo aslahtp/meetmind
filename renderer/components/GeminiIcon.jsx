@@ -8,7 +8,7 @@ export default function GeminiIcon({ size = 16, className = '' }) {
       alt=""
       width={size}
       height={size}
-      className={`inline-block shrink-0 object-contain ${className}`.trim()}
+      className={`inline-block shrink-0 object-contain logo-mono ${className}`.trim()}
       draggable={false}
       aria-hidden="true"
     />

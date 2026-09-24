@@ -3,14 +3,35 @@
 <head>
   <meta charset="UTF-8" />
   <style>
+    @font-face {
+      font-family: 'DM Sans';
+      src: url('fonts/DMSans-Variable.woff2') format('woff2');
+      font-weight: 100 1000;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --paper: #f8f5ed;
+      --ink: #000000;
+      --graphite: #707070;
+      --sunshine: #ffda6e;
+      --sunshine-deep: #f5ca50;
+      --mint: #6ece9d;
+      --signal: #c84132;
+      color-scheme: light;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 290px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
-      font-size: 13px;
-      background: #0e0e12;
-      color: #f5f5fa;
+      width: 300px;
+      font-family: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      font-feature-settings: "ss03", "ss04";
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--paper);
+      color: var(--ink);
       -webkit-font-smoothing: antialiased;
     }
 
@@ -18,52 +39,53 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 16px;
-      background: #15151b;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 16px;
+      border-bottom: 1px solid var(--ink);
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
 
+    /* Bordered avatar tile */
     .logo {
-      width: 28px;
-      height: 28px;
-      background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
-      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      background: var(--paper);
+      border: 1px solid var(--ink);
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+      color: var(--ink);
     }
 
-    .title { font-weight: 700; font-size: 14px; letter-spacing: -0.01em; color: #fff; }
-    .subtitle { font-size: 11px; color: #10b981; font-weight: 500; }
+    .title { font-weight: 500; font-size: 16px; color: var(--ink); line-height: 1.25; }
+    .subtitle { font-size: 14px; color: var(--graphite); line-height: 1.25; }
 
     .version-badge {
-      font-size: 10px;
-      font-family: monospace;
-      padding: 2px 6px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-      color: #888;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 0 8px;
+      border: 1px solid var(--graphite);
+      border-radius: 9999px;
+      color: var(--graphite);
+      font-variant-numeric: tabular-nums;
     }
 
-    .body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .body { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
 
     .status-card {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 12px;
-      background: #191922;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
+      padding: 8px 16px;
+      border: 1px solid var(--ink);
+      border-radius: 9999px;
+      margin-bottom: 8px;
     }
 
     .status-left {
@@ -73,31 +95,21 @@
     }
 
     .dot {
-      width: 8px;
-      height: 8px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
       flex-shrink: 0;
     }
-    .dot.connected {
-      background: #10b981;
-      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-    }
-    .dot.disconnected {
-      background: #f59e0b;
-      box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
-    }
-    .dot.recording {
-      background: #ef4444;
-      box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
-      animation: pulse 1.2s ease-in-out infinite;
-    }
+    .dot.connected    { background: var(--mint); }
+    .dot.disconnected { background: var(--graphite); }
+    .dot.recording    { background: var(--signal); animation: pulse 1.4s ease-in-out infinite; }
 
     @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50%      { opacity: 0.5; transform: scale(0.8); }
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.35; }
     }
 
-    .status-text { font-size: 12px; font-weight: 500; color: #d0d0dc; }
+    .status-text { font-size: 14px; font-weight: 500; color: var(--ink); }
 
     .btn {
       display: flex;
@@ -105,64 +117,66 @@
       justify-content: center;
       gap: 8px;
       width: 100%;
-      padding: 9px 12px;
-      border: none;
-      border-radius: 9px;
-      font-size: 12px;
-      font-weight: 600;
+      padding: 12px 24px;
+      border: 1px solid transparent;
+      border-radius: 24px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
       cursor: pointer;
-      transition: all 0.15s ease;
-      outline: none;
+      transition: background 0.15s ease, border-color 0.15s ease;
     }
+    .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
+    /* Sunshine — the single primary action */
     .btn-primary {
-      background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
-      color: #09090b;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.2);
+      background: var(--sunshine);
+      border-color: var(--sunshine);
+      color: #000000;
     }
-    .btn-primary:hover {
-      background: linear-gradient(135deg, #34d399 0%, #2dd4bf 100%);
-      transform: translateY(-1px);
+    .btn-primary:hover { background: var(--sunshine-deep); border-color: var(--sunshine-deep); }
+
+    /* Ink — stop / destructive-adjacent action */
+    .btn-ink {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--paper);
     }
+    .btn-ink:hover { background: #333333; }
 
     .btn-ghost {
-      background: #191922;
-      color: #a0a0b0;
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: transparent;
+      color: var(--ink);
+      border-color: var(--ink);
     }
-    .btn-ghost:hover {
-      background: #22222f;
-      color: #ffffff;
-      border-color: rgba(255, 255, 255, 0.15);
-    }
+    .btn-ghost:hover { background: rgba(0, 0, 0, 0.06); }
 
     .footer {
-      padding: 10px 16px;
-      background: #111116;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      font-size: 11px;
-      color: #666;
+      padding: 8px 16px;
+      border-top: 1px solid var(--ink);
+      font-size: 14px;
+      color: var(--graphite);
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
 
-    .footer a { color: #10b981; text-decoration: none; font-weight: 500; }
-    .footer a:hover { text-decoration: underline; }
+    .footer a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; font-weight: 500; }
+    .footer a:hover { color: var(--graphite); }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="brand">
       <div class="logo">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#09090b" stroke-width="2.5">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
           <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>
         </svg>
       </div>
       <div>
         <div class="title">MeetMind</div>
-        <div class="subtitle">AI Meeting Companion</div>
+        <div class="subtitle">Meeting notes</div>
       </div>
     </div>
     <span class="version-badge" id="version-badge">v1.7.1</span>
@@ -181,7 +195,7 @@
         <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
         <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
       </svg>
-      Open Desktop App
+      Open desktop app
     </button>
 
     <button class="btn btn-ghost" id="go-to-meet-btn">

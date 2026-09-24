@@ -1,66 +1,46 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  Terminal,
-  Trash2,
-  Copy,
   Check,
   Search,
-  Filter,
-  Download,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  Info,
-  ChevronDown,
   RefreshCw,
   FolderOpen,
   Radio,
+  AlertCircle,
 } from 'lucide-react';
+import { useApp } from '../app.jsx';
+import { IconButton, Switch, SegmentedControl, Skeleton } from './ui/index.jsx';
 
-const LEVEL_META = {
-  ALL: {
-    label: 'All',
-    color: 'text-slate-700 dark:text-zinc-300',
-    activeClass: 'bg-slate-200 dark:bg-zinc-700/90 text-slate-900 dark:text-white border-slate-300 dark:border-zinc-600/60',
-    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-slate-900 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800/60',
-  },
-  INFO: {
-    label: 'Info',
-    icon: Info,
-    color: 'text-sky-600 dark:text-sky-400',
-    activeClass: 'bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/40 font-semibold',
-    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-sky-600 dark:hover:text-sky-300 hover:bg-sky-500/10',
-    badge: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/20',
-  },
-  WARN: {
-    label: 'Warn',
-    icon: AlertTriangle,
-    color: 'text-amber-600 dark:text-amber-400',
-    activeClass: 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 font-semibold',
-    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-amber-600 dark:hover:text-amber-300 hover:bg-amber-500/10',
-    badge: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
-  },
-  ERROR: {
-    label: 'Error',
-    icon: XCircle,
-    color: 'text-rose-600 dark:text-rose-400',
-    activeClass: 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 font-semibold',
-    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-500/10',
-    badge: 'text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20',
-  },
-  DEBUG: {
-    label: 'Debug',
-    icon: Terminal,
-    color: 'text-slate-500 dark:text-zinc-500',
-    activeClass: 'text-slate-800 dark:text-zinc-200 bg-slate-200 dark:bg-zinc-700/50 border-slate-300 dark:border-zinc-600/50',
-    idleClass: 'bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-transparent hover:text-slate-900 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800/60',
-    badge: 'text-slate-600 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800/60 border-slate-200 dark:border-zinc-700/50',
-  },
-};
+const MAX_LOGS = 2000;
+const NEAR_BOTTOM_PX = 48;
+const FALLBACK_POLL_MS = 3000;
+const HIDE_EXT_KEY = 'meetmind:hide-extension-logs';
+
+const LEVELS = [
+  { value: 'ALL',   label: 'All' },
+  { value: 'INFO',  label: 'Info' },
+  { value: 'WARN',  label: 'Warn' },
+  { value: 'ERROR', label: 'Error' },
+  { value: 'DEBUG', label: 'Debug' },
+];
+
+function LevelTag({ level }) {
+  const base = 'inline-block flex-shrink-0 w-[64px] text-caption font-medium uppercase';
+  const style = { letterSpacing: 'var(--tracking-badge)' };
+  if (level === 'WARN') {
+    return (
+      <span className={base} style={style}>
+        <span className="bg-sunshine text-on-sunshine rounded-input px-4">WARN</span>
+      </span>
+    );
+  }
+  const color = level === 'ERROR' ? 'text-signal' : level === 'DEBUG' ? 'text-graphite' : 'text-ink';
+  return <span className={`${base} ${color}`} style={style}>{level}</span>;
+}
 
 function formatTimestamp(iso) {
   if (!iso) return '';
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
   const time = d.toLocaleTimeString('en-US', {
     hour12: false,
     hour: '2-digit',
@@ -98,27 +78,68 @@ function isExtensionLog(entry) {
   return false;
 }
 
+function normalizeEntry(item) {
+  if (typeof item !== 'string') return item;
+  const match = item.match(/^\[([^\]]+)\]\s+\[([A-Z]+)\](?:\s+\[([^\]]+)\])?\s+(.*?)(?:\s+(\{.*\}|\[.*\]))?$/);
+  if (match) {
+    let meta = null;
+    try { if (match[5]) meta = JSON.parse(match[5]); } catch { meta = match[5]; }
+    return {
+      timestamp: match[1],
+      level: match[2].toUpperCase(),
+      context: match[3],
+      message: match[4],
+      meta,
+    };
+  }
+  return { timestamp: new Date().toISOString(), level: 'INFO', message: item };
+}
+
+function formatLine(l) {
+  return `[${l.timestamp}] [${l.level}] ${l.context ? `[${l.context}] ` : ''}${l.message}${l.meta ? ' ' + JSON.stringify(l.meta) : ''}`;
+}
+
+const capped = (list) => (list.length > MAX_LOGS ? list.slice(-MAX_LOGS) : list);
+
 export default function LogsViewer() {
+  const { confirm, addToast } = useApp();
+  const bridge = typeof window !== 'undefined' ? window.meetmind : null;
+  const hasLogsApi = !!bridge?.logs;
+  const hasPush = !!bridge?.on;
+
   const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(hasLogsApi);
+  const [loadError, setLoadError] = useState(null);
   const [levelFilter, setLevelFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [isLive, setIsLive] = useState(true);
+  const [pausedCount, setPausedCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const isLiveRef = useRef(true);
   const [hideExtensionLogs, setHideExtensionLogs] = useState(() => {
     try {
-      return localStorage.getItem('meetmind:hide-extension-logs') === 'true';
+      return localStorage.getItem(HIDE_EXT_KEY) === 'true';
     } catch {
       return false;
     }
   });
   const [copied, setCopied] = useState(false);
   const [openingLogDir, setOpeningLogDir] = useState(false);
+
+  const isLiveRef = useRef(true);
+  const pausedBufferRef = useRef([]);
   const logContainerRef = useRef(null);
+  const nearBottomRef = useRef(true);
 
   useEffect(() => {
     isLiveRef.current = isLive;
+    // Resuming flushes whatever arrived while paused.
+    if (isLive && pausedBufferRef.current.length) {
+      const buffered = pausedBufferRef.current;
+      pausedBufferRef.current = [];
+      setLogs((prev) => capped([...prev, ...buffered]));
+    }
+    setPausedCount(0);
   }, [isLive]);
 
   const loadLogs = useCallback(async () => {
@@ -128,73 +149,59 @@ export default function LogsViewer() {
         ? await window.meetmind.logs.getHistory()
         : await window.meetmind.logs.get();
       if (Array.isArray(raw)) {
-        const normalized = raw.map((item) => {
-          if (typeof item === 'string') {
-            const match = item.match(/^\[([^\]]+)\]\s+\[([A-Z]+)\](?:\s+\[([^\]]+)\])?\s+(.*?)(?:\s+(\{.*\}|\[.*\]))?$/);
-            if (match) {
-              let meta = null;
-              try { if (match[5]) meta = JSON.parse(match[5]); } catch { meta = match[5]; }
-              return {
-                timestamp: match[1],
-                level: match[2].toUpperCase(),
-                context: match[3],
-                message: match[4],
-                meta,
-              };
-            }
-            return { timestamp: new Date().toISOString(), level: 'INFO', message: item };
-          }
-          return item;
-        });
-        setLogs(normalized);
+        setLogs(capped(raw.map(normalizeEntry)));
       }
+      setLoadError(null);
     } catch (err) {
       console.error('Failed to load logs history:', err);
+      setLoadError(err?.message || 'Failed to load logs');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
+  // Initial history + live push. The history is fetched once; after that, pushed
+  // `log:entry` events append. A full re-fetch poll only runs when push is
+  // unavailable — polling alongside push used to overwrite the live entries.
   useEffect(() => {
     loadLogs();
 
-    let unsub = null;
-    if (window.meetmind?.on) {
-      unsub = window.meetmind.on('log:entry', (entry) => {
-        if (!entry) return;
-        if (!isLiveRef.current) return;
-        setLogs((prev) => {
-          const next = [...prev, entry];
-          return next.length > 2000 ? next.slice(-2000) : next;
-        });
-      });
-    }
+    if (!window.meetmind?.on) return undefined;
+    const unsub = window.meetmind.on('log:entry', (entry) => {
+      if (!entry) return;
+      const normalized = normalizeEntry(entry);
+      if (!isLiveRef.current) {
+        pausedBufferRef.current = capped([...pausedBufferRef.current, normalized]);
+        setPausedCount(pausedBufferRef.current.length);
+        return;
+      }
+      setLogs((prev) => capped([...prev, normalized]));
+    });
+    return () => unsub?.();
+  }, [loadLogs]);
 
-    let intervalId = null;
-    if (isLive) {
-      intervalId = setInterval(() => {
-        loadLogs();
-      }, 3000);
-    }
-
-    return () => {
-      unsub?.();
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [loadLogs, isLive]);
+  useEffect(() => {
+    if (hasPush || !isLive || !hasLogsApi) return undefined;
+    const intervalId = setInterval(loadLogs, FALLBACK_POLL_MS);
+    return () => clearInterval(intervalId);
+  }, [hasPush, isLive, hasLogsApi, loadLogs]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
+      pausedBufferRef.current = [];
+      setPausedCount(0);
       await loadLogs();
     } finally {
       setTimeout(() => setRefreshing(false), 400);
     }
   };
 
-  useEffect(() => {
-    if (autoScroll && logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-    }
-  }, [logs, autoScroll]);
+  const handleScroll = () => {
+    const el = logContainerRef.current;
+    if (!el) return;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+  };
 
   const counts = useMemo(() => {
     const c = { ALL: 0, INFO: 0, WARN: 0, ERROR: 0, DEBUG: 0 };
@@ -223,19 +230,26 @@ export default function LogsViewer() {
     });
   }, [logs, levelFilter, search, hideExtensionLogs]);
 
+  // Follow the tail only while the reader is already at (or near) the bottom.
+  useEffect(() => {
+    const el = logContainerRef.current;
+    if (autoScroll && el && nearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [filteredLogs, autoScroll]);
+
   const handleCopy = async () => {
-    const text = filteredLogs
-      .map((l) => `[${l.timestamp}] [${l.level}] ${l.context ? `[${l.context}] ` : ''}${l.message}${l.meta ? ' ' + JSON.stringify(l.meta) : ''}`)
-      .join('\n');
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(filteredLogs.map(formatLine).join('\n'));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      addToast?.(`Couldn't copy logs: ${err.message}`, 'error');
+    }
   };
 
   const handleExport = () => {
-    const text = logs
-      .map((l) => `[${l.timestamp}] [${l.level}] ${l.context ? `[${l.context}] ` : ''}${l.message}${l.meta ? ' ' + JSON.stringify(l.meta) : ''}`)
-      .join('\n');
+    const text = logs.map(formatLine).join('\n');
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -246,10 +260,23 @@ export default function LogsViewer() {
   };
 
   const handleClear = async () => {
-    if (window.meetmind?.logs?.clear) {
-      await window.meetmind.logs.clear();
+    const ok = await confirm({
+      title: 'Clear all logs?',
+      message: 'This empties the log buffer and the log file. Export first if you need to keep them.',
+      confirmLabel: 'Clear logs',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      if (window.meetmind?.logs?.clear) {
+        await window.meetmind.logs.clear();
+      }
+      pausedBufferRef.current = [];
+      setPausedCount(0);
+      setLogs([]);
+    } catch (err) {
+      addToast?.(`Couldn't clear logs: ${err.message}`, 'error');
     }
-    setLogs([]);
   };
 
   const handleOpenLogFolder = async () => {
@@ -262,208 +289,182 @@ export default function LogsViewer() {
     }
   };
 
-  return (
-    <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-zinc-950/40 fade-in">
-      {/* Header */}
-      <div className="flex-shrink-0 px-6 pt-3 pb-3 border-b border-slate-200 dark:border-zinc-800/80 bg-slate-100/50 dark:bg-transparent backdrop-blur-md titlebar-drag select-none">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Application Logs</h1>
-            <p className="text-slate-500 dark:text-zinc-400 text-xs mt-0.5">
-              Live diagnostic events, STT status, notes generation, and Notion sync logs
-            </p>
-          </div>
+  const toggleHideExtension = (value) => {
+    setHideExtensionLogs(value);
+    try {
+      localStorage.setItem(HIDE_EXT_KEY, value ? 'true' : 'false');
+    } catch { /* storage unavailable — keep in-memory preference */ }
+  };
 
-          <div className="flex items-center gap-1.5 titlebar-no-drag">
-            {/* Live Mode toggle */}
-            <button
-              type="button"
-              onClick={() => setIsLive((prev) => !prev)}
-              className={`p-2 rounded-lg border transition-all flex items-center justify-center ${
-                isLive
-                  ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 shadow-sm shadow-emerald-500/10'
-                  : 'bg-white dark:bg-zinc-900/60 border-slate-200 dark:border-zinc-800 text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300'
-              }`}
-              title={isLive ? 'Live Streaming: Active (Click to pause)' : 'Live Streaming: Paused (Click to resume)'}
-            >
-              <Radio size={14} className={isLive ? 'animate-pulse' : ''} strokeWidth={2.2} />
-            </button>
+  const levelOptions = LEVELS.map((l) => ({ ...l, count: counts[l.value] || 0 }));
 
-            {/* Refresh */}
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="p-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:bg-slate-100 dark:hover:bg-zinc-800/80 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm dark:shadow-none flex items-center justify-center disabled:opacity-50"
-              title="Refresh Logs"
-            >
-              <RefreshCw size={14} className={refreshing ? 'animate-spin text-emerald-500' : ''} strokeWidth={2} />
-            </button>
-
-            {/* Open Folder */}
-            <button
-              type="button"
-              onClick={handleOpenLogFolder}
-              disabled={openingLogDir}
-              className="p-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:bg-slate-100 dark:hover:bg-zinc-800/80 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm dark:shadow-none flex items-center justify-center disabled:opacity-50"
-              title="Open Logs Folder"
-            >
-              <FolderOpen size={14} strokeWidth={2} />
-            </button>
-
-            {/* Export */}
-            <button
-              type="button"
-              onClick={handleExport}
-              className="p-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:bg-slate-100 dark:hover:bg-zinc-800/80 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm dark:shadow-none flex items-center justify-center"
-              title="Export Logs (.log)"
-            >
-              <Download size={14} strokeWidth={2} />
-            </button>
-
-            {/* Copy */}
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="p-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:bg-slate-100 dark:hover:bg-zinc-800/80 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm dark:shadow-none flex items-center justify-center"
-              title={copied ? 'Copied to clipboard' : 'Copy Filtered Logs'}
-            >
-              {copied ? (
-                <Check size={14} className="text-emerald-500" strokeWidth={2.5} />
-              ) : (
-                <Copy size={14} strokeWidth={2} />
-              )}
-            </button>
-
-            {/* Clear */}
-            <button
-              type="button"
-              onClick={handleClear}
-              className="p-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 dark:hover:border-rose-800 transition-all shadow-sm dark:shadow-none flex items-center justify-center"
-              title="Clear Log Buffer"
-            >
-              <Trash2 size={14} strokeWidth={2} />
-            </button>
-          </div>
+  let body;
+  if (!hasLogsApi) {
+    body = (
+      <div className="flex items-center justify-center h-full text-caption text-graphite">
+        Logs are only available in the desktop app.
+      </div>
+    );
+  } else if (loading) {
+    body = (
+      <div className="flex flex-col gap-8" aria-label="Loading logs">
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <Skeleton key={i} className={`h-16 ${i % 3 === 0 ? 'w-3/4' : i % 3 === 1 ? 'w-full' : 'w-1/2'}`} />
+        ))}
+      </div>
+    );
+  } else if (loadError && logs.length === 0) {
+    body = (
+      <div className="flex flex-col items-center justify-center gap-16 h-full text-center">
+        <p className="flex items-center gap-8 text-caption text-signal">
+          <AlertCircle size={16} strokeWidth={1.75} />
+          Couldn't load logs: {loadError}
+        </p>
+        <button type="button" className="btn-ghost btn-sm" onClick={handleRefresh}>Try again</button>
+      </div>
+    );
+  } else if (filteredLogs.length === 0) {
+    body = (
+      <div className="flex items-center justify-center h-full text-caption text-graphite">
+        {logs.length === 0 ? 'No logs recorded yet.' : 'No logs match your filters.'}
+      </div>
+    );
+  } else {
+    body = filteredLogs.map((entry, idx) => {
+      const lvl = (entry.level || 'INFO').toUpperCase();
+      return (
+        <div
+          key={`${entry.timestamp}-${idx}`}
+          className="flex items-start gap-16 px-8 py-4 rounded-input hover:bg-ink/[0.04]"
+        >
+          <span className="tabular text-graphite flex-shrink-0 select-none">
+            {formatTimestamp(entry.timestamp)}
+          </span>
+          <LevelTag level={lvl} />
+          {entry.context && (
+            <span className="text-graphite flex-shrink-0">[{entry.context}]</span>
+          )}
+          <span className="text-ink break-all flex-1">
+            {entry.message}
+            {entry.meta && (
+              <span className="ml-8 text-graphite">
+                {typeof entry.meta === 'object' ? JSON.stringify(entry.meta) : String(entry.meta)}
+              </span>
+            )}
+          </span>
         </div>
+      );
+    });
+  }
 
-        {/* Toolbar: Level Filter + Search */}
-        <div className="flex items-center justify-between gap-2.5 pt-2.5 border-t border-slate-200 dark:border-zinc-800/40 titlebar-no-drag overflow-x-auto no-scrollbar flex-nowrap">
-          <div className="flex items-center gap-1 shrink-0 flex-nowrap">
-            {Object.keys(LEVEL_META).map((key) => {
-              const meta = LEVEL_META[key];
-              const active = levelFilter === key;
-              const count = counts[key] || 0;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setLevelFilter(key)}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono border whitespace-nowrap shrink-0 transition-all ${
-                    active ? meta.activeClass : meta.idleClass
-                  }`}
-                >
-                  <span>{meta.label}</span>
-                  {count > 0 && (
-                    <span className="text-[10px] opacity-75 font-semibold">({count})</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0 flex-nowrap">
-            <div className="relative w-36 sm:w-44">
-              <Search
-                size={12}
-                strokeWidth={2}
-                className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500 pointer-events-none"
-              />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Filter logs…"
-                className="w-full bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-zinc-800 rounded-lg pl-6 pr-2 py-0.5 text-xs text-slate-800 dark:text-zinc-200 placeholder-slate-400 dark:placeholder-zinc-500 outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20"
-              />
+  return (
+    <div className="h-full flex flex-col overflow-hidden fade-in">
+      {/* Header */}
+      <div className="flex-shrink-0 border-b border-ink">
+        <div className="mx-auto w-full max-w-[1200px] px-32 pt-32 pb-24">
+          <div className="flex flex-wrap items-end justify-between gap-16">
+            <div className="min-w-0">
+              <h1 className="text-heading font-medium text-ink">Logs</h1>
+              <p className="text-body-sm text-graphite mt-8">
+                Diagnostic events from recording, transcription, note generation and Notion sync.
+              </p>
             </div>
 
-            <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-zinc-400 cursor-pointer select-none whitespace-nowrap shrink-0">
-              <input
-                type="checkbox"
-                checked={hideExtensionLogs}
-                onChange={(e) => {
-                  setHideExtensionLogs(e.target.checked);
-                  try {
-                    localStorage.setItem('meetmind:hide-extension-logs', e.target.checked ? 'true' : 'false');
-                  } catch {}
-                }}
-                className="rounded border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-emerald-500 focus:ring-0"
-              />
-              Hide Extension Logs
-            </label>
+            <div className="flex flex-wrap items-center gap-8">
+              <IconButton
+                label={isLive ? 'Pause live updates' : 'Resume live updates'}
+                pressed={isLive}
+                onClick={() => setIsLive((prev) => !prev)}
+              >
+                <Radio size={16} strokeWidth={1.75} />
+              </IconButton>
+              <IconButton label="Reload logs" onClick={handleRefresh} disabled={refreshing || !hasLogsApi}>
+                <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
+              </IconButton>
+              <IconButton label="Open logs folder" onClick={handleOpenLogFolder} disabled={openingLogDir || !hasLogsApi}>
+                <FolderOpen size={16} strokeWidth={1.75} />
+              </IconButton>
+              <button type="button" className="btn-ghost btn-sm" onClick={handleCopy} disabled={filteredLogs.length === 0}>
+                {copied && <Check size={14} strokeWidth={2} />}
+                {copied ? 'Copied' : 'Copy visible'}
+              </button>
+              <button type="button" className="btn-ghost btn-sm" onClick={handleExport} disabled={logs.length === 0}>
+                Export all
+              </button>
+              <button type="button" className="btn-danger btn-sm" onClick={handleClear} disabled={!hasLogsApi}>
+                Clear
+              </button>
+            </div>
+          </div>
 
-            <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-zinc-400 cursor-pointer select-none whitespace-nowrap shrink-0">
-              <input
-                type="checkbox"
-                checked={autoScroll}
-                onChange={(e) => setAutoScroll(e.target.checked)}
-                className="rounded border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-emerald-500 focus:ring-0"
-              />
-              Auto-scroll
-            </label>
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-16 mt-24">
+            <SegmentedControl
+              label="Filter by level"
+              role="radiogroup"
+              size="sm"
+              options={levelOptions}
+              value={levelFilter}
+              onChange={setLevelFilter}
+            />
+
+            <div className="flex flex-wrap items-center gap-24">
+              <div className="relative w-[240px]">
+                <Search
+                  size={16}
+                  strokeWidth={1.75}
+                  className="absolute left-8 top-1/2 -translate-y-1/2 text-graphite pointer-events-none"
+                  aria-hidden="true"
+                />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Filter logs…"
+                  aria-label="Filter logs by text"
+                  className="input pl-32"
+                />
+              </div>
+
+              <label className="flex items-center gap-8 text-caption text-ink cursor-pointer select-none">
+                <Switch checked={hideExtensionLogs} onChange={toggleHideExtension} label="Hide extension logs" />
+                Hide extension logs
+              </label>
+
+              <label className="flex items-center gap-8 text-caption text-ink cursor-pointer select-none">
+                <Switch checked={autoScroll} onChange={setAutoScroll} label="Auto-scroll" />
+                Auto-scroll
+              </label>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Log Console Body */}
-      <div className="flex-1 p-6 overflow-hidden">
+      {/* Log panel */}
+      <div className="flex-1 min-h-0 mx-auto w-full max-w-[1200px] px-32 py-24 flex flex-col gap-8">
+        {!isLive && (
+          <p className="flex items-center gap-8 text-caption text-graphite" role="status">
+            <span className="dot dot-graphite" aria-hidden="true" />
+            Paused{pausedCount > 0 ? ` · ${pausedCount} new ${pausedCount === 1 ? 'entry' : 'entries'} waiting` : ''}
+            <button type="button" className="font-medium text-ink underline underline-offset-4" onClick={() => setIsLive(true)}>
+              Resume
+            </button>
+          </p>
+        )}
+        {loadError && logs.length > 0 && (
+          <p className="flex items-center gap-8 text-caption text-signal" role="alert">
+            <AlertCircle size={14} strokeWidth={1.75} />
+            Couldn't refresh logs: {loadError}
+          </p>
+        )}
         <div
           ref={logContainerRef}
-          className="h-full overflow-y-auto bg-white dark:bg-zinc-950/90 border border-slate-200 dark:border-zinc-800/80 rounded-xl p-4 font-mono text-xs text-slate-800 dark:text-zinc-300 space-y-1 select-text scrollbar-wide shadow-inner"
+          onScroll={handleScroll}
+          className="tile flex-1 min-h-0 overflow-y-auto p-16 font-mono text-caption select-text"
+          role="log"
+          aria-live="off"
         >
-          {filteredLogs.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-slate-400 dark:text-zinc-600 text-xs">
-              {logs.length === 0 ? 'No logs recorded yet.' : 'No logs match your filter criteria.'}
-            </div>
-          ) : (
-            filteredLogs.map((entry, idx) => {
-              const lvl = (entry.level || 'INFO').toUpperCase();
-              const meta = LEVEL_META[lvl] || LEVEL_META.INFO;
-              return (
-                <div
-                  key={idx}
-                  className="flex items-start gap-2.5 py-0.5 leading-relaxed hover:bg-slate-100 dark:hover:bg-zinc-900/60 px-2 rounded -mx-2 transition-colors"
-                >
-                  <span className="text-[11px] text-slate-400 dark:text-zinc-600 flex-shrink-0 select-none">
-                    {formatTimestamp(entry.timestamp)}
-                  </span>
-                  <span
-                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded border flex-shrink-0 ${
-                      meta.badge || 'text-slate-600 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
-                    }`}
-                  >
-                    {lvl}
-                  </span>
-                  {entry.context && (
-                    <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-semibold flex-shrink-0">
-                      [{entry.context}]
-                    </span>
-                  )}
-                  <span className="text-slate-800 dark:text-zinc-300 break-all flex-1">
-                    {entry.message}
-                    {entry.meta && (
-                      <span className="ml-2 text-slate-500 dark:text-zinc-400 text-[11px]">
-                        {typeof entry.meta === 'object'
-                          ? JSON.stringify(entry.meta)
-                          : String(entry.meta)}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              );
-            })
-          )}
+          {body}
         </div>
       </div>
     </div>

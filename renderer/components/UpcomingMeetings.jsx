@@ -1,187 +1,130 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  CalendarDays,
-  Clock,
   ChevronDown,
   ChevronRight,
   ExternalLink,
-  Mic,
   Users,
   Video,
   RefreshCw,
-  Loader2,
-  Link2,
   MapPin,
-  AlertCircle,
 } from 'lucide-react';
 import GoogleCalendarIcon from './GoogleCalendarIcon.jsx';
+import { IconButton, StatusDot, Skeleton, AvatarTile } from './ui/index.jsx';
+import { formatTime, dayLabel } from '../lib/format.js';
+import { meetingPlatform } from '../lib/platform.js';
+import { useNow } from '../lib/hooks.js';
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const SOON_WINDOW_MS = 15 * 60 * 1000;
+const COLLAPSED_KEY = 'meetmind.upcomingCollapsed';
 
-function formatEventTime(isoString) {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-}
-
-function formatEventDate(isoString) {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function getEventStatus(event) {
-  const now = Date.now();
+function getEventStatus(event, now) {
   const start = new Date(event.start).getTime();
   const end = new Date(event.end).getTime();
 
   if (event.isAllDay) return 'all-day';
   if (now >= start && now <= end) return 'in-progress';
-  if (start - now <= 15 * 60 * 1000 && start - now > 0) return 'starting-soon';
+  if (start - now <= SOON_WINDOW_MS && start - now > 0) return 'starting-soon';
   return 'upcoming';
 }
 
-function isToday(dateStr) {
-  const d = new Date(dateStr);
-  const today = new Date();
-  return d.toDateString() === today.toDateString();
+function readCollapsed() {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
-function isTomorrow(dateStr) {
-  const d = new Date(dateStr);
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return d.toDateString() === tomorrow.toDateString();
+function writeCollapsed(value) {
+  try {
+    localStorage.setItem(COLLAPSED_KEY, value ? '1' : '0');
+  } catch { /* storage unavailable — collapse still works for this session */ }
 }
 
-function getDayLabel(dateStr) {
-  if (isToday(dateStr)) return 'Today';
-  if (isTomorrow(dateStr)) return 'Tomorrow';
-  return formatEventDate(dateStr);
-}
-
-function getMeetingPlatform(url) {
-  if (!url) return null;
-  if (url.includes('meet.google.com')) return { name: 'Google Meet', color: 'text-emerald-500 dark:text-emerald-400', icon: 'icons/google-meet.png' };
-  if (url.includes('zoom.us') || url.includes('zoom.com')) return { name: 'Zoom', color: 'text-blue-500 dark:text-blue-400' };
-  if (url.includes('teams.microsoft.com') || url.includes('teams.live.com')) return { name: 'Teams', color: 'text-violet-500 dark:text-violet-400' };
-  return { name: 'Video Call', color: 'text-sky-500 dark:text-sky-400' };
-}
-
-function EventCard({ event, onStartRecording, isRecording }) {
-  const status = getEventStatus(event);
-  const platform = getMeetingPlatform(event.meetingLink);
+function EventCard({ event, onStartRecording, isRecording, now }) {
+  const status = getEventStatus(event, now);
+  const platform = meetingPlatform(event.meetingLink);
   const isLive = status === 'in-progress';
   const isSoon = status === 'starting-soon';
+  const minutesUntil = Math.max(1, Math.ceil((new Date(event.start).getTime() - now) / 60000));
+
+  const meta = [];
+  if (event.isAllDay) meta.push(<span key="time">All day</span>);
+  else meta.push(<span key="time" className="tabular">{formatTime(event.start)} – {formatTime(event.end)}</span>);
+  if (event.attendeeCount > 1) {
+    meta.push(
+      <span key="people" className="flex items-center gap-4">
+        <Users size={14} strokeWidth={1.75} />
+        {event.attendeeCount}
+      </span>
+    );
+  }
+  if (event.location && !event.meetingLink) {
+    meta.push(
+      <span key="loc" className="flex items-center gap-4 truncate max-w-[160px]">
+        <MapPin size={14} strokeWidth={1.75} />
+        {event.location}
+      </span>
+    );
+  }
+  if (platform) {
+    meta.push(
+      <span key="platform" className="flex items-center gap-4">
+        {platform.icon
+          ? <img src={platform.icon} alt="" className="w-16 h-16 object-contain logo-mono" />
+          : <Video size={14} strokeWidth={1.75} />}
+        {platform.name}
+      </span>
+    );
+  }
 
   return (
-    <div
-      className={`relative overflow-hidden rounded-lg border transition-all duration-200 group ${
-        isLive
-          ? 'border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-500/5'
-          : isSoon
-          ? 'border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/5'
-          : 'border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/40'
-      } hover:border-indigo-500/30 hover:bg-indigo-500/5 dark:hover:bg-indigo-500/5`}
-    >
-      <div className="px-3.5 py-2.5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            {/* Title */}
-            <div className="flex items-center gap-2 mb-1">
-              {isLive && (
-                <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live
-                </span>
-              )}
-              {isSoon && (
-                <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                  <Clock size={10} strokeWidth={2.5} />
-                  Soon
-                </span>
-              )}
-              <h4 className="text-sm font-medium text-slate-800 dark:text-zinc-200 truncate leading-tight">
-                {event.title}
-              </h4>
-            </div>
-
-            {/* Time + metadata */}
-            <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-zinc-400">
-              {!event.isAllDay && (
-                <span className="flex items-center gap-1">
-                  <Clock size={11} strokeWidth={2} />
-                  {formatEventTime(event.start)}
-                  <span className="text-slate-300 dark:text-zinc-600">—</span>
-                  {formatEventTime(event.end)}
-                </span>
-              )}
-              {event.isAllDay && (
-                <span className="flex items-center gap-1 text-slate-400 dark:text-zinc-500">
-                  All day
-                </span>
-              )}
-              {event.attendeeCount > 1 && (
-                <>
-                  <span className="text-slate-300 dark:text-zinc-600">·</span>
-                  <span className="flex items-center gap-1">
-                    <Users size={11} strokeWidth={2} />
-                    {event.attendeeCount}
-                  </span>
-                </>
-              )}
-              {event.location && !event.meetingLink && (
-                <>
-                  <span className="text-slate-300 dark:text-zinc-600">·</span>
-                  <span className="flex items-center gap-1 truncate max-w-[120px]">
-                    <MapPin size={11} strokeWidth={2} />
-                    {event.location}
-                  </span>
-                </>
-              )}
-              {platform && (
-                <>
-                  <span className="text-slate-300 dark:text-zinc-600">·</span>
-                  <span className={`flex items-center gap-1 font-medium ${platform.color}`}>
-                    {platform.icon
-                      ? <img src={platform.icon} alt={platform.name} className="w-3 h-3 object-contain" />
-                      : <Video size={11} strokeWidth={2} />}
-                    {platform.name}
-                  </span>
-                </>
-              )}
-            </div>
+    <div className={`card-compact py-16 ${isLive ? 'border-2' : ''}`}>
+      <div className="flex items-center justify-between gap-16">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-8 min-w-0">
+            {isLive && (
+              <span className="flex items-center gap-8 text-caption font-medium text-ink flex-shrink-0">
+                <StatusDot tone="ok" className="dot-live" />
+                Live now
+              </span>
+            )}
+            {isSoon && <span className="highlight flex-shrink-0">In {minutesUntil} min</span>}
+            <h4 className="text-body-sm font-medium text-ink truncate">{event.title}</h4>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {event.meetingLink && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.meetmind.shell.openExternal(event.meetingLink);
-                }}
-                className="btn-ghost text-[11px] px-2 py-1 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
-                title="Join meeting"
-              >
-                <ExternalLink size={11} strokeWidth={2} />
-                Join
-              </button>
-            )}
-            {(isLive || isSoon) && !event.isAllDay && !isRecording && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStartRecording(event);
-                }}
-                className="btn-primary text-[11px] px-2.5 py-1 shadow-sm"
-                title="Start recording this meeting"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-zinc-950" />
-                Record
-              </button>
-            )}
+          <div className="flex items-center gap-8 flex-wrap text-caption text-graphite mt-4">
+            {meta.map((item, i) => (
+              <React.Fragment key={item.key}>
+                {i > 0 && <span aria-hidden="true">·</span>}
+                {item}
+              </React.Fragment>
+            ))}
           </div>
+        </div>
+
+        <div className="flex items-center gap-8 flex-shrink-0">
+          {event.meetingLink && (
+            <button
+              type="button"
+              onClick={() => window.meetmind.shell.openExternal(event.meetingLink)}
+              className="btn-ghost btn-sm"
+            >
+              <ExternalLink size={14} strokeWidth={1.75} />
+              Join
+            </button>
+          )}
+          {(isLive || isSoon) && !event.isAllDay && !isRecording && (
+            <button
+              type="button"
+              onClick={() => onStartRecording(event)}
+              className="btn-ink btn-sm"
+            >
+              <span className="dot dot-sm dot-signal" aria-hidden="true" />
+              Record
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -190,16 +133,13 @@ function EventCard({ event, onStartRecording, isRecording }) {
 
 function SkeletonEvent() {
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/40 px-3.5 py-2.5">
-      <div className="flex items-start justify-between gap-3">
+    <div className="card-compact py-16" aria-hidden="true">
+      <div className="flex items-center justify-between gap-16">
         <div className="flex-1">
-          <div className="h-3.5 w-44 bg-slate-200 dark:bg-zinc-800 rounded animate-pulse mb-2" />
-          <div className="flex gap-2">
-            <div className="h-3 w-24 bg-slate-200 dark:bg-zinc-800 rounded animate-pulse" />
-            <div className="h-3 w-16 bg-slate-200 dark:bg-zinc-800 rounded animate-pulse" />
-          </div>
+          <Skeleton className="h-16 w-[40%]" />
+          <Skeleton className="h-16 w-[25%] mt-8" />
         </div>
-        <div className="h-6 w-14 bg-slate-200 dark:bg-zinc-800 rounded animate-pulse" />
+        <Skeleton className="h-32 w-[72px] rounded-full" />
       </div>
     </div>
   );
@@ -209,12 +149,17 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   const [connected, setConnected] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const now = useNow(60_000);
 
   const fetchEvents = useCallback(async (showRefreshState = false) => {
-    if (!window.meetmind?.calendar) return;
+    if (!window.meetmind?.calendar) {
+      setConnected(false);
+      setLoading(false);
+      return;
+    }
 
     if (showRefreshState) setRefreshing(true);
 
@@ -224,8 +169,6 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
 
       if (!status.connected) {
         setEvents([]);
-        setLoading(false);
-        setRefreshing(false);
         return;
       }
 
@@ -251,6 +194,13 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      writeCollapsed(!prev);
+      return !prev;
+    });
+  };
+
   // Group events by day
   const groupedEvents = useMemo(() => {
     const groups = {};
@@ -261,123 +211,105 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
     }
     return Object.entries(groups).map(([dateKey, evts]) => ({
       dateKey,
-      label: getDayLabel(evts[0].start),
+      label: dayLabel(evts[0].start),
       events: evts,
     }));
   }, [events]);
 
-  // Don't render the section at all if not connected
   if (!loading && !connected) {
     return (
-      <div className={className}>
+      <section className={className}>
         <button
+          type="button"
           onClick={onNavigateToSettings}
-          className="w-full rounded-xl border border-dashed border-slate-300 dark:border-zinc-700/60 bg-white/50 dark:bg-zinc-900/30 px-4 py-3 text-left hover:border-indigo-500/40 hover:bg-indigo-500/5 dark:hover:bg-indigo-500/5 transition-all group"
+          className="w-full card-compact text-left flex items-center gap-16 transition-colors duration-150 hover:bg-ink/[0.03]"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
-              <GoogleCalendarIcon size={15} className="text-indigo-500 dark:text-indigo-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-700 dark:text-zinc-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                Connect Google Calendar
-              </p>
-              <p className="text-xs text-slate-500 dark:text-zinc-500 mt-0.5">
-                See upcoming meetings and get recording prompts
-              </p>
-            </div>
-            <ChevronRight size={16} className="text-slate-400 dark:text-zinc-600 group-hover:text-indigo-500 transition-colors" />
+          <AvatarTile size={48}>
+            <GoogleCalendarIcon size={20} />
+          </AvatarTile>
+          <div className="flex-1 min-w-0">
+            <p className="text-body-sm font-medium text-ink">Connect Google Calendar</p>
+            <p className="text-caption text-graphite mt-4">See upcoming meetings and get a prompt to record when they start.</p>
           </div>
+          <ChevronRight size={18} strokeWidth={1.75} className="text-graphite flex-shrink-0" />
         </button>
-      </div>
+      </section>
     );
   }
 
+  const errorUrl = error?.match(/https?:\/\/[^\s]+/)?.[0];
+
   return (
-    <div className={className}>
-      {/* Section header */}
-      <div className="flex items-center justify-between mb-2">
+    <section className={className} aria-labelledby="upcoming-heading">
+      <div className="flex items-center justify-between gap-16 mb-16">
         <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors"
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          aria-controls="upcoming-list"
+          className="flex items-center gap-8 text-graphite hover:text-ink transition-colors duration-150"
         >
-          {collapsed ? <ChevronRight size={13} strokeWidth={2.5} /> : <ChevronDown size={13} strokeWidth={2.5} />}
-          <GoogleCalendarIcon size={13} className="text-indigo-500 dark:text-indigo-400" />
-          Upcoming Meetings
-          {events.length > 0 && (
-            <span className="ml-1 text-[10px] font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 rounded-full px-1.5 py-0.5 normal-case">
-              {events.length}
-            </span>
-          )}
+          {collapsed ? <ChevronRight size={16} strokeWidth={1.75} /> : <ChevronDown size={16} strokeWidth={1.75} />}
+          <GoogleCalendarIcon size={16} />
+          <span id="upcoming-heading" className="eyebrow">Upcoming meetings</span>
+          {events.length > 0 && <span className="pill-quiet tabular">{events.length}</span>}
         </button>
-        <button
-          onClick={() => fetchEvents(true)}
-          disabled={refreshing}
-          className="btn-ghost p-1.5 text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300"
-          title="Refresh events"
-        >
-          <RefreshCw size={12} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} />
-        </button>
+        <IconButton label="Refresh calendar events" onClick={() => fetchEvents(true)} disabled={refreshing}>
+          <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
+        </IconButton>
       </div>
 
-      {/* Collapsible content */}
       {!collapsed && (
-        <div className="space-y-3 fade-in">
+        <div id="upcoming-list" className="flex flex-col gap-24 fade-in">
           {loading ? (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-8">
               <SkeletonEvent />
               <SkeletonEvent />
             </div>
           ) : error ? (
-            <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-400 space-y-2">
-              <div className="flex items-start gap-2">
-                <AlertCircle size={15} strokeWidth={2} className="flex-shrink-0 mt-0.5" />
+            <div className="card-compact" role="alert">
+              <div className="flex items-start gap-16">
+                <StatusDot tone="error" className="mt-4" />
                 <div className="flex-1 min-w-0">
-                  <p className="leading-relaxed font-medium">
+                  <p className="text-body-sm text-ink">
                     {error.includes('http') ? error.split('http')[0].replace(/:\s*$/, '') : error}
                   </p>
-                  {error.includes('http') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const match = error.match(/https?:\/\/[^\s]+/);
-                        if (match) window.meetmind.shell.openExternal(match[0]);
-                      }}
-                      className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-700 dark:text-rose-300 font-medium transition-colors"
-                    >
-                      <ExternalLink size={12} />
-                      Enable Google Calendar API in Google Cloud Console
-                    </button>
-                  )}
-                  {error.includes('Settings') && (
-                    <button
-                      type="button"
-                      onClick={onNavigateToSettings}
-                      className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-700 dark:text-rose-300 font-medium transition-colors"
-                    >
-                      Go to Settings
-                    </button>
+                  {(errorUrl || error.includes('Settings')) && (
+                    <div className="flex flex-wrap items-center gap-8 mt-16">
+                      {errorUrl && (
+                        <button
+                          type="button"
+                          onClick={() => window.meetmind.shell.openExternal(errorUrl)}
+                          className="btn-ghost btn-sm"
+                        >
+                          <ExternalLink size={14} strokeWidth={1.75} />
+                          Enable Google Calendar API
+                        </button>
+                      )}
+                      {error.includes('Settings') && (
+                        <button type="button" onClick={onNavigateToSettings} className="btn-ghost btn-sm">
+                          Go to Settings
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
             </div>
           ) : events.length === 0 ? (
-            <div className="text-center py-3">
-              <p className="text-xs text-slate-400 dark:text-zinc-500">No upcoming meetings</p>
-            </div>
+            <p className="text-caption text-graphite">No upcoming meetings.</p>
           ) : (
             groupedEvents.map((group) => (
               <div key={group.dateKey}>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-600 mb-1.5 px-0.5">
-                  {group.label}
-                </p>
-                <div className="space-y-1.5">
+                <p className="eyebrow mb-8">{group.label}</p>
+                <div className="flex flex-col gap-8">
                   {group.events.map((event) => (
                     <EventCard
                       key={event.id}
                       event={event}
                       onStartRecording={onStartRecording}
                       isRecording={isRecording}
+                      now={now}
                     />
                   ))}
                 </div>
@@ -386,6 +318,6 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }

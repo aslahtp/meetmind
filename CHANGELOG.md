@@ -1,10 +1,37 @@
 ---
 tags: [meta, changelog]
-updated: 2026-09-17
+updated: 2026-09-24
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [2.13.0] - 2026-09-24
+
+### Changed
+
+- Redesigned the whole app and Chrome extension in a "paper notebook" style: cream canvas, ink hairline borders, DM Sans, one yellow primary action per view, and no shadows or gradients.
+- Navigation moved from the sidebar to a top bar with the wordmark, page tabs and a Record button.
+- Settings is split into tabs (General, Transcription, Notes, Integrations, System), with a "How to get a key" guide next to each API key field.
+- Light is now the default theme. The dark theme is derived from the same design tokens, and an explicitly saved Dark or System choice is kept.
+- Brand and platform logos are monochrome, and status is shown with dots and text instead of colored badges.
+
+### Added
+
+- Meetings: search, plus filters for All / Needs attention / Processing / In Notion.
+- Top-bar processing indicator that shows the pipeline stage and percentage; click it to open the meeting.
+- Settings: an unsaved-changes bar with Save and Discard, and a prompt before leaving with unsaved edits.
+- In-app confirmation dialogs for deleting a meeting, regenerating notes, disconnecting Google Calendar and clearing logs.
+- Dashboard: an inline setup checklist when API keys are missing, replacing the floating onboarding banner.
+
+### Fixed
+
+- Keyboard focus is now visible everywhere. Dialogs, tabs, switches and radio groups can be used with the keyboard and have proper ARIA roles.
+- A meeting that is already processing no longer offers "Generate notes", which prevented starting a second run.
+- The logs Live view no longer overwrites streamed entries with its periodic refresh, and it only auto-scrolls when you are at the bottom.
+- "Copy as Markdown" now includes section-based notes and action items that have no `task` field.
+- The recording timer no longer resets to zero when the recording bar re-renders.
+- The session card delete button is no longer nested inside another button, and failed meetings show "Processing failed" with a Retry action.
 
 ## [2.12.0] - 2026-09-22
 

@@ -4,29 +4,53 @@
   <meta charset="utf-8" />
   <title>Opening MeetMind…</title>
   <style>
+    @font-face {
+      font-family: 'DM Sans';
+      src: url('fonts/DMSans-Variable.woff2') format('woff2');
+      font-weight: 100 1000;
+      font-style: normal;
+      font-display: swap;
+    }
+    :root { color-scheme: light; }
     html, body {
       margin: 0;
       height: 100%;
-      background: #0e0e12;
-      color: #e8e8ed;
-      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #f8f5ed;
+      color: #000000;
+      font-family: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-feature-settings: "ss03", "ss04";
+      -webkit-font-smoothing: antialiased;
     }
     body {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 12px;
+      gap: 16px;
       padding: 24px;
       text-align: center;
     }
+    #status {
+      font-size: 28px;
+      font-weight: 500;
+      line-height: 1.25;
+    }
     a {
-      color: #34d399;
-      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 16px;
+      padding: 16px 24px;
+      border-radius: 24px;
+      background: #ffda6e;
+      color: #000000;
+      font-size: 16px;
+      font-weight: 500;
       text-decoration: none;
     }
-    a:hover { text-decoration: underline; }
-    .muted { color: #9a9aab; font-size: 13px; max-width: 320px; line-height: 1.4; }
+    a:hover { background: #f5ca50; }
+    a:focus-visible { outline: 2px solid #000000; outline-offset: 2px; }
+    .muted { color: #707070; font-size: 16px; max-width: 360px; line-height: 1.5; margin: 0; }
   </style>
 </head>
 <body>
@@ -35,7 +59,7 @@
     If Chrome asks to open MeetMind, click <strong>Open</strong>.
     If nothing happens, start MeetMind from the Start menu once, then try again.
   </p>
-  <a id="launch" href="meetmind://open">Open MeetMind App</a>
+  <a id="launch" href="meetmind://open">Open MeetMind app</a>
   <script src="open-app.js"></script>
 </body>
 </html>

@@ -64,7 +64,7 @@ const schema = {
   },
   theme: {
     type: 'string',
-    default: 'dark',
+    default: 'light',
   },
   websocketPort: {
     type: 'number',
@@ -209,7 +209,7 @@ function getConfig() {
     systemAudioDevice:         store.get('systemAudioDevice') || '',
     micDevice:                 store.get('micDevice') || '',
     autoLaunch:                store.get('autoLaunch') ?? true,
-    theme:                     store.get('theme') || 'dark',
+    theme:                     store.get('theme') || 'light',
     websocketPort:             store.get('websocketPort') || 39842,
     onboardingComplete:        store.get('onboardingComplete') || false,
     sttService:                store.get('sttService') || 'google',

@@ -68,7 +68,7 @@ function injectOverlay(config = {}) {
   overlayFrame.src = chrome.runtime.getURL('overlay/overlay.html');
   overlayFrame.allow = '';
   overlayFrame.allowFullscreen = false;
-  overlayFrame.style.colorScheme = 'dark';
+  overlayFrame.style.colorScheme = 'light';
 
   overlayWidth = 160;
   overlayHeight = BAR_HEIGHT;
