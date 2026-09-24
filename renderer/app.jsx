@@ -20,6 +20,7 @@ import NoteViewer from './components/NoteViewer.jsx';
 import Settings from './components/Settings.jsx';
 import ProcessingIndicator from './components/ProcessingIndicator.jsx';
 import { AppContext, useApp, hasSttApiKey } from './lib/app-context.js';
+import { markScrollRestore, cancelScrollRestore } from './lib/scrollMemory.js';
 import LogsViewer from './components/LogsViewer.jsx';
 import RecordingBar from './components/RecordingBar.jsx';
 import { IconButton, StatusDot, useConfirmDialog } from './components/ui/index.jsx';
@@ -536,7 +537,11 @@ export default function App() {
           {view === 'session' && selectedSession && (
             <NoteViewer
               session={selectedSession}
-              onBack={() => requestNavigate(sessionOrigin)}
+              onBack={async () => {
+                // Return to the list where it was scrolled, not the top.
+                markScrollRestore(sessionOrigin);
+                if (!(await requestNavigate(sessionOrigin))) cancelScrollRestore(sessionOrigin);
+              }}
               onRefresh={async () => {
                 const updated = await window.meetmind.sessions.get(selectedSession.id);
                 if (updated) setSelectedSession(updated);

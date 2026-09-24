@@ -21,6 +21,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 ### Changed
 
+- Back from a meeting returns the Dashboard or Meetings list to where you were scrolled, and Meetings keeps its search and filter; the top-bar tabs still open pages at the top.
 - The meeting toolbar's Notion control is one pill marked by the Notion logo, with "Open" and a labelled "Update" that confirms before replacing the page, instead of an unlabelled Notion logo button.
 
 ## [3.4.0] - 2026-09-25

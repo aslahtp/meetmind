@@ -7,6 +7,7 @@ import { PageHeader, IconButton, EmptyState, Skeleton, StatusDot } from './ui/in
 import { sessionDisplayTitle } from '../lib/format.js';
 import { isProcessing } from '../lib/status.js';
 import { useDelayedFlag, useSessionActions, SKELETON_DELAY_MS } from '../lib/hooks.js';
+import { useScrollMemory, useRememberedState } from '../lib/scrollMemory.js';
 
 const FILTERS = [
   { key: 'all',       label: 'All',             test: () => true },
@@ -45,8 +46,10 @@ export default function Meetings({ onOpenSession }) {
   const { sessions, refreshSessions, startRecording, isRecording, sessionsLoading, sessionsError } = useApp();
   const { handleUploadAudio } = useSessionActions();
   const showSkeleton = useDelayedFlag(sessionsLoading, SKELETON_DELAY_MS);
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('all');
+  // Remembered so Back from a meeting returns to the same filtered list (and scroll spot).
+  const [query, setQuery] = useRememberedState('meetings:query', '');
+  const [filter, setFilter] = useRememberedState('meetings:filter', 'all');
+  const scrollRef = useScrollMemory('meetings');
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -94,7 +97,7 @@ export default function Meetings({ onOpenSession }) {
 
   return (
     <>
-      <div className="h-full overflow-y-auto">
+      <div ref={scrollRef} className="h-full overflow-y-auto">
         <div className="page fade-in">
           <PageHeader
             title="Meetings"

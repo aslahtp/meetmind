@@ -20,6 +20,7 @@ import {
 } from './ui/index.jsx';
 import { getSessionDuration, formatMinutes } from '../lib/format.js';
 import { useDelayedFlag, useSessionActions, SKELETON_DELAY_MS } from '../lib/hooks.js';
+import { useScrollMemory } from '../lib/scrollMemory.js';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -141,6 +142,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   const [meetingToast, setMeetingToast] = useState(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const scrollRef = useScrollMemory('dashboard');
   const toastTimersRef = useRef([]);
 
   const recentLimit = config?.dashboardRecentLimit || 5;
@@ -242,7 +244,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
           }
           actions={headerActions}
         />
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1200px] px-32 pt-24 pb-48">
             {keysNotSet && <SetupCard config={config} onSetup={onNavigateToSettings} />}
 
