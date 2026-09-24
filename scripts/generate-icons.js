@@ -1,5 +1,6 @@
 /**
  * Generates MeetMind PNG + ICO icons from assets/icons/icon.svg
+ * (sizes up to SMALL_MAX use the bolder assets/icons/icon-small.svg)
  * Run: pnpm run generate-icons
  */
 
@@ -12,6 +13,8 @@ const pngToIco = require('png-to-ico').default || require('png-to-ico');
 
 const ROOT = path.join(__dirname, '..');
 const SVG = path.join(ROOT, 'assets/icons/icon.svg');
+const SVG_SMALL = path.join(ROOT, 'assets/icons/icon-small.svg');
+const SMALL_MAX = 24;
 const APP_ICONS = path.join(ROOT, 'assets/icons');
 const EXT_ICONS = path.join(ROOT, 'extension/icons');
 
@@ -20,7 +23,8 @@ const EXT_SIZES = [16, 48, 128];
 const ICO_SIZES = [16, 24, 32, 48, 256];
 
 async function renderPng(size, outPath) {
-  await sharp(SVG)
+  const source = size <= SMALL_MAX && fs.existsSync(SVG_SMALL) ? SVG_SMALL : SVG;
+  await sharp(source, { density: 72 * Math.max(1, size / 128) * 4 })
     .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
     .toFile(outPath);

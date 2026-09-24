@@ -6,6 +6,13 @@ updated: 2026-09-24
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.2.0] - 2026-09-24
+
+### Changed
+
+- New app icon everywhere (window, taskbar, tray, installer, notifications and the Chrome extension): the outlined mic tile from the app's top bar, replacing the old green microphone.
+- Icons at 16–24px use a bolder variant so the mic stays legible in the tray, and large icon sizes are rendered sharper.
+
 ## [3.1.0] - 2026-09-24
 
 ### Changed
