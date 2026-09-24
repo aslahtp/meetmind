@@ -6,6 +6,15 @@ updated: 2026-09-24
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.1.0] - 2026-09-24
+
+### Changed
+
+- Meeting page header is now a single slim toolbar (back, Summary/Transcript/Audio tabs, Copy, Regenerate, Notion), so notes get most of the window.
+- The meeting title, date and tags scroll away with the notes, and the title reappears in the toolbar once scrolled past.
+- Markdown notes no longer repeat the meeting title as their first heading.
+- Switching between Summary, Transcript and Audio starts at the top of the page.
+
 ## [3.0.0] - 2026-09-24
 
 ### Changed

@@ -157,8 +157,17 @@ export function FormattedText({ content, className = '' }) {
 }
 
 // Full markdown renderer for executive-markdown notes (token-mapped prose).
-export function MarkdownNoteView({ markdown }) {
+// Drops a leading "# Title" when it repeats the page title shown above the notes.
+function stripDuplicateTitle(markdown, title) {
+  if (!title) return markdown;
+  const match = markdown.match(/^\s*#\s+(.+?)\s*#*\s*(?:\r?\n|$)/);
+  if (!match || match[1].trim().toLowerCase() !== title.trim().toLowerCase()) return markdown;
+  return markdown.slice(match[0].length);
+}
+
+export function MarkdownNoteView({ markdown, omitTitle }) {
   if (!markdown) return null;
+  markdown = stripDuplicateTitle(markdown, omitTitle);
   return (
     <article className="prose max-w-none fade-in">
       <ReactMarkdown

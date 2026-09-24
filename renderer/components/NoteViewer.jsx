@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { FileText, Mic, Volume2, MicOff, Sparkles, Loader2 } from 'lucide-react';
 import { useApp } from '../app.jsx';
 import TranscriptViewer from './TranscriptViewer.jsx';
-import NoteHeader from './note/NoteHeader.jsx';
+import { NoteToolbar, NoteTitleBlock } from './note/NoteHeader.jsx';
 import SummaryJson from './note/SummaryJson.jsx';
 import AudioPlayer from './note/AudioPlayer.jsx';
 import { MarkdownNoteView } from './note/markdown.jsx';
@@ -57,9 +57,11 @@ function ProcessingCard({ stage, percent, includeNotion, onRestart }) {
 
 // ── Summary tab ──────────────────────────────────────────────────────────────
 
-function SummaryTab({ notes, noSpeech, isError, busy, onGenerate, onRetry }) {
+function SummaryTab({ notes, title, noSpeech, isError, busy, onGenerate, onRetry }) {
   if (notes) {
-    return notes._rawMarkdown ? <MarkdownNoteView markdown={notes._rawMarkdown} /> : <SummaryJson notes={notes} />;
+    return notes._rawMarkdown
+      ? <MarkdownNoteView markdown={notes._rawMarkdown} omitTitle={title} />
+      : <SummaryJson notes={notes} />;
   }
   if (busy) return null;
 
@@ -108,6 +110,21 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const [regenerating, setRegenerating] = useState(false);
   const [starting, setStarting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [titleHidden, setTitleHidden] = useState(false);
+  const scrollRef = useRef(null);
+  const titleRef = useRef(null);
+
+  // Show the title in the toolbar once the in-page title scrolls out of view.
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el || !scrollRef.current) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => setTitleHidden(!entry.isIntersecting),
+      { root: scrollRef.current, threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const notes = session.notes;
   const rawTranscript = session.transcript;
@@ -209,6 +226,11 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
     }
   };
 
+  const changeTab = (tab) => {
+    setActiveTab(tab);
+    scrollRef.current?.scrollTo({ top: 0 });
+  };
+
   const tabs = [
     { value: 'summary', label: 'Summary', icon: FileText },
     {
@@ -222,16 +244,14 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden fade-in">
-      <NoteHeader
-        session={session}
-        notes={notes}
+      <NoteToolbar
         title={title}
-        durationLabel={durationLabel}
+        showTitle={titleHidden}
+        notes={notes}
         tabs={tabs}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={changeTab}
         onBack={onBack}
-        processingError={processingError}
         busy={busy}
         copied={copied}
         onCopy={handleCopy}
@@ -242,10 +262,18 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
         onSyncNotion={handleSyncNotion}
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className={`mx-auto w-full max-w-[880px] px-32 pb-64 ${activeTab === 'transcript' ? 'pt-0' : 'pt-32'}`}>
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[880px] px-32 pb-64">
+          <NoteTitleBlock
+            ref={titleRef}
+            session={session}
+            notes={notes}
+            title={title}
+            durationLabel={durationLabel}
+            processingError={processingError}
+          />
           {activeTab === 'summary' && (
-            <div className="space-y-48">
+            <div className="space-y-48 pt-24">
               {busy && (
                 <ProcessingCard
                   stage={stage}
@@ -256,6 +284,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
               )}
               <SummaryTab
                 notes={notes}
+                title={title}
                 noSpeech={noSpeech}
                 isError={isError}
                 busy={busy}
@@ -268,11 +297,13 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
             <TranscriptViewer transcript={normalizedTranscript} />
           )}
           {activeTab === 'audio' && (
-            <AudioPlayer
-              sessionId={session.id}
-              title={title}
-              durationLabel={durationLabel}
-            />
+            <div className="pt-24">
+              <AudioPlayer
+                sessionId={session.id}
+                title={title}
+                durationLabel={durationLabel}
+              />
+            </div>
           )}
         </div>
       </div>

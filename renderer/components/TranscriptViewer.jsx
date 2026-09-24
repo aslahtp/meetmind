@@ -76,7 +76,7 @@ export default function TranscriptViewer({ transcript }) {
   return (
     <div className="fade-in">
       {/* Toolbar — sticks to the top of the scrolling body */}
-      <div className="sticky top-0 z-10 bg-paper pt-24 pb-16 border-b border-ink space-y-16">
+      <div className="sticky top-0 z-10 bg-paper pt-16 pb-16 border-b border-ink space-y-16">
         <div className="flex items-center gap-8">
           <div className="relative flex-1 min-w-0">
             <Search

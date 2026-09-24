@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import {
   ChevronLeft,
   Copy,
@@ -26,28 +26,18 @@ const SENTIMENT_LABELS = {
   tense:    'Tense',
 };
 
-function MetaLine({ session, notes, durationLabel }) {
+function metaText(session, notes, durationLabel) {
   const attendees = notes?.attendees || [];
   const parts = [
     session.started_at && formatDate(session.started_at),
     session.started_at && formatTime(session.started_at),
     notes?.duration || durationLabel,
+    attendees.length > 0 && `${attendees.length} attendee${attendees.length !== 1 ? 's' : ''}`,
   ].filter(Boolean);
-
-  return (
-    <p className="text-body-sm text-graphite mt-8">
-      {parts.join(' · ')}
-      {attendees.length > 0 && (
-        <span title={attendees.join(', ')}>
-          {parts.length > 0 ? ' · ' : ''}
-          {attendees.length} attendee{attendees.length !== 1 ? 's' : ''}
-        </span>
-      )}
-    </p>
-  );
+  return parts.join(' · ');
 }
 
-function MetaChips({ session, notes }) {
+function metaChips(session, notes) {
   const sentiment = SENTIMENT_LABELS[notes?.sentiment];
   const hostname = meetingHostname(session.meeting_url);
   const platform = meetingPlatform(session.meeting_url);
@@ -88,21 +78,19 @@ function MetaChips({ session, notes }) {
       </button>
     );
   }
-
-  if (!chips.length) return null;
-  return <div className="flex items-center flex-wrap gap-8 mt-16">{chips}</div>;
+  return chips;
 }
 
-export default function NoteHeader({
-  session,
-  notes,
+// Slim sticky bar: back, view tabs and note actions on one row. The meeting
+// title only appears here once the in-page title has scrolled out of view.
+export function NoteToolbar({
   title,
-  durationLabel,
+  showTitle,
+  notes,
   tabs,
   activeTab,
   onTabChange,
   onBack,
-  processingError,
   busy,
   copied,
   onCopy,
@@ -114,88 +102,109 @@ export default function NoteHeader({
 }) {
   return (
     <header className="flex-shrink-0 border-b border-ink bg-paper">
-      <div className="mx-auto w-full max-w-[880px] px-32 pt-24 pb-24">
-        <div className="flex items-start gap-16">
-          <IconButton label="Back to meetings" onClick={onBack} className="mt-4 flex-shrink-0">
-            <ChevronLeft size={18} strokeWidth={1.75} />
-          </IconButton>
+      <div className="w-full px-24 py-8 flex items-center gap-16">
+        <IconButton label="Back to meetings" onClick={onBack} className="flex-shrink-0">
+          <ChevronLeft size={18} strokeWidth={1.75} />
+        </IconButton>
 
-          <div className="flex-1 min-w-0">
-            <h1 className="text-heading font-medium text-ink truncate">{title}</h1>
-            <MetaLine session={session} notes={notes} durationLabel={durationLabel} />
-            <MetaChips session={session} notes={notes} />
-            {processingError && (
-              <p role="alert" className="flex items-start gap-8 text-caption text-signal mt-16">
-                <AlertTriangle size={16} strokeWidth={1.75} className="flex-shrink-0 mt-[2px]" />
-                <span className="min-w-0 break-words">{processingError}</span>
-              </p>
-            )}
-          </div>
-        </div>
+        <p
+          aria-hidden="true"
+          title={title}
+          className={`flex-1 min-w-0 truncate text-body-sm font-medium text-ink transition-opacity duration-150 ${
+            showTitle ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          {title}
+        </p>
 
-        <div className="flex items-center justify-between gap-16 flex-wrap mt-24">
-          <SegmentedControl
-            label="Meeting views"
-            options={tabs}
-            value={activeTab}
-            onChange={onTabChange}
-          />
+        <SegmentedControl
+          label="Meeting views"
+          options={tabs}
+          value={activeTab}
+          onChange={onTabChange}
+          size="sm"
+        />
 
-          {notes && (
-            <div className="flex items-center gap-8 flex-wrap">
-              <button type="button" onClick={onCopy} className="btn-ghost btn-sm" title="Copy notes as Markdown">
-                {copied ? <Check size={14} strokeWidth={2} /> : <Copy size={14} strokeWidth={1.75} />}
-                {copied ? 'Copied' : 'Copy'}
-              </button>
+        {notes && (
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <IconButton label={copied ? 'Copied' : 'Copy notes as Markdown'} onClick={onCopy}>
+              {copied ? <Check size={16} strokeWidth={2} /> : <Copy size={16} strokeWidth={1.75} />}
+            </IconButton>
 
-              <button
-                type="button"
-                onClick={onRegenerate}
-                disabled={busy || regenerating || uploading}
-                className="btn-ghost btn-sm"
-                title="Regenerate notes from the transcript"
-              >
-                {regenerating
-                  ? <Loader2 size={14} strokeWidth={2} className="spinner" />
-                  : <RefreshCw size={14} strokeWidth={1.75} />}
-                {regenerating ? 'Regenerating…' : 'Regenerate'}
-              </button>
+            <IconButton
+              label={regenerating ? 'Regenerating…' : 'Regenerate notes'}
+              onClick={onRegenerate}
+              disabled={busy || regenerating || uploading}
+            >
+              {regenerating
+                ? <Loader2 size={16} strokeWidth={2} className="spinner" />
+                : <RefreshCw size={16} strokeWidth={1.75} />}
+            </IconButton>
 
-              {notionUrl ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => window.meetmind.shell.openExternal(notionUrl)}
-                    className="btn-ghost btn-sm"
-                  >
-                    <StatusDot tone="ok" />
-                    Open in Notion
-                    <ExternalLink size={14} strokeWidth={1.75} />
-                  </button>
-                  <IconButton
-                    label={uploading ? 'Syncing to Notion…' : 'Re-sync to Notion'}
-                    onClick={onSyncNotion}
-                    disabled={uploading || busy}
-                  >
-                    {uploading ? <Loader2 size={16} strokeWidth={2} className="spinner" /> : <NotionIcon size={16} />}
-                  </IconButton>
-                </>
-              ) : (
+            {notionUrl ? (
+              <>
                 <button
                   type="button"
+                  onClick={() => window.meetmind.shell.openExternal(notionUrl)}
+                  className="btn-ghost px-16 py-4 text-caption"
+                  title="Open in Notion"
+                >
+                  <StatusDot tone="ok" />
+                  <span className="hidden lg:inline">Open in Notion</span>
+                  <span className="lg:hidden">Notion</span>
+                  <ExternalLink size={14} strokeWidth={1.75} />
+                </button>
+                <IconButton
+                  label={uploading ? 'Syncing to Notion…' : 'Re-sync to Notion'}
                   onClick={onSyncNotion}
                   disabled={uploading || busy}
-                  className="btn-ghost btn-sm"
-                  title="Upload notes to Notion"
                 >
-                  {uploading ? <Loader2 size={14} strokeWidth={2} className="spinner" /> : <NotionIcon size={14} />}
-                  {uploading ? 'Syncing…' : 'Sync to Notion'}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+                  {uploading ? <Loader2 size={16} strokeWidth={2} className="spinner" /> : <NotionIcon size={16} />}
+                </IconButton>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={onSyncNotion}
+                disabled={uploading || busy}
+                className="btn-ghost px-16 py-4 text-caption"
+                title="Upload notes to Notion"
+              >
+                {uploading ? <Loader2 size={14} strokeWidth={2} className="spinner" /> : <NotionIcon size={14} />}
+                {uploading ? 'Syncing…' : 'Sync to Notion'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );
 }
+
+// Title, meta line and chips at the top of the scrolling body, so they scroll
+// away with the notes instead of permanently taking up the viewport.
+export const NoteTitleBlock = forwardRef(function NoteTitleBlock(
+  { session, notes, title, durationLabel, processingError },
+  ref,
+) {
+  const meta = metaText(session, notes, durationLabel);
+  const chips = metaChips(session, notes);
+
+  return (
+    <div className="pt-32 pb-8">
+      <h1 ref={ref} className="text-heading font-medium text-ink break-words">{title}</h1>
+      {(meta || chips.length > 0) && (
+        <div className="flex items-center flex-wrap gap-8 mt-8">
+          {meta && <p className="text-body-sm text-graphite mr-8">{meta}</p>}
+          {chips}
+        </div>
+      )}
+      {processingError && (
+        <p role="alert" className="flex items-start gap-8 text-caption text-signal mt-16">
+          <AlertTriangle size={16} strokeWidth={1.75} className="flex-shrink-0 mt-[2px]" />
+          <span className="min-w-0 break-words">{processingError}</span>
+        </p>
+      )}
+    </div>
+  );
+});
