@@ -14,6 +14,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 - The meeting title, date and tags scroll away with the notes, and the title reappears in the toolbar once scrolled past.
 - Markdown notes no longer repeat the meeting title as their first heading.
 - Switching between Summary, Transcript and Audio starts at the top of the page.
+- Logs page header is now a single toolbar (level filter, search, and icon buttons for the extension-log filter, auto-scroll, live updates, reload, folder, copy, export and clear), and the log panel uses the full window width.
 
 ## [3.0.0] - 2026-09-24
 

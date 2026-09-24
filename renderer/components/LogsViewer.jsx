@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Check,
+  Copy,
+  FileDown,
+  Trash2,
   Search,
   RefreshCw,
   FolderOpen,
   Radio,
+  Puzzle,
+  ChevronsDown,
   AlertCircle,
 } from 'lucide-react';
 import { useApp } from '../app.jsx';
-import { IconButton, Switch, SegmentedControl, Skeleton } from './ui/index.jsx';
+import { IconButton, SegmentedControl, Skeleton } from './ui/index.jsx';
 
 const MAX_LOGS = 2000;
 const NEAR_BOTTOM_PX = 48;
@@ -359,89 +364,79 @@ export default function LogsViewer() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden fade-in">
-      {/* Header */}
-      <div className="flex-shrink-0 border-b border-ink">
-        <div className="mx-auto w-full max-w-[1200px] px-32 pt-32 pb-24">
-          <div className="flex flex-wrap items-end justify-between gap-16">
-            <div className="min-w-0">
-              <h1 className="text-heading font-medium text-ink">Logs</h1>
-              <p className="text-body-sm text-graphite mt-8">
-                Diagnostic events from recording, transcription, note generation and Notion sync.
-              </p>
-            </div>
+      {/* Toolbar — one slim row so the log panel gets the rest of the window */}
+      <header className="flex-shrink-0 border-b border-ink bg-paper">
+        <h1 className="sr-only">Logs</h1>
+        <div className="w-full px-24 py-8 flex flex-wrap items-center gap-16">
+          <SegmentedControl
+            label="Filter by level"
+            role="radiogroup"
+            size="sm"
+            options={levelOptions}
+            value={levelFilter}
+            onChange={setLevelFilter}
+          />
 
-            <div className="flex flex-wrap items-center gap-8">
-              <IconButton
-                label={isLive ? 'Pause live updates' : 'Resume live updates'}
-                pressed={isLive}
-                onClick={() => setIsLive((prev) => !prev)}
-              >
-                <Radio size={16} strokeWidth={1.75} />
-              </IconButton>
-              <IconButton label="Reload logs" onClick={handleRefresh} disabled={refreshing || !hasLogsApi}>
-                <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
-              </IconButton>
-              <IconButton label="Open logs folder" onClick={handleOpenLogFolder} disabled={openingLogDir || !hasLogsApi}>
-                <FolderOpen size={16} strokeWidth={1.75} />
-              </IconButton>
-              <button type="button" className="btn-ghost btn-sm" onClick={handleCopy} disabled={filteredLogs.length === 0}>
-                {copied && <Check size={14} strokeWidth={2} />}
-                {copied ? 'Copied' : 'Copy visible'}
-              </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={handleExport} disabled={logs.length === 0}>
-                Export all
-              </button>
-              <button type="button" className="btn-danger btn-sm" onClick={handleClear} disabled={!hasLogsApi}>
-                Clear
-              </button>
-            </div>
+          <div className="relative flex-1 min-w-[160px] max-w-[360px]">
+            <Search
+              size={16}
+              strokeWidth={1.75}
+              className="absolute left-16 top-1/2 -translate-y-1/2 text-graphite pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter logs…"
+              aria-label="Filter logs by text"
+              className="input pl-48 text-caption"
+            />
           </div>
 
-          {/* Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-16 mt-24">
-            <SegmentedControl
-              label="Filter by level"
-              role="radiogroup"
-              size="sm"
-              options={levelOptions}
-              value={levelFilter}
-              onChange={setLevelFilter}
-            />
+          <div className="flex items-center gap-4 ml-auto">
+            <IconButton label="Hide extension logs" pressed={hideExtensionLogs} onClick={() => toggleHideExtension(!hideExtensionLogs)}>
+              <Puzzle size={16} strokeWidth={1.75} />
+            </IconButton>
+            <IconButton label="Auto-scroll to newest" pressed={autoScroll} onClick={() => setAutoScroll((prev) => !prev)}>
+              <ChevronsDown size={16} strokeWidth={1.75} />
+            </IconButton>
+            <IconButton
+              label={isLive ? 'Pause live updates' : 'Resume live updates'}
+              pressed={isLive}
+              onClick={() => setIsLive((prev) => !prev)}
+            >
+              <Radio size={16} strokeWidth={1.75} />
+            </IconButton>
 
-            <div className="flex flex-wrap items-center gap-24">
-              <div className="relative w-[240px]">
-                <Search
-                  size={16}
-                  strokeWidth={1.75}
-                  className="absolute left-8 top-1/2 -translate-y-1/2 text-graphite pointer-events-none"
-                  aria-hidden="true"
-                />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Filter logs…"
-                  aria-label="Filter logs by text"
-                  className="input pl-32"
-                />
-              </div>
+            <span className="w-px h-24 bg-graphite/40 mx-8" aria-hidden="true" />
 
-              <label className="flex items-center gap-8 text-caption text-ink cursor-pointer select-none">
-                <Switch checked={hideExtensionLogs} onChange={toggleHideExtension} label="Hide extension logs" />
-                Hide extension logs
-              </label>
-
-              <label className="flex items-center gap-8 text-caption text-ink cursor-pointer select-none">
-                <Switch checked={autoScroll} onChange={setAutoScroll} label="Auto-scroll" />
-                Auto-scroll
-              </label>
-            </div>
+            <IconButton label="Reload logs" onClick={handleRefresh} disabled={refreshing || !hasLogsApi}>
+              <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
+            </IconButton>
+            <IconButton label="Open logs folder" onClick={handleOpenLogFolder} disabled={openingLogDir || !hasLogsApi}>
+              <FolderOpen size={16} strokeWidth={1.75} />
+            </IconButton>
+            <IconButton label={copied ? 'Copied' : 'Copy visible logs'} onClick={handleCopy} disabled={filteredLogs.length === 0}>
+              {copied ? <Check size={16} strokeWidth={2} /> : <Copy size={16} strokeWidth={1.75} />}
+            </IconButton>
+            <IconButton label="Export all logs" onClick={handleExport} disabled={logs.length === 0}>
+              <FileDown size={16} strokeWidth={1.75} />
+            </IconButton>
+            <IconButton
+              label="Clear logs"
+              onClick={handleClear}
+              disabled={!hasLogsApi}
+              className="hover:text-signal hover:border-signal"
+            >
+              <Trash2 size={16} strokeWidth={1.75} />
+            </IconButton>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Log panel */}
-      <div className="flex-1 min-h-0 mx-auto w-full max-w-[1200px] px-32 py-24 flex flex-col gap-8">
+      <div className="flex-1 min-h-0 w-full px-24 py-16 flex flex-col gap-8">
         {!isLive && (
           <p className="flex items-center gap-8 text-caption text-graphite" role="status">
             <span className="dot dot-graphite" aria-hidden="true" />
