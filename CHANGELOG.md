@@ -17,6 +17,11 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 - Copied Markdown now includes each action item's priority and plain-text status updates, which were previously dropped.
 - The Google Calendar icon shows its tile, folded corner and "31" again instead of a solid square, in both themes.
+- Re-syncing or regenerating notes no longer leaves duplicate pages in Notion: the meeting's previous page is moved to Notion's trash once the new one is created.
+
+### Changed
+
+- The meeting toolbar's Notion control is one pill: "Open in Notion" plus a labelled "Update" that confirms before replacing the page, instead of an unlabelled Notion logo button.
 
 ## [3.4.0] - 2026-09-25
 

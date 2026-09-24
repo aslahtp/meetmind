@@ -198,13 +198,27 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
     }
   };
 
+  // First sync creates the Notion page. Updating replaces it: the main process creates a fresh
+  // page from the current notes, then moves the old one to Notion's trash (no duplicates).
   const handleSyncNotion = async () => {
+    const updating = !!notionUrl;
+    if (updating) {
+      const ok = await confirm({
+        title: 'Update the Notion page?',
+        message: 'MeetMind creates a fresh page with the current notes and moves the old one to Notion’s trash, where you can restore it for 30 days. Edits made directly in Notion won’t carry over.',
+        confirmLabel: 'Update page',
+      });
+      if (!ok) return;
+    }
     setUploading(true);
     try {
       const result = await window.meetmind.notion.upload(session.id);
       if (result?.success) {
         setUploadResult(result.url);
-        addToast('Notes synced to Notion.', 'success');
+        addToast(updating ? 'Notion page updated.' : 'Notes synced to Notion.', 'success', {
+          label: 'Open',
+          onClick: () => window.meetmind.shell.openExternal(result.url),
+        });
         onRefresh?.();
       } else {
         addToast(result?.error || 'Notion upload failed.', 'error');

@@ -5,6 +5,7 @@ import {
   Check,
   RefreshCw,
   FileDown,
+  CloudUpload,
   Loader2,
   ExternalLink,
   AlertTriangle,
@@ -144,26 +145,34 @@ export function NoteToolbar({
             </IconButton>
 
             {notionUrl ? (
-              <>
+              // One pill, two halves: open the page, or replace it with the current notes.
+              <div role="group" aria-label="Notion page" className="inline-flex items-stretch rounded-full border border-ink">
                 <button
                   type="button"
                   onClick={() => window.meetmind.shell.openExternal(notionUrl)}
-                  className="btn-ghost px-16 py-4 text-caption"
-                  title="Open in Notion"
+                  className="inline-flex items-center gap-8 rounded-l-full pl-16 pr-8 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06]"
+                  title="Open the Notion page"
                 >
                   <StatusDot tone="ok" />
                   <span className="hidden lg:inline">Open in Notion</span>
                   <span className="lg:hidden">Notion</span>
                   <ExternalLink size={14} strokeWidth={1.75} />
                 </button>
-                <IconButton
-                  label={uploading ? 'Syncing to Notion…' : 'Re-sync to Notion'}
+                <span className="w-px my-4 bg-ink/30" aria-hidden="true" />
+                <button
+                  type="button"
                   onClick={onSyncNotion}
                   disabled={uploading || busy}
+                  aria-label={uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
+                  title={uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
+                  className="inline-flex items-center gap-8 rounded-r-full pl-8 pr-16 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {uploading ? <Loader2 size={16} strokeWidth={2} className="spinner" /> : <NotionIcon size={16} />}
-                </IconButton>
-              </>
+                  {uploading
+                    ? <Loader2 size={14} strokeWidth={2} className="spinner" />
+                    : <CloudUpload size={14} strokeWidth={1.75} />}
+                  <span className="hidden lg:inline">{uploading ? 'Updating…' : 'Update'}</span>
+                </button>
+              </div>
             ) : (
               <button
                 type="button"

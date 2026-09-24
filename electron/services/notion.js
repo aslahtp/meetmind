@@ -726,4 +726,23 @@ async function testNotionConnection(parentId, notionToken) {
   }
 }
 
-module.exports = { uploadToNotion, testNotionConnection, normalizeNotionId };
+/**
+ * Moves a page MeetMind created earlier to Notion's trash (restorable there for 30 days).
+ * Used after a re-sync has created the replacement page, so a meeting keeps one page in Notion.
+ * Never throws: a page that's already gone or no longer shared is simply skipped.
+ */
+async function trashNotionPage(pageRef, notionToken) {
+  const pageId = normalizeNotionId(pageRef);
+  if (!pageId || !notionToken) return false;
+  try {
+    const notion = new Client({ auth: notionToken });
+    await notion.pages.update({ page_id: pageId, archived: true });
+    logger.info('Moved previous Notion page to trash', { pageId });
+    return true;
+  } catch (err) {
+    logger.warn('Could not move previous Notion page to trash', { pageId, error: err.message });
+    return false;
+  }
+}
+
+module.exports = { uploadToNotion, testNotionConnection, normalizeNotionId, trashNotionPage };

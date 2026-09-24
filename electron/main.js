@@ -9,7 +9,7 @@ const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = requ
 const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
 const { transcribeAudio, testGoogleSTT, testAssemblyAI, testSarvam } = require('./services/transcription');
 const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/gemini');
-const { uploadToNotion, testNotionConnection } = require('./services/notion');
+const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./services/notion');
 const { exportPdf, buildPdfFileName, resolveExportDir } = require('./services/pdf-export');
 const { testGeminiConnection } = require('./services/gemini');
 const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState } = require('./services/updater');
@@ -18,10 +18,18 @@ const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
 
-function uploadSessionToNotion(notes, transcript, config) {
-  return uploadToNotion(notes, transcript, config.notionPageId, config.notionToken, {
+// Uploads a session's notes to Notion. If the session already has a page (re-sync or
+// regenerated notes), the new page is created first and the old one is then moved to Notion's
+// trash, so each meeting keeps a single page and a failed upload never loses the old one.
+async function uploadSessionToNotion(sessionId, notes, transcript, config) {
+  const previousUrl = db.getSession(sessionId)?.notion_page_url || null;
+  const url = await uploadToNotion(notes, transcript, config.notionPageId, config.notionToken, {
     includeTranscript: config.notionUploadTranscript !== false,
   });
+  if (previousUrl && previousUrl !== url) {
+    await trashNotionPage(previousUrl, config.notionToken);
+  }
+  return url;
 }
 
 // Top-level crash guards for main process
@@ -664,7 +672,7 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     if (config.notionToken && config.notionPageId) {
       sendProgress('uploading', 85);
       db.updateSession(sessionId, { status: 'uploading' });
-      notionUrl = await uploadSessionToNotion(notes, transcript, config);
+      notionUrl = await uploadSessionToNotion(sessionId, notes, transcript, config);
       db.updateSession(sessionId, { notion_page_url: notionUrl, status: 'complete' });
       sendProgress('complete', 100);
     }
@@ -911,7 +919,7 @@ function registerIpcHandlers() {
         typeof session.transcript === 'string'
           ? JSON.parse(session.transcript || '[]')
           : (session.transcript || []);
-      const url = await uploadSessionToNotion(notes, transcript, config);
+      const url = await uploadSessionToNotion(sessionId, notes, transcript, config);
       db.updateSession(sessionId, { notion_page_url: url });
       return { success: true, url };
     } catch (err) {
@@ -1011,7 +1019,7 @@ function registerIpcHandlers() {
           typeof session.transcript === 'string'
             ? JSON.parse(session.transcript || '[]')
             : (session.transcript || []);
-        const url = await uploadSessionToNotion(notes, transcript, config);
+        const url = await uploadSessionToNotion(sessionId, notes, transcript, config);
         db.updateSession(sessionId, { notion_page_url: url, status: 'complete' });
         return { success: true, url };
       } catch (err) {
@@ -1107,7 +1115,7 @@ function registerIpcHandlers() {
         if (config.notionToken && config.notionPageId) {
           sendProgress('uploading', 85);
           db.updateSession(sessionId, { status: 'uploading' });
-          notionUrl = await uploadSessionToNotion(notes, transcript, config);
+          notionUrl = await uploadSessionToNotion(sessionId, notes, transcript, config);
           db.updateSession(sessionId, { notion_page_url: notionUrl, status: 'complete' });
           sendProgress('complete', 100);
         }
