@@ -11,7 +11,7 @@ Thanks for helping improve MeetMind. Bug reports, feature ideas, documentation f
 
 ## Development setup
 
-MeetMind is a Windows-only Electron app. You need Windows 10/11, Node.js 20+ and [pnpm](https://pnpm.io/) (never npm or npx).
+MeetMind is a Windows-only Electron app. You need Windows 10/11, Node.js 22.12+ and [pnpm](https://pnpm.io/) (never npm or npx).
 
 ```bash
 git clone https://github.com/aslahtp/meetmind.git
@@ -35,5 +35,6 @@ pnpm run dev
 2. Keep each pull request focused on one change.
 3. Describe what changed, why, and how you tested it; include screenshots for UI changes.
 4. Make sure `pnpm run build:dir` still succeeds if you touched packaging or the main process.
+5. CI must pass: lint, tests, build, secret scan, dependency audit, CodeQL, and the version/changelog check. For comment- or formatting-only changes, a maintainer can add the `skip-version-check` label.
 
 By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE) and that you will follow the [Code of Conduct](CODE_OF_CONDUCT.md).

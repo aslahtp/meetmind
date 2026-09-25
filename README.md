@@ -139,7 +139,7 @@ The extension only talks to the MeetMind desktop app over a local WebSocket (`12
 
 ## 💻 Developer setup
 
-Requires Windows, Node.js 20+ and [pnpm](https://pnpm.io/).
+Requires Windows, Node.js 22.12+ and [pnpm](https://pnpm.io/).
 
 ### 1. Clone and install
 

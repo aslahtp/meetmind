@@ -37,7 +37,7 @@ Run `pnpm run lint` and `pnpm run test` before finishing a change. The tests cov
 
 The package manager is pnpm (pinned via `packageManager` in `package.json`); never use npm/npx or commit a `package-lock.json`. `pnpm-workspace.yaml` sets `nodeLinker: hoisted` so electron-builder sees a flat `node_modules`, and lists the dependencies allowed to run install scripts under `allowBuilds` (add new ones with `pnpm approve-builds <pkg>`). `verifyDepsBeforeRun: warn` stops `pnpm run` from silently reinstalling after `package.json` changes, because that reinstall replaces `node_modules/electron` and breaks it if the app is running; run `pnpm install` explicitly with the app closed. If Electron reports it "failed to install correctly", run `pnpm rebuild electron`.
 
-- `pnpm install` — install dependencies (Node 20+, Windows only)
+- `pnpm install` — install dependencies (Node 22.12+, Windows only)
 - `pnpm run lint` — ESLint (flat config in `eslint.config.mjs`) over `electron/`, `renderer/`, `extension/`, `scripts/` and `tests/`
 - `pnpm run test` — Vitest suite in `tests/` (`vitest.config.mjs`, Node environment); `pnpm run test:watch` for watch mode. Tests live in `tests/`, not next to the code, so electron-builder never packages them
 - `pnpm run dev` — full dev loop: regenerates icons + rebuilds the Chrome extension (`predev`), then runs Vite and Electron concurrently. Renderer serves at http://localhost:5173; Electron opens DevTools automatically in dev
@@ -47,6 +47,17 @@ The package manager is pnpm (pinned via `packageManager` in `package.json`); nev
 - `pnpm run build:dir` — production renderer build + unpacked Electron app under `dist/desktop/` (fast iteration, skips installer packaging)
 - `pnpm run build` — full production build: Vite build + electron-builder NSIS installer (`dist/desktop/MeetMind-Setup-X.Y.Z.exe`). Requires `assets/ffmpeg/ffmpeg.exe`, `assets/ffmpeg/ffprobe.exe`, and `assets/icons/icon.ico` to already exist (not committed — download FFmpeg from the app's Settings screen or gyan.dev/ffmpeg/builds)
 - `pnpm run generate-icons` — regenerate `assets/icons/*` from the source icon
+
+## CI/CD
+
+All workflows are in `.github/workflows/` and share `.github/actions/setup` (pnpm from `packageManager`, Node 24, `pnpm install --frozen-lockfile`).
+
+- **`ci.yml`** runs on every PR and push to `main`. It lints, tests, and builds the renderer and extension; runs repo hygiene checks (no npm/yarn lockfile, `.exe`/`.dll`, real `.env` file, or file over 10 MB); scans the full git history for API keys with gitleaks; and runs `pnpm audit --prod --audit-level high`. It's also a reusable workflow.
+- **`release.yml`** calls `ci.yml` as a required gate before the Windows installer is built and published, so a failing check blocks the release.
+- **`pr-checks.yml`** runs on PRs only. The version-and-changelog check fails any PR that changes code without bumping `package.json` and adding a matching `## [X.Y.Z] - YYYY-MM-DD` heading; docs and `.github/` changes are exempt, and a `skip-version-check` label overrides it. Dependency review fails a PR that adds a runtime dependency with a high-severity advisory.
+- **`codeql.yml`** runs CodeQL security analysis on PRs, pushes, and weekly. **`.github/dependabot.yml`** opens grouped weekly minor/patch dependency PRs and monthly action updates.
+
+If `pnpm audit` fails, try `pnpm audit --fix update` first. It re-resolves the lockfile to patched versions inside the existing ranges, without adding overrides.
 
 ## UI / UX Work
 

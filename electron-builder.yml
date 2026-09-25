@@ -50,7 +50,7 @@ files:
   - package.json
   - "!assets/ffmpeg/**"
 
-electronVersion: "33.2.1"
+electronVersion: "33.4.11"
 
 publish:
   provider: github

@@ -8,6 +8,7 @@
 
 ## Checklist
 
+- [ ] `pnpm run lint` and `pnpm run test` pass
 - [ ] `package.json` version bumped and `CHANGELOG.md` updated (skip for typo/formatting-only changes)
 - [ ] Read `DESIGN.md` before changing any UI
 - [ ] No API keys, FFmpeg binaries or `package-lock.json` committed

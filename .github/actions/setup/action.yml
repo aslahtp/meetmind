@@ -1,0 +1,26 @@
+name: Setup pnpm and Node
+description: Install pnpm (version from package.json `packageManager`), Node, and optionally the dependencies.
+
+inputs:
+  install:
+    description: Run `pnpm install --frozen-lockfile`
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        # Vitest 5 needs Node 22.12+.
+        node-version: 24
+        cache: pnpm
+
+    - name: Install Dependencies
+      if: inputs.install == 'true'
+      shell: bash
+      run: pnpm install --frozen-lockfile

@@ -1,0 +1,81 @@
+name: PR checks
+
+# PR-only checks on top of CI: the version/changelog rule from AGENTS.md and a review of
+# newly added dependencies. Re-runs when labels change so `skip-version-check` takes effect.
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  version-changelog:
+    name: Version & changelog
+    runs-on: ubuntu-latest
+    # Dependabot PRs and PRs labelled `skip-version-check` (comments/formatting only) are exempt.
+    if: github.actor != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-version-check')
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a version bump and changelog entry for code changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE_SHA"...HEAD)
+          # Docs, GitHub config and repo metadata don't need a release.
+          code=$(echo "$changed" | grep -vE '^(docs/|\.github/|\.claude/)|\.md$|^(LICENSE|CITATION\.cff|llms\.txt)$' || true)
+          if [ -z "$code" ]; then
+            echo "Only docs/config changed; no version bump needed."
+            exit 0
+          fi
+
+          base_version=$(git show "$BASE_SHA:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          head_version=$(node -p "require('./package.json').version")
+          echo "Base version: $base_version  PR version: $head_version"
+
+          newer=$(node -e "
+            const [a, b] = process.argv.slice(1).map((v) => v.split('.').map(Number));
+            const d = b.map((n, i) => n - a[i]).find((n) => n !== 0) || 0;
+            console.log(d > 0);
+          " "$base_version" "$head_version")
+          if [ "$newer" != "true" ]; then
+            echo "::error file=package.json::Bump \"version\" in package.json (currently $head_version, same as or older than main's $base_version). See AGENTS.md → Versioning and Changelog, or add the skip-version-check label for comment/formatting-only changes."
+            exit 1
+          fi
+
+          if ! grep -qE "^## \[${head_version//./\\.}\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md; then
+            echo "::error file=CHANGELOG.md::Add a \"## [$head_version] - YYYY-MM-DD\" section to CHANGELOG.md."
+            exit 1
+          fi
+
+          # The release workflow builds its notes from this entry; fail here rather than at release time.
+          node scripts/generate-release-notes.js
+          echo "Version $head_version has a changelog entry."
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Review new and updated dependencies
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          comment-summary-in-pr: on-failure
