@@ -48,7 +48,7 @@ export function parseInlineMarkdown(text) {
       );
     } else if (codeText != null) {
       parts.push(
-        <code key={match.index} className="px-4 rounded-input border border-ink font-mono text-caption text-ink">
+        <code key={match.index} className="px-4 rounded-input border border-graphite/40 font-mono text-caption text-graphite">
           {codeText}
         </code>
       );

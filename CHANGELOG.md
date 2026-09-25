@@ -1,10 +1,16 @@
 ---
 tags: [meta, changelog]
-updated: 2026-09-24
+updated: 2026-09-25
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [3.6.1] - 2026-09-25
+
+### Fixed
+
+- Inline `code` in notes now uses the muted body-text color and a faint border instead of high-contrast ink, so it no longer stands out from the surrounding text.
 
 ## [3.6.0] - 2026-09-25
 

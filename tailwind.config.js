@@ -81,7 +81,7 @@ module.exports = {
             '--tw-prose-quotes': 'rgb(var(--color-ink))',
             '--tw-prose-quote-borders': 'rgb(var(--color-ink))',
             '--tw-prose-captions': 'rgb(var(--color-graphite))',
-            '--tw-prose-code': 'rgb(var(--color-ink))',
+            '--tw-prose-code': 'rgb(var(--color-graphite))',
             '--tw-prose-pre-code': 'rgb(var(--color-ink))',
             '--tw-prose-pre-bg': 'rgb(var(--color-paper))',
             '--tw-prose-th-borders': 'rgb(var(--color-ink))',
@@ -97,7 +97,7 @@ module.exports = {
             a: { textUnderlineOffset: '3px' },
             code: {
               fontWeight: '400',
-              border: '1px solid rgb(var(--color-ink))',
+              border: '1px solid rgb(var(--color-graphite) / 0.4)',
               borderRadius: '6px',
               padding: '0 4px',
             },

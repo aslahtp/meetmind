@@ -1,6 +1,6 @@
 {
   "name": "meetmind",
-  "version": "3.6.0",
+  "version": "3.6.1",
   "description": "Open-source AI meeting notes app for Windows: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT or Sarvam AI, summarize with Gemini, and sync to Notion.",
   "keywords": [
     "ai-meeting-notes",
