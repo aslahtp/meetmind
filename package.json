@@ -41,7 +41,7 @@
     "dev:renderer": "vite",
     "dev:electron": "cross-env NODE_ENV=development electron .",
     "prebuild": "pnpm run generate-icons && pnpm run build:ext",
-    "build": "vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml",
+    "build": "vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml --publish never",
     "build:renderer": "vite build",
     "build:electron": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml",
     "build:dir": "vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --dir --config electron-builder.yml",

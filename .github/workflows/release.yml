@@ -1,5 +1,12 @@
 name: Build
 
+# Builds and publishes a release when package.json's version has no tag yet.
+#
+# Supply-chain hardening (public repo): actions are pinned to commit SHAs; the build job runs
+# all dependency code with a read-only token and no dependency cache; only the small publish
+# job, which runs no dependency code or third-party actions, gets `contents: write`. FFmpeg (shipped inside the
+# installer) is a pinned version checked against its SHA-256.
+
 on:
   push:
     branches:
@@ -9,7 +16,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # https://github.com/GyanD/codexffmpeg/releases (the same builds gyan.dev serves).
+  FFMPEG_VERSION: 9.0.2
+  FFMPEG_SHA256: 60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba
 
 jobs:
   check-version:
@@ -22,29 +38,30 @@ jobs:
       prev_tag: ${{ steps.version_check.outputs.prev_tag }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Read Version & Check Existing Tags
         id: version_check
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
           git fetch --tags
           PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${TAG}$" | head -n 1 || echo "")
-          echo "prev_tag=${PREV_TAG}" >> $GITHUB_OUTPUT
+          echo "prev_tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
           echo "Previous release tag on GitHub: ${PREV_TAG}"
 
           if git rev-parse "${TAG}" >/dev/null 2>&1; then
             echo "Tag ${TAG} already exists on remote. Skipping release build."
-            echo "release_needed=false" >> $GITHUB_OUTPUT
+            echo "release_needed=false" >> "$GITHUB_OUTPUT"
           else
             echo "Tag ${TAG} does not exist. Creating new release for v${VERSION}."
-            echo "release_needed=true" >> $GITHUB_OUTPUT
+            echo "release_needed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Verify changelog parsing for release notes
@@ -57,30 +74,43 @@ jobs:
     name: Checks
     needs: check-version
     if: needs.check-version.outputs.release_needed == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+    uses: $/.github/workflows/ci.yml
 
-  build-and-release:
-    name: Build & Publish Release
+  build:
+    name: Build installer
     needs: [check-version, checks]
     if: needs.check-version.outputs.release_needed == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
+      # No cache: the installer is built from a clean, lockfile-verified install.
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
+        with:
+          cache: 'false'
 
-      - name: Download FFmpeg Binaries
+      - name: Download FFmpeg Binaries (checksum-verified)
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force -Path assets/ffmpeg | Out-Null
 
           $zipPath = Join-Path $env:RUNNER_TEMP "ffmpeg.zip"
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $zipPath -UserAgent "MeetMind-CI/1.0"
+          $url = "https://github.com/GyanD/codexffmpeg/releases/download/$env:FFMPEG_VERSION/ffmpeg-$env:FFMPEG_VERSION-essentials_build.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zipPath -UserAgent "MeetMind-CI/1.0"
+
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath).Hash.ToLowerInvariant()
+          if ($actual -ne $env:FFMPEG_SHA256) {
+            throw "FFmpeg archive checksum mismatch: expected $env:FFMPEG_SHA256, got $actual"
+          }
 
           $extractDir = Join-Path $env:RUNNER_TEMP "ffmpeg-extracted"
           Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
@@ -93,31 +123,55 @@ jobs:
 
           Copy-Item $ffmpegExe.FullName -Destination "assets/ffmpeg/ffmpeg.exe" -Force
           Copy-Item $ffprobeExe.FullName -Destination "assets/ffmpeg/ffprobe.exe" -Force
-          Write-Host "FFmpeg binaries staged in assets/ffmpeg/ for packaging."
+          Write-Host "FFmpeg $env:FFMPEG_VERSION staged in assets/ffmpeg/ for packaging."
 
+      # `pnpm run build` passes --publish never: electron-builder only builds, it never needs a token.
       - name: Build Desktop App and Extension
         run: pnpm run build
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-files
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist/desktop/*.exe
+            dist/desktop/*.blockmap
+            dist/desktop/latest.yml
+            dist/meetmind-extension.zip
+
+  publish:
+    name: Publish Release
+    needs: [check-version, build]
+    runs-on: ubuntu-latest
+    # The only job with write access; it runs no project dependencies.
+    permissions:
+      contents: write # create the tag and release, upload the installer
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download release files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-files
+          path: release-files
 
       - name: Generate Release Notes from Template and CHANGELOG
         run: node scripts/generate-release-notes.js
         env:
           PREV_TAG: ${{ needs.check-version.outputs.prev_tag }}
 
+      # The runner's own `gh` CLI, so no third-party action ever holds the write token.
+      # Tags the exact commit that was built, not whatever main points to by now.
       - name: Create GitHub Release and Upload Artifacts
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.check-version.outputs.tag }}
-          name: MeetMind ${{ needs.check-version.outputs.tag }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: false
-          files: |
-            dist/desktop/*.exe
-            dist/desktop/*.blockmap
-            dist/desktop/latest.yml
-            dist/meetmind-extension.zip
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check-version.outputs.tag }}
+        run: |
+          shopt -s failglob
+          gh release create "$TAG"             --repo "$GITHUB_REPOSITORY"             --target "$GITHUB_SHA"             --title "MeetMind $TAG"             --notes-file release_notes.md             release-files/desktop/*.exe             release-files/desktop/*.blockmap             release-files/desktop/latest.yml             release-files/meetmind-extension.zip

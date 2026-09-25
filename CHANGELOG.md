@@ -11,11 +11,12 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Added
 
 - `pnpm run lint` (ESLint) and `pnpm run test` (Vitest) for contributors, with tests for note Markdown export/parsing, formatting helpers and PDF file naming.
-- CI on every pull request and push to `main`: lint, tests, build, secret scanning, dependency audit, CodeQL, dependency review and a version/changelog check. Releases are only built when these pass.
+- CI on every pull request and push to `main`: lint, tests, build, secret scanning, dependency audit, CodeQL, workflow security linting, dependency review and a version/changelog check. Releases are only built when these pass.
 
 ### Changed
 
 - Updated Electron to 33.4.11 and runtime dependencies to patched versions, resolving 22 high-severity security advisories.
+- The installer now bundles a pinned, checksum-verified FFmpeg (9.0.2) and is built without write access to the repository; GitHub Actions are pinned to commit SHAs and new package versions are held back for a day before they can be installed.
 - Development now requires Node.js 22.12 or newer.
 
 ## [3.6.1] - 2026-09-25

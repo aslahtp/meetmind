@@ -2,6 +2,9 @@ name: PR checks
 
 # PR-only checks on top of CI: the version/changelog rule from AGENTS.md and a review of
 # newly added dependencies. Re-runs when labels change so `skip-version-check` takes effect.
+#
+# Fork PRs get a read-only token and no secrets under `pull_request`; nothing here needs more.
+# Never switch to `pull_request_target`, which runs with write access next to untrusted code.
 
 on:
   pull_request:
@@ -21,12 +24,14 @@ jobs:
     name: Version & changelog
     runs-on: ubuntu-latest
     # Dependabot PRs and PRs labelled `skip-version-check` (comments/formatting only) are exempt.
-    if: github.actor != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-version-check')
+    # Checks the PR author, not `github.actor` (whoever last triggered the run can differ).
+    if: github.event.pull_request.user.login != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-version-check')
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Require a version bump and changelog entry for code changes
         env:
@@ -66,16 +71,17 @@ jobs:
   dependency-review:
     name: Dependency review
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
+      # Results go to the job summary. PR comments would need `pull-requests: write`, which
+      # fork PRs never get, so they stay off.
       - name: Review new and updated dependencies
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
           fail-on-scopes: runtime
-          comment-summary-in-pr: on-failure
+          comment-summary-in-pr: never

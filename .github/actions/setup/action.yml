@@ -1,9 +1,15 @@
 name: Setup pnpm and Node
 description: Install pnpm (version from package.json `packageManager`), Node, and optionally the dependencies.
 
+# Third-party actions are pinned to full commit SHAs (tags can be moved); Dependabot bumps them.
+
 inputs:
   install:
     description: Run `pnpm install --frozen-lockfile`
+    required: false
+    default: 'true'
+  cache:
+    description: Restore/save the pnpm store cache. Off for release builds, so a poisoned cache can't reach the installer.
     required: false
     default: 'true'
 
@@ -11,14 +17,15 @@ runs:
   using: composite
   steps:
     - name: Setup pnpm
-      uses: pnpm/action-setup@v4
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         # Vitest 5 needs Node 22.12+.
         node-version: 24
-        cache: pnpm
+        cache: ${{ inputs.cache == 'true' && 'pnpm' || '' }}
+        package-manager-cache: ${{ inputs.cache == 'true' }}
 
     - name: Install Dependencies
       if: inputs.install == 'true'

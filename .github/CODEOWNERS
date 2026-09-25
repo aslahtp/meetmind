@@ -1,0 +1,11 @@
+# Files that control how MeetMind is built, released and which code gets installed.
+# A contributor PR touching any of these needs the maintainer's review (enable
+# "Require review from Code Owners" in the branch protection rule for main).
+
+/.github/                 @aslahtp
+/package.json             @aslahtp
+/pnpm-lock.yaml           @aslahtp
+/pnpm-workspace.yaml      @aslahtp
+/electron-builder.yml     @aslahtp
+/scripts/                 @aslahtp
+/electron/services/updater.js  @aslahtp

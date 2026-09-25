@@ -2,6 +2,10 @@ name: CI
 
 # Lint, tests, build, secret scan and dependency audit. Runs on every PR and push to main,
 # and is called by the release workflow (release.yml) as a gate before the installer is built.
+#
+# Public repo: fork PRs run this with a read-only token and no secrets (`pull_request`, never
+# `pull_request_target`), so untrusted PR code can't write to the repo. Keep it that way.
+# Actions are pinned to full commit SHAs (tags can be moved); Dependabot keeps them current.
 
 on:
   pull_request:
@@ -22,6 +26,8 @@ concurrency:
 
 env:
   GITLEAKS_VERSION: 8.30.1
+  # sha256 of gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz, from the release's checksums.txt.
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
 
 jobs:
   lint-test-build:
@@ -29,10 +35,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
 
       - name: Lint
         run: pnpm run lint
@@ -51,7 +59,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Check for files that must not be committed
         run: |
@@ -86,14 +96,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Install gitleaks
+      - name: Install gitleaks (checksum-verified)
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz -C "$RUNNER_TEMP" gitleaks
+          tarball="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl -sSfL -o "$tarball" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $tarball" | sha256sum --check --strict
+          tar -xzf "$tarball" -C "$RUNNER_TEMP" gitleaks
 
       - name: Scan full git history for API keys and tokens
         run: |
@@ -104,13 +117,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
         with:
           install: 'false'
 
       # Runtime dependencies only (what ships in the installer); fails on high or critical.
       - name: Audit production dependencies
         run: pnpm audit --prod --audit-level high
+
+  # Static security lint of the workflows themselves: catches template injection,
+  # dangerous triggers, over-broad permissions and unpinned actions, e.g. in a contributor's PR.
+  workflow-security:
+    name: Workflow security (zizmor)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
+          # Fail the job with annotations instead of uploading SARIF (needs no write permission).
+          advanced-security: false
