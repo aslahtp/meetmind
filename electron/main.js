@@ -845,6 +845,26 @@ function registerIpcHandlers() {
     return true;
   });
 
+  // Saves notes edited in the renderer (already parsed from Markdown there).
+  ipcMain.handle('session:update-notes', (_e, id, notes) => {
+    const session = db.getSession(id);
+    if (!session) return { success: false, error: 'Meeting not found.' };
+    if (!notes || typeof notes !== 'object' || Array.isArray(notes)) {
+      return { success: false, error: 'Invalid notes.' };
+    }
+    try {
+      db.updateSession(id, {
+        notes: JSON.stringify(notes),
+        title: notes.meeting_title || notes.title || session.title,
+      });
+      logger.info('Notes edited', { sessionId: id });
+      return { success: true, session: db.getSession(id) };
+    } catch (err) {
+      logger.error('Failed to save edited notes', { sessionId: id, error: err.message });
+      return { success: false, error: err.message || 'Failed to save notes.' };
+    }
+  });
+
   ipcMain.handle('session:open-recording', async (_e, sessionId) => {
     const audioPath = resolveSessionAudioPath(sessionId);
     if (!audioPath) {

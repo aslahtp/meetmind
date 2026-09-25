@@ -423,6 +423,9 @@ export default function App() {
 
   const openSession = useCallback(async (session) => {
     const origin = viewRef.current === 'meetings' ? 'meetings' : 'dashboard';
+    // requestNavigate skips the guard for the current view, so switching from one
+    // meeting to another (e.g. from the processing pill) checks for unsaved edits here.
+    if (viewRef.current === 'session' && navGuardRef.current && !(await navGuardRef.current())) return;
     if (!(await requestNavigate('session'))) return;
     setSessionOrigin(origin);
     setSelectedSession(session);
@@ -536,6 +539,7 @@ export default function App() {
           )}
           {view === 'session' && selectedSession && (
             <NoteViewer
+              key={selectedSession.id}
               session={selectedSession}
               onBack={async () => {
                 // Return to the list where it was scrolled, not the top.
@@ -545,6 +549,7 @@ export default function App() {
               onRefresh={async () => {
                 const updated = await window.meetmind.sessions.get(selectedSession.id);
                 if (updated) setSelectedSession(updated);
+                refreshSessions();
               }}
             />
           )}

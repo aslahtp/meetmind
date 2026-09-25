@@ -1,13 +1,13 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { FileText, Mic, Volume2, MicOff, Sparkles, Loader2 } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { FileText, Mic, Volume2, MicOff, Sparkles, Loader2, Eye, Code } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import TranscriptViewer from './TranscriptViewer.jsx';
 import { NoteToolbar, NoteTitleBlock } from './note/NoteHeader.jsx';
 import SummaryJson from './note/SummaryJson.jsx';
 import AudioPlayer from './note/AudioPlayer.jsx';
 import { MarkdownNoteView } from './note/markdown.jsx';
-import { buildNotesMarkdown, notesTitle } from './note/copyMarkdown.js';
-import { EmptyState, StepBadge, ProgressBar } from './ui/index.jsx';
+import { buildNotesMarkdown, parseNotesMarkdown, notesTitle } from './note/copyMarkdown.js';
+import { EmptyState, StepBadge, ProgressBar, SaveBar, SegmentedControl } from './ui/index.jsx';
 import { formatDurationSeconds } from '../lib/format.js';
 import { isProcessing, PIPELINE_STAGES, STAGE_LABELS, stageIndex } from '../lib/status.js';
 
@@ -100,10 +100,53 @@ function SummaryTab({ notes, title, noSpeech, isError, busy, onGenerate, onRetry
   );
 }
 
+// ── Markdown editor ──────────────────────────────────────────────────────────
+
+const EDIT_MODES = [
+  { value: 'preview', label: 'Preview', icon: Eye },
+  { value: 'markdown', label: 'Markdown', icon: Code },
+];
+
+// Grows with its content so the page scrolls, not the textarea.
+function MarkdownEditor({ value, onChange, structured }) {
+  const ref = useRef(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Collapsing to measure would clamp the page's scroll position; keep it.
+    const scroller = el.closest('.overflow-y-auto');
+    const top = scroller?.scrollTop;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + 2}px`;
+    if (scroller) scroller.scrollTop = top;
+  }, [value]);
+
+  return (
+    <div className="fade-in">
+      <label htmlFor="notes-markdown" className="label">Notes (Markdown)</label>
+      {structured && (
+        <p id="notes-markdown-hint" className="hint mb-8">
+          Keep the ## section headings (Participants, Action Items, Key Topics…) so the notes keep their card layout.
+        </p>
+      )}
+      <textarea
+        id="notes-markdown"
+        ref={ref}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-describedby={structured ? 'notes-markdown-hint' : undefined}
+        rows={12}
+        className="input font-mono text-caption leading-relaxed resize-none overflow-hidden"
+      />
+    </div>
+  );
+}
+
 // ── Main NoteViewer ──────────────────────────────────────────────────────────
 
 export default function NoteViewer({ session, onBack, onRefresh }) {
-  const { processing, trackProcessing, addToast, confirm, config } = useApp();
+  const { processing, trackProcessing, addToast, confirm, config, setNavGuard } = useApp();
   const [activeTab, setActiveTab] = useState('summary');
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
@@ -112,6 +155,9 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [titleHidden, setTitleHidden] = useState(false);
+  const [editMode, setEditMode] = useState('preview');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const scrollRef = useRef(null);
   const titleRef = useRef(null);
 
@@ -127,8 +173,30 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
     return () => observer.disconnect();
   }, []);
 
-  const notes = session.notes;
+  const savedNotes = session.notes;
   const rawTranscript = session.transcript;
+
+  // ── Editing: the draft is the notes as one Markdown document ──
+  const savedMarkdown = useMemo(
+    () => (savedNotes ? buildNotesMarkdown(savedNotes, session) : ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [savedNotes, session.title],
+  );
+  const [draft, setDraft] = useState(savedMarkdown);
+  const lastSavedRef = useRef(savedMarkdown);
+  // Follow the saved notes (save, regenerate, background refresh) unless mid-edit.
+  useEffect(() => {
+    const previous = lastSavedRef.current;
+    lastSavedRef.current = savedMarkdown;
+    setDraft((d) => (d === previous ? savedMarkdown : d));
+  }, [savedMarkdown]);
+
+  const dirty = !!savedNotes && draft !== savedMarkdown;
+  // Preview shows unsaved edits, parsed back into the same shape as saved notes.
+  const notes = useMemo(
+    () => (dirty ? parseNotesMarkdown(draft, savedNotes) : savedNotes),
+    [dirty, draft, savedNotes],
+  );
 
   const normalizedTranscript = useMemo(() => {
     if (!rawTranscript) return [];
@@ -161,6 +229,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
     || !!(config?.notionToken?.trim?.() && config?.notionDatabaseId?.trim?.());
 
   const title = notesTitle(notes, session);
+  const showEditor = editMode === 'markdown' && !!savedNotes && !busy;
 
   // Starts a pipeline run and hands progress tracking to the app shell.
   const startPipeline = async (run) => {
@@ -186,7 +255,9 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const handleRegenerate = async () => {
     const ok = await confirm({
       title: 'Regenerate notes?',
-      message: 'The current notes will be replaced with a new version generated from the transcript.',
+      message: savedNotes?._editedAt
+        ? 'The current notes will be replaced with a new version generated from the transcript. Your edits will be lost.'
+        : 'The current notes will be replaced with a new version generated from the transcript.',
       confirmLabel: 'Regenerate',
     });
     if (!ok) return;
@@ -269,6 +340,75 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
     }
   };
 
+  // Toast actions outlive this render, so they call the latest handler.
+  const handleSyncNotionRef = useRef(null);
+  handleSyncNotionRef.current = handleSyncNotion;
+
+  const handleSaveEdits = useCallback(async () => {
+    if (!dirty || saving) return;
+    setSaving(true);
+    try {
+      const next = { ...parseNotesMarkdown(draft, savedNotes), _editedAt: new Date().toISOString() };
+      const result = await window.meetmind.sessions.updateNotes(session.id, next);
+      if (!result?.success) {
+        addToast(result?.error || 'Couldn’t save the notes.', 'error');
+        return;
+      }
+      // What was saved, normalised, so the draft is clean once the session reloads.
+      setDraft(buildNotesMarkdown(next, session));
+      await onRefresh?.();
+      setSaved(true);
+      if (notionUrl) {
+        addToast('Notes saved. The Notion page still has the previous version.', 'success', {
+          label: 'Update Notion',
+          onClick: () => handleSyncNotionRef.current?.(),
+        });
+      }
+    } catch (err) {
+      addToast(`Couldn’t save the notes: ${err.message}`, 'error');
+    } finally {
+      setSaving(false);
+    }
+  }, [dirty, saving, draft, savedNotes, session, notionUrl, addToast, onRefresh]);
+
+  const handleDiscardEdits = () => setDraft(savedMarkdown);
+
+  useEffect(() => {
+    if (!saved) return undefined;
+    const t = setTimeout(() => setSaved(false), 2500);
+    return () => clearTimeout(t);
+  }, [saved]);
+
+  // Ctrl/Cmd+S saves while there are edits.
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveEdits();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dirty, handleSaveEdits]);
+
+  // Guard navigation away from the meeting while there are unsaved edits.
+  useEffect(() => {
+    if (dirty) {
+      setNavGuard(() => confirm({
+        title: 'Discard unsaved edits?',
+        message: 'Your edits to these notes haven’t been saved.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        destructive: true,
+      }));
+    } else {
+      setNavGuard(null);
+    }
+  }, [dirty, setNavGuard, confirm]);
+
+  useEffect(() => () => setNavGuard(null), [setNavGuard]);
+
   const changeTab = (tab) => {
     setActiveTab(tab);
     scrollRef.current?.scrollTo({ top: 0 });
@@ -305,6 +445,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
         onSyncNotion={handleSyncNotion}
         exporting={exporting}
         onExportPdf={handleExportPdf}
+        editing={dirty}
       />
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
@@ -316,6 +457,18 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
             title={title}
             durationLabel={durationLabel}
             processingError={processingError}
+            aside={activeTab === 'summary' && savedNotes && (
+              <SegmentedControl
+                label="Notes view"
+                role="radiogroup"
+                options={EDIT_MODES}
+                value={showEditor ? 'markdown' : 'preview'}
+                onChange={setEditMode}
+                size="sm"
+                revealIcon
+                disabled={busy}
+              />
+            )}
           />
           {activeTab === 'summary' && (
             <div className="space-y-48 pt-24">
@@ -327,16 +480,30 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                   onRestart={!liveProcessing && !starting ? handleRetry : undefined}
                 />
               )}
-              <SummaryTab
-                notes={notes}
-                title={title}
-                noSpeech={noSpeech}
-                isError={isError}
-                busy={busy}
-                onGenerate={handleGenerate}
-                onRetry={handleRetry}
-              />
+              {showEditor ? (
+                <MarkdownEditor value={draft} onChange={setDraft} structured={!savedNotes._rawMarkdown} />
+              ) : (
+                <SummaryTab
+                  notes={notes}
+                  title={title}
+                  noSpeech={noSpeech}
+                  isError={isError}
+                  busy={busy}
+                  onGenerate={handleGenerate}
+                  onRetry={handleRetry}
+                />
+              )}
             </div>
+          )}
+          {(dirty || saving || saved) && (
+            <SaveBar
+              className="mt-32"
+              dirty={dirty}
+              saving={saving}
+              saved={saved}
+              onSave={handleSaveEdits}
+              onDiscard={handleDiscardEdits}
+            />
           )}
           {activeTab === 'transcript' && (
             <TranscriptViewer transcript={normalizedTranscript} />

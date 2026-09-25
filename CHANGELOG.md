@@ -6,6 +6,17 @@ updated: 2026-09-24
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.6.0] - 2026-09-25
+
+### Added
+
+- Edit a meeting’s notes as Markdown from the Summary tab’s new Preview / Markdown toggle; structured notes keep their card layout, and saved edits carry through to Copy, PDF export and Notion.
+- Meetings with edited notes show an “Edited” chip, and leaving with unsaved edits asks before discarding them.
+
+### Changed
+
+- Ticked action items (`- [x]`) are kept in copied Markdown and shown as done.
+
 ## [3.5.1] - 2026-09-25
 
 ### Changed

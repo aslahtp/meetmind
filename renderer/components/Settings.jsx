@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, SlidersHorizontal, AudioLines, NotebookPen, Blocks, Cpu } from 'lucide-react';
+import { SlidersHorizontal, AudioLines, NotebookPen, Blocks, Cpu } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
-import { PageHeader, SegmentedControl, StatusDot } from './ui/index.jsx';
+import { PageHeader, SaveBar, SegmentedControl } from './ui/index.jsx';
 import GeneralSection from './settings/GeneralSection.jsx';
 import TranscriptionSection from './settings/TranscriptionSection.jsx';
 import NotesSection from './settings/NotesSection.jsx';
@@ -223,40 +223,14 @@ export default function Settings({ onSave }) {
         ))}
 
         {showSaveBar && (
-          <div
-            className="sticky bottom-24 mt-32 floating rounded-card px-24 py-16 flex flex-wrap items-center justify-between gap-16 fade-in"
-            role="region"
-            aria-label="Save changes"
-          >
-            {saved && !isDirty ? (
-              <p className="inline-flex items-center gap-8 text-body-sm text-ink" role="status">
-                <StatusDot tone="ok" />
-                Saved
-              </p>
-            ) : (
-              <>
-                <p className="inline-flex items-center gap-8 text-body-sm text-ink">
-                  <StatusDot tone="warning" />
-                  Unsaved changes
-                </p>
-                <div className="flex items-center gap-8">
-                  <button type="button" onClick={handleDiscard} disabled={saving} className="btn-ghost btn-sm">
-                    Discard
-                  </button>
-                  <button type="button" onClick={handleSave} disabled={saving} className="btn-sunshine btn-sm">
-                    {saving ? (
-                      <>
-                        <Loader2 size={14} strokeWidth={2} className="spinner" />
-                        Saving…
-                      </>
-                    ) : (
-                      'Save changes'
-                    )}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          <SaveBar
+            className="mt-32"
+            dirty={isDirty}
+            saving={saving}
+            saved={saved}
+            onSave={handleSave}
+            onDiscard={handleDiscard}
+          />
         )}
       </div>
     </div>

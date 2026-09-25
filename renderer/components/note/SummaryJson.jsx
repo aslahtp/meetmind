@@ -30,8 +30,10 @@ function PriorityTag({ priority }) {
 }
 
 function ActionItemsList({ items, n }) {
+  // Ticks start from the saved `done` flag (`- [x]` in the Markdown); clicks here are local.
   const [checked, setChecked] = useState(() => ({}));
-  const doneCount = items.reduce((count, _, idx) => count + (checked[idx] ? 1 : 0), 0);
+  const isChecked = (idx) => checked[idx] ?? !!items[idx]?.done;
+  const doneCount = items.reduce((count, _, idx) => count + (isChecked(idx) ? 1 : 0), 0);
 
   return (
     <section>
@@ -52,7 +54,7 @@ function ActionItemsList({ items, n }) {
       ) : (
         <ul className="border border-ink rounded-card divide-y divide-graphite/40">
           {items.map((item, idx) => {
-            const isDone = !!checked[idx];
+            const isDone = isChecked(idx);
             return (
               <li key={idx} className="px-24 py-16">
                 <CheckBox

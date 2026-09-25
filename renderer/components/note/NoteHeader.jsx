@@ -27,6 +27,14 @@ const SENTIMENT_LABELS = {
   tense:    'Tense',
 };
 
+// Actions below read the saved notes, so they pause while there are unsaved edits.
+const EDITING_HINT = 'Save or discard your edits first';
+
+function editedLabel(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? 'Edited' : `Edited ${d.toLocaleString()}`;
+}
+
 function metaChips(session, notes) {
   const sentiment = SENTIMENT_LABELS[notes?.sentiment];
   const hostname = meetingHostname(session.meeting_url);
@@ -39,6 +47,11 @@ function metaChips(session, notes) {
     chips.push(
       <span key="mode" className="pill-quiet">{notes._rawMarkdown ? 'Markdown' : 'JSON'}</span>
     );
+    if (notes._editedAt) {
+      chips.push(
+        <span key="edited" className="pill-quiet" title={editedLabel(notes._editedAt)}>Edited</span>
+      );
+    }
   }
   if (notes?._geminiModel) {
     chips.push(
@@ -95,7 +108,9 @@ export function NoteToolbar({
   notionUrl,
   uploading,
   onSyncNotion,
+  editing,
 }) {
+  const lockTitle = editing ? { title: EDITING_HINT } : {};
   return (
     <header className="flex-shrink-0 border-b border-ink bg-paper">
       <div className="w-full px-24 py-8 grid grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)] items-center gap-16">
@@ -126,14 +141,20 @@ export function NoteToolbar({
         <div className="flex items-center justify-end gap-4 min-w-0">
           {notes && (
             <>
-              <IconButton label={copied ? 'Copied' : 'Copy notes as Markdown'} onClick={onCopy}>
+              <IconButton
+                label={copied ? 'Copied' : 'Copy notes as Markdown'}
+                onClick={onCopy}
+                disabled={editing}
+                {...lockTitle}
+              >
                 {copied ? <Check size={16} strokeWidth={2} /> : <Copy size={16} strokeWidth={1.75} />}
               </IconButton>
 
               <IconButton
                 label={regenerating ? 'Regenerating…' : 'Regenerate notes'}
                 onClick={onRegenerate}
-                disabled={busy || regenerating || uploading}
+                disabled={editing || busy || regenerating || uploading}
+                {...lockTitle}
               >
                 {regenerating
                   ? <Loader2 size={16} strokeWidth={2} className="spinner" />
@@ -143,7 +164,8 @@ export function NoteToolbar({
               <IconButton
                 label={exporting ? 'Exporting PDF…' : 'Export as PDF'}
                 onClick={onExportPdf}
-                disabled={exporting}
+                disabled={editing || exporting}
+                {...lockTitle}
               >
                 {exporting
                   ? <Loader2 size={16} strokeWidth={2} className="spinner" />
@@ -167,9 +189,9 @@ export function NoteToolbar({
                   <button
                     type="button"
                     onClick={onSyncNotion}
-                    disabled={uploading || busy}
+                    disabled={editing || uploading || busy}
                     aria-label={uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
-                    title={uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
+                    title={editing ? EDITING_HINT : uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
                     className="inline-flex items-center gap-8 rounded-r-full pl-8 pr-16 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {uploading
@@ -182,9 +204,9 @@ export function NoteToolbar({
                 <button
                   type="button"
                   onClick={onSyncNotion}
-                  disabled={uploading || busy}
+                  disabled={editing || uploading || busy}
                   className="btn-ghost px-16 py-4 text-caption"
-                  title="Upload notes to Notion"
+                  title={editing ? EDITING_HINT : 'Upload notes to Notion'}
                 >
                   {uploading ? <Loader2 size={14} strokeWidth={2} className="spinner" /> : <NotionIcon size={14} />}
                   {uploading ? 'Syncing…' : 'Sync to Notion'}
@@ -201,7 +223,7 @@ export function NoteToolbar({
 // Title, meta line and chips at the top of the scrolling body, so they scroll
 // away with the notes instead of permanently taking up the viewport.
 export const NoteTitleBlock = forwardRef(function NoteTitleBlock(
-  { session, notes, title, durationLabel, processingError },
+  { session, notes, title, durationLabel, processingError, aside },
   ref,
 ) {
   const meta = metaText(session, notes, durationLabel);
@@ -209,7 +231,10 @@ export const NoteTitleBlock = forwardRef(function NoteTitleBlock(
 
   return (
     <div className="pt-32 pb-8">
-      <h1 ref={ref} className="text-heading font-medium text-ink break-words">{title}</h1>
+      <div className="flex items-start justify-between gap-16">
+        <h1 ref={ref} className="min-w-0 text-heading font-medium text-ink break-words">{title}</h1>
+        {aside && <div className="flex-shrink-0 mt-4">{aside}</div>}
+      </div>
       {(meta || chips.length > 0) && (
         <div className="flex items-center flex-wrap gap-8 mt-8">
           {meta && <p className="text-body-sm text-graphite mr-8">{meta}</p>}
