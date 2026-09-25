@@ -1,7 +1,6 @@
 const { google } = require('googleapis');
 const { shell } = require('electron');
 const http = require('http');
-const url = require('url');
 const logger = require('../utils/logger');
 
 // Scopes for read-only calendar access + user profile email

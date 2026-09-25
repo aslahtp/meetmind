@@ -150,7 +150,7 @@ function parseDeviceList(ffmpegOutput) {
  * regardless of output device (speakers, headphones, USB, Bluetooth).
  * Falls back to Stereo Mix or virtual cable devices if WASAPI loopback shouldn't be used.
  */
-function detectSystemLoopback(devices) {
+function detectSystemLoopback(_devices) {
   // WASAPI loopback is always the best option on Windows — return it unconditionally
   return WASAPI_LOOPBACK_ID;
 }

@@ -4,12 +4,11 @@ const fs = require('fs');
 const { app } = require('electron');
 const { EventEmitter } = require('events');
 
-const { getFfmpegPath, getFfprobePath, resolveFfmpegPath, resolveFfprobePath, validateFfmpegExists } = require('./ffmpeg-path');
+const { resolveFfmpegPath, resolveFfprobePath } = require('./ffmpeg-path');
 const {
   buildAmixFilter,
   buildSingleDeviceArgs,
   parseDeviceList,
-  detectSystemLoopback,
   detectDshowLoopback,
   detectMicrophone,
   isWasapiLoopback,
@@ -348,7 +347,7 @@ async function stopRecording() {
       }
     }, 5000);
 
-    ffmpegProcess.on('close', (code) => {
+    ffmpegProcess.on('close', () => {
       clearTimeout(timeout);
       ffmpegProcess = null;
 

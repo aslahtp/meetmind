@@ -6,6 +6,12 @@ updated: 2026-09-25
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.6.2] - 2026-09-25
+
+### Added
+
+- `pnpm run lint` (ESLint) and `pnpm run test` (Vitest) for contributors, with tests for note Markdown export/parsing, formatting helpers and PDF file naming.
+
 ## [3.6.1] - 2026-09-25
 
 ### Fixed

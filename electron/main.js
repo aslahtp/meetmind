@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { Readable } = require('stream');
 
-const { getConfig, setConfig, setMultipleConfig, isFirstRun } = require('./utils/config');
+const { getConfig, setConfig, setMultipleConfig } = require('./utils/config');
 const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
 const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
@@ -388,7 +388,7 @@ function requestRendererCaptureStop() {
       return;
     }
 
-    function onDone(_e, buffer) {
+    function onDone() {
       clearTimeout(timer);
       // Sentinel received — all chunks have been flushed to disk already
       resolve();
@@ -1214,10 +1214,8 @@ function registerIpcHandlers() {
 
   // ── FFmpeg install ─────────────────────────────────────────────────────────
   ipcMain.handle('ffmpeg:install', async () => {
-    const https = require('https');
     const os = require('os');
     const { spawnSync } = require('child_process');
-    const { getFfmpegPath, getFfprobePath } = require('./audio/ffmpeg-path');
 
     // Where to install
     const targetDir = app.isPackaged

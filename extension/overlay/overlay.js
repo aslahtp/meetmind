@@ -19,7 +19,6 @@ let currentState = State.APP_OFFLINE;
 let meetingUrl   = '';
 let meetingTitle = '';
 let notionUrl    = null;
-let sessionId    = null;
 let timerSeconds = 0;
 let timerInterval = null;
 let processingStage  = '';
@@ -419,7 +418,6 @@ window.addEventListener('message', (event) => {
         case 'RECORDING':
           if (currentState !== State.RECORDING) {
             currentState = State.RECORDING;
-            sessionId = msg.sessionId;
             startTimer();
             render();
           }
@@ -436,7 +434,6 @@ window.addEventListener('message', (event) => {
         case 'COMPLETE':
           currentState = State.COMPLETE;
           notionUrl  = msg.notionUrl  || null;
-          sessionId  = msg.sessionId || null;
           // Surface the finished state even if the user had docked the overlay
           if (collapsed) setCollapsed(false);
           else render();
@@ -560,26 +557,6 @@ function iconNotion(size = PILL_ICON_SIZE) {
   img.setAttribute('aria-hidden', 'true');
   img.draggable = false;
   return img;
-}
-
-function iconExternal(size = PILL_ICON_SIZE) {
-  const svg = svgEl({ width: size, height: size, 'stroke-width': '2.2' });
-  svg.append(
-    path('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'),
-    path('M15 3h6v6'),
-    path('M10 14 21 3'),
-  );
-  return svg;
-}
-
-function iconDownload(size) {
-  const svg = svgEl({ width: size, height: size, 'stroke-width': '2.2' });
-  svg.append(
-    path('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'),
-    path('M7 10l5 5 5-5'),
-    path('M12 15V3'),
-  );
-  return svg;
 }
 
 render();

@@ -172,7 +172,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
 
   useEffect(() => {
     refreshSessions();
-  }, []);
+  }, [refreshSessions]);
 
   // Listen for calendar meeting-starting events
   useEffect(() => {

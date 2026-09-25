@@ -162,9 +162,6 @@ Present the meeting minutes in a well-structured Markdown document with clear he
 
 - **Heading Rule**: The H1 (single \`#\`) is reserved exclusively for the meeting title and must appear at the very top of the document. Do not use H1 anywhere else in the document; all subsequent section headers (e.g., Executive Summary, Agenda Items, Key Decisions, Action Items, Next Steps, Attachments/References) must use H2 (\`##\`) or lower.`;
 
-// Alias kept for internal use
-const SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;
-
 function transcriptToText(transcript) {
   if (!Array.isArray(transcript) || transcript.length === 0) {
     return 'No transcript available.';

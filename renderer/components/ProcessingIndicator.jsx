@@ -35,7 +35,9 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }) {
   const slotRef = useRef(null);
   const pillRef = useRef(null);
   const sizeRef = useRef(null);
-  const measureRefs = { full: useRef(null), compact: useRef(null), icon: useRef(null) };
+  const fullRef = useRef(null);
+  const compactRef = useRef(null);
+  const iconRef = useRef(null);
 
   useEffect(() => { openRef.current = open; }, [open]);
 
@@ -77,9 +79,9 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }) {
   // which stays constant however the slot is currently sized, so the choice can't oscillate.
   const fit = useCallback(() => {
     const m = {
-      full: measureRefs.full.current?.offsetWidth ?? 0,
-      compact: measureRefs.compact.current?.offsetWidth ?? 0,
-      icon: measureRefs.icon.current?.offsetWidth ?? 0,
+      full: fullRef.current?.offsetWidth ?? 0,
+      compact: compactRef.current?.offsetWidth ?? 0,
+      icon: iconRef.current?.offsetWidth ?? 0,
     };
     setWidths((prev) => (prev && prev.full === m.full && prev.compact === m.compact && prev.icon === m.icon ? prev : m));
     const pill = pillRef.current;
@@ -95,11 +97,11 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }) {
   useLayoutEffect(() => {
     fit();
     const ro = new ResizeObserver(() => fit());
-    [spacerRef?.current, slotRef.current, measureRefs.full.current, measureRefs.compact.current]
+    [spacerRef?.current, slotRef.current, fullRef.current, compactRef.current]
       .filter(Boolean)
       .forEach((el) => ro.observe(el));
     return () => ro.disconnect();
-  }, [fit]);
+  }, [fit, spacerRef]);
 
   const outcome = view?.outcome;
   const pct = Math.max(0, Math.min(100, Math.round(view?.percent || 0)));
@@ -141,13 +143,13 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }) {
           </span>
           {/* Invisible copies of each variant, measured to decide which one fits. */}
           <span className="proc-measure" aria-hidden="true">
-            <span ref={measureRefs.full} className="proc-content">
+            <span ref={fullRef} className="proc-content">
               <PillContent outcome={outcome} label={label} pct={pct} showLabel showPct={!outcome} />
             </span>
-            <span ref={measureRefs.compact} className="proc-content">
+            <span ref={compactRef} className="proc-content">
               <PillContent outcome={outcome} label={label} pct={pct} showLabel={false} showPct={!outcome} />
             </span>
-            <span ref={measureRefs.icon} className="proc-content">
+            <span ref={iconRef} className="proc-content">
               <PillContent outcome={outcome} label={label} pct={pct} showLabel={false} showPct={false} />
             </span>
           </span>

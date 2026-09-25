@@ -79,7 +79,7 @@ function parseMarkdownRichText(text) {
 }
 
 // Legacy fallback
-function richText(text, options = {}) {
+function richText(text) {
   return parseMarkdownRichText(text);
 }
 
@@ -109,7 +109,7 @@ function todoBlock(text, checked = false) {
   return { object: 'block', type: 'to_do', to_do: { rich_text: parseMarkdownRichText(text), checked } };
 }
 
-function quoteBlock(text, options = {}) {
+function quoteBlock(text) {
   return {
     object: 'block',
     type: 'quote',
@@ -131,17 +131,6 @@ function calloutBlock(text, emoji = '📋') {
     callout: {
       rich_text: parseMarkdownRichText(text),
       icon: { type: 'emoji', emoji },
-    },
-  };
-}
-
-function toggleBlock(heading, children = []) {
-  return {
-    object: 'block',
-    type: 'toggle',
-    toggle: {
-      rich_text: parseMarkdownRichText(heading),
-      children: children.slice(0, NOTION_BLOCK_LIMIT),
     },
   };
 }
@@ -195,13 +184,6 @@ function tableBlock(headers, rows) {
       children: tableChildren.slice(0, NOTION_BLOCK_LIMIT),
     },
   };
-}
-
-// ── Priority badge text ────────────────────────────────────────────────────────
-
-function priorityBadge(priority) {
-  const badges = { high: '🔴 High', medium: '🟡 Medium', low: '🟢 Low' };
-  return badges[priority] || '';
 }
 
 // ── Duration helpers ────────────────────────────────────────────────────────────
@@ -455,7 +437,7 @@ function buildBlocks(notes, transcript, { includeTranscript = true } = {}) {
         : getTranscriptDurationSeconds(transcript);
     const durationLabel = notes.duration || formatDuration(durationSeconds);
     if (durationLabel) {
-      blocks.push(quoteBlock(`Duration: ${durationLabel}`, { bold: true, italic: true }));
+      blocks.push(quoteBlock(`Duration: ${durationLabel}`));
     }
 
     // Participants

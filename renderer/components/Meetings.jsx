@@ -55,7 +55,7 @@ export default function Meetings({ onOpenSession }) {
 
   useEffect(() => {
     refreshSessions();
-  }, []);
+  }, [refreshSessions]);
 
   const counts = useMemo(() => {
     const out = {};

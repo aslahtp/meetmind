@@ -24,7 +24,7 @@ pnpm run dev
 
 ## Making changes
 
-- There is no lint or test script. Verify a change by running the app with `pnpm run dev` and exercising the affected flow.
+- Run `pnpm run lint` and `pnpm run test` before opening a PR. The tests cover pure logic only, so also verify a change by running the app with `pnpm run dev` and exercising the affected flow.
 - Before changing any UI, read [DESIGN.md](DESIGN.md); it defines MeetMind's visual language and component patterns.
 - For any change beyond a typo or formatting fix, bump `version` in `package.json` using semantic versioning and add an entry to [CHANGELOG.md](CHANGELOG.md) in the same pull request. The rules are in [AGENTS.md](AGENTS.md#versioning-and-changelog).
 - Do not commit FFmpeg binaries, `package-lock.json`, `.env` files or API keys.

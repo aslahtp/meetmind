@@ -64,14 +64,6 @@ function ensureDb() {
   return db;
 }
 
-// ── Row helper: sql.js returns {columns, values} for exec; we need row objects ───
-
-function rowToObject(columns, values) {
-  const row = {};
-  columns.forEach((col, i) => { row[col] = values[i]; });
-  return row;
-}
-
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
 function createSession(session) {

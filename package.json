@@ -1,6 +1,6 @@
 {
   "name": "meetmind",
-  "version": "3.6.1",
+  "version": "3.6.2",
   "description": "Open-source AI meeting notes app for Windows: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT or Sarvam AI, summarize with Gemini, and sync to Notion.",
   "keywords": [
     "ai-meeting-notes",
@@ -47,7 +47,10 @@
     "build:dir": "vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --dir --config electron-builder.yml",
     "build:ext": "node scripts/build-extension.js",
     "preview": "vite preview",
-    "generate-icons": "node scripts/generate-icons.js"
+    "generate-icons": "node scripts/generate-icons.js",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.14.0",
@@ -67,12 +70,17 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
     "png-to-ico": "^3.0.2",
     "postcss": "^8.4.49",
     "rcedit": "^5.0.2",
@@ -80,7 +88,8 @@
     "react-dom": "^18.3.1",
     "sharp": "^0.35.3",
     "tailwindcss": "^3.4.17",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vitest": "^5.0.1"
   },
   "build": {
     "extends": "./electron-builder.yml"
