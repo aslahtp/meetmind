@@ -9,7 +9,7 @@ inputs:
     required: false
     default: 'true'
   cache:
-    description: Restore/save the pnpm store cache. Off for release builds, so a poisoned cache can't reach the installer.
+    description: Restore/save the pnpm store cache. Off for release builds, so a poisoned cache can't reach the installer. Ignored when `install` is false.
     required: false
     default: 'true'
 
@@ -24,8 +24,9 @@ runs:
       with:
         # Vitest 5 needs Node 22.12+.
         node-version: 24
-        cache: ${{ inputs.cache == 'true' && 'pnpm' || '' }}
-        package-manager-cache: ${{ inputs.cache == 'true' }}
+        # No install means no pnpm store, and setup-node fails its post-job cache save on a missing path.
+        cache: ${{ inputs.cache == 'true' && inputs.install == 'true' && 'pnpm' || '' }}
+        package-manager-cache: ${{ inputs.cache == 'true' && inputs.install == 'true' }}
 
     - name: Install Dependencies
       if: inputs.install == 'true'
