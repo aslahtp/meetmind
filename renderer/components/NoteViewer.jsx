@@ -230,6 +230,16 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
 
   const title = notesTitle(notes, session);
   const showEditor = editMode === 'markdown' && !!savedNotes && !busy;
+  const showModeToggle = activeTab === 'summary' && !!savedNotes;
+  const modeToggle = {
+    label: 'Notes view',
+    role: 'radiogroup',
+    options: EDIT_MODES,
+    value: showEditor ? 'markdown' : 'preview',
+    onChange: setEditMode,
+    size: 'sm',
+    disabled: busy,
+  };
 
   // Starts a pipeline run and hands progress tracking to the app shell.
   const startPipeline = async (run) => {
@@ -449,6 +459,21 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
       />
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
+        {/* Once the title (and the toggle beside it) scrolls away, an icon-only copy
+            stays pinned to the top-right corner. Zero height, so it takes no space. */}
+        {showModeToggle && (
+          <div className="sticky top-16 z-10 h-0 flex justify-end px-24 pointer-events-none">
+            <div
+              aria-hidden={!titleHidden}
+              inert={titleHidden ? undefined : ''}
+              className={`transition-[opacity,transform] duration-200 ease-out ${
+                titleHidden ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-8'
+              }`}
+            >
+              <SegmentedControl {...modeToggle} iconOnly className="bg-paper" />
+            </div>
+          </div>
+        )}
         <div className="mx-auto w-full max-w-[880px] px-32 pb-64">
           <NoteTitleBlock
             ref={titleRef}
@@ -457,18 +482,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
             title={title}
             durationLabel={durationLabel}
             processingError={processingError}
-            aside={activeTab === 'summary' && savedNotes && (
-              <SegmentedControl
-                label="Notes view"
-                role="radiogroup"
-                options={EDIT_MODES}
-                value={showEditor ? 'markdown' : 'preview'}
-                onChange={setEditMode}
-                size="sm"
-                revealIcon
-                disabled={busy}
-              />
-            )}
+            aside={showModeToggle && <SegmentedControl {...modeToggle} revealIcon />}
           />
           {activeTab === 'summary' && (
             <div className="space-y-48 pt-24">

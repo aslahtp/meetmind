@@ -48,7 +48,11 @@ export function Switch({ checked, onChange, label, id, disabled }) {
 
 // ── SegmentedControl / Tabs — role="tablist" with arrow-key navigation ────────
 // `revealIcon`: show each option's icon only while it is selected, animating it in and out.
-export function SegmentedControl({ options, value, onChange, label, role = 'tablist', size = 'md', revealIcon = false, disabled = false }) {
+// `iconOnly`: icons without text; each label becomes the button's accessible name and tooltip.
+export function SegmentedControl({
+  options, value, onChange, label, role = 'tablist', size = 'md',
+  revealIcon = false, iconOnly = false, disabled = false, className = '',
+}) {
   const refs = useRef([]);
   const isTabs = role === 'tablist';
 
@@ -68,7 +72,7 @@ export function SegmentedControl({ options, value, onChange, label, role = 'tabl
     <div
       role={isTabs ? 'tablist' : 'radiogroup'}
       aria-label={label}
-      className="inline-flex items-center gap-4 rounded-full border border-ink p-4"
+      className={`inline-flex items-center gap-4 rounded-full border border-ink p-4 ${className}`}
     >
       {options.map((opt, idx) => {
         const selected = opt.value === value;
@@ -82,16 +86,20 @@ export function SegmentedControl({ options, value, onChange, label, role = 'tabl
             aria-selected={isTabs ? selected : undefined}
             aria-checked={isTabs ? undefined : selected}
             tabIndex={selected ? 0 : -1}
+            aria-label={iconOnly ? opt.label : undefined}
+            title={iconOnly ? opt.label : undefined}
             disabled={disabled}
             onClick={() => onChange(opt.value)}
             onKeyDown={(e) => onKeyDown(e, idx)}
             className={`inline-flex items-center rounded-full font-medium ${
               revealIcon ? 'transition-colors duration-200 ease-out' : 'gap-8 transition-colors duration-150'
             } ${
-              size === 'sm' ? 'px-16 py-4 text-caption' : 'px-16 py-8 text-caption'
+              iconOnly ? 'p-8' : size === 'sm' ? 'px-16 py-4 text-caption' : 'px-16 py-8 text-caption'
             } ${selected ? 'bg-ink text-paper' : 'text-graphite hover:text-ink'} disabled:cursor-not-allowed disabled:opacity-40`}
           >
-            {Icon && revealIcon ? (
+            {Icon && iconOnly ? (
+              <Icon size={14} strokeWidth={1.75} aria-hidden="true" />
+            ) : Icon && revealIcon ? (
               // Same technique as the top-bar nav: the icon stays mounted and its width, gap and
               // opacity animate, so the pill (and the whole control) resizes smoothly.
               <span
@@ -105,8 +113,8 @@ export function SegmentedControl({ options, value, onChange, label, role = 'tabl
             ) : (
               Icon && <Icon size={14} strokeWidth={1.75} />
             )}
-            {opt.label}
-            {opt.count != null && (
+            {!iconOnly && opt.label}
+            {!iconOnly && opt.count != null && (
               <span className={`tabular ${selected ? 'text-paper/70' : 'text-graphite'}`}>{opt.count}</span>
             )}
           </button>
