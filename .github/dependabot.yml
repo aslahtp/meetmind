@@ -6,6 +6,8 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 1
     groups:
       actions:
         patterns: ['*']
@@ -17,6 +19,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Match pnpm's minimumReleaseAge (pnpm-workspace.yaml): skip versions under a day old,
+    # so a compromised release is pulled before it's proposed (and pnpm doesn't reject it).
+    cooldown:
+      default-days: 1
     open-pull-requests-limit: 5
     groups:
       runtime:

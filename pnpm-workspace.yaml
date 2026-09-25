@@ -6,3 +6,9 @@ nodeLinker: hoisted
 # version bump). That reinstall replaces node_modules/electron, which fails while the app is
 # running and leaves Electron without its binary. Warn instead; run `pnpm install` yourself.
 verifyDepsBeforeRun: warn
+# Supply-chain guard: refuse package versions published less than a day ago (value in minutes).
+# Most compromised npm releases are caught and unpublished within hours, so a fresh malicious
+# version can't be resolved by `pnpm add`/`pnpm update` while it's still live. Dependabot
+# picks versions itself, so .github/dependabot.yml has a matching `cooldown`.
+# To take an urgent fix sooner, add it to `minimumReleaseAgeExclude` and remove it afterwards.
+minimumReleaseAge: 1440
