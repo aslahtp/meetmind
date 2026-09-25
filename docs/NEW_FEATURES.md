@@ -1,0 +1,9 @@
+- Rename speakers (S): change "Speaker 1" to "Anil" once for the whole meeting, and pre-fill names from the calendar invite. The new names would carry through to the notes, PDF and Notion.
+- Global shortcuts (S): start and stop recording from anywhere with something like Ctrl+Shift+R. Nothing uses globalShortcut yet.
+- Level meters and silence warning (S): show mic and system audio levels on the recording bar, and warn with something like "no system audio for 2 minutes." This catches a failed loopback while the meeting is still going, not after it ends.
+- Crash recovery (S/M): on startup, find leftover in-progress .webm files and offer to recover them instead of losing the recording.
+- Note templates per meeting type (M): presets such as 1:1, standup, client call, interview or sprint retro, each with its own prompt. Pick one automatically from calendar keywords or by hand. Today there is one system prompt for each output mode.
+- More destinations (M each): Slack (post a summary to a channel), Linear or Jira (turn action items into tickets), Google Docs, and Obsidian or a Markdown folder (auto-save a .md file to a vault). The Notion pipeline stage could become a general "destinations" system.
+- Local transcription (L): an offline option using whisper.cpp for sensitive meetings. Code-switching quality would need testing.
+- Backup and restore (S): export the database, settings and optionally audio to a zip, and import it on a new machine.
+- Redaction (M): mask phone numbers, emails and card numbers before anything goes to Gemini or Notion.
