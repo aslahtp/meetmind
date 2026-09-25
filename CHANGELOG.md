@@ -12,6 +12,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 - Settings tabs now show an icon on the active tab, which slides in and out smoothly as you switch, matching the top navigation.
 - Every Settings section card now has an icon beside its title (brand logos for Gemini and the selected speech-to-text service).
+- The Summary / Transcript / Audio tabs on a meeting page are now centred in the toolbar, regardless of the title and action buttons beside them.
 
 ## [3.5.0] - 2026-09-25
 

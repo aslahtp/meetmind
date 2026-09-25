@@ -73,6 +73,10 @@ function metaChips(session, notes) {
 
 // Slim sticky bar: back, view tabs and note actions on one row. The meeting
 // title only appears here once the in-page title has scrolled out of view.
+// A 1fr/auto/1fr grid keeps the tabs centred on the bar whatever the widths of
+// the side columns (title visibility, Notion state, notes missing); the actions
+// column never shrinks below its content, so at narrow widths the tabs shift left
+// instead of being overlapped.
 export function NoteToolbar({
   title,
   showTitle,
@@ -94,20 +98,22 @@ export function NoteToolbar({
 }) {
   return (
     <header className="flex-shrink-0 border-b border-ink bg-paper">
-      <div className="w-full px-24 py-8 flex items-center gap-16">
-        <IconButton label="Back to meetings" onClick={onBack} className="flex-shrink-0">
-          <ChevronLeft size={18} strokeWidth={1.75} />
-        </IconButton>
+      <div className="w-full px-24 py-8 grid grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)] items-center gap-16">
+        <div className="flex items-center gap-16 min-w-0">
+          <IconButton label="Back to meetings" onClick={onBack} className="flex-shrink-0">
+            <ChevronLeft size={18} strokeWidth={1.75} />
+          </IconButton>
 
-        <p
-          aria-hidden="true"
-          title={title}
-          className={`flex-1 min-w-0 truncate text-body-sm font-medium text-ink transition-opacity duration-150 ${
-            showTitle ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          {title}
-        </p>
+          <p
+            aria-hidden="true"
+            title={title}
+            className={`flex-1 min-w-0 truncate text-body-sm font-medium text-ink transition-opacity duration-150 ${
+              showTitle ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            {title}
+          </p>
+        </div>
 
         <SegmentedControl
           label="Meeting views"
@@ -117,74 +123,76 @@ export function NoteToolbar({
           size="sm"
         />
 
-        {notes && (
-          <div className="flex items-center gap-4 flex-shrink-0">
-            <IconButton label={copied ? 'Copied' : 'Copy notes as Markdown'} onClick={onCopy}>
-              {copied ? <Check size={16} strokeWidth={2} /> : <Copy size={16} strokeWidth={1.75} />}
-            </IconButton>
+        <div className="flex items-center justify-end gap-4 min-w-0">
+          {notes && (
+            <>
+              <IconButton label={copied ? 'Copied' : 'Copy notes as Markdown'} onClick={onCopy}>
+                {copied ? <Check size={16} strokeWidth={2} /> : <Copy size={16} strokeWidth={1.75} />}
+              </IconButton>
 
-            <IconButton
-              label={regenerating ? 'Regenerating…' : 'Regenerate notes'}
-              onClick={onRegenerate}
-              disabled={busy || regenerating || uploading}
-            >
-              {regenerating
-                ? <Loader2 size={16} strokeWidth={2} className="spinner" />
-                : <RefreshCw size={16} strokeWidth={1.75} />}
-            </IconButton>
+              <IconButton
+                label={regenerating ? 'Regenerating…' : 'Regenerate notes'}
+                onClick={onRegenerate}
+                disabled={busy || regenerating || uploading}
+              >
+                {regenerating
+                  ? <Loader2 size={16} strokeWidth={2} className="spinner" />
+                  : <RefreshCw size={16} strokeWidth={1.75} />}
+              </IconButton>
 
-            <IconButton
-              label={exporting ? 'Exporting PDF…' : 'Export as PDF'}
-              onClick={onExportPdf}
-              disabled={exporting}
-            >
-              {exporting
-                ? <Loader2 size={16} strokeWidth={2} className="spinner" />
-                : <FileDown size={16} strokeWidth={1.75} />}
-            </IconButton>
+              <IconButton
+                label={exporting ? 'Exporting PDF…' : 'Export as PDF'}
+                onClick={onExportPdf}
+                disabled={exporting}
+              >
+                {exporting
+                  ? <Loader2 size={16} strokeWidth={2} className="spinner" />
+                  : <FileDown size={16} strokeWidth={1.75} />}
+              </IconButton>
 
-            {notionUrl ? (
-              // One Notion pill, marked by the logo: open the page, or replace it with the current notes.
-              <div role="group" aria-label="Notion page" className="inline-flex items-stretch rounded-full border border-ink">
-                <button
-                  type="button"
-                  onClick={() => window.meetmind.shell.openExternal(notionUrl)}
-                  className="inline-flex items-center gap-8 rounded-l-full pl-16 pr-8 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06]"
-                  title="Open in Notion"
-                  aria-label="Open in Notion"
-                >
-                  <NotionIcon size={16} />
-                  <span>Open</span>
-                </button>
-                <span className="w-px my-4 bg-ink/30" aria-hidden="true" />
+              {notionUrl ? (
+                // One Notion pill, marked by the logo: open the page, or replace it with the current notes.
+                <div role="group" aria-label="Notion page" className="inline-flex items-stretch rounded-full border border-ink">
+                  <button
+                    type="button"
+                    onClick={() => window.meetmind.shell.openExternal(notionUrl)}
+                    className="inline-flex items-center gap-8 rounded-l-full pl-16 pr-8 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06]"
+                    title="Open in Notion"
+                    aria-label="Open in Notion"
+                  >
+                    <NotionIcon size={16} />
+                    <span>Open</span>
+                  </button>
+                  <span className="w-px my-4 bg-ink/30" aria-hidden="true" />
+                  <button
+                    type="button"
+                    onClick={onSyncNotion}
+                    disabled={uploading || busy}
+                    aria-label={uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
+                    title={uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
+                    className="inline-flex items-center gap-8 rounded-r-full pl-8 pr-16 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {uploading
+                      ? <Loader2 size={14} strokeWidth={2} className="spinner" />
+                      : <CloudUpload size={14} strokeWidth={1.75} />}
+                    <span>{uploading ? 'Updating…' : 'Update'}</span>
+                  </button>
+                </div>
+              ) : (
                 <button
                   type="button"
                   onClick={onSyncNotion}
                   disabled={uploading || busy}
-                  aria-label={uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
-                  title={uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
-                  className="inline-flex items-center gap-8 rounded-r-full pl-8 pr-16 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="btn-ghost px-16 py-4 text-caption"
+                  title="Upload notes to Notion"
                 >
-                  {uploading
-                    ? <Loader2 size={14} strokeWidth={2} className="spinner" />
-                    : <CloudUpload size={14} strokeWidth={1.75} />}
-                  <span>{uploading ? 'Updating…' : 'Update'}</span>
+                  {uploading ? <Loader2 size={14} strokeWidth={2} className="spinner" /> : <NotionIcon size={14} />}
+                  {uploading ? 'Syncing…' : 'Sync to Notion'}
                 </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={onSyncNotion}
-                disabled={uploading || busy}
-                className="btn-ghost px-16 py-4 text-caption"
-                title="Upload notes to Notion"
-              >
-                {uploading ? <Loader2 size={14} strokeWidth={2} className="spinner" /> : <NotionIcon size={14} />}
-                {uploading ? 'Syncing…' : 'Sync to Notion'}
-              </button>
-            )}
-          </div>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
     </header>
   );
