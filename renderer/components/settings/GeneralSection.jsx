@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor, Palette, Power } from 'lucide-react';
 import { useApp } from '../../lib/app-context.js';
 import { SegmentedControl, Switch } from '../ui/index.jsx';
 import { SettingsGroup, SettingRow, RowList } from './SettingsParts.jsx';
@@ -17,7 +17,11 @@ export default function GeneralSection({ form, onChange }) {
 
   return (
     <div className="space-y-24">
-      <SettingsGroup title="Appearance" description="Theme changes apply immediately.">
+      <SettingsGroup
+        title="Appearance"
+        description="Theme changes apply immediately."
+        icon={<Palette size={20} strokeWidth={1.75} className="text-ink" />}
+      >
         <RowList>
           <SettingRow label="Theme" description="Follow Windows or choose a theme.">
             <SegmentedControl
@@ -52,7 +56,7 @@ export default function GeneralSection({ form, onChange }) {
         </RowList>
       </SettingsGroup>
 
-      <SettingsGroup title="Startup & updates">
+      <SettingsGroup title="Startup & updates" icon={<Power size={20} strokeWidth={1.75} className="text-ink" />}>
         <RowList>
           <SettingRow
             label="Launch on startup"

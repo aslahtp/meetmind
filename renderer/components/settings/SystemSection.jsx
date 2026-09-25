@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, RefreshCw, RotateCcw, Download, ArrowUpCircle } from 'lucide-react';
+import { Loader2, RefreshCw, RotateCcw, Download, ArrowUpCircle, FileAudio } from 'lucide-react';
 import { StatusDot, ProgressBar } from '../ui/index.jsx';
 import { SettingsGroup, ExternalLink } from './SettingsParts.jsx';
 
@@ -169,6 +169,7 @@ export default function SystemSection({ active }) {
       <SettingsGroup
         title="FFmpeg & FFprobe"
         description="Required for audio capture, conversion, duration detection and system audio mixing."
+        icon={<FileAudio size={20} strokeWidth={1.75} className="text-ink" />}
         aside={
           <button type="button" onClick={handleCheckFfmpeg} disabled={checkingFfmpeg} className="btn-ghost btn-sm">
             {checkingFfmpeg ? (

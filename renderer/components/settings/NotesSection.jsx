@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Braces, FileText, RotateCcw, FolderOpen } from 'lucide-react';
+import { Braces, FileText, RotateCcw, FolderOpen, BrainCircuit, MessageSquareText, FileDown } from 'lucide-react';
+import GeminiIcon from '../GeminiIcon.jsx';
 import { PasswordField, SegmentedControl, Switch } from '../ui/index.jsx';
 import { SettingsGroup, SettingRow, KeyGuide, TestAction, RadioCardGroup, ExternalLink } from './SettingsParts.jsx';
 import { GEMINI_MODELS } from './data.js';
@@ -63,6 +64,7 @@ export default function NotesSection({ form, onChange, defaultSystemPrompt, defa
       <SettingsGroup
         title="Gemini API key"
         description="Gemini turns transcripts into structured meeting notes."
+        icon={<GeminiIcon size={20} />}
         aside={<ExternalLink href="https://aistudio.google.com/app/apikey">Get API key</ExternalLink>}
       >
         <div className="space-y-16">
@@ -77,7 +79,11 @@ export default function NotesSection({ form, onChange, defaultSystemPrompt, defa
         </div>
       </SettingsGroup>
 
-      <SettingsGroup title="Model" description="The primary model used to write notes.">
+      <SettingsGroup
+        title="Model"
+        description="The primary model used to write notes."
+        icon={<BrainCircuit size={20} strokeWidth={1.75} className="text-ink" />}
+      >
         <RadioCardGroup
           label="Gemini model"
           options={GEMINI_MODELS}
@@ -128,6 +134,7 @@ export default function NotesSection({ form, onChange, defaultSystemPrompt, defa
       <SettingsGroup
         title="Output & system prompt"
         description="The format and instructions sent to Gemini when generating notes."
+        icon={<MessageSquareText size={20} strokeWidth={1.75} className="text-ink" />}
       >
         <div>
           <p className="label">Output format</p>
@@ -168,6 +175,7 @@ export default function NotesSection({ form, onChange, defaultSystemPrompt, defa
       <SettingsGroup
         title="PDF export"
         description="Where Export PDF on a meeting saves its notes, and what goes in the file."
+        icon={<FileDown size={20} strokeWidth={1.75} className="text-ink" />}
       >
         <div>
           <label htmlFor="pdf-export-dir" className="label">Save to</label>

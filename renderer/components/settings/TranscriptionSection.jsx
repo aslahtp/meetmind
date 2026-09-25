@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AudioWaveform } from 'lucide-react';
 import { PasswordField, TextField, StatusDot, AvatarTile } from '../ui/index.jsx';
 import { SettingsGroup, KeyGuide, TestAction, RadioCardGroup, ExternalLink } from './SettingsParts.jsx';
 import { STT_SERVICES } from './data.js';
@@ -33,6 +34,7 @@ export default function TranscriptionSection({ form, onChange }) {
   const service = form.sttService || 'google';
   const field = PROVIDER_FIELDS[service] || PROVIDER_FIELDS.google;
   const serviceInfo = STT_SERVICES.find((s) => s.id === service) || STT_SERVICES[0];
+  const ServiceIcon = serviceInfo.icon;
 
   const handleTest = async () => {
     setTesting(true);
@@ -59,6 +61,7 @@ export default function TranscriptionSection({ form, onChange }) {
       <SettingsGroup
         title="Speech-to-text engine"
         description="Choose which service transcribes your recordings."
+        icon={<AudioWaveform size={20} strokeWidth={1.75} className="text-ink" />}
       >
         <RadioCardGroup
           label="Speech-to-text engine"
@@ -94,6 +97,7 @@ export default function TranscriptionSection({ form, onChange }) {
 
       <SettingsGroup
         title={`${serviceInfo.name} credentials`}
+        icon={<ServiceIcon size={20} />}
         aside={<ExternalLink href={field.link.href}>{field.link.label}</ExternalLink>}
       >
         <div className="space-y-16">

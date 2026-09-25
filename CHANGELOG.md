@@ -11,6 +11,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Changed
 
 - Settings tabs now show an icon on the active tab, which slides in and out smoothly as you switch, matching the top navigation.
+- Every Settings section card now has an icon beside its title (brand logos for Gemini and the selected speech-to-text service).
 
 ## [3.5.0] - 2026-09-25
 
