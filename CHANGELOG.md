@@ -6,6 +6,12 @@ updated: 2026-09-24
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.5.1] - 2026-09-25
+
+### Changed
+
+- Settings tabs now show an icon on the active tab, which slides in and out smoothly as you switch, matching the top navigation.
+
 ## [3.5.0] - 2026-09-25
 
 ### Added

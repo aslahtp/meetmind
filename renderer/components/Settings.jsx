@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, SlidersHorizontal, AudioLines, NotebookPen, Blocks, Cpu } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import { PageHeader, SegmentedControl, StatusDot } from './ui/index.jsx';
 import GeneralSection from './settings/GeneralSection.jsx';
@@ -9,11 +9,11 @@ import IntegrationsSection from './settings/IntegrationsSection.jsx';
 import SystemSection from './settings/SystemSection.jsx';
 
 const TABS = [
-  { value: 'general', label: 'General' },
-  { value: 'transcription', label: 'Transcription' },
-  { value: 'notes', label: 'Notes' },
-  { value: 'integrations', label: 'Integrations' },
-  { value: 'system', label: 'System' },
+  { value: 'general', label: 'General', icon: SlidersHorizontal },
+  { value: 'transcription', label: 'Transcription', icon: AudioLines },
+  { value: 'notes', label: 'Notes', icon: NotebookPen },
+  { value: 'integrations', label: 'Integrations', icon: Blocks },
+  { value: 'system', label: 'System', icon: Cpu },
 ];
 
 const TAB_STORAGE_KEY = 'meetmind.settingsTab';
@@ -197,7 +197,7 @@ export default function Settings({ onSave }) {
         />
 
         <div className="mb-32 overflow-x-auto">
-          <SegmentedControl label="Settings sections" options={TABS} value={tab} onChange={handleTabChange} />
+          <SegmentedControl label="Settings sections" options={TABS} value={tab} onChange={handleTabChange} revealIcon />
         </div>
 
         {TABS.map((t) => (

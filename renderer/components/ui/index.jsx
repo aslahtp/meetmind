@@ -47,7 +47,8 @@ export function Switch({ checked, onChange, label, id, disabled }) {
 }
 
 // ── SegmentedControl / Tabs — role="tablist" with arrow-key navigation ────────
-export function SegmentedControl({ options, value, onChange, label, role = 'tablist', size = 'md' }) {
+// `revealIcon`: show each option's icon only while it is selected, animating it in and out.
+export function SegmentedControl({ options, value, onChange, label, role = 'tablist', size = 'md', revealIcon = false }) {
   const refs = useRef([]);
   const isTabs = role === 'tablist';
 
@@ -83,11 +84,26 @@ export function SegmentedControl({ options, value, onChange, label, role = 'tabl
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(opt.value)}
             onKeyDown={(e) => onKeyDown(e, idx)}
-            className={`inline-flex items-center gap-8 rounded-full font-medium transition-colors duration-150 ${
+            className={`inline-flex items-center rounded-full font-medium ${
+              revealIcon ? 'transition-colors duration-200 ease-out' : 'gap-8 transition-colors duration-150'
+            } ${
               size === 'sm' ? 'px-16 py-4 text-caption' : 'px-16 py-8 text-caption'
             } ${selected ? 'bg-ink text-paper' : 'text-graphite hover:text-ink'}`}
           >
-            {Icon && <Icon size={14} strokeWidth={1.75} />}
+            {Icon && revealIcon ? (
+              // Same technique as the top-bar nav: the icon stays mounted and its width, gap and
+              // opacity animate, so the pill (and the whole control) resizes smoothly.
+              <span
+                aria-hidden="true"
+                className={`inline-flex items-center overflow-hidden transition-[max-width,margin-right,opacity] duration-200 ease-out ${
+                  selected ? 'max-w-[14px] mr-8 opacity-100' : 'max-w-[0px] mr-0 opacity-0'
+                }`}
+              >
+                <Icon size={14} strokeWidth={1.75} className="flex-shrink-0" />
+              </span>
+            ) : (
+              Icon && <Icon size={14} strokeWidth={1.75} />
+            )}
             {opt.label}
             {opt.count != null && (
               <span className={`tabular ${selected ? 'text-paper/70' : 'text-graphite'}`}>{opt.count}</span>
