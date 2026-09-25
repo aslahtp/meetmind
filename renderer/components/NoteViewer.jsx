@@ -231,6 +231,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const title = notesTitle(notes, session);
   const showEditor = editMode === 'markdown' && !!savedNotes && !busy;
   const showModeToggle = activeTab === 'summary' && !!savedNotes;
+  const pinModeToggle = showModeToggle && config?.pinNotesViewToggle !== false;
   const modeToggle = {
     label: 'Notes view',
     role: 'radiogroup',
@@ -460,8 +461,9 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
         {/* Once the title (and the toggle beside it) scrolls away, an icon-only copy
-            stays pinned to the top-right corner. Zero height, so it takes no space. */}
-        {showModeToggle && (
+            stays pinned to the top-right corner (Settings → General can turn this off).
+            Zero height, so it takes no space. */}
+        {pinModeToggle && (
           <div className="sticky top-16 z-10 h-0 flex justify-end px-24 pointer-events-none">
             <div
               aria-hidden={!titleHidden}

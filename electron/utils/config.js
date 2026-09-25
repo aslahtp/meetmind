@@ -130,6 +130,10 @@ const schema = {
     type: 'boolean',
     default: false,
   },
+  pinNotesViewToggle: {
+    type: 'boolean',
+    default: true,
+  },
   googleCalendarClientId: {
     type: 'string',
     default: '',
@@ -235,6 +239,7 @@ function getConfig() {
     maxSpeakers:               store.get('maxSpeakers') || 6,
     autoCheckUpdates:          store.get('autoCheckUpdates') !== false,
     hideLogsInSidebar:         store.get('hideLogsInSidebar') || false,
+    pinNotesViewToggle:        store.get('pinNotesViewToggle') !== false,
     googleCalendarClientId:    store.get('googleCalendarClientId') || '',
     googleCalendarClientSecret: store.get('googleCalendarClientSecret') || '',
     googleCalendarRefreshToken: store.get('googleCalendarRefreshToken') || '',

@@ -10,7 +10,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 ### Added
 
-- Edit a meeting’s notes as Markdown from the Summary tab’s new Preview / Markdown toggle, which stays pinned as icons in the top-right corner while you scroll; structured notes keep their card layout, and saved edits carry through to Copy, PDF export and Notion.
+- Edit a meeting’s notes as Markdown from the Summary tab’s new Preview / Markdown toggle, which stays pinned as icons in the top-right corner while you scroll (can be turned off in Settings → General); structured notes keep their card layout, and saved edits carry through to Copy, PDF export and Notion.
 - Meetings with edited notes show an “Edited” chip, and leaving with unsaved edits asks before discarding them.
 
 ### Changed

@@ -53,6 +53,18 @@ export default function GeneralSection({ form, onChange }) {
               onChange={(show) => onChange('hideLogsInSidebar', !show)}
             />
           </SettingRow>
+          <SettingRow
+            label="Pin the notes view toggle"
+            description="Keeps Preview / Markdown as icons in the top-right corner after you scroll past a meeting’s title."
+            htmlFor="pref-pin-notes-toggle"
+          >
+            <Switch
+              id="pref-pin-notes-toggle"
+              label="Pin the notes view toggle"
+              checked={form.pinNotesViewToggle !== false}
+              onChange={(v) => onChange('pinNotesViewToggle', v)}
+            />
+          </SettingRow>
         </RowList>
       </SettingsGroup>
 
