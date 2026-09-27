@@ -11,6 +11,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Added
 
 - A labelled "Regenerate transcript" button on a meeting's Transcript tab transcribes the recording again and re-runs the rest of the pipeline; the Summary tab keeps "Regenerate notes".
+- A startup splash replaces the blank window on launch: the app icon draws itself in hairlines while MeetMind loads.
 
 ### Changed
 
