@@ -3,7 +3,6 @@ import {
   ChevronLeft,
   Copy,
   Check,
-  RefreshCw,
   FileDown,
   CloudUpload,
   Loader2,
@@ -151,18 +150,6 @@ export function NoteToolbar({
               </IconButton>
 
               <IconButton
-                label={regenerating ? 'Regenerating…' : regenerate.label}
-                onClick={regenerate.onClick}
-                disabled={editing || busy || regenerating || uploading || !!regenerate.unavailable}
-                {...lockTitle}
-                {...(!editing && regenerate.unavailable ? { title: regenerate.unavailable } : {})}
-              >
-                {regenerating
-                  ? <Loader2 size={16} strokeWidth={2} className="spinner" />
-                  : <RefreshCw size={16} strokeWidth={1.75} />}
-              </IconButton>
-
-              <IconButton
                 label={exporting ? 'Exporting PDF…' : 'Export as PDF'}
                 onClick={onExportPdf}
                 disabled={editing || exporting}
@@ -172,6 +159,26 @@ export function NoteToolbar({
                   ? <Loader2 size={16} strokeWidth={2} className="spinner" />
                   : <FileDown size={16} strokeWidth={1.75} />}
               </IconButton>
+
+              {/* Labelled, with an icon per action, because what it regenerates follows the tab.
+                  Below lg the label hides and the icon alone tells the two apart. */}
+              <button
+                type="button"
+                onClick={regenerate.onClick}
+                disabled={editing || busy || regenerating || uploading || !!regenerate.unavailable}
+                aria-label={regenerating ? 'Regenerating…' : regenerate.label}
+                title={editing ? EDITING_HINT : regenerate.unavailable || regenerate.label}
+                className="btn-ghost px-8 py-4 text-caption lg:px-16 mr-4"
+              >
+                {regenerating ? (
+                  <Loader2 size={14} strokeWidth={2} className="spinner" />
+                ) : (
+                  <regenerate.icon key={`icon-${regenerate.label}`} size={14} strokeWidth={1.75} className="fade-in" aria-hidden="true" />
+                )}
+                <span key={`label-${regenerate.label}`} className="hidden lg:inline fade-in">
+                  {regenerating ? 'Regenerating…' : regenerate.label}
+                </span>
+              </button>
 
               {notionUrl ? (
                 // One Notion pill, marked by the logo: open the page, or replace it with the current notes.

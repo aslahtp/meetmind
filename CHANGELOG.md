@@ -10,7 +10,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 ### Added
 
-- A "Regenerate transcript" button on a meeting's Transcript tab transcribes the recording again and re-runs the rest of the pipeline; the Summary tab keeps "Regenerate notes".
+- A labelled "Regenerate transcript" button on a meeting's Transcript tab transcribes the recording again and re-runs the rest of the pipeline; the Summary tab keeps "Regenerate notes".
 
 ### Changed
 
