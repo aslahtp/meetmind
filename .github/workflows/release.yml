@@ -126,8 +126,13 @@ jobs:
           Write-Host "FFmpeg $env:FFMPEG_VERSION staged in assets/ffmpeg/ for packaging."
 
       # `pnpm run build` passes --publish never: electron-builder only builds, it never needs a token.
+      # bash, like the setup action's install: under the default pwsh the runner's pnpm shim exited 0
+      # without running the script. The ls fails the step here if the build produced nothing.
       - name: Build Desktop App and Extension
-        run: pnpm run build
+        shell: bash
+        run: |
+          pnpm run build
+          ls -l dist/desktop/*.exe dist/meetmind-extension.zip
 
       - name: Upload release files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
