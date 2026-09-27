@@ -28,7 +28,11 @@
       transition: opacity 280ms ease-out;
     }
     html.dark #splash { --splash-paper: #1a1813; --splash-ink: #f8f5ed; }
+    /* Held on its first (empty) frame until main.jsx adds .splash-play, which it does once the window
+       is actually on screen: the window is created hidden, so the draw would otherwise run unseen. */
+    #splash:not(.splash-play), #splash:not(.splash-play) * { animation-play-state: paused !important; }
     #splash.splash-out { opacity: 0; pointer-events: none; }
+    #splash[hidden] { display: none; } /* kept in the page between replays */
     #splash.splash-out .splash-mark { transform: scale(0.96); }
 
     .splash-mark { position: relative; width: 96px; height: 96px; transition: transform 280ms ease-out; }

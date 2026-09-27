@@ -34,6 +34,20 @@ function applyStartupThemeClass() {
 let startupTheme = 'light';
 try { startupTheme = resolveStartupTheme(); } catch { /* theme is cosmetic — never fatal */ }
 
+// Startup splash: main sends window:shown whenever the window goes from hidden to visible (first
+// launch, reopening from the tray). Relay it to the page as a DOM event, which crosses the
+// context-isolation boundary, and remember it: the first one can arrive before the page's own
+// scripts are listening, and a reload happens with the window already visible.
+let windowShown = false;
+function markWindowShown() {
+  windowShown = true;
+  try { window.dispatchEvent(new Event('meetmind:window-shown')); } catch { /* cosmetic */ }
+}
+ipcRenderer.on('window:shown', markWindowShown);
+ipcRenderer.invoke('window:isVisible')
+  .then((visible) => { if (visible && !windowShown) markWindowShown(); })
+  .catch(() => { /* cosmetic — the page falls back to a timer */ });
+
 contextBridge.exposeInMainWorld('meetmind', {
   // Effective theme ('light' | 'dark') at launch, for index.html's pre-paint script.
   startupTheme,
@@ -44,6 +58,8 @@ contextBridge.exposeInMainWorld('meetmind', {
     maximize:    () => ipcRenderer.invoke('window:maximize'),
     close:       () => ipcRenderer.invoke('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+    // True once the window has been on screen (see markWindowShown); used by the startup splash.
+    wasShown:    () => windowShown,
   },
 
   // Shell — open URLs in the system default browser

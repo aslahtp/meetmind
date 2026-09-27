@@ -6,6 +6,12 @@ updated: 2026-09-27
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.7.2] - 2026-09-27
+
+### Fixed
+
+- The startup splash now plays once the window is on screen, instead of mostly while it was still hidden, and plays again when MeetMind is reopened from the tray or desktop shortcut.
+
 ## [3.7.1] - 2026-09-27
 
 ### Fixed

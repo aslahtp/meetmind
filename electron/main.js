@@ -107,10 +107,19 @@ function sendToRenderer(channel, ...args) {
   return false;
 }
 
+// Shows the window. When it was hidden (first launch, or reopened after × sent it to the tray),
+// tells the renderer, which plays the startup splash only once the window is actually on screen.
+function revealMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const wasHidden = !mainWindow.isVisible();
+  mainWindow.show();
+  if (wasHidden) sendToRenderer('window:shown');
+}
+
 function focusMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
+    revealMainWindow();
     mainWindow.focus();
   } else {
     createMainWindow();
@@ -131,7 +140,7 @@ function resolveStartupBackgroundColor(themeSetting) {
 function createMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
+    revealMainWindow();
     mainWindow.focus();
     return mainWindow;
   }
@@ -171,16 +180,8 @@ function createMainWindow() {
   mainWindow.on('page-title-updated', (e) => e.preventDefault());
 
   // Show quickly — don't wait forever for full renderer paint.
-  mainWindow.once('ready-to-show', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
-    }
-  });
-  setTimeout(() => {
-    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-      mainWindow.show();
-    }
-  }, 400);
+  mainWindow.once('ready-to-show', revealMainWindow);
+  setTimeout(revealMainWindow, 400);
 
   mainWindow.on('close', (event) => {
     if (!app.isQuitting) {
@@ -711,6 +712,7 @@ function registerIpcHandlers() {
       mainWindow.close();
     }
   });
+  ipcMain.handle('window:isVisible', () => !!(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()));
   ipcMain.handle('window:isMaximized', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       return mainWindow.isMaximized();
