@@ -6,6 +6,13 @@
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' meetmind-audio:; img-src 'self' data:;" />
   <title>MeetMind</title>
+  <!-- Apply the saved theme before the first paint, so the splash never flashes the wrong one. -->
+  <script>
+    try {
+      var t = window.meetmind && window.meetmind.startupTheme;
+      if (t === 'dark' || t === 'light') document.documentElement.classList.add(t);
+    } catch (e) { /* theme is cosmetic */ }
+  </script>
   <!-- Startup splash: inline so it paints on the first frame, before the bundle loads.
        The app icon draws itself in hairlines, then main.jsx fades it out once React has mounted.
        Colours are local copies of --color-paper / --color-ink; the preload sets <html class="dark|light">. -->
