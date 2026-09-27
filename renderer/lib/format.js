@@ -84,3 +84,12 @@ export function initials(name) {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
+
+// STT services can label speakers with a bare letter or number (AssemblyAI uses "A", "B");
+// older sessions stored those as-is, so normalize them to "Speaker A" for display.
+export function speakerName(raw) {
+  const label = raw != null ? String(raw).trim() : '';
+  if (!label) return 'Speaker';
+  if (/^([A-Z]|\d+)$/.test(label)) return `Speaker ${label}`;
+  return label;
+}

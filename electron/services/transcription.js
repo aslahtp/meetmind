@@ -141,9 +141,9 @@ async function transcribeWithAssemblyAI(wavFilePath, apiKey, prompt, onProgress)
     for (const utt of transcript.utterances) {
       const startSec = typeof utt.start === 'number' ? utt.start / 1000 : 0;
       const endSec = typeof utt.end === 'number' ? utt.end / 1000 : startSec;
-      const speakerLabel = utt.speaker != null ? String(utt.speaker) : '1';
-      const speaker =
-        /^\d+$/.test(speakerLabel.trim()) ? `Speaker ${speakerLabel.trim()}` : speakerLabel;
+      // AssemblyAI labels speakers "A", "B", …; store them as "Speaker A" like the other services.
+      const speakerLabel = utt.speaker != null ? String(utt.speaker).trim() : '1';
+      const speaker = /^([A-Z]|\d+)$/.test(speakerLabel) ? `Speaker ${speakerLabel}` : speakerLabel;
 
       segments.push({
         speaker,

@@ -6,7 +6,7 @@ import dmSansFont from '../../assets/fonts/DMSans-Variable.woff2?inline';
 import { buildNotesMarkdown, notesTitle } from './copyMarkdown.js';
 import { stripDuplicateTitle } from './markdown.jsx';
 import { metaText } from './meta.js';
-import { formatClock, formatDurationSeconds } from '../../lib/format.js';
+import { formatClock, formatDurationSeconds, speakerName } from '../../lib/format.js';
 import { meetingHostname } from '../../lib/platform.js';
 
 // Builds the self-contained HTML that the main process prints to PDF. Notes go through the
@@ -113,7 +113,7 @@ function PdfDocument({ session, notes, transcript, includeTranscript, title }) {
               <p key={i} className="seg">
                 <span className="ts">{seg.startTime != null ? formatClock(seg.startTime) : ''}</span>
                 <span>
-                  <span className="speaker">{seg.speaker || 'Speaker'}</span>
+                  <span className="speaker">{speakerName(seg.speaker)}</span>
                   {seg.text}
                 </span>
               </p>

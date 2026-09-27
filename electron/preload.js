@@ -9,26 +9,35 @@ const { contextBridge, ipcRenderer } = require('electron');
 // before the document is parsed, so documentElement may not exist yet. Losing the
 // theme costs a brief flash; losing the bridge takes out sessions, settings, and
 // the custom titlebar's window controls with it.
-function applyStartupThemeClass() {
-  const root = document && document.documentElement;
-  if (!root) return false;
-
-  let effective = 'light';
+function resolveStartupTheme() {
   try {
     const arg = (process.argv || []).find((a) => a.startsWith('--meetmind-theme='));
     const configured = arg ? arg.split('=')[1] : 'light';
     const themeSetting = ['light', 'dark', 'system'].includes(configured) ? configured : 'light';
     const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    effective = themeSetting === 'system' ? (prefersDark ? 'dark' : 'light') : themeSetting;
+    return (themeSetting === 'system' ? (prefersDark ? 'dark' : 'light') : themeSetting) === 'dark' ? 'dark' : 'light';
   } catch {
-    effective = 'light';
+    return 'light';
   }
+}
 
-  root.classList.add(effective === 'light' ? 'light' : 'dark');
+function applyStartupThemeClass() {
+  const root = document && document.documentElement;
+  if (!root) return false;
+  root.classList.add(resolveStartupTheme());
   return true;
 }
 
+// Resolved once, before the page's scripts run: an inline <head> script in index.html reads it
+// so the startup splash paints in the saved theme (the fallback below only lands at
+// DOMContentLoaded, after the splash has already been painted).
+let startupTheme = 'light';
+try { startupTheme = resolveStartupTheme(); } catch { /* theme is cosmetic — never fatal */ }
+
 contextBridge.exposeInMainWorld('meetmind', {
+  // Effective theme ('light' | 'dark') at launch, for index.html's pre-paint script.
+  startupTheme,
+
   // Window controls (frameless window)
   window: {
     minimize:    () => ipcRenderer.invoke('window:minimize'),

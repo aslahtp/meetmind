@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Check, Copy, Mic, X, ScrollText } from 'lucide-react';
-import { AvatarTile, EmptyState } from './ui/index.jsx';
-import { initials } from '../lib/format.js';
+import { EmptyState } from './ui/index.jsx';
+import { speakerName } from '../lib/format.js';
 
 function formatTime(seconds) {
   if (!seconds && seconds !== 0) return '';
@@ -30,8 +30,8 @@ export default function TranscriptViewer({ transcript }) {
     if (!Array.isArray(transcript)) return [];
     return transcript.map((seg, idx) => ({
       ...seg,
-      _speaker: seg.speaker || 'Speaker',
-      _key: `${seg.speaker || 'Speaker'}-${seg.startTime ?? ''}-${idx}`,
+      _speaker: speakerName(seg.speaker),
+      _key: `${speakerName(seg.speaker)}-${seg.startTime ?? ''}-${idx}`,
     }));
   }, [transcript]);
 
@@ -158,19 +158,16 @@ export default function TranscriptViewer({ transcript }) {
       ) : (
         <ol className="divide-y divide-graphite/40">
           {segments.map((seg) => (
-            <li key={seg._key} className="flex gap-16 py-24">
-              <AvatarTile size={32} className="text-caption">{initials(seg._speaker)}</AvatarTile>
-              <div className="flex-1 min-w-0">
-                <p className="flex items-baseline gap-8 flex-wrap">
-                  <span className="text-body-sm font-medium text-ink">
-                    <HighlightedText text={seg._speaker} query={searchQuery} />
-                  </span>
-                  <span className="text-caption text-graphite tabular">{formatTime(seg.startTime)}</span>
-                </p>
-                <p className="text-body-sm text-graphite mt-4">
-                  <HighlightedText text={seg.text || ''} query={searchQuery} />
-                </p>
-              </div>
+            <li key={seg._key} className="py-24">
+              <p className="flex items-baseline gap-8 flex-wrap">
+                <span className="text-body-sm font-medium text-ink">
+                  <HighlightedText text={seg._speaker} query={searchQuery} />
+                </span>
+                <span className="text-caption text-graphite tabular">{formatTime(seg.startTime)}</span>
+              </p>
+              <p className="text-body-sm text-graphite mt-4">
+                <HighlightedText text={seg.text || ''} query={searchQuery} />
+              </p>
             </li>
           ))}
         </ol>

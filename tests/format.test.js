@@ -6,6 +6,7 @@ import {
   getSessionDuration,
   sessionDisplayTitle,
   initials,
+  speakerName,
 } from '../renderer/lib/format.js';
 import { sessionStatus, isProcessing, stageIndex } from '../renderer/lib/status.js';
 
@@ -48,6 +49,14 @@ describe('session helpers', () => {
     expect(initials('ravi')).toBe('RA');
     expect(initials('  ')).toBe('?');
     expect(initials(null)).toBe('?');
+  });
+
+  it('normalizes bare speaker labels', () => {
+    expect(speakerName('A')).toBe('Speaker A');
+    expect(speakerName(' 2 ')).toBe('Speaker 2');
+    expect(speakerName('Asha')).toBe('Asha');
+    expect(speakerName('Speaker 1')).toBe('Speaker 1');
+    expect(speakerName(null)).toBe('Speaker');
   });
 });
 

@@ -6,8 +6,79 @@
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' meetmind-audio:; img-src 'self' data:;" />
   <title>MeetMind</title>
+  <!-- Apply the saved theme before the first paint, so the splash never flashes the wrong one. -->
+  <script>
+    try {
+      var t = window.meetmind && window.meetmind.startupTheme;
+      if (t === 'dark' || t === 'light') document.documentElement.classList.add(t);
+    } catch (e) { /* theme is cosmetic */ }
+  </script>
+  <!-- Startup splash: inline so it paints on the first frame, before the bundle loads.
+       The app icon draws itself in hairlines, then main.jsx fades it out once React has mounted.
+       Colours are local copies of --color-paper / --color-ink; the preload sets <html class="dark|light">. -->
+  <style>
+    #splash {
+      --splash-paper: #f8f5ed;
+      --splash-ink: #000000;
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px;
+      background: var(--splash-paper); color: var(--splash-ink);
+      font-family: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      font-feature-settings: "ss03", "ss04";
+      transition: opacity 280ms ease-out;
+    }
+    html.dark #splash { --splash-paper: #1a1813; --splash-ink: #f8f5ed; }
+    #splash.splash-out { opacity: 0; pointer-events: none; }
+    #splash.splash-out .splash-mark { transform: scale(0.96); }
+
+    .splash-mark { position: relative; width: 96px; height: 96px; transition: transform 280ms ease-out; }
+    .splash-mark svg { position: relative; display: block; overflow: visible; }
+    .splash-draw { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round;
+                   stroke-dasharray: 1; stroke-dashoffset: 1; animation: splash-draw 520ms cubic-bezier(.65,0,.35,1) both; }
+    .splash-tile { animation-duration: 640ms; }
+    .splash-capsule { animation-delay: 260ms; }
+    .splash-arc { animation-delay: 420ms; }
+    .splash-stem { animation-delay: 560ms; animation-duration: 260ms; }
+
+    /* Sound ripples: hairline copies of the tile that breathe outward while the app loads. */
+    .splash-ripple { position: absolute; inset: 0; border: 1px solid currentColor; border-radius: 36px; opacity: 0;
+                     animation: splash-ripple 1800ms cubic-bezier(.2,.6,.3,1) 700ms infinite; }
+    .splash-ripple + .splash-ripple { animation-delay: 1300ms; }
+
+    .splash-word { margin: 0; font-size: 20px; font-weight: 500; line-height: 1.5; letter-spacing: -0.01em;
+                   opacity: 0; transform: translateY(8px); animation: splash-rise 480ms ease-out 520ms forwards; }
+
+    /* Hidden until its own draw starts: a round cap on a zero-length dash would paint a dot. */
+    @keyframes splash-draw { 0% { stroke-dashoffset: 1; opacity: 0; } 1% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 1; } }
+    @keyframes splash-ripple { 0% { opacity: 0.35; transform: scale(1); } 100% { opacity: 0; transform: scale(1.4); } }
+    @keyframes splash-rise { to { opacity: 1; transform: none; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .splash-draw { animation: none; stroke-dashoffset: 0; }
+      .splash-ripple { display: none; }
+      .splash-word { animation: none; opacity: 1; transform: none; }
+      .splash-mark { transition: none; }
+    }
+  </style>
 </head>
 <body>
+  <div id="splash" aria-hidden="true">
+    <div class="splash-mark">
+      <span class="splash-ripple"></span>
+      <span class="splash-ripple"></span>
+      <svg viewBox="0 0 96 96" width="96" height="96">
+        <rect class="splash-draw splash-tile" x="0.75" y="0.75" width="94.5" height="94.5" rx="35.25"
+              stroke-width="1.5" pathLength="1" />
+        <!-- Lucide "mic" glyph at half the tile size, as in assets/icons/icon.svg -->
+        <g transform="translate(24 24) scale(2)" stroke-width="1.5">
+          <rect class="splash-draw splash-capsule" x="9" y="2" width="6" height="13" rx="3" pathLength="1" />
+          <path class="splash-draw splash-arc" d="M19 10v2a7 7 0 0 1-14 0v-2" pathLength="1" />
+          <path class="splash-draw splash-stem" d="M12 19v3" pathLength="1" />
+        </g>
+      </svg>
+    </div>
+    <p class="splash-word">MeetMind</p>
+  </div>
   <div id="root"></div>
   <script type="module" src="/main.jsx"></script>
 </body>
