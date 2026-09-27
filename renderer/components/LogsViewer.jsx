@@ -11,6 +11,11 @@ import {
   Puzzle,
   ChevronsDown,
   AlertCircle,
+  Layers,
+  Info,
+  TriangleAlert,
+  CircleX,
+  Bug,
 } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import { IconButton, SegmentedControl, Skeleton } from './ui/index.jsx';
@@ -21,11 +26,11 @@ const FALLBACK_POLL_MS = 3000;
 const HIDE_EXT_KEY = 'meetmind:hide-extension-logs';
 
 const LEVELS = [
-  { value: 'ALL',   label: 'All' },
-  { value: 'INFO',  label: 'Info' },
-  { value: 'WARN',  label: 'Warn' },
-  { value: 'ERROR', label: 'Error' },
-  { value: 'DEBUG', label: 'Debug' },
+  { value: 'ALL',   label: 'All',   icon: Layers },
+  { value: 'INFO',  label: 'Info',  icon: Info },
+  { value: 'WARN',  label: 'Warn',  icon: TriangleAlert },
+  { value: 'ERROR', label: 'Error', icon: CircleX },
+  { value: 'DEBUG', label: 'Debug', icon: Bug },
 ];
 
 function LevelTag({ level }) {
@@ -375,6 +380,7 @@ export default function LogsViewer() {
             options={levelOptions}
             value={levelFilter}
             onChange={setLevelFilter}
+            revealIcon
           />
 
           <div className="relative flex-1 min-w-[160px] max-w-[360px]">

@@ -280,6 +280,34 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
     }
   };
 
+  // Re-runs the whole pipeline from the recording: speech-to-text, then notes (and Notion).
+  const handleRetranscribe = async () => {
+    const ok = await confirm({
+      title: 'Regenerate transcript?',
+      message: savedNotes?._editedAt
+        ? 'MeetMind will transcribe the recording again, then regenerate the notes from the new transcript. The current transcript and notes will be replaced, and your edits will be lost.'
+        : 'MeetMind will transcribe the recording again, then regenerate the notes from the new transcript. The current transcript and notes will be replaced.',
+      confirmLabel: 'Regenerate',
+    });
+    if (!ok) return;
+    setRegenerating(true);
+    try {
+      await startPipeline(() => window.meetmind.processing.retry(session.id, 'transcription'));
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const onTranscriptTab = activeTab === 'transcript';
+  const regenerate = onTranscriptTab
+    ? {
+      label: 'Regenerate transcript',
+      onClick: handleRetranscribe,
+      // Pasted transcripts have no recording to transcribe again.
+      unavailable: session.audio_path ? null : 'No recording to transcribe again',
+    }
+    : { label: 'Regenerate notes', onClick: handleRegenerate, unavailable: null };
+
   // First sync creates the Notion page. Updating replaces it: the main process creates a fresh
   // page from the current notes, then moves the old one to Notion's trash (no duplicates).
   const handleSyncNotion = async () => {
@@ -450,7 +478,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
         copied={copied}
         onCopy={handleCopy}
         regenerating={regenerating}
-        onRegenerate={handleRegenerate}
+        regenerate={regenerate}
         notionUrl={notionUrl}
         uploading={uploading}
         onSyncNotion={handleSyncNotion}
@@ -521,8 +549,20 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
               onDiscard={handleDiscardEdits}
             />
           )}
-          {activeTab === 'transcript' && (
-            <TranscriptViewer transcript={normalizedTranscript} />
+          {onTranscriptTab && (
+            <>
+              {busy && (
+                <div className="pt-24">
+                  <ProcessingCard
+                    stage={stage}
+                    percent={liveProcessing?.percent}
+                    includeNotion={includeNotion}
+                    onRestart={!liveProcessing && !starting ? handleRetry : undefined}
+                  />
+                </div>
+              )}
+              <TranscriptViewer transcript={normalizedTranscript} />
+            </>
           )}
           {activeTab === 'audio' && (
             <div className="pt-24">

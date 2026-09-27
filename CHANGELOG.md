@@ -6,11 +6,16 @@ updated: 2026-09-27
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
-## [3.6.3] - 2026-09-27
+## [3.7.0] - 2026-09-27
+
+### Added
+
+- A "Regenerate transcript" button on a meeting's Transcript tab transcribes the recording again and re-runs the rest of the pipeline; the Summary tab keeps "Regenerate notes".
 
 ### Changed
 
 - The transcript view no longer shows a speaker avatar next to each segment.
+- The Logs level filter now shows an animated icon on the selected level, matching the top navigation bar.
 
 ### Fixed
 

@@ -102,7 +102,7 @@ export function NoteToolbar({
   copied,
   onCopy,
   regenerating,
-  onRegenerate,
+  regenerate,
   exporting,
   onExportPdf,
   notionUrl,
@@ -151,10 +151,11 @@ export function NoteToolbar({
               </IconButton>
 
               <IconButton
-                label={regenerating ? 'Regenerating…' : 'Regenerate notes'}
-                onClick={onRegenerate}
-                disabled={editing || busy || regenerating || uploading}
+                label={regenerating ? 'Regenerating…' : regenerate.label}
+                onClick={regenerate.onClick}
+                disabled={editing || busy || regenerating || uploading || !!regenerate.unavailable}
                 {...lockTitle}
+                {...(!editing && regenerate.unavailable ? { title: regenerate.unavailable } : {})}
               >
                 {regenerating
                   ? <Loader2 size={16} strokeWidth={2} className="spinner" />

@@ -115,7 +115,7 @@ export function SegmentedControl({
             )}
             {!iconOnly && opt.label}
             {!iconOnly && opt.count != null && (
-              <span className={`tabular ${selected ? 'text-paper/70' : 'text-graphite'}`}>{opt.count}</span>
+              <span className={`tabular ${revealIcon ? 'ml-8' : ''} ${selected ? 'text-paper/70' : 'text-graphite'}`}>{opt.count}</span>
             )}
           </button>
         );
