@@ -10,7 +10,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 ### Fixed
 
-- The startup splash now plays once the window is on screen, instead of mostly while it was still hidden, and plays again when MeetMind is reopened from the tray or desktop shortcut.
+- The startup splash now plays once the window is on screen, instead of mostly while it was still hidden.
 
 ## [3.7.1] - 2026-09-27
 
