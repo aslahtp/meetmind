@@ -1,10 +1,20 @@
 ---
 tags: [meta, changelog]
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [3.6.3] - 2026-09-27
+
+### Changed
+
+- The transcript view no longer shows a speaker avatar next to each segment.
+
+### Fixed
+
+- Bare speaker labels from AssemblyAI ("A", "B") now read "Speaker A" in the transcript view and PDF export.
 
 ## [3.6.2] - 2026-09-25
 
