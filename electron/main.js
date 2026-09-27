@@ -580,6 +580,11 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     broadcastToExtension({ type: 'PROCESSING_PROGRESS', stage, percent });
   };
 
+  // Start on the next tick so an IPC handler's reply reaches the renderer before any progress or
+  // error event. Otherwise a run that fails at once (e.g. a missing API key) sends
+  // processing:error before the caller starts tracking it, and the UI stays stuck "processing".
+  await new Promise((resolve) => setImmediate(resolve));
+
   try {
     const config = getConfig();
     const session = db.getSession(sessionId);

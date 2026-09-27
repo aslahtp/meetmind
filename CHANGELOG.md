@@ -20,6 +20,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Fixed
 
 - Bare speaker labels from AssemblyAI ("A", "B") now read "Speaker A" in the transcript view and PDF export.
+- A processing run that fails immediately (for example, a missing API key) no longer leaves the meeting stuck on "Transcribing 0%".
 
 ## [3.6.2] - 2026-09-25
 
