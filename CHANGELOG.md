@@ -6,6 +6,12 @@ updated: 2026-09-27
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.7.1] - 2026-09-27
+
+### Fixed
+
+- The release workflow now builds the Windows installer; the 3.7.0 build step silently produced no files.
+
 ## [3.7.0] - 2026-09-27
 
 ### Added
