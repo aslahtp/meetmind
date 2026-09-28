@@ -6,6 +6,12 @@ updated: 2026-09-27
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.8.0] - 2026-09-28
+
+### Added
+
+- Site-wide scroll-triggered animation system inspired by the Textura/Marloa spring-based motion vocabulary: blur + rise + stagger reveals on every section (replacing the hero-only `rise` keyframe), hero screenshot parallax drift, spring-physics stat counter animation, smooth FAQ accordion height transitions with exclusive open behaviour, card hover lift, data-flow connector pulse, cloud-grid and table-row stagger reveals, and button press micro-animations. All animations respect `prefers-reduced-motion`.
+
 ## [3.7.3] - 2026-09-27
 
 ### Fixed
