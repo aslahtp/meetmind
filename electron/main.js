@@ -8,11 +8,12 @@ const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
 const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
 const { getSessionWaveform, deleteSessionWaveform } = require('./audio/waveform');
-const { transcribeAudio, testGoogleSTT, testAssemblyAI, testSarvam } = require('./services/transcription');
-const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/gemini');
+const { transcribe } = require('./services/transcription');
+const { generateNotes } = require('./services/notes');
+const { DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/prompts');
+const { registries, describeProviders } = require('./providers');
 const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./services/notion');
 const { exportPdf, buildPdfFileName, resolveExportDir } = require('./services/pdf-export');
-const { testGeminiConnection } = require('./services/gemini');
 const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState } = require('./services/updater');
 const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEvents, startEventPoller, stopEventPoller } = require('./services/google-calendar');
 const db = require('./db/sessions');
@@ -48,17 +49,29 @@ process.on('unhandledRejection', (reason) => {
   });
 });
 
-// Resolve the effective system prompt based on the configured output mode.
-// If the user has a custom prompt saved, it always takes precedence.
-// Otherwise fall back to the mode-appropriate default.
-function resolveSystemPrompt(config) {
-  if (config.geminiSystemPrompt && config.geminiSystemPrompt.trim()) {
-    return config.geminiSystemPrompt.trim();
+// Runs the notes stage: generate with the configured LLM (and fallback), stamp provenance
+// into the notes blob for the renderer, and announce a fallback if one was used.
+async function generateAndStampNotes(sessionId, transcript, config, sttInfo) {
+  const result = await generateNotes(transcript, config);
+  const notes = result.notes;
+
+  notes._llmProvider = result.provider;
+  notes._llmModel = result.model;
+  notes._geminiModel = result.model; // kept so older readers still show the model
+  notes._sttService = sttInfo.provider;
+  if (sttInfo.model) notes._sttModel = sttInfo.model;
+
+  if (result.fallback) {
+    sendToRenderer('llm:fallback-used', {
+      sessionId,
+      primaryProvider: result.fallback.primary.provider,
+      primaryModel: result.fallback.primary.model,
+      fallbackProvider: result.provider,
+      fallbackModel: result.model,
+    });
+    logger.info('Fallback LLM was used', { primary: result.fallback.primary, fallback: { provider: result.provider, model: result.model } });
   }
-  if (config.noteOutputMode === 'markdown') {
-    return DEFAULT_MD_SYSTEM_PROMPT;
-  }
-  return DEFAULT_SYSTEM_PROMPT;
+  return notes;
 }
 
 // Ensure a single running instance (prevents duplicate windows/tray icons)
@@ -591,6 +604,7 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     const config = getConfig();
     const session = db.getSession(sessionId);
     let transcript = null;
+    let sttInfo = { provider: config.sttService || 'google', model: config.sttModels?.[config.sttService] || '' };
 
     // Check if transcript already exists for this session unless forceRetranscribe is true
     if (!options?.forceRetranscribe && session && session.transcript) {
@@ -609,20 +623,11 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
       // Stage 1: Transcription (0–60%)
       sendProgress('transcribing', 0);
       const onTranscriptionProgress = (pct) => sendProgress('transcribing', Math.round(pct * 0.6));
-      transcript = await transcribeAudio(
-        audioPath,
-        config.googleApiKey,
-        onTranscriptionProgress,
-        config.googleCloudProjectId,
-        config.googleCloudStorageBucket,
-        config.googleCloudStorageKeyPath,
-        config.sttService,
-        config.assemblyAiApiKey,
-        config.assemblyAiPrompt,
-        config.sarvamApiKey
-      );
+      const stt = await transcribe(audioPath, config, onTranscriptionProgress);
+      transcript = stt.segments;
+      sttInfo = { provider: stt.provider, model: stt.model };
 
-      // transcribeAudio throws for silent files; if we get here but with empty results,
+      // transcribe() throws for silent files; if we get here but with empty results,
       // treat it the same way (STT may return empty for near-silence)
       if (!transcript || transcript.length === 0) {
         throw new Error(
@@ -640,22 +645,8 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
 
     sendProgress('generating', 60);
 
-    // Stage 2: Gemini notes (60–85%)
-    const notes = await generateMeetingNotes(
-      transcript,
-      config.selectedModel,
-      config.geminiApiKey,
-      resolveSystemPrompt(config),
-      config.secondaryGeminiModel || ''
-    );
-
-    // Track which model was actually used (primary or fallback)
-    const modelUsed = notes._modelUsed || config.selectedModel;
-    const usedFallback = modelUsed !== config.selectedModel;
-
-    // Stamp metadata into the notes blob so the renderer can display it
-    notes._geminiModel = modelUsed;
-    notes._sttService  = config.sttService || 'google';
+    // Stage 2: LLM notes (60–85%)
+    const notes = await generateAndStampNotes(sessionId, transcript, config, sttInfo);
 
     db.updateSession(sessionId, {
       notes: JSON.stringify(notes),
@@ -663,16 +654,6 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
       status: 'complete',
     });
     sendProgress('complete', 85);
-
-    // Notify the renderer if the fallback model was used
-    if (usedFallback) {
-      sendToRenderer('gemini:fallback-used', {
-        sessionId,
-        primaryModel: config.selectedModel,
-        fallbackModel: modelUsed,
-      });
-      logger.info('Fallback Gemini model was used', { primaryModel: config.selectedModel, fallbackModel: modelUsed });
-    }
 
     // Stage 3: Notion upload (85–100%) — optional, only if configured
     let notionUrl = null;
@@ -981,47 +962,30 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('models:list', () => getAvailableModels());
+  ipcMain.handle('providers:list', () => describeProviders());
+
+  // Generic connection test for any registered provider. `values` are the (possibly unsaved)
+  // form values, so credentials can be verified before saving.
+  ipcMain.handle('providers:test', async (_e, { kind, id, values, model } = {}) => {
+    try {
+      const registry = registries[kind];
+      if (!registry) throw new Error(`Unknown provider kind "${kind}"`);
+      const provider = registry.get(id);
+      const config = { ...getConfig(), ...(values || {}) };
+      if (!registry.isConfigured(provider, config)) {
+        const missing = provider.credentials.find((f) => f.required && !String(config[f.configKey] ?? '').trim());
+        throw new Error(`${missing?.label || 'Credentials'} is required`);
+      }
+      await provider.test({ config, model: registry.resolveModel(provider, model) });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
 
   ipcMain.handle('gemini:default-system-prompt', () => DEFAULT_SYSTEM_PROMPT);
 
   ipcMain.handle('gemini:default-md-system-prompt', () => DEFAULT_MD_SYSTEM_PROMPT);
-
-  ipcMain.handle('api:test-google', async (_e, apiKey, _projectId) => {
-    try {
-      await testGoogleSTT(apiKey);
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle('api:test-assemblyai', async (_e, apiKey) => {
-    try {
-      await testAssemblyAI(apiKey);
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle('api:test-sarvam', async (_e, apiKey) => {
-    try {
-      await testSarvam(apiKey);
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle('api:test-gemini', async (_e, apiKey, modelId) => {
-    try {
-      await testGeminiConnection(apiKey, modelId);
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
-  });
 
   ipcMain.handle('processing:run', async (_e, sessionId) => {
     const session = db.getSession(sessionId);
@@ -1082,14 +1046,15 @@ function registerIpcHandlers() {
     }
 
     const config = getConfig();
-    if (!config.geminiApiKey?.trim()) {
-      return { success: false, error: 'Gemini API key is not configured. Please add it in Settings.' };
+    const llm = registries.llm.get(config.llmProvider);
+    if (!registries.llm.isConfigured(llm, config)) {
+      return { success: false, error: `${llm.name} API key is not configured. Please add it in Settings.` };
     }
 
     const sessionId = uuidv4();
     const now = new Date().toISOString();
 
-    // Convert raw text into the standard segment array expected by generateMeetingNotes and NoteViewer.
+    // Convert raw text into the standard segment array expected by generateNotes and NoteViewer.
     // Split on blank lines (paragraph boundaries); each paragraph becomes one segment.
     const paragraphs = transcriptText
       .split(/\n\s*\n/)
@@ -1124,19 +1089,7 @@ function registerIpcHandlers() {
 
         sendProgress('generating', 60);
 
-        const notes = await generateMeetingNotes(
-          transcript,
-          config.selectedModel,
-          config.geminiApiKey,
-          resolveSystemPrompt(config),
-          config.secondaryGeminiModel || ''
-        );
-
-        const modelUsed  = notes._modelUsed || config.selectedModel;
-        const usedFallback = modelUsed !== config.selectedModel;
-
-        notes._geminiModel = modelUsed;
-        notes._sttService  = 'none'; // no STT for pasted transcripts
+        const notes = await generateAndStampNotes(sessionId, transcript, config, { provider: 'none', model: '' }); // no STT for pasted transcripts
 
         db.updateSession(sessionId, {
           notes:  JSON.stringify(notes),
@@ -1145,14 +1098,6 @@ function registerIpcHandlers() {
           status: 'complete',
         });
         sendProgress('complete', 85);
-
-        if (usedFallback) {
-          sendToRenderer('gemini:fallback-used', {
-            sessionId,
-            primaryModel:  config.selectedModel,
-            fallbackModel: modelUsed,
-          });
-        }
 
         // Optional Notion upload
         let notionUrl = null;

@@ -8,10 +8,3 @@ export const AppContext = createContext(null);
 export function useApp() {
   return useContext(AppContext);
 }
-
-export function hasSttApiKey(cfg) {
-  const service = cfg?.sttService || 'google';
-  if (service === 'assemblyai') return !!cfg?.assemblyAiApiKey?.trim();
-  if (service === 'sarvam') return !!cfg?.sarvamApiKey?.trim();
-  return !!cfg?.googleApiKey?.trim();
-}

@@ -6,6 +6,26 @@ updated: 2026-09-29
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.0.0] - 2026-09-29
+
+### Added
+
+- Groq is now available for both speech-to-text (Whisper Large v3 and v3 Turbo) and note generation (Llama 3.3 70B, GPT-OSS 120B/20B, Llama 3.1 8B).
+- Every speech-to-text and note-generation provider now has a model picker, plus a custom model ID field where the provider supports it.
+- The fallback for note generation can be any provider and model (for example Groq first, Gemini as backup).
+- Google Cloud STT settings now expose the project ID, Storage bucket and service account key path fields that were previously only editable in the config file.
+- Notes and transcripts record the provider and model that produced them, shown in the note header.
+
+### Changed
+
+- Speech-to-text and note-generation engines are now self-describing provider modules under `electron/providers/`; Settings, connection tests and key checks are generated from them, so adding an engine no longer needs UI or IPC changes (see `docs/ADDING_PROVIDERS.md`).
+- Existing Gemini model and fallback settings migrate automatically to the new per-provider settings.
+- The fallback event is now `llm:fallback-used`, and provider connection tests go through `providers.test()`.
+
+### Removed
+
+- The per-provider `api.test*` and `models.list` preload methods, replaced by `providers.list()` and `providers.test()`.
+
 ## [3.10.0] - 2026-09-29
 
 ### Added

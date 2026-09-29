@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Braces, FileText, RotateCcw, FolderOpen, BrainCircuit, MessageSquareText, FileDown } from 'lucide-react';
-import GeminiIcon from '../GeminiIcon.jsx';
-import { PasswordField, SegmentedControl, Switch } from '../ui/index.jsx';
-import { SettingsGroup, SettingRow, KeyGuide, TestAction, RadioCardGroup, ExternalLink } from './SettingsParts.jsx';
-import { GEMINI_MODELS } from './data.js';
+import { Braces, FileText, RotateCcw, FolderOpen, MessageSquareText, FileDown } from 'lucide-react';
+import { SegmentedControl, Switch } from '../ui/index.jsx';
+import { SettingsGroup, SettingRow } from './SettingsParts.jsx';
+import ProviderSection from './providers/ProviderSection.jsx';
 
 const OUTPUT_MODES = [
   { value: 'json', label: 'JSON (structured)', icon: Braces },
@@ -16,8 +15,6 @@ const OUTPUT_MODE_HELP = {
 };
 
 export default function NotesSection({ form, onChange, defaultSystemPrompt, defaultMdSystemPrompt }) {
-  const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState(null);
   const [downloadsDir, setDownloadsDir] = useState('');
 
   // The default PDF folder is the Windows Downloads folder; shown when no custom folder is set.
@@ -36,19 +33,6 @@ export default function NotesSection({ form, onChange, defaultSystemPrompt, defa
   const outputMode = (form.promptOutputMode || form.noteOutputMode) === 'markdown' ? 'markdown' : 'json';
   const hasCustomPrompt = !!(form.systemPrompt && form.systemPrompt.trim() !== '');
 
-  const handleTest = async () => {
-    setTesting(true);
-    setResult(null);
-    try {
-      const res = await window.meetmind.api.testGemini(form.geminiApiKey, form.geminiModel);
-      setResult(res);
-    } catch (err) {
-      setResult({ success: false, error: err.message });
-    } finally {
-      setTesting(false);
-    }
-  };
-
   const setOutputMode = (mode) => {
     onChange('promptOutputMode', mode);
     onChange('noteOutputMode', mode);
@@ -61,79 +45,11 @@ export default function NotesSection({ form, onChange, defaultSystemPrompt, defa
 
   return (
     <div className="space-y-24">
-      <SettingsGroup
-        title="Gemini API key"
-        description="Gemini turns transcripts into structured meeting notes."
-        icon={<GeminiIcon size={20} />}
-        aside={<ExternalLink href="https://aistudio.google.com/app/apikey">Get API key</ExternalLink>}
-      >
-        <div className="space-y-16">
-          <PasswordField
-            id="gemini-key"
-            label="Google Gemini API key"
-            value={form.geminiApiKey || ''}
-            onChange={(e) => onChange('geminiApiKey', e.target.value)}
-            placeholder="AIzaSy..."
-          />
-          <KeyGuide provider="google" />
-        </div>
-      </SettingsGroup>
-
-      <SettingsGroup
-        title="Model"
-        description="The primary model used to write notes."
-        icon={<BrainCircuit size={20} strokeWidth={1.75} className="text-ink" />}
-      >
-        <RadioCardGroup
-          label="Gemini model"
-          options={GEMINI_MODELS}
-          value={form.geminiModel}
-          onChange={(id) => { onChange('geminiModel', id); setResult(null); }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-16"
-          renderOption={(model) => (
-            <span className="block">
-              <span className="flex flex-wrap items-center gap-8">
-                <span className="text-body-sm font-medium text-ink">{model.name}</span>
-                <span className="pill-quiet">{model.badge}</span>
-              </span>
-              <span className="block text-caption text-graphite mt-8">{model.description}</span>
-            </span>
-          )}
-        />
-
-        <div>
-          <label htmlFor="secondary-gemini-model" className="label">Fallback model</label>
-          <select
-            id="secondary-gemini-model"
-            value={form.secondaryGeminiModel || ''}
-            onChange={(e) => onChange('secondaryGeminiModel', e.target.value)}
-            aria-describedby="secondary-gemini-model-hint"
-            className="input"
-          >
-            <option value="">None (disabled)</option>
-            {GEMINI_MODELS.filter((m) => m.id !== form.geminiModel).map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name} — {model.badge}
-              </option>
-            ))}
-          </select>
-          <p id="secondary-gemini-model-hint" className="hint mt-8">
-            If the primary model fails (for example a rate limit or outage), MeetMind retries automatically with this model.
-          </p>
-        </div>
-
-        <TestAction
-          onClick={handleTest}
-          testing={testing}
-          label="Test Gemini connection"
-          result={result}
-          successLabel="Gemini verified"
-        />
-      </SettingsGroup>
+      <ProviderSection kind="llm" form={form} onChange={onChange} />
 
       <SettingsGroup
         title="Output & system prompt"
-        description="The format and instructions sent to Gemini when generating notes."
+        description="The format and instructions sent to the model when generating notes."
         icon={<MessageSquareText size={20} strokeWidth={1.75} className="text-ink" />}
       >
         <div>

@@ -63,9 +63,10 @@ export function ExternalLink({ href, children }) {
 }
 
 // ── "How to get a key" disclosure with numbered steps ─────────────────────────
-export function KeyGuide({ provider, title = 'How to get a key' }) {
-  const steps = KEY_GUIDES[provider];
-  if (!steps) return null;
+// `steps` (from a provider descriptor) wins; `provider` looks up the static guides in data.js.
+export function KeyGuide({ steps: stepsProp, provider, title = 'How to get a key' }) {
+  const steps = stepsProp || KEY_GUIDES[provider];
+  if (!steps?.length) return null;
   return (
     <details className="group">
       <summary className="inline-flex items-center gap-8 cursor-pointer list-none text-caption font-medium text-graphite hover:text-ink [&::-webkit-details-marker]:hidden">
