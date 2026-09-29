@@ -7,6 +7,7 @@ const { getConfig, setConfig, setMultipleConfig } = require('./utils/config');
 const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
 const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
+const { getSessionWaveform, deleteSessionWaveform } = require('./audio/waveform');
 const { transcribeAudio, testGoogleSTT, testAssemblyAI, testSarvam } = require('./services/transcription');
 const { generateMeetingNotes, getAvailableModels, DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/gemini');
 const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./services/notion');
@@ -849,6 +850,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('session:delete', (_e, id) => {
     db.deleteSession(id);
+    deleteSessionWaveform(id);
     return true;
   });
 
@@ -883,6 +885,21 @@ function registerIpcHandlers() {
     } catch (err) {
       logger.error('Failed to open recording file', { sessionId, audioPath, error: err.message });
       return { success: false, error: err.message || 'Failed to open recording file.' };
+    }
+  });
+
+  // Loudness envelope for the Audio tab's waveform player.
+  ipcMain.handle('session:waveform', async (_e, sessionId) => {
+    const audioPath = resolveSessionAudioPath(sessionId);
+    if (!audioPath) {
+      return { success: false, error: 'Recording file not found for this session.' };
+    }
+    try {
+      const { peaks, duration } = await getSessionWaveform(sessionId, audioPath);
+      return { success: true, peaks, duration };
+    } catch (err) {
+      logger.warn('Failed to compute waveform', { sessionId, audioPath, error: err.message });
+      return { success: false, error: err.message || 'Failed to compute waveform.' };
     }
   });
 

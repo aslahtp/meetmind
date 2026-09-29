@@ -65,6 +65,18 @@ export default function GeneralSection({ form, onChange }) {
               onChange={(v) => onChange('pinNotesViewToggle', v)}
             />
           </SettingRow>
+          <SettingRow
+            label="Audio waveform"
+            description="Shows the recording’s waveform in a meeting’s Audio tab. Turn off for a plain seek bar."
+            htmlFor="pref-audio-waveform"
+          >
+            <Switch
+              id="pref-audio-waveform"
+              label="Audio waveform"
+              checked={form.showAudioWaveform !== false}
+              onChange={(v) => onChange('showAudioWaveform', v)}
+            />
+          </SettingRow>
         </RowList>
       </SettingsGroup>
 

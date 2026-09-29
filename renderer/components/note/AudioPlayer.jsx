@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Volume2, Play, Pause, FolderOpen, Loader2, AlertTriangle } from 'lucide-react';
 import { AvatarTile } from '../ui/index.jsx';
+import Waveform from './Waveform.jsx';
 
 const SPEEDS = [1, 1.25, 1.5, 2];
 
@@ -11,7 +12,7 @@ function formatPlayerTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function AudioPlayer({ sessionId, title, durationLabel }) {
+export default function AudioPlayer({ sessionId, title, durationLabel, showWaveform = true }) {
   const audioRef = useRef(null);
   const [speed, setSpeed] = useState(1);
   const [error, setError] = useState(null);
@@ -21,6 +22,44 @@ export default function AudioPlayer({ sessionId, title, durationLabel }) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // { status: 'loading' | 'ready' | 'error', peaks, duration } — computed once per recording in main.
+  const [waveform, setWaveform] = useState(null);
+
+  useEffect(() => {
+    if (!showWaveform || !sessionId || !window.meetmind?.sessions?.waveform) {
+      setWaveform(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setWaveform({ status: 'loading', peaks: null, duration: 0 });
+    window.meetmind.sessions.waveform(sessionId)
+      .then((result) => {
+        if (cancelled) return;
+        setWaveform(result?.success
+          ? { status: 'ready', peaks: result.peaks, duration: result.duration || 0 }
+          : { status: 'error', peaks: null, duration: 0 });
+      })
+      .catch(() => {
+        if (!cancelled) setWaveform({ status: 'error', peaks: null, duration: 0 });
+      });
+    return () => { cancelled = true; };
+  }, [sessionId, showWaveform]);
+
+  // timeupdate fires only ~4x a second; follow the playhead per frame so the waveform moves smoothly.
+  useEffect(() => {
+    if (!playing) return undefined;
+    let raf;
+    const tick = () => {
+      if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
+
+  // Recorder webm files often report an Infinity duration; fall back to the decoded length.
+  const effectiveDuration = duration || waveform?.duration || 0;
+  const useWaveform = showWaveform && waveform && waveform.status !== 'error';
 
   const audioSrc = sessionId ? `meetmind-audio://session/${sessionId}` : '';
 
@@ -40,9 +79,8 @@ export default function AudioPlayer({ sessionId, title, durationLabel }) {
     }
   };
 
-  const seek = (e) => {
-    if (!audioRef.current || !duration) return;
-    const value = Number(e.target.value);
+  const seekTo = (value) => {
+    if (!audioRef.current || !effectiveDuration) return;
     audioRef.current.currentTime = value;
     setCurrentTime(value);
   };
@@ -98,23 +136,34 @@ export default function AudioPlayer({ sessionId, title, durationLabel }) {
             )}
           </button>
 
-          <div className="space-y-8">
-            <input
-              type="range"
-              min={0}
-              max={duration || 0}
-              step={0.1}
-              value={Math.min(currentTime, duration || 0)}
-              onChange={seek}
-              disabled={!ready || !duration}
-              aria-label="Seek"
-              aria-valuetext={`${formatPlayerTime(currentTime)} of ${formatPlayerTime(duration)}`}
-              className="w-full cursor-pointer disabled:cursor-not-allowed"
-              style={{ accentColor: 'rgb(var(--color-ink))' }}
-            />
+          <div className={useWaveform ? 'space-y-8 pt-8' : 'space-y-8'}>
+            {useWaveform ? (
+              <Waveform
+                peaks={waveform.peaks}
+                currentTime={currentTime}
+                duration={effectiveDuration}
+                disabled={!ready}
+                onSeek={seekTo}
+                formatTime={formatPlayerTime}
+              />
+            ) : (
+              <input
+                type="range"
+                min={0}
+                max={effectiveDuration}
+                step={0.1}
+                value={Math.min(currentTime, effectiveDuration)}
+                onChange={(e) => seekTo(Number(e.target.value))}
+                disabled={!ready || !effectiveDuration}
+                aria-label="Seek"
+                aria-valuetext={`${formatPlayerTime(currentTime)} of ${formatPlayerTime(effectiveDuration)}`}
+                className="w-full cursor-pointer disabled:cursor-not-allowed"
+                style={{ accentColor: 'rgb(var(--color-ink))' }}
+              />
+            )}
             <div className="flex items-center justify-between text-caption text-graphite tabular">
               <span>{formatPlayerTime(currentTime)}</span>
-              <span>{formatPlayerTime(duration)}</span>
+              <span>{formatPlayerTime(effectiveDuration)}</span>
             </div>
           </div>
 
@@ -130,8 +179,13 @@ export default function AudioPlayer({ sessionId, title, durationLabel }) {
             onLoadedMetadata={() => {
               setReady(true);
               setError(null);
-              setDuration(audioRef.current?.duration || 0);
+              const d = audioRef.current?.duration;
+              setDuration(Number.isFinite(d) && d > 0 ? d : 0);
               if (audioRef.current) audioRef.current.playbackRate = speed;
+            }}
+            onDurationChange={() => {
+              const d = audioRef.current?.duration;
+              if (Number.isFinite(d) && d > 0) setDuration(d);
             }}
             onCanPlay={() => setReady(true)}
             onEnded={() => setPlaying(false)}

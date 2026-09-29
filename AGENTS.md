@@ -33,7 +33,7 @@ Three artifacts build from this one repo: the Electron desktop app, its React re
 
 ## Commands
 
-Run `pnpm run lint` and `pnpm run test` before finishing a change. The tests cover pure logic only (note Markdown export/parse, formatting, PDF file naming), so also verify UI and main-process changes by running the app (`pnpm run dev`) and exercising the affected flow directly.
+Run `pnpm run lint` and `pnpm run test` before finishing a change. The tests cover pure logic only (note Markdown export/parse, formatting, PDF file naming, waveform peaks), so also verify UI and main-process changes by running the app (`pnpm run dev`) and exercising the affected flow directly.
 
 The package manager is pnpm (pinned via `packageManager` in `package.json`); never use npm/npx or commit a `package-lock.json`. `pnpm-workspace.yaml` sets `nodeLinker: hoisted` so electron-builder sees a flat `node_modules`, and lists the dependencies allowed to run install scripts under `allowBuilds` (add new ones with `pnpm approve-builds <pkg>`). `verifyDepsBeforeRun: warn` stops `pnpm run` from silently reinstalling after `package.json` changes, because that reinstall replaces `node_modules/electron` and breaks it if the app is running; run `pnpm install` explicitly with the app closed. If Electron reports it "failed to install correctly", run `pnpm rebuild electron`. `minimumReleaseAge: 1440` makes pnpm refuse package versions published less than a day ago, a supply-chain guard; Dependabot has its own 7-day `cooldown` in `.github/dependabot.yml`. If `pnpm add`/`pnpm update` says a version is too new, wait, or for an urgent security fix add the package to `minimumReleaseAgeExclude` temporarily. Never remove the setting.
 

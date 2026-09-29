@@ -98,6 +98,7 @@ contextBridge.exposeInMainWorld('meetmind', {
     delete: (id) => ipcRenderer.invoke('session:delete', id),
     updateNotes: (id, notes) => ipcRenderer.invoke('session:update-notes', id, notes),
     openRecording: (id) => ipcRenderer.invoke('session:open-recording', id),
+    waveform: (id) => ipcRenderer.invoke('session:waveform', id),
     createFromTranscript: (opts) => ipcRenderer.invoke('session:create-from-transcript', opts),
   },
 

@@ -134,6 +134,10 @@ const schema = {
     type: 'boolean',
     default: true,
   },
+  showAudioWaveform: {
+    type: 'boolean',
+    default: true,
+  },
   googleCalendarClientId: {
     type: 'string',
     default: '',
@@ -240,6 +244,7 @@ function getConfig() {
     autoCheckUpdates:          store.get('autoCheckUpdates') !== false,
     hideLogsInSidebar:         store.get('hideLogsInSidebar') || false,
     pinNotesViewToggle:        store.get('pinNotesViewToggle') !== false,
+    showAudioWaveform:         store.get('showAudioWaveform') !== false,
     googleCalendarClientId:    store.get('googleCalendarClientId') || '',
     googleCalendarClientSecret: store.get('googleCalendarClientSecret') || '',
     googleCalendarRefreshToken: store.get('googleCalendarRefreshToken') || '',
