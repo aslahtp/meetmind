@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, Loader2, ClipboardPaste } from 'lucide-react';
+import { Loader2, ClipboardPaste } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import { Dialog, TextField, StatusDot } from './ui/index.jsx';
+import GeminiIcon from './GeminiIcon.jsx';
 import { STAGE_LABELS } from '../lib/status.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -10,9 +11,9 @@ function defaultTitle() {
   const now = new Date();
   return now.toLocaleDateString('en-US', {
     weekday: 'long',
-    month:   'long',
-    day:     'numeric',
-    year:    'numeric',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
   }) + ' Meeting';
 }
 
@@ -21,11 +22,11 @@ function defaultTitle() {
 export default function PasteTranscriptModal({ onClose }) {
   const { openSession, refreshSessions, trackProcessing } = useApp();
 
-  const [title, setTitle]                 = useState(defaultTitle);
-  const [transcript, setTranscript]       = useState('');
-  const [status, setStatus]               = useState('idle'); // 'idle' | 'loading' | 'error'
+  const [title, setTitle] = useState(defaultTitle);
+  const [transcript, setTranscript] = useState('');
+  const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'error'
   const [progressLabel, setProgressLabel] = useState('');
-  const [errorMessage, setErrorMessage]   = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const textareaRef = useRef(null);
 
   // Track live processing stage from the existing IPC event
@@ -108,7 +109,7 @@ export default function PasteTranscriptModal({ onClose }) {
                 </>
               ) : (
                 <>
-                  <Sparkles size={14} strokeWidth={1.75} />
+                  <GeminiIcon size={14} />
                   Generate notes
                 </>
               )}

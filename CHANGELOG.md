@@ -1,10 +1,16 @@
 ---
 tags: [meta, changelog]
-updated: 2026-09-27
+updated: 2026-09-29
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [3.8.1] - 2026-09-29
+
+### Changed
+
+- The regenerate toolbar button now displays "Regenerate" on both tabs, pairing the Gemini icon for AI note generation with AudioLines for transcript regeneration.
 
 ## [3.8.0] - 2026-09-28
 

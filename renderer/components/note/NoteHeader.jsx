@@ -166,14 +166,14 @@ export function NoteToolbar({
                 type="button"
                 onClick={regenerate.onClick}
                 disabled={editing || busy || regenerating || uploading || !!regenerate.unavailable}
-                aria-label={regenerating ? 'Regenerating…' : regenerate.label}
-                title={editing ? EDITING_HINT : regenerate.unavailable || regenerate.label}
+                aria-label={regenerating ? 'Regenerating…' : regenerate.title || regenerate.label}
+                title={editing ? EDITING_HINT : regenerate.unavailable || regenerate.title || regenerate.label}
                 className="btn-ghost px-8 py-4 text-caption lg:px-16 mr-4"
               >
                 {regenerating ? (
                   <Loader2 size={14} strokeWidth={2} className="spinner" />
                 ) : (
-                  <regenerate.icon key={`icon-${regenerate.label}`} size={14} strokeWidth={1.75} className="fade-in" aria-hidden="true" />
+                  <regenerate.icon key={`icon-${regenerate.title || regenerate.label}`} size={14} strokeWidth={1.75} className="fade-in" aria-hidden="true" />
                 )}
                 <span key={`label-${regenerate.label}`} className="hidden lg:inline fade-in">
                   {regenerating ? 'Regenerating…' : regenerate.label}

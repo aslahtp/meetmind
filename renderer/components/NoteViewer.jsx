@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
-import { FileText, Mic, Volume2, MicOff, Sparkles, Loader2, Eye, Code, RefreshCw, AudioLines } from 'lucide-react';
+import { FileText, Mic, Volume2, MicOff, Loader2, Eye, Code, AudioLines } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import TranscriptViewer from './TranscriptViewer.jsx';
 import { NoteToolbar, NoteTitleBlock } from './note/NoteHeader.jsx';
@@ -8,6 +8,7 @@ import AudioPlayer from './note/AudioPlayer.jsx';
 import { MarkdownNoteView } from './note/markdown.jsx';
 import { buildNotesMarkdown, parseNotesMarkdown, notesTitle } from './note/copyMarkdown.js';
 import { EmptyState, StepBadge, ProgressBar, SaveBar, SegmentedControl } from './ui/index.jsx';
+import GeminiIcon from './GeminiIcon.jsx';
 import { formatDurationSeconds } from '../lib/format.js';
 import { isProcessing, PIPELINE_STAGES, STAGE_LABELS, stageIndex } from '../lib/status.js';
 
@@ -84,7 +85,7 @@ function SummaryTab({ notes, title, noSpeech, isError, busy, onGenerate, onRetry
   return (
     <EmptyState
       compact
-      icon={<Sparkles size={24} strokeWidth={1.75} />}
+      icon={<GeminiIcon size={24} />}
       title={isError ? 'Processing failed' : 'Notes not ready yet'}
       message={
         isError
@@ -301,13 +302,14 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const onTranscriptTab = activeTab === 'transcript';
   const regenerate = onTranscriptTab
     ? {
-      label: 'Regenerate transcript',
+      label: 'Regenerate',
+      title: 'Regenerate transcript',
       icon: AudioLines,
       onClick: handleRetranscribe,
       // Pasted transcripts have no recording to transcribe again.
       unavailable: session.audio_path ? null : 'No recording to transcribe again',
     }
-    : { label: 'Regenerate notes', icon: RefreshCw, onClick: handleRegenerate, unavailable: null };
+    : { label: 'Regenerate', title: 'Regenerate notes', icon: GeminiIcon, onClick: handleRegenerate, unavailable: null };
 
   // First sync creates the Notion page. Updating replaces it: the main process creates a fresh
   // page from the current notes, then moves the old one to Notion's trash (no duplicates).
@@ -497,9 +499,8 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
             <div
               aria-hidden={!titleHidden}
               inert={titleHidden ? undefined : ''}
-              className={`transition-[opacity,transform] duration-200 ease-out ${
-                titleHidden ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-8'
-              }`}
+              className={`transition-[opacity,transform] duration-200 ease-out ${titleHidden ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-8'
+                }`}
             >
               <SegmentedControl {...modeToggle} iconOnly className="bg-paper" />
             </div>
