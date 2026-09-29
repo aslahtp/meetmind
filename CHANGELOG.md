@@ -6,6 +6,12 @@ updated: 2026-09-29
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.10.0] - 2026-09-29
+
+### Added
+
+- Dashboard greeting is now picked randomly from a pool of ~40 creative, time-aware messages across five time slots (early morning, morning, afternoon, evening, late night), with bonus greetings mixed in for Mondays, Fridays, and weekends.
+
 ## [3.9.0] - 2026-09-29
 
 ### Added
