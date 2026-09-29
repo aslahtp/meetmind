@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { SlidersHorizontal, AudioLines, NotebookPen, Blocks, Cpu } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
+import { providerConfigKeys } from '../lib/providers.js';
 import { PageHeader, SaveBar, SegmentedControl } from './ui/index.jsx';
 import GeneralSection from './settings/GeneralSection.jsx';
 import TranscriptionSection from './settings/TranscriptionSection.jsx';
@@ -33,13 +34,10 @@ function storeTab(tab) {
 
 const DEFAULT_FORM = {
   sttService: 'google',
-  googleApiKey: '',
-  sarvamApiKey: '',
-  assemblyAiApiKey: '',
-  assemblyAiPrompt: '',
-  geminiApiKey: '',
-  geminiModel: 'gemini-3.8-flash',
-  secondaryGeminiModel: '',
+  sttModels: {},
+  llmProvider: 'gemini',
+  llmModels: {},
+  llmFallback: {},
   notionApiKey: '',
   notionDatabaseId: '',
   notionUploadTranscript: true,
@@ -64,16 +62,19 @@ const DEFAULT_FORM = {
   pdfIncludeTranscript: false,
 };
 
-function formFromConfig(cfg) {
+// Provider credential/option keys come from the provider descriptors, so adding a provider needs
+// no edit here.
+function formFromConfig(cfg, providers) {
+  const providerFields = {};
+  for (const key of providerConfigKeys(providers)) providerFields[key] = cfg[key] || '';
+
   return {
+    ...providerFields,
     sttService: cfg.sttService || 'google',
-    googleApiKey: cfg.googleApiKey || '',
-    sarvamApiKey: cfg.sarvamApiKey || '',
-    assemblyAiApiKey: cfg.assemblyAiApiKey || '',
-    assemblyAiPrompt: cfg.assemblyAiPrompt || '',
-    geminiApiKey: cfg.geminiApiKey || '',
-    geminiModel: cfg.geminiModel || cfg.selectedModel || 'gemini-3.8-flash',
-    secondaryGeminiModel: cfg.secondaryGeminiModel || '',
+    sttModels: cfg.sttModels || {},
+    llmProvider: cfg.llmProvider || 'gemini',
+    llmModels: cfg.llmModels || {},
+    llmFallback: cfg.llmFallback || {},
     notionApiKey: cfg.notionApiKey || cfg.notionToken || '',
     notionDatabaseId: cfg.notionDatabaseId || cfg.notionPageId || '',
     notionUploadTranscript: cfg.notionUploadTranscript !== false,
@@ -98,8 +99,15 @@ function formFromConfig(cfg) {
   };
 }
 
+// Form values can be objects (per-provider models, fallback), so compare structurally.
+function sameValue(a, b) {
+  if (a === b) return true;
+  if (a && b && typeof a === 'object' && typeof b === 'object') return JSON.stringify(a) === JSON.stringify(b);
+  return false;
+}
+
 export default function Settings({ onSave }) {
-  const { confirm, addToast, setNavGuard, keysNotSet } = useApp();
+  const { confirm, addToast, setNavGuard, keysNotSet, providers } = useApp();
   const [tab, setTab] = useState(() => (keysNotSet ? 'transcription' : readStoredTab() || 'general'));
   const [form, setForm] = useState(DEFAULT_FORM);
   const [initialForm, setInitialForm] = useState(null);
@@ -110,15 +118,16 @@ export default function Settings({ onSave }) {
 
   const isDirty = useMemo(() => {
     if (!initialForm) return false;
-    return Object.keys(form).some((key) => form[key] !== initialForm[key]);
+    return Object.keys(form).some((key) => !sameValue(form[key], initialForm[key]));
   }, [form, initialForm]);
 
   useEffect(() => {
     async function load() {
       if (!window.meetmind) return;
+      if (!providers) return; // descriptors decide which credential fields exist
       const cfg = await window.meetmind.config.get();
       if (cfg) {
-        const loadedForm = formFromConfig(cfg);
+        const loadedForm = formFromConfig(cfg, providers);
         setForm(loadedForm);
         setInitialForm(loadedForm);
       }
@@ -138,7 +147,7 @@ export default function Settings({ onSave }) {
       }
     }
     load();
-  }, []);
+  }, [providers]);
 
   // Guard navigation away from the screen while there are unsaved edits.
   useEffect(() => {

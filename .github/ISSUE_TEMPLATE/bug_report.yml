@@ -54,6 +54,7 @@ body:
         - AssemblyAI
         - Google Cloud Speech-to-Text
         - Sarvam AI
+        - Groq Whisper
         - Not relevant
   - type: input
     id: windows

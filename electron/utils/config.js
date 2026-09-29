@@ -1,27 +1,9 @@
 const Store = require('electron-store');
-const { AVAILABLE_MODELS, DEFAULT_GEMINI_MODEL, DEFAULT_SYSTEM_PROMPT } = require('../services/gemini');
+const { DEFAULT_SYSTEM_PROMPT } = require('../services/prompts');
+const { sttRegistry, llmRegistry, providerConfigKeys } = require('../providers');
+const { migrateLegacyModels } = require('./configMigration');
 
 const schema = {
-  googleApiKey: {
-    type: 'string',
-    default: '',
-  },
-  googleCloudProjectId: {
-    type: 'string',
-    default: '',
-  },
-  googleCloudStorageBucket: {
-    type: 'string',
-    default: '',
-  },
-  googleCloudStorageKeyPath: {
-    type: 'string',
-    default: '',
-  },
-  geminiApiKey: {
-    type: 'string',
-    default: '',
-  },
   notionToken: {
     type: 'string',
     default: '',
@@ -38,18 +20,16 @@ const schema = {
     type: 'string',
     default: '',
   },
-  selectedModel: {
-    type: 'string',
-    default: DEFAULT_GEMINI_MODEL,
-  },
-  geminiModel: {
-    type: 'string',
-    default: DEFAULT_GEMINI_MODEL,
-  },
-  secondaryGeminiModel: {
-    type: 'string',
-    default: '',
-  },
+  // Legacy (pre-4.0) single-Gemini keys; read once by migrateLegacyModels, then removed.
+  selectedModel: { type: 'string' },
+  geminiModel: { type: 'string' },
+  secondaryGeminiModel: { type: 'string' },
+  // Active LLM provider, per-provider model choices ({providerId: modelId}) and the
+  // optional cross-provider fallback ({provider, model}; empty object = disabled).
+  llmProvider: { type: 'string', default: 'gemini' },
+  llmModels: { type: 'object', default: {} },
+  llmFallback: { type: 'object', default: {} },
+  sttModels: { type: 'object', default: {} },
   systemAudioDevice: {
     type: 'string',
     default: '',
@@ -77,18 +57,6 @@ const schema = {
   sttService: {
     type: 'string',
     default: 'google',
-  },
-  assemblyAiApiKey: {
-    type: 'string',
-    default: '',
-  },
-  assemblyAiPrompt: {
-    type: 'string',
-    default: '',
-  },
-  sarvamApiKey: {
-    type: 'string',
-    default: '',
   },
   geminiSystemPrompt: {
     type: 'string',
@@ -177,32 +145,48 @@ const schema = {
   },
 };
 
+// Provider credential/option keys (API keys, project IDs, ...) come from the provider registries.
+for (const field of providerConfigKeys()) {
+  schema[field.configKey] = { type: 'string', default: '' };
+}
+
 const store = new Store({ schema, name: 'meetmind-config' });
 
-const DEPRECATED_GEMINI_MODELS = {
-  'gemini-1.5-flash': 'gemini-3.5-flash-lite',
-  'gemini-1.5-pro': 'gemini-3.5-flash-lite',
-  'gemini-2.0-flash': 'gemini-3.5-flash-lite',
-  'gemini-2.0-flash-thinking-exp': 'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite-preview': 'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite': 'gemini-3.5-flash-lite',
-  'gemini-3-flash-preview': 'gemini-3.8-flash',
-  'gemini-3-pro-preview': 'gemini-3.8-flash',
-  'gemini-3.6-flash': 'gemini-3.8-flash',
-  'gemini-3.5-flash': 'gemini-3.8-flash',
-};
+function applyLegacyMigration() {
+  const raw = {
+    selectedModel: store.get('selectedModel'),
+    geminiModel: store.get('geminiModel'),
+    secondaryGeminiModel: store.get('secondaryGeminiModel'),
+    llmModels: store.get('llmModels'),
+    llmFallback: store.get('llmFallback'),
+  };
+  const { set, remove } = migrateLegacyModels(raw, llmRegistry.get('gemini')._deprecatedModels);
+  for (const [key, value] of Object.entries(set)) store.set(key, value);
+  for (const key of remove) store.delete(key);
+}
+
+/** Saved model per provider, validated against each provider's list. */
+function resolveModels(registry, saved = {}) {
+  const out = {};
+  for (const provider of registry.list()) {
+    out[provider.id] = registry.resolveModel(provider, saved[provider.id]);
+  }
+  return out;
+}
 
 function getConfig() {
-  let selectedModel = store.get('selectedModel') || store.get('geminiModel');
-  if (selectedModel in DEPRECATED_GEMINI_MODELS) {
-    selectedModel = DEPRECATED_GEMINI_MODELS[selectedModel];
-    store.set('selectedModel', selectedModel);
-    store.set('geminiModel', selectedModel);
-  }
-  if (!AVAILABLE_MODELS.includes(selectedModel)) {
-    selectedModel = DEFAULT_GEMINI_MODEL;
-    store.set('selectedModel', selectedModel);
-    store.set('geminiModel', selectedModel);
+  applyLegacyMigration();
+
+  const llmProvider = llmRegistry.has(store.get('llmProvider')) ? store.get('llmProvider') : llmRegistry.defaultId();
+  const sttService = sttRegistry.has(store.get('sttService')) ? store.get('sttService') : sttRegistry.defaultId();
+  const fallback = store.get('llmFallback') || {};
+  const llmFallback = llmRegistry.has(fallback.provider)
+    ? { provider: fallback.provider, model: llmRegistry.resolveModel(llmRegistry.get(fallback.provider), fallback.model) }
+    : {};
+
+  const providerFields = {};
+  for (const field of providerConfigKeys()) {
+    providerFields[field.configKey] = store.get(field.configKey) || '';
   }
 
   const notionToken = store.get('notionToken') || store.get('notionApiKey') || '';
@@ -211,28 +195,22 @@ function getConfig() {
   const outMode = store.get('noteOutputMode') || store.get('promptOutputMode') || 'json';
 
   return {
-    googleApiKey:              store.get('googleApiKey') || '',
-    googleCloudProjectId:      store.get('googleCloudProjectId') || '',
-    googleCloudStorageBucket:  store.get('googleCloudStorageBucket') || '',
-    googleCloudStorageKeyPath: store.get('googleCloudStorageKeyPath') || '',
-    geminiApiKey:              store.get('geminiApiKey') || '',
+    ...providerFields,
     notionToken,
     notionApiKey:              notionToken,
     notionDatabaseId:          notionDbId,
     notionPageId:              notionDbId,
-    selectedModel,
-    geminiModel:               selectedModel,
-    secondaryGeminiModel:      store.get('secondaryGeminiModel') || '',
+    llmProvider,
+    llmModels:                 resolveModels(llmRegistry, store.get('llmModels')),
+    llmFallback,
+    sttModels:                 resolveModels(sttRegistry, store.get('sttModels')),
     systemAudioDevice:         store.get('systemAudioDevice') || '',
     micDevice:                 store.get('micDevice') || '',
     autoLaunch:                store.get('autoLaunch') ?? true,
     theme:                     store.get('theme') || 'light',
     websocketPort:             store.get('websocketPort') || 39842,
     onboardingComplete:        store.get('onboardingComplete') || false,
-    sttService:                store.get('sttService') || 'google',
-    assemblyAiApiKey:          store.get('assemblyAiApiKey') || '',
-    assemblyAiPrompt:          store.get('assemblyAiPrompt') || '',
-    sarvamApiKey:              store.get('sarvamApiKey') || '',
+    sttService,
     geminiSystemPrompt:        sysPrompt,
     systemPrompt:              sysPrompt,
     noteOutputMode:            outMode,
@@ -264,8 +242,6 @@ function setConfig(key, value) {
   if (key === 'notionToken') store.set('notionApiKey', value);
   if (key === 'notionDatabaseId') store.set('notionPageId', value);
   if (key === 'notionPageId') store.set('notionDatabaseId', value);
-  if (key === 'geminiModel') store.set('selectedModel', value);
-  if (key === 'selectedModel') store.set('geminiModel', value);
   if (key === 'systemPrompt') store.set('geminiSystemPrompt', value);
   if (key === 'geminiSystemPrompt') store.set('systemPrompt', value);
   if (key === 'promptOutputMode') store.set('noteOutputMode', value);

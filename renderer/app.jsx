@@ -19,7 +19,8 @@ import Meetings from './components/Meetings.jsx';
 import NoteViewer from './components/NoteViewer.jsx';
 import Settings from './components/Settings.jsx';
 import ProcessingIndicator from './components/ProcessingIndicator.jsx';
-import { AppContext, useApp, hasSttApiKey } from './lib/app-context.js';
+import { AppContext, useApp } from './lib/app-context.js';
+import { getSetupState } from './lib/providers.js';
 import { markScrollRestore, cancelScrollRestore } from './lib/scrollMemory.js';
 import LogsViewer from './components/LogsViewer.jsx';
 import RecordingBar from './components/RecordingBar.jsx';
@@ -125,6 +126,7 @@ export default function App() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState(null);
   const [config, setConfigState] = useState(null);
+  const [providers, setProviders] = useState(null);      // STT/LLM provider descriptors from main
   const [theme, setThemeState] = useState('light');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSessionId, setRecordingSessionId] = useState(null);
@@ -177,7 +179,8 @@ export default function App() {
     }));
   }, []);
 
-  const keysNotSet = !hasSttApiKey(config) || !config?.geminiApiKey?.trim();
+  const setup = getSetupState(providers, config);
+  const keysNotSet = setup.ready && (!setup.sttDone || !setup.llmDone);
 
   // Request microphone access at startup so Windows adds this app to the
   // Privacy → Microphone list and allows FFmpeg (a desktop app) to capture audio.
@@ -290,6 +293,9 @@ export default function App() {
 
     async function init() {
       if (!window.meetmind) return;
+      window.meetmind.providers?.list?.().then(setProviders).catch((err) => {
+        console.error('Provider list load failed:', err);
+      });
       try {
         const cfg = await window.meetmind.config.get();
         setConfigState(cfg);
@@ -395,7 +401,7 @@ export default function App() {
       if (status?.status === 'downloaded') setShowUpdateBanner(true);
     });
 
-    const unsubFallback = window.meetmind.on('gemini:fallback-used', ({ primaryModel, fallbackModel }) => {
+    const unsubFallback = window.meetmind.on('llm:fallback-used', ({ primaryModel, fallbackModel }) => {
       addToast(
         `Primary model (${primaryModel}) failed — switched to ${fallbackModel} automatically.`,
         'warning'
@@ -506,6 +512,7 @@ export default function App() {
     selectedSession, setSelectedSession,
     sessions, setSessions, refreshSessions, sessionsLoading, sessionsError,
     config, setConfigState, updateConfig, updateMultipleConfig,
+    providers, setup,
     theme, setTheme, toggleTheme,
     isRecording, recordingSessionId, recordingStartedAt,
     startRecording, stopRecording,

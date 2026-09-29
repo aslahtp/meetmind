@@ -51,6 +51,9 @@ async function initialize() {
       status            TEXT NOT NULL DEFAULT 'recording'
     )
   `);
+  // Added in 4.0.0: why the last processing run failed (no migration system, so add if missing).
+  const cols = db.exec('PRAGMA table_info(sessions)')[0]?.values.map((r) => r[1]) || [];
+  if (!cols.includes('last_error')) db.run('ALTER TABLE sessions ADD COLUMN last_error TEXT');
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
   persist();
@@ -86,7 +89,7 @@ function createSession(session) {
 
 function updateSession(id, updates) {
   const d = ensureDb();
-  const allowed = ['title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status'];
+  const allowed = ['title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status', 'last_error'];
   const keys = Object.keys(updates).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;
 

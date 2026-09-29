@@ -7,7 +7,7 @@ import {
   ArrowRight,
   ClipboardList,
 } from 'lucide-react';
-import { useApp, hasSttApiKey } from '../lib/app-context.js';
+import { useApp } from '../lib/app-context.js';
 import PasteTranscriptModal from './PasteTranscriptModal.jsx';
 import UpcomingMeetings from './UpcomingMeetings.jsx';
 import { SessionList, SessionListSkeleton } from './SessionCard.jsx';
@@ -178,9 +178,8 @@ function DashboardSkeleton() {
   );
 }
 
-function SetupCard({ config, onSetup }) {
-  const sttDone = hasSttApiKey(config);
-  const geminiDone = !!config?.geminiApiKey?.trim();
+function SetupCard({ config, setup, onSetup }) {
+  const { sttDone, llmDone } = setup;
   const notionDone = !!(config?.notionToken?.trim() && config?.notionPageId?.trim());
 
   return (
@@ -192,7 +191,7 @@ function SetupCard({ config, onSetup }) {
       </p>
       <div className="flex flex-wrap items-center gap-8 mt-24">
         <StepBadge n={1} done={sttDone}>Speech-to-text</StepBadge>
-        <StepBadge n={2} done={geminiDone}>Gemini</StepBadge>
+        <StepBadge n={2} done={llmDone}>{setup.llm?.name || 'Note generation'}</StepBadge>
         <StepBadge n={3} done={notionDone}>Notion (optional)</StepBadge>
       </div>
       <button type="button" onClick={onSetup} className="btn-sunshine mt-32">
@@ -230,6 +229,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   const {
     sessions, refreshSessions, startRecording, isRecording, sessionsLoading, sessionsError,
     config, keysNotSet,
+    setup,
   } = useApp();
   const { handleUploadAudio } = useSessionActions();
   const showSkeleton = useDelayedFlag(sessionsLoading, SKELETON_DELAY_MS);
@@ -340,7 +340,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
         />
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1200px] px-32 pt-24 pb-48">
-            {keysNotSet && <SetupCard config={config} onSetup={onNavigateToSettings} />}
+            {keysNotSet && <SetupCard config={config} setup={setup} onSetup={onNavigateToSettings} />}
 
             {meetingToast && !isRecording && (
               <MeetingStartingCallout

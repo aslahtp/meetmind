@@ -120,23 +120,16 @@ contextBridge.exposeInMainWorld('meetmind', {
     testConnection: (token, dbId) => ipcRenderer.invoke('notion:test', token, dbId),
   },
 
-  // Models
-  models: {
-    list: () => ipcRenderer.invoke('models:list'),
+  // STT / LLM providers (descriptors + generic connection test)
+  providers: {
+    list: () => ipcRenderer.invoke('providers:list'),
+    test: (opts) => ipcRenderer.invoke('providers:test', opts),
   },
 
   // Gemini
   gemini: {
     getDefaultSystemPrompt: () => ipcRenderer.invoke('gemini:default-system-prompt'),
     getMdDefaultSystemPrompt: () => ipcRenderer.invoke('gemini:default-md-system-prompt'),
-  },
-
-  // API Tests
-  api: {
-    testGoogle: (apiKey, projectId) => ipcRenderer.invoke('api:test-google', apiKey, projectId),
-    testGemini: (apiKey, modelId) => ipcRenderer.invoke('api:test-gemini', apiKey, modelId),
-    testAssemblyAi: (apiKey) => ipcRenderer.invoke('api:test-assemblyai', apiKey),
-    testSarvam: (apiKey) => ipcRenderer.invoke('api:test-sarvam', apiKey),
   },
 
   // Processing
@@ -201,7 +194,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'sessions:durations-updated',
       'updater:status',
       'calendar:meeting-starting',
-      'gemini:fallback-used',
+      'llm:fallback-used',
       'log:entry',
     ];
     if (validChannels.includes(channel)) {
