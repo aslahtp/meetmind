@@ -24,6 +24,8 @@
      - (Optional) Add a short prompt to fine-tune behavior for English/Malayalam meetings.
    - For **Google STT**: Enter your Google Cloud API key and Project ID.
    - For **Sarvam AI STT**: Paste your Sarvam AI API key
+   - For **Groq Whisper**: Paste your Groq API key (no speaker labels)
+   - Each engine has a model picker under its key.
 5. Configure **Audio Devices** (System + Microphone) and run a quick test recording.
 
 ### Browser Extension

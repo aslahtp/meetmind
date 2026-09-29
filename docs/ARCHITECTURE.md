@@ -19,8 +19,8 @@ written meeting notes. It:
 1. Records system audio (via WASAPI loopback or a DirectShow fallback) and the microphone at
    the same time, on the user's own PC. Nothing joins the meeting as a bot or participant.
 2. Sends the recording to a speech to text engine chosen by the user (AssemblyAI, Google Cloud
-   Speech to Text v1/v2, or Sarvam AI) to get a speaker labeled transcript.
-3. Sends the transcript to Google Gemini to produce structured meeting notes (executive
+   Speech to Text v1/v2, Sarvam AI, or Groq Whisper) to get a speaker labeled transcript.
+3. Sends the transcript to the user's chosen LLM (Google Gemini or Groq, with an optional cross-provider fallback) to produce structured meeting notes (executive
    summary, agenda, decisions, an action items table) as either structured JSON or Markdown.
 4. Stores everything locally in a SQLite database (via `sql.js`), and optionally exports a PDF,
    copies Markdown, or syncs a formatted page to Notion.
@@ -57,8 +57,8 @@ Three build artifacts come out of this one repository:
         |                                            |
         v                                            |
  runProcessingPipeline() in main.js  ------------------+
-   Stage 1: electron/services/transcription.js  (Google STT / AssemblyAI / Sarvam)
-   Stage 2: electron/services/gemini.js         (structured JSON or Markdown notes)
+   Stage 1: electron/services/transcription.js  -> electron/providers/stt/* (Google / AssemblyAI / Sarvam / Groq)
+   Stage 2: electron/services/notes.js          -> electron/providers/llm/* (Gemini / Groq; JSON or Markdown notes)
    Stage 3: electron/services/notion.js         (optional, if configured)
         |
         v
@@ -143,9 +143,8 @@ grouped by feature:
 | `dialog` | `dialog:choose-folder` | Native folder picker |
 | `pdf` | `pdf:export`, `pdf:reveal`, `pdf:default-dir` | PDF export |
 | `notion` | `notion:upload`, `notion:test` | Notion sync and connection test |
-| `models` | `models:list` | Available Gemini models |
+| `providers` | `providers:list`, `providers:test` | Provider descriptors (models, credential fields, guides) and generic connection test |
 | `gemini` | `gemini:default-system-prompt`, `gemini:default-md-system-prompt` | Default prompt text for Settings |
-| `api` | `api:test-google`, `api:test-gemini`, `api:test-assemblyai`, `api:test-sarvam` | Settings-screen "Test connection" buttons |
 | `processing` | `processing:run`, `processing:retry` | Manually (re)run the pipeline on a session |
 | `capture` | `capture:start/stop` (main -> renderer), `capture:started/failed/chunk/audio-data` (renderer -> main) | Renderer-side system audio capture handshake |
 | `calendar` | `calendar:auth/disconnect/events/status` | Google Calendar OAuth and event polling |
@@ -158,7 +157,7 @@ explicit allowlist of valid channel names (`recording:started`, `recording:stopp
 `recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
 `processing:error`, `ws:extension-connected`, `ws:recording-requested`,
 `sessions:durations-updated`, `updater:status`, `calendar:meeting-starting`,
-`gemini:fallback-used`, `log:entry`) so the renderer cannot subscribe to an arbitrary IPC
+`llm:fallback-used`, `log:entry`) so the renderer cannot subscribe to an arbitrary IPC
 channel.
 
 Preload also injects the startup theme class (`light`/`dark`) onto `<html>` synchronously, by
@@ -194,7 +193,7 @@ based on the `theme` setting) driven by CSS custom properties in `renderer/style
 (`--color-*` tokens), consumed via Tailwind arbitrary values, e.g.
 `bg-[rgb(var(--color-background))]`, rather than hardcoded hex colors. Icons from
 `lucide-react` plus a handful of hand-authored brand icon components
-(`GeminiIcon`, `AssemblyAiIcon`, `SarvamIcon`, `NotionIcon`, `GoogleCloudIcon`,
+(`GeminiIcon`, `AssemblyAiIcon`, `SarvamIcon`, `GroqIcon`, `NotionIcon`, `GoogleCloudIcon`,
 `GoogleCalendarIcon`). Notes/transcript Markdown rendering uses `react-markdown` +
 `remark-gfm`, shared between the in-app notes view and the PDF export document.
 
@@ -250,10 +249,31 @@ the renderer via `processing:progress` and, via the WebSocket bridge, to the ext
 independently retried through `processing:retry` if it fails (e.g. a transient network error on
 Stage 1 does not force re-transcription to be repeated once Stage 2 later fails).
 
-### 5.1 Stage 1: Transcription (`electron/services/transcription.js`, ~1080 lines)
+### 5.0 Provider layer (`electron/providers/`)
 
-The engine is selected by the `sttService` setting: `google` (default), `assemblyai`, or
-`sarvam`.
+Every speech-to-text and LLM engine is a self-describing module registered in
+`electron/providers/index.js` (two registries built by `providers/registry.js`). A module
+exports its metadata (`id`, `name`, `credentials[]`, curated `models[]`, `defaultModel`,
+`allowCustomModel`, `guide[]`, `capabilities`) plus `transcribe()` (STT) or `generate()` (LLM)
+and `test()`. Consequences:
+
+- The renderer gets serializable descriptors from `providers:list` and renders Settings, the
+  "key set" pills, model pickers and connection tests generically (`ProviderSection.jsx`); the
+  generic `providers:test` IPC replaces the old per-vendor `api:test-*` handlers.
+- Config keys (API keys, project IDs, ...) are derived from each module's `credentials`, so
+  `config.js` needs no edit for a new provider.
+- The controllers stay provider-agnostic: `services/transcription.js` (silence check, dispatch)
+  and `services/notes.js` (prompt/mode resolution, JSON parsing, primary -> fallback).
+- Shared helpers live in `providers/shared/` (`http.js`, `wav.js`, `log.js`). Provider modules
+  must not import `electron` at load time, so they are unit-testable.
+
+To add an engine see [`ADDING_PROVIDERS.md`](ADDING_PROVIDERS.md).
+
+### 5.1 Stage 1: Transcription (`electron/services/transcription.js` + `electron/providers/stt/*`)
+
+The engine is selected by the `sttService` setting: `google` (default), `assemblyai`, `sarvam`
+or `groq`. The model comes from `sttModels[<engine>]` (curated list per engine, validated on
+read). The controller checks that the recording is not silent and then calls the provider.
 
 **Google Cloud Speech-to-Text.** Two API versions are supported, both called from this file:
 
@@ -289,33 +309,49 @@ The engine is selected by the `sttService` setting: `google` (default), `assembl
   against `/speech-to-text/job/v1/...`: create job (model `saaras:v3`) -> upload file -> start
   job -> poll status -> download result. `saaras:v3` is used specifically because meetings
   commonly mix English and Malayalam, and this model supports that code-switching
-  automatically, without a language being pinned in advance. This is the only engine of the
-  three built for that use case; Google STT and AssemblyAI are configured with a single
+  automatically, without a language being pinned in advance. This is the only engine
+  built for that use case; Google STT and AssemblyAI are configured with a single
   `language` setting (default `ml-IN`).
 
-### 5.2 Stage 2: Notes generation (`electron/services/gemini.js`, ~430 lines)
+- **Groq** (`https://api.groq.com/openai/v1/audio/transcriptions`): Whisper models
+  `whisper-large-v3-turbo` (default) and `whisper-large-v3`, called with multipart `fetch`
+  and `verbose_json` segment timestamps. Groq caps uploads at 25 MB on the free tier, so the
+  WAV is split into 10 minute chunks (2 s overlap, merged with the shared `mergeTranscriptSegments`)
+  and 429 responses are retried honoring `retry-after`. It has no diarization, so every segment
+  is labelled `Speaker 1` (`capabilities.diarization: false`), and it is weaker than Sarvam on
+  English/Malayalam code-switching. The same `groqApiKey` is used by the Groq LLM provider.
 
-Uses the `@google/generative-ai` SDK against the Gemini API. Available models
-(`AVAILABLE_MODELS`): `gemini-3.8-flash` (default), `gemini-3.7-flash`,
-`gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`. A `DEPRECATED_GEMINI_MODELS` remap table in
-`electron/utils/config.js` transparently migrates settings that still reference retired model
-IDs (e.g. `gemini-1.5-flash`, `gemini-2.0-flash`, `gemini-3-flash-preview`) forward to a current
-model the first time config is read, so existing installs do not silently start failing after a
-model is sunset.
+### 5.2 Stage 2: Notes generation (`electron/services/notes.js` + `electron/providers/llm/*`)
 
-Two output modes, controlled by `noteOutputMode`:
+`generateNotes(transcript, config)` resolves the primary target from `llmProvider` and
+`llmModels[<provider>]`, builds the prompt for the output mode, calls `provider.generate()` and
+parses the result (`services/notes-normalize.js`: fence stripping, `normalizeNotes`, JSON
+fallback). Providers only return raw text.
 
-- **`json`** (default): Gemini is asked for structured JSON (executive summary, agenda, key
+- **Gemini** (`llm/gemini.js`, `@google/generative-ai`): `gemini-3.8-flash` (default),
+  `gemini-3.7-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`. Retired model IDs saved
+  by older versions are remapped through the provider's `_deprecatedModels` table.
+- **Groq** (`llm/groq.js`, OpenAI-compatible `chat/completions`): `llama-3.3-70b-versatile`
+  (default), `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `llama-3.1-8b-instant`. JSON mode sends
+  `response_format: {type: "json_object"}`. Free-tier tokens-per-minute limits can reject long
+  transcripts (HTTP 413/429); the error says so and the fallback below covers it.
+- Both allow a custom model ID.
+
+Two output modes, controlled by `noteOutputMode` (the model is asked for JSON or Markdown):
+
+- **`json`** (default): the model is asked for structured JSON (executive summary, agenda, key
   decisions, an action items array with owner/deadline/priority per item, participants, notable
   mentions, and per-topic sections with options discussed / open questions). This structured
   form is what is rendered as cards in the Summary tab and is what the `copyMarkdown.js`
   converter round-trips to/from Markdown for editing.
-- **`markdown`**: Gemini is asked to write executive-style Markdown directly (`DEFAULT_MD_SYSTEM_PROMPT`), and that Markdown is stored and rendered as-is, with no structured
+- **`markdown`**: the model is asked to write executive-style Markdown directly (`DEFAULT_MD_SYSTEM_PROMPT`), and that Markdown is stored and rendered as-is, with no structured
   round trip.
 
-A secondary model can be configured (`secondaryGeminiModel`) as an automatic fallback if the
-primary model call fails, surfaced to the renderer via the `gemini:fallback-used` event so the
-user knows a fallback model produced the notes they are reading.
+A fallback (`llmFallback: {provider, model}`) can be any provider and model, tried once if the
+primary call fails (or the primary has no key). It is surfaced to the renderer via the
+`llm:fallback-used` event so the user knows a fallback produced the notes they are reading.
+Notes record `_llmProvider`, `_llmModel`, `_sttService` and `_sttModel` (plus the legacy
+`_geminiModel`) for the note header.
 
 ### 5.3 Stage 3: Notion upload (`electron/services/notion.js`, ~730 lines, optional)
 
@@ -362,9 +398,10 @@ in-progress recording indefinitely.
 ### 6.2 Settings (`electron/utils/config.js`)
 
 Wraps `electron-store` (itself backed by a JSON file in `userData`) with a typed schema covering:
-API keys (`googleApiKey`, `geminiApiKey`, `assemblyAiApiKey`, `sarvamApiKey`, Notion, Google
-Calendar OAuth client), service selection (`sttService`, `selectedModel`/`geminiModel`,
-`secondaryGeminiModel`), audio device selection, diarization parameters
+API keys (`googleApiKey`, `geminiApiKey`, `assemblyAiApiKey`, `sarvamApiKey`, `groqApiKey`,
+Notion, Google Calendar OAuth client; the provider ones are generated from the provider
+registries), service and model selection (`sttService`, `sttModels`, `llmProvider`,
+`llmModels`, `llmFallback`), audio device selection, diarization parameters
 (`enableDiarization`, `minSpeakers`, `maxSpeakers`), output preferences (`noteOutputMode`,
 `language`, custom `geminiSystemPrompt`), UI preferences (`theme`, `autoLaunch`,
 `hideLogsInSidebar`, `pinNotesViewToggle`, `dashboardRecentLimit`), update behavior
@@ -373,8 +410,10 @@ port (`websocketPort`, default `39842`).
 
 Several settings keys have deliberate aliases kept in sync on write (`setConfig`), for backward
 compatibility with older releases' field names: `notionToken`/`notionApiKey`,
-`notionDatabaseId`/`notionPageId`, `geminiModel`/`selectedModel`,
-`systemPrompt`/`geminiSystemPrompt`, `promptOutputMode`/`noteOutputMode`.
+`notionDatabaseId`/`notionPageId`,
+`systemPrompt`/`geminiSystemPrompt`, `promptOutputMode`/`noteOutputMode`. The pre-4.0 keys `selectedModel`/`geminiModel` and
+`secondaryGeminiModel` are migrated once into `llmModels.gemini` and `llmFallback`
+(`utils/configMigration.js`).
 
 ---
 
@@ -496,12 +535,13 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 
 | Service | Used for | Auth | Called from |
 | --- | --- | --- | --- |
-| Google Cloud Speech-to-Text v1 | Transcription (fallback, no project ID configured) | API key | `electron/services/transcription.js` |
-| Google Cloud Speech-to-Text v2 | Transcription (`chirp_3` sync, or BatchRecognize for long audio) | Service account Bearer token (no API-key auth) | `electron/services/transcription.js` |
-| Google Cloud Storage | Staging WAV files for v2 BatchRecognize | Service account key file | `electron/services/transcription.js` (`@google-cloud/storage`) |
-| Google Gemini API | Meeting notes generation (Stage 2) | API key | `electron/services/gemini.js` (`@google/generative-ai`) |
-| AssemblyAI | Transcription (alternative engine) | API key | `electron/services/transcription.js` (`assemblyai` SDK + REST) |
-| Sarvam AI | Transcription, `saaras:v3` model for English/Malayalam code-switching | API key | `electron/services/transcription.js` (REST) |
+| Google Cloud Speech-to-Text v1 | Transcription (fallback, no project ID configured) | API key | `electron/providers/stt/google.js` |
+| Google Cloud Speech-to-Text v2 | Transcription (`chirp_3` sync, or BatchRecognize for long audio) | Service account Bearer token (no API-key auth) | `electron/providers/stt/google.js` |
+| Google Cloud Storage | Staging WAV files for v2 BatchRecognize | Service account key file | `electron/providers/stt/google.js` (`@google-cloud/storage`) |
+| Google Gemini API | Meeting notes generation (Stage 2) | API key | `electron/providers/llm/gemini.js` (`@google/generative-ai`) |
+| Groq | Notes generation (Llama, GPT-OSS) and Whisper transcription | API key (one key for both) | `electron/providers/llm/groq.js`, `electron/providers/stt/groq.js` (REST via `fetch`) |
+| AssemblyAI | Transcription (alternative engine) | API key | `electron/providers/stt/assemblyai.js` (`assemblyai` SDK + REST) |
+| Sarvam AI | Transcription, `saaras:v3` model for English/Malayalam code-switching | API key | `electron/providers/stt/sarvam.js` (REST) |
 | Notion API | Optional notes sync (Stage 3) | Internal integration token | `electron/services/notion.js` (`@notionhq/client`) |
 | Google Calendar API | Optional upcoming-meeting reminders | OAuth2 (user-supplied client ID/secret) | `electron/services/google-calendar.js` (`googleapis`) |
 | GitHub Releases | Auto-update distribution | none (public releases) | `electron-updater`, configured in `electron-builder.yml` |

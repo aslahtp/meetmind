@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MeetMind — Free open-source AI meeting notes app for Windows</title>
   <meta name="description"
-    content="MeetMind records Google Meet, Zoom and any call on Windows, transcribes it with AssemblyAI, Google STT or Sarvam AI, and writes meeting minutes with Gemini. Free, open source, no meeting bot, syncs to Notion.">
+    content="MeetMind records Google Meet, Zoom and any call on Windows, transcribes it with AssemblyAI, Google STT, Sarvam AI or Groq, and writes meeting minutes with Gemini or Groq. Free, open source, no meeting bot, syncs to Notion.">
   <meta name="keywords"
-    content="AI meeting notes, meeting transcription, meeting minutes, AI note taker, Windows, Google Meet, Zoom, Notion, Gemini, AssemblyAI, Sarvam AI, Malayalam, open source, Otter alternative">
+    content="AI meeting notes, meeting transcription, meeting minutes, AI note taker, Windows, Google Meet, Zoom, Notion, Gemini, Groq, AssemblyAI, Sarvam AI, Malayalam, open source, Otter alternative">
   <meta name="author" content="Aslah">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="color-scheme" content="light dark">
@@ -44,7 +44,7 @@
         "@type": "SoftwareApplication",
         "@id": "https://aslahtp.github.io/meetmind/#app",
         "name": "MeetMind",
-        "description": "Open-source AI meeting notes app for Windows. Records system audio and microphone, transcribes with AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI, generates meeting minutes with Google Gemini, and syncs them to Notion. A Chrome extension adds one-click recording to Google Meet and Zoom.",
+        "description": "Open-source AI meeting notes app for Windows. Records system audio and microphone, transcribes with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, generates meeting minutes with Google Gemini or Groq, and syncs them to Notion. A Chrome extension adds one-click recording to Google Meet and Zoom.",
         "url": "https://aslahtp.github.io/meetmind/",
         "applicationCategory": "BusinessApplication",
         "applicationSubCategory": "Meeting notes and transcription",
@@ -61,10 +61,11 @@
         "author": { "@type": "Person", "name": "Aslah", "url": "https://github.com/aslahtp" },
         "featureList": [
           "Records system audio and microphone together on Windows",
-          "Transcription with AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI",
+          "Transcription with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq",
           "Speaker diarization",
           "English and Malayalam code-switching with Sarvam AI saaras:v3",
-          "AI meeting minutes with Google Gemini: summary, decisions and action items",
+          "AI meeting minutes with Google Gemini or Groq: summary, decisions and action items",
+          "Selectable model for every speech-to-text and note-generation engine, with cross-provider fallback",
           "Chrome extension for Google Meet and Zoom",
           "Google Calendar reminders to start recording",
           "Notion sync",
@@ -87,7 +88,7 @@
         "@type": "FAQPage",
         "@id": "https://aslahtp.github.io/meetmind/#faq",
         "mainEntity": [
-          { "@type": "Question", "name": "Is MeetMind free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you connect, and both Gemini (free tier) and AssemblyAI (signup credit) can be used at no cost for moderate use." } },
+          { "@type": "Question", "name": "Is MeetMind free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you connect, and Gemini and Groq (free tiers) and AssemblyAI (signup credit) can be used at no cost for moderate use." } },
           { "@type": "Question", "name": "Does a bot join my meeting?", "acceptedAnswer": { "@type": "Answer", "text": "No. MeetMind records the audio playing on your own computer plus your microphone, so no extra participant appears in Google Meet, Zoom or Teams." } },
           { "@type": "Question", "name": "Which meeting apps does MeetMind work with?", "acceptedAnswer": { "@type": "Answer", "text": "Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and Webex. The Chrome extension adds a one-click record button for Google Meet and Zoom in the browser." } },
           { "@type": "Question", "name": "Does MeetMind work on macOS or Linux?", "acceptedAnswer": { "@type": "Answer", "text": "Not currently. MeetMind is built for Windows 10 and 11 because it relies on Windows audio loopback capture." } },
@@ -1367,8 +1368,8 @@
         <h1 class="display" data-reveal="lg" style="--stagger: 1;">AI meeting notes for Windows, without a meeting bot
         </h1>
         <p class="sub" data-reveal style="--stagger: 2;">MeetMind records Google Meet, Zoom or any call on your PC,
-          transcribes it with AssemblyAI, Google Speech-to-Text or Sarvam AI, and writes clear meeting minutes with
-          Gemini — then syncs them to Notion.</p>
+          transcribes it with AssemblyAI, Google Speech-to-Text, Sarvam AI or Groq, and writes clear meeting minutes with
+          Gemini or Groq — then syncs them to Notion.</p>
         <div class="actions" data-reveal style="--stagger: 3;">
           <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"
               aria-hidden="true">
@@ -1435,7 +1436,7 @@
           </div>
           <div class="stat" data-stat>
             <dt class="eyebrow">STT engines</dt>
-            <dd><span class="value" data-count="3">3</span><span class="note">AssemblyAI, Google, Sarvam AI</span></dd>
+            <dd><span class="value" data-count="4">4</span><span class="note">AssemblyAI, Google, Sarvam AI, Groq</span></dd>
           </div>
           <div class="stat" data-stat>
             <dt class="eyebrow">Your data</dt>
@@ -1465,14 +1466,14 @@
                 <use href="#i-file" />
               </svg></div>
             <h3>Transcribe</h3>
-            <p>AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI returns a transcript with speaker labels.</p>
+            <p>AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq returns a transcript (speaker-labelled, except Groq).</p>
           </li>
           <li class="card" data-reveal style="--stagger: 2;">
             <div class="step-head"><span class="step-num">3</span><svg class="icon" aria-hidden="true">
                 <use href="#i-gemini" />
               </svg></div>
             <h3>Summarize</h3>
-            <p>Gemini writes an executive summary, agenda, key decisions and an action items table with owners and
+            <p>Gemini or Groq writes an executive summary, agenda, key decisions and an action items table with owners and
               deadlines.</p>
           </li>
           <li class="card" data-reveal style="--stagger: 3;">
@@ -1505,9 +1506,9 @@
                 <use href="#i-file" />
               </svg></div>
             <h3>Your choice of speech-to-text</h3>
-            <p>AssemblyAI, Google Cloud Speech-to-Text v1/v2 or Sarvam AI, all with speaker diarization.</p>
+            <p>AssemblyAI, Google Cloud Speech-to-Text v1/v2, Sarvam AI or Groq Whisper, each with a model picker. Speaker diarization on all but Groq.</p>
             <div class="chips"><span class="chip">AssemblyAI</span><span class="chip">Google STT</span><span
-                class="chip">Sarvam AI</span></div>
+                class="chip">Sarvam AI</span><span class="chip">Groq</span></div>
           </div>
           <div class="card" data-reveal style="--stagger: 2;">
             <div class="tile" aria-hidden="true"><svg class="icon">
@@ -1522,8 +1523,8 @@
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-gemini" />
               </svg></div>
-            <h3>AI minutes with Gemini</h3>
-            <p>Executive-style Markdown or structured JSON notes, an editable prompt, and an automatic fallback model.
+            <h3>AI minutes with Gemini or Groq</h3>
+            <p>Executive-style Markdown or structured JSON notes, your choice of model, an editable prompt, and an automatic fallback to any other provider.
             </p>
           </div>
           <div class="card" data-reveal style="--stagger: 4;">
@@ -1572,10 +1573,10 @@
           </li>
           <li data-reveal style="--stagger: 1; --flow-i: 1;"><span class="eyebrow">Audio</span><strong>Speech-to-text
               you choose</strong>
-            <p>AssemblyAI, Google Cloud STT or Sarvam AI.</p>
+            <p>AssemblyAI, Google Cloud STT, Sarvam AI or Groq.</p>
           </li>
-          <li data-reveal style="--stagger: 2; --flow-i: 2;"><span class="eyebrow">Transcript</span><strong>Google
-              Gemini</strong>
+          <li data-reveal style="--stagger: 2; --flow-i: 2;"><span class="eyebrow">Transcript</span><strong>Gemini
+              or Groq</strong>
             <p>Turns the transcript into minutes and action items.</p>
           </li>
           <li data-reveal style="--stagger: 3; --flow-i: 3;"><span
@@ -1661,7 +1662,7 @@
               </tr>
               <tr style="--ri:3">
                 <th scope="row">Transcription</th>
-                <td class="us">AssemblyAI, Google STT or Sarvam AI — your choice</td>
+                <td class="us">AssemblyAI, Google STT, Sarvam AI or Groq — your choice</td>
                 <td>Vendor's own engine</td>
               </tr>
               <tr style="--ri:4">
@@ -1693,7 +1694,7 @@
             <div class="answer">
               <div>
                 <p>Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you
-                  connect, and both Gemini (free tier) and AssemblyAI (signup credit) can be used at no cost for
+                  connect, and Gemini and Groq (free tiers) and AssemblyAI (signup credit) can be used at no cost for
                   moderate use.</p>
               </div>
             </div>
@@ -1740,7 +1741,7 @@
               <div>
                 <p>Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or
                   account: audio is sent only to the speech-to-text provider you choose, and the transcript only to
-                  Gemini, using your own API keys.</p>
+                  the note-generation provider you choose (Gemini or Groq), using your own API keys.</p>
               </div>
             </div>
           </details>
@@ -1792,7 +1793,7 @@
             <use href="#i-mic" />
           </svg></div>
         <h2 class="display" id="cta" data-reveal="lg" style="--stagger: 1;">Ready for your next meeting?</h2>
-        <p class="sub" data-reveal style="--stagger: 2;">Install MeetMind, add a Gemini key and a speech-to-text key,
+        <p class="sub" data-reveal style="--stagger: 2;">Install MeetMind, add a Gemini or Groq key and a speech-to-text key,
           and your next call becomes searchable minutes.</p>
         <div class="actions" data-reveal style="--stagger: 3;">
           <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"

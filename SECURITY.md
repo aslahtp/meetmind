@@ -16,4 +16,4 @@ You should get an acknowledgement within a few days. Once a fix is released, the
 
 ## Scope
 
-MeetMind stores API keys and meeting data locally and exposes a WebSocket server on `127.0.0.1` (ports 39842–39852) that only accepts `chrome-extension://` origins. Issues in these areas, in the Chrome extension, or in how audio and transcripts are sent to third-party providers are in scope. Vulnerabilities in the third-party services themselves (AssemblyAI, Google Cloud, Sarvam AI, Gemini, Notion) should be reported to those vendors.
+MeetMind stores API keys and meeting data locally and exposes a WebSocket server on `127.0.0.1` (ports 39842–39852) that only accepts `chrome-extension://` origins. Issues in these areas, in the Chrome extension, or in how audio and transcripts are sent to third-party providers are in scope. Vulnerabilities in the third-party services themselves (AssemblyAI, Google Cloud, Sarvam AI, Groq, Gemini, Notion) should be reported to those vendors.

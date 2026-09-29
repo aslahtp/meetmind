@@ -18,6 +18,19 @@ For every change beyond a minor fix (typo, comment, formatting), update both fil
 
 Skip this process only for changes that touch no functionality: comments, formatting, whitespace, or internal documentation.
 
+## Documentation and References
+
+Whenever a change alters user-visible behavior, supported providers/services, settings, IPC channels, config keys, architecture or commands, update every doc that mentions it in the same commit/PR, not just the changelog. Search the repo for the old name or behavior (e.g. `rg -i "sarvam|assemblyai"`) to find stale references. Check these places:
+
+- `README.md` (badges, intro, features, setup steps, FAQ) and `llms.txt`.
+- `site/index.html` (meta tags, JSON-LD, hero, feature cards, comparison table, FAQ, CTA).
+- `docs/ARCHITECTURE.md` (pipeline, IPC table, config, external services, packages) and other files in `docs/`, e.g. `docs/ADDING_PROVIDERS.md`.
+- This file (`AGENTS.md`) when the architecture, commands or conventions change.
+- `CITATION.cff`, `SECURITY.md`, `CONTRIBUTING.md`, `.env.example`, `.github/ISSUE_TEMPLATE/`, `.github/release_template.md`.
+- In-app text: Settings copy, key guides, tooltips.
+
+Keep wording consistent across all of them, and do not leave references to removed files, channels or keys.
+
 ## Codebase Architecture
 
 Three artifacts build from this one repo: the Electron desktop app, its React renderer, and a Chrome MV3 extension (`extension/`) that bridges Google Meet/Zoom to the desktop app.
