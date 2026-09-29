@@ -6,6 +6,12 @@ updated: 2026-09-29
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [3.9.0] - 2026-09-29
+
+### Added
+
+- The Audio tab player shows the recording's waveform: click or drag it to seek, hover to preview a timestamp, or use the arrow, Page Up/Down, Home and End keys. Waveforms are decoded with FFmpeg and cached per recording, and you can switch back to the plain seek bar under Settings → General → Audio waveform.
+
 ## [3.8.1] - 2026-09-29
 
 ### Changed

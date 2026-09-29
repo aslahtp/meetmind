@@ -572,6 +572,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                 sessionId={session.id}
                 title={title}
                 durationLabel={durationLabel}
+                showWaveform={config?.showAudioWaveform !== false}
               />
             </div>
           )}
