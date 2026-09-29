@@ -22,6 +22,10 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 - Existing Gemini model and fallback settings migrate automatically to the new per-provider settings.
 - The fallback event is now `llm:fallback-used`, and provider connection tests go through `providers.test()`.
 
+### Fixed
+
+- A failed transcription (bad key, API error) no longer shows "No speech detected"; the meeting now shows the real error, remembered across restarts, with a Retry button.
+
 ### Removed
 
 - The per-provider `api.test*` and `models.list` preload methods, replaced by `providers.list()` and `providers.test()`.

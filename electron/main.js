@@ -473,7 +473,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
   } catch (err) {
     logger.error('Failed to start recording', { error: err.message });
     captureMode = 'none';
-    db.updateSession(currentSessionId, { status: 'error' });
+    db.updateSession(currentSessionId, { status: 'error', last_error: err.message });
     sendToRenderer('recording:error', { error: err.message });
     return { success: false, error: err.message };
   }
@@ -570,6 +570,7 @@ async function handleStopRecording() {
     if (currentSessionId) {
       db.updateSession(currentSessionId, {
         status: 'error',
+        last_error: err.message,
         ended_at: new Date().toISOString(),
       });
     }
@@ -652,6 +653,7 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
       notes: JSON.stringify(notes),
       title: notes.meeting_title || notes.title || 'Untitled Meeting',
       status: 'complete',
+      last_error: null,
     });
     sendProgress('complete', 85);
 
@@ -670,7 +672,7 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     logger.info('Processing pipeline complete', { sessionId, notionUrl });
   } catch (err) {
     logger.error('Processing pipeline error', { sessionId, error: err.message });
-    db.updateSession(sessionId, { status: 'error' });
+    db.updateSession(sessionId, { status: 'error', last_error: err.message });
     sendToRenderer('processing:error', { sessionId, error: err.message });
     broadcastToExtension({ type: 'PROCESSING_ERROR', error: err.message });
   }
@@ -1114,7 +1116,7 @@ function registerIpcHandlers() {
         logger.info('Paste-transcript pipeline complete', { sessionId });
       } catch (err) {
         logger.error('Paste-transcript pipeline error', { sessionId, error: err.message });
-        db.updateSession(sessionId, { status: 'error' });
+        db.updateSession(sessionId, { status: 'error', last_error: err.message });
         sendToRenderer('processing:error', { sessionId, error: err.message });
         broadcastToExtension({ type: 'PROCESSING_ERROR', error: err.message });
       }

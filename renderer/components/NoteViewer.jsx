@@ -58,7 +58,7 @@ function ProcessingCard({ stage, percent, includeNotion, onRestart }) {
 
 // ── Summary tab ──────────────────────────────────────────────────────────────
 
-function SummaryTab({ notes, title, noSpeech, isError, busy, onGenerate, onRetry }) {
+function SummaryTab({ notes, title, noSpeech, transcriptionFailed, failureMessage, isError, busy, onGenerate, onRetry }) {
   if (notes) {
     return notes._rawMarkdown
       ? <MarkdownNoteView markdown={notes._rawMarkdown} omitTitle={title} />
@@ -82,6 +82,22 @@ function SummaryTab({ notes, title, noSpeech, isError, busy, onGenerate, onRetry
     );
   }
 
+  if (transcriptionFailed) {
+    return (
+      <EmptyState
+        compact
+        icon={<MicOff size={24} strokeWidth={1.75} />}
+        title="Transcription failed"
+        message={failureMessage || 'The recording was saved, but it could not be transcribed. Check your speech-to-text settings and retry.'}
+        action={
+          <button type="button" onClick={onRetry} className="btn-sunshine">
+            Retry processing
+          </button>
+        }
+      />
+    );
+  }
+
   return (
     <EmptyState
       compact
@@ -89,7 +105,7 @@ function SummaryTab({ notes, title, noSpeech, isError, busy, onGenerate, onRetry
       title={isError ? 'Processing failed' : 'Notes not ready yet'}
       message={
         isError
-          ? 'Something went wrong while generating notes for this meeting.'
+          ? (failureMessage || 'Something went wrong while generating notes for this meeting.')
           : 'Generate an AI summary, action items and key topics from the transcript.'
       }
       action={
@@ -217,8 +233,12 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
 
   const durationLabel = session.duration_seconds > 0 ? formatDurationSeconds(session.duration_seconds) : null;
   const isError = session.status === 'error';
-  const noSpeech = isError && !normalizedTranscript.length;
   const processingError = session._processingError || null;
+  // Only claim "no speech" when the failure actually said so; other failures (bad key, API error)
+  // must show their real message even though there is no transcript.
+  const failureMessage = processingError || session.last_error || '';
+  const noSpeech = isError && !normalizedTranscript.length && /no speech detected|completely silent/i.test(failureMessage);
+  const transcriptionFailed = isError && !normalizedTranscript.length && !noSpeech;
   const notionUrl = uploadResult || session.notion_page_url;
 
   // Pipeline state: live progress from the app when it's for this session,
@@ -533,6 +553,8 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                   notes={notes}
                   title={title}
                   noSpeech={noSpeech}
+                  transcriptionFailed={transcriptionFailed}
+                  failureMessage={failureMessage}
                   isError={isError}
                   busy={busy}
                   onGenerate={handleGenerate}
