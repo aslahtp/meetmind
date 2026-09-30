@@ -20,6 +20,44 @@ const db = require('./db/sessions');
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// ── Auto-launch helpers ──────────────────────────────────────────────────────
+// On Windows + NSIS, Electron writes to HKCU\…\Run. The registry key name is
+// derived from `name` (defaults to `app.name`, which is "Electron" in dev and
+// "meetmind" in production). Passing an explicit `name` keeps the key stable
+// across dev / prod.  We also skip the call entirely in dev mode so `pnpm run
+// dev` never writes a broken startup entry pointing at the dev electron binary.
+
+const AUTO_LAUNCH_NAME = 'MeetMind';
+
+function applyAutoLaunch(enabled) {
+  if (isDev) {
+    logger.info('Skipping setLoginItemSettings in dev mode', { enabled });
+    return;
+  }
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+      name: AUTO_LAUNCH_NAME,
+    });
+    logger.info('Auto-launch updated', { enabled });
+  } catch (err) {
+    logger.error('Failed to update auto-launch', err);
+  }
+}
+
+function getAutoLaunchStatus() {
+  if (isDev) {
+    return { openAtLogin: false, isDev: true };
+  }
+  try {
+    const settings = app.getLoginItemSettings({ name: AUTO_LAUNCH_NAME });
+    return { openAtLogin: settings.openAtLogin };
+  } catch (err) {
+    logger.error('Failed to read auto-launch status', err);
+    return { openAtLogin: false, error: err.message };
+  }
+}
+
 // Uploads a session's notes to Notion. If the session already has a page (re-sync or
 // regenerated notes), the new page is created first and the old one is then moved to Notion's
 // trash, so each meeting keeps a single page and a failed upload never loses the old one.
@@ -718,10 +756,12 @@ function registerIpcHandlers() {
 
   ipcMain.handle('config:get', () => getConfig());
 
+  ipcMain.handle('config:autoLaunchStatus', () => getAutoLaunchStatus());
+
   ipcMain.handle('config:set', (_e, key, value) => {
     setConfig(key, value);
     if (key === 'autoLaunch') {
-      app.setLoginItemSettings({ openAtLogin: value });
+      applyAutoLaunch(value);
     }
     return true;
   });
@@ -729,7 +769,7 @@ function registerIpcHandlers() {
   ipcMain.handle('config:set-multiple', (_e, updates) => {
     setMultipleConfig(updates);
     if ('autoLaunch' in updates) {
-      app.setLoginItemSettings({ openAtLogin: updates.autoLaunch });
+      applyAutoLaunch(updates.autoLaunch);
     }
     return true;
   });
@@ -1627,7 +1667,7 @@ app.whenReady().then(async () => {
     if (url.startsWith('meetmind://')) focusMainWindow();
   });
 
-  app.setLoginItemSettings({ openAtLogin: config.autoLaunch });
+  applyAutoLaunch(config.autoLaunch);
 
   // Start calendar event poller if connected
   startCalendarPoller(config);

@@ -127,6 +127,17 @@ export default function Settings({ onSave }) {
       if (!providers) return; // descriptors decide which credential fields exist
       const cfg = await window.meetmind.config.get();
       if (cfg) {
+        // Prefer the OS-level startup state over the stored config so the
+        // toggle reflects reality even if the user disabled startup from
+        // Task Manager or the registry entry was removed.
+        if (window.meetmind.config.autoLaunchStatus) {
+          try {
+            const status = await window.meetmind.config.autoLaunchStatus();
+            if (!status.isDev) {
+              cfg.autoLaunch = status.openAtLogin;
+            }
+          } catch { /* fall back to stored config */ }
+        }
         const loadedForm = formFromConfig(cfg, providers);
         setForm(loadedForm);
         setInitialForm(loadedForm);

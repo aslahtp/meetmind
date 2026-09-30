@@ -80,6 +80,7 @@ contextBridge.exposeInMainWorld('meetmind', {
     get: () => ipcRenderer.invoke('config:get'),
     set: (key, value) => ipcRenderer.invoke('config:set', key, value),
     setMultiple: (updates) => ipcRenderer.invoke('config:set-multiple', updates),
+    autoLaunchStatus: () => ipcRenderer.invoke('config:autoLaunchStatus'),
   },
 
   // Recording

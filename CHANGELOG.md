@@ -1,10 +1,18 @@
 ---
 tags: [meta, changelog]
-updated: 2026-09-29
+updated: 2026-09-30
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.0.1] - 2026-09-30
+
+### Fixed
+
+- Launch-at-startup no longer writes a broken registry entry when toggled from `pnpm run dev`; the setting is now skipped entirely in dev mode.
+- The registry key name is now always `MeetMind` (via an explicit `name` option) instead of varying between `Electron` (dev) and `meetmind` (production), which prevented the toggle from removing the entry it created.
+- The "Launch on startup" toggle in Settings now reads back the actual Windows registry state on load, so it reflects the truth even if startup was disabled from Task Manager.
 
 ## [4.0.0] - 2026-09-29
 
