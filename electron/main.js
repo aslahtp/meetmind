@@ -404,6 +404,10 @@ let rendererWebmPath = null;    // Path to the in-progress .webm file
 let rendererChunkCount = 0;     // Number of chunks flushed to disk
 let rendererBytesWritten = 0;   // Total bytes flushed to disk
 
+// Sessions deleted while the processing pipeline is still in flight. The
+// pipeline checks this set before each expensive stage and aborts early.
+const cancelledSessions = new Set();
+
 // ── Renderer capture IPC helpers ─────────────────────────────────────────────
 
 function requestRendererCaptureStart() {
@@ -634,12 +638,23 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     broadcastToExtension({ type: 'PROCESSING_PROGRESS', stage, percent });
   };
 
+  // Abort guard — called before each expensive stage so a session deleted
+  // mid-pipeline doesn't burn API calls on transcription, LLM, or Notion.
+  function abortIfCancelled() {
+    if (cancelledSessions.has(sessionId) || !db.getSession(sessionId)) {
+      cancelledSessions.delete(sessionId);
+      throw Object.assign(new Error('Session deleted while processing'), { _cancelled: true });
+    }
+  }
+
   // Start on the next tick so an IPC handler's reply reaches the renderer before any progress or
   // error event. Otherwise a run that fails at once (e.g. a missing API key) sends
   // processing:error before the caller starts tracking it, and the UI stays stuck "processing".
   await new Promise((resolve) => setImmediate(resolve));
 
   try {
+    abortIfCancelled();
+
     const config = getConfig();
     const session = db.getSession(sessionId);
     let transcript = null;
@@ -677,6 +692,7 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
         );
       }
 
+      abortIfCancelled();
       db.updateSession(sessionId, { transcript: JSON.stringify(transcript), status: 'generating' });
     } else {
       db.updateSession(sessionId, { status: 'generating' });
@@ -684,8 +700,12 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
 
     sendProgress('generating', 60);
 
+    abortIfCancelled();
+
     // Stage 2: LLM notes (60–85%)
     const notes = await generateAndStampNotes(sessionId, transcript, config, sttInfo);
+
+    abortIfCancelled();
 
     db.updateSession(sessionId, {
       notes: JSON.stringify(notes),
@@ -698,6 +718,7 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     // Stage 3: Notion upload (85–100%) — optional, only if configured
     let notionUrl = null;
     if (config.notionToken && config.notionPageId) {
+      abortIfCancelled();
       sendProgress('uploading', 85);
       db.updateSession(sessionId, { status: 'uploading' });
       notionUrl = await uploadSessionToNotion(sessionId, notes, transcript, config);
@@ -709,6 +730,14 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     broadcastToExtension({ type: 'PROCESSING_COMPLETE', notionUrl, sessionId });
     logger.info('Processing pipeline complete', { sessionId, notionUrl });
   } catch (err) {
+    // If the session was deleted, silently drop the pipeline — no error toast,
+    // no status update (the row is already gone).
+    if (err._cancelled || cancelledSessions.has(sessionId) || !db.getSession(sessionId)) {
+      cancelledSessions.delete(sessionId);
+      logger.info('Processing pipeline cancelled (session deleted)', { sessionId });
+      sendToRenderer('processing:cancelled', { sessionId });
+      return;
+    }
     logger.error('Processing pipeline error', { sessionId, error: err.message });
     db.updateSession(sessionId, { status: 'error', last_error: err.message });
     sendToRenderer('processing:error', { sessionId, error: err.message });
@@ -872,8 +901,24 @@ function registerIpcHandlers() {
   ipcMain.handle('session:get', (_e, id) => db.getSession(id));
 
   ipcMain.handle('session:delete', (_e, id) => {
+    // If the processing pipeline is in flight for this session, flag it for
+    // abort so it doesn't keep burning API calls after the row is gone.
+    cancelledSessions.add(id);
+    setTimeout(() => cancelledSessions.delete(id), 5 * 60 * 1000);
     db.deleteSession(id);
     deleteSessionWaveform(id);
+
+    // Clean up the audio file — it's no longer needed.
+    try {
+      const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+      for (const ext of ['.wav', '.webm']) {
+        const fp = path.join(recordingsDir, `${id}${ext}`);
+        if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      }
+    } catch (err) {
+      logger.warn('Failed to clean up audio files for deleted session', { sessionId: id, error: err.message });
+    }
+
     return true;
   });
 

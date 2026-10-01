@@ -1,10 +1,17 @@
 ---
 tags: [meta, changelog]
-updated: 2026-09-30
+updated: 2026-10-01
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.1.1] - 2026-10-01
+
+### Fixed
+
+- Deleting a session while the processing pipeline is in flight (transcribing, generating notes, or uploading to Notion) now aborts the pipeline immediately instead of continuing to burn API calls on a deleted session. The processing pill in the UI clears correctly.
+- Session deletion now also cleans up the `.wav` / `.webm` audio files from disk.
 
 ## [4.1.0] - 2026-10-01
 

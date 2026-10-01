@@ -155,7 +155,7 @@ grouped by feature:
 Event subscriptions go through a single `on(channel, callback)` / `off(...)` pair with an
 explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
 `recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
-`processing:error`, `ws:extension-connected`, `ws:recording-requested`,
+`processing:error`, `processing:cancelled`, `ws:extension-connected`, `ws:recording-requested`,
 `sessions:durations-updated`, `updater:status`, `calendar:meeting-starting`,
 `llm:fallback-used`, `log:entry`) so the renderer cannot subscribe to an arbitrary IPC
 channel.

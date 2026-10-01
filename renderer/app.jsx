@@ -453,6 +453,13 @@ export default function App() {
       }
     });
 
+    // Pipeline was cancelled because the session was deleted mid-flight.
+    const unsubCancelled = window.meetmind.on('processing:cancelled', () => {
+      setProcessing(null);
+      processingSessionRef.current = null;
+      refreshSessions();
+    });
+
     const unsubDurations = window.meetmind.on('sessions:durations-updated', async () => {
       const updated = await window.meetmind.sessions.list();
       setSessions(updated);
@@ -488,6 +495,7 @@ export default function App() {
       unsubProgress?.();
       unsubComplete?.();
       unsubError?.();
+      unsubCancelled?.();
       unsubDurations?.();
       unsubUpdater?.();
       unsubFallback?.();

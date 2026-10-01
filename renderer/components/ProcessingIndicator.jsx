@@ -68,9 +68,15 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }) {
     };
     const offComplete = window.meetmind.on('processing:complete', () => finish('done', HOLD_DONE_MS));
     const offError = window.meetmind.on('processing:error', () => finish('error', HOLD_ERROR_MS));
+    const offCancelled = window.meetmind.on('processing:cancelled', () => {
+      clearTimeout(hideTimer.current);
+      outcomeRef.current = null;
+      setOpen(false);
+    });
     return () => {
       offComplete?.();
       offError?.();
+      offCancelled?.();
       clearTimeout(hideTimer.current);
     };
   }, []);
