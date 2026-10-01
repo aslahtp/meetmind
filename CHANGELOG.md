@@ -6,6 +6,13 @@ updated: 2026-09-30
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.1.0] - 2026-10-01
+
+### Added
+
+- Live audio level meters on the recording bar: separate mic and system-audio meters with animated bars driven by Web Audio AnalyserNodes at ~30 fps.
+- Silence warning banner appears after 2 minutes of consecutive system-audio silence, alerting the user that loopback capture may have failed while the meeting is still in progress.
+
 ## [4.0.1] - 2026-09-30
 
 ### Fixed

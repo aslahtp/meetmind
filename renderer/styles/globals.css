@@ -291,6 +291,40 @@ h1, h2, h3, h4 {
 }
 .wave-bar { animation: waveformBar 0.8s ease-in-out infinite alternate; }
 
+/* ── Recording bar level meters ───────────────────────────────────────────── */
+.level-meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 16px;
+}
+.level-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+}
+.level-bar {
+  width: 3px;
+  min-height: 4px;
+  border-radius: 9999px;
+  background-color: rgb(var(--color-ink));
+  /* Spring-like transition: bars bounce up quickly, settle down gently */
+  transition: height 80ms cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 120ms ease-out;
+  will-change: height, opacity;
+}
+
+/* Silence warning */
+.silence-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 24px 8px;
+  border-top: 1px solid rgb(var(--color-signal) / 0.2);
+  background: rgb(var(--color-signal) / 0.06);
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin 0.8s linear infinite; }
 

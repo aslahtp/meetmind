@@ -131,6 +131,7 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [recordingStartedAt, setRecordingStartedAt] = useState(null);
+  const [audioLevels, setAudioLevels] = useState({ mic: 0, system: 0 });
   const [processing, setProcessing] = useState(null);      // { sessionId, stage, percent } | null
   const [updaterState, setUpdaterState] = useState(null);
   const [showUpdateBanner, setShowUpdateBanner] = useState(true);
@@ -192,12 +193,60 @@ export default function App() {
   }, []);
 
   // ── Renderer-based audio capture (system loopback + mic via Web Audio) ─────
+  // The AnalyserNodes tap each channel independently and a rAF loop pushes RMS
+  // levels into `audioLevels` state for the RecordingBar's live meters.
   useEffect(() => {
     if (!window.meetmind?.capture) return;
 
     let mediaRecorder = null;
     let streams = [];
     let ctx = null;
+    let meterRafId = null;
+    let sysAnalyser = null;
+    let micAnalyser = null;
+
+    // ── Level-metering loop ──────────────────────────────────────────────────
+    function startMeterLoop() {
+      const sysData = sysAnalyser ? new Float32Array(sysAnalyser.fftSize) : null;
+      const micData = micAnalyser ? new Float32Array(micAnalyser.fftSize) : null;
+
+      function rms(buf) {
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        return Math.sqrt(sum / buf.length);
+      }
+
+      // Throttle to ~30 fps to avoid hammering React state.
+      let last = 0;
+      function tick(ts) {
+        meterRafId = requestAnimationFrame(tick);
+        if (ts - last < 33) return;
+        last = ts;
+
+        let sysLevel = 0;
+        let micLevel = 0;
+        if (sysAnalyser && sysData) {
+          sysAnalyser.getFloatTimeDomainData(sysData);
+          sysLevel = Math.min(1, rms(sysData) * 4); // ×4 gain for visual clarity
+        }
+        if (micAnalyser && micData) {
+          micAnalyser.getFloatTimeDomainData(micData);
+          micLevel = Math.min(1, rms(micData) * 4);
+        }
+        setAudioLevels({ mic: micLevel, system: sysLevel });
+      }
+      meterRafId = requestAnimationFrame(tick);
+    }
+
+    function stopMeterLoop() {
+      if (meterRafId != null) {
+        cancelAnimationFrame(meterRafId);
+        meterRafId = null;
+      }
+      sysAnalyser = null;
+      micAnalyser = null;
+      setAudioLevels({ mic: 0, system: 0 });
+    }
 
     window.meetmind.capture.onStart(async () => {
       try {
@@ -216,8 +265,24 @@ export default function App() {
 
         ctx = new AudioContext();
         const dest = ctx.createMediaStreamDestination();
-        ctx.createMediaStreamSource(sysStream).connect(dest);
-        if (micStream) ctx.createMediaStreamSource(micStream).connect(dest);
+
+        // System audio — source → analyser → dest
+        const sysSource = ctx.createMediaStreamSource(sysStream);
+        sysAnalyser = ctx.createAnalyser();
+        sysAnalyser.fftSize = 256;
+        sysSource.connect(sysAnalyser);
+        sysSource.connect(dest);
+
+        // Microphone — source → analyser → dest
+        if (micStream) {
+          const micSource = ctx.createMediaStreamSource(micStream);
+          micAnalyser = ctx.createAnalyser();
+          micAnalyser.fftSize = 256;
+          micSource.connect(micAnalyser);
+          micSource.connect(dest);
+        }
+
+        startMeterLoop();
 
         const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
           ? 'audio/webm;codecs=opus'
@@ -240,11 +305,13 @@ export default function App() {
         window.meetmind.capture.sendStarted();
       } catch (err) {
         console.error('Renderer audio capture failed:', err);
+        stopMeterLoop();
         window.meetmind.capture.sendFailed(err.message);
       }
     });
 
     window.meetmind.capture.onStop(async () => {
+      stopMeterLoop();
       try {
         if (!mediaRecorder || mediaRecorder.state === 'inactive') {
           window.meetmind.capture.sendAudioData(new ArrayBuffer(0));
@@ -530,7 +597,7 @@ export default function App() {
         <TopBar />
 
         {isRecording && (
-          <RecordingBar startedAt={recordingStartedAt} onStop={stopRecording} />
+          <RecordingBar startedAt={recordingStartedAt} onStop={stopRecording} audioLevels={audioLevels} />
         )}
 
         <main className="flex-1 min-h-0 overflow-hidden">
