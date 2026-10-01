@@ -21,107 +21,9 @@ import {
 import { getSessionDuration, formatMinutes } from '../lib/format.js';
 import { useDelayedFlag, useSessionActions, SKELETON_DELAY_MS } from '../lib/hooks.js';
 import { useScrollMemory } from '../lib/scrollMemory.js';
+import { greeting } from '../lib/greeting.js';
 
-/** Pick one random element from an array. */
-function pick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-/**
- * Creative time-and-context-aware greeting, refreshed once per page load.
- * Pools are intentionally large so the dashboard feels alive across visits.
- */
-function greeting() {
-  const now = new Date();
-  const hour = now.getHours();
-  const day = now.getDay(); // 0 = Sun, 6 = Sat
-
-  // ── Time-of-day pools ──────────────────────────────────────────────
-  const earlyMorning = [
-    `You're up early — the best ideas happen before the world wakes up`,
-    'Dawn patrol. Coffee first, meetings later',
-    'The early bird gets the action items',
-    `Up before the sun? That's dedication`,
-    'Early start today — your future self will thank you',
-  ];
-
-  const morning = [
-    'Good morning — ready to make today count?',
-    'Morning! Fresh day, fresh notes',
-    'Top of the morning to you',
-    `Good morning — what's on the agenda today?`,
-    'Rise and shine — your meetings await',
-    `Good morning! Let's capture some great ideas today`,
-    `Morning — the calendar's filling up, let's stay sharp`,
-    'Hello! A new day of productive meetings ahead',
-  ];
-
-  const afternoon = [
-    'Good afternoon — keeping the momentum going',
-    `Afternoon check-in. How's the day shaping up?`,
-    `Good afternoon — you've got this`,
-    'Halfway through the day and still going strong',
-    'Good afternoon! Time to power through the rest',
-    'Post-lunch productivity mode: activated',
-    `Good afternoon — let's make the second half count`,
-    'Afternoon! Hope your meetings are going smoothly',
-  ];
-
-  const evening = [
-    'Good evening — winding down or ramping up?',
-    'Evening! Almost time to close the notebook',
-    'Good evening — wrapping up a productive day?',
-    `The day's meetings are behind you. Time to reflect`,
-    `Good evening — tomorrow's a fresh start`,
-    'Evening mode. Review your notes, plan tomorrow',
-    'Good evening! Great work getting through today',
-    'Settling in for the evening? Your notes are waiting',
-  ];
-
-  const lateNight = [
-    'Burning the midnight oil?',
-    `Late night session — don't forget to rest`,
-    `Still at it? That's commitment`,
-    'The quiet hours — perfect for reviewing notes',
-    'Night owl mode. The best ideas sneak in late',
-    'Working late? Your notes will be here in the morning',
-  ];
-
-  // ── Day-of-week bonus greetings ────────────────────────────────────
-  const mondayBonus = [
-    `Happy Monday — let's set the tone for the week`,
-    'Monday: new week, new meetings, new possibilities',
-    `Welcome back! Monday's full of fresh starts`,
-  ];
-
-  const fridayBonus = [
-    'Happy Friday — the finish line is in sight',
-    'Friday! One last push before the weekend',
-    `TGIF — let's wrap this week up strong`,
-  ];
-
-  const weekendBonus = [
-    'Working on the weekend? Respect',
-    `Weekend warrior mode — hope it's optional!`,
-    'Weekend hours — the office is all yours',
-  ];
-
-  // ── Build the candidate pool ───────────────────────────────────────
-  let pool;
-  if (hour < 6) pool = [...lateNight];
-  else if (hour < 9) pool = [...earlyMorning, ...morning];
-  else if (hour < 12) pool = [...morning];
-  else if (hour < 18) pool = [...afternoon];
-  else if (hour < 22) pool = [...evening];
-  else pool = [...lateNight];
-
-  // Mix in day-of-week specials (adds variety, not guaranteed to show).
-  if (day === 1) pool.push(...mondayBonus);
-  if (day === 5) pool.push(...fridayBonus);
-  if (day === 0 || day === 6) pool.push(...weekendBonus);
-
-  return pick(pool);
-}
+export { greeting };
 
 // One bordered strip with hairline-separated cells instead of four tall cards.
 function StatStrip({ stats }) {
@@ -145,11 +47,15 @@ function StatStrip({ stats }) {
 
 // Slim sticky bar shared by the loaded and loading states: greeting left, actions right, and
 // the meeting count centred in whatever space is left between them.
-function DashboardToolbar({ subtitle, actions }) {
+function DashboardToolbar({ subtitle, actions, greetingText }) {
+  const fallbackRef = useRef(null);
+  if (!fallbackRef.current) fallbackRef.current = greeting();
+  const text = greetingText || fallbackRef.current;
+
   return (
     <header className="flex-shrink-0 border-b border-ink bg-paper">
       <div className="w-full px-24 py-8 min-h-[56px] flex items-center gap-16">
-        <h1 className="flex-shrink-0 text-body-sm font-medium text-ink whitespace-nowrap">{greeting()}</h1>
+        <h1 className="flex-shrink-0 text-body-sm font-medium text-ink whitespace-nowrap">{text}</h1>
         <p className="flex-1 min-w-0 text-center text-caption text-graphite truncate">{subtitle}</p>
         {actions && <div className="flex-shrink-0 flex items-center gap-8">{actions}</div>}
       </div>
@@ -157,10 +63,10 @@ function DashboardToolbar({ subtitle, actions }) {
   );
 }
 
-function DashboardSkeleton() {
+function DashboardSkeleton({ greetingText }) {
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <DashboardToolbar />
+      <DashboardToolbar greetingText={greetingText} />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="mx-auto w-full max-w-[1200px] px-32 pt-24 pb-48" aria-busy="true" aria-label="Loading dashboard">
           <div className="grid grid-cols-2 md:grid-cols-4 rounded-card border border-ink mb-32">
@@ -236,6 +142,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   const [meetingToast, setMeetingToast] = useState(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [greetingText] = useState(() => greeting());
   const scrollRef = useScrollMemory('dashboard');
   const toastTimersRef = useRef([]);
 
@@ -306,7 +213,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   // While loading, render the skeleton only once it's been slow enough to warrant
   // one; before that show nothing, so a fast load goes straight to real content.
   if (sessionsLoading) {
-    return showSkeleton ? <DashboardSkeleton /> : <div className="h-full" />;
+    return showSkeleton ? <DashboardSkeleton greetingText={greetingText} /> : <div className="h-full" />;
   }
 
   const hasSessions = sessions.length > 0;
@@ -331,6 +238,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
     <>
       <div className="h-full flex flex-col overflow-hidden fade-in">
         <DashboardToolbar
+          greetingText={greetingText}
           subtitle={
             hasSessions
               ? `${sessions.length} meeting${sessions.length !== 1 ? 's' : ''} recorded`

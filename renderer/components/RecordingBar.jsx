@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, Square, Mic, Monitor, AlertTriangle, X } from 'lucide-react';
 import { formatClock } from '../lib/format.js';
+import { audioMeter } from '../lib/audioMeter.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -77,8 +78,15 @@ function SilenceWarning({ seconds, onDismiss }) {
 // Hairline band under the top bar while a recording is live. Elapsed time is
 // derived from the App-level start timestamp, so it survives remounts.
 // `audioLevels` is { mic: 0–1, system: 0–1 } updated ~30 fps from the capture
-// AnalyserNodes in app.jsx.
-export default function RecordingBar({ startedAt, onStop, audioLevels }) {
+// AnalyserNodes via audioMeter or passed directly as a prop.
+export default function RecordingBar({ startedAt, onStop, audioLevels: propAudioLevels }) {
+  const [internalLevels, setInternalLevels] = useState(() => audioMeter.getLevels());
+
+  useEffect(() => {
+    return audioMeter.subscribe(setInternalLevels);
+  }, []);
+
+  const audioLevels = propAudioLevels ?? internalLevels;
   const [now, setNow] = useState(() => Date.now());
   const [stopping, setStopping] = useState(false);
 

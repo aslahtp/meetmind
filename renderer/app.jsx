@@ -24,6 +24,7 @@ import { getSetupState } from './lib/providers.js';
 import { markScrollRestore, cancelScrollRestore } from './lib/scrollMemory.js';
 import LogsViewer from './components/LogsViewer.jsx';
 import RecordingBar from './components/RecordingBar.jsx';
+import { audioMeter } from './lib/audioMeter.js';
 import { IconButton, StatusDot, useConfirmDialog } from './components/ui/index.jsx';
 
 // ── Toast System ──────────────────────────────────────────────────────────────
@@ -131,7 +132,6 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [recordingStartedAt, setRecordingStartedAt] = useState(null);
-  const [audioLevels, setAudioLevels] = useState({ mic: 0, system: 0 });
   const [processing, setProcessing] = useState(null);      // { sessionId, stage, percent } | null
   const [updaterState, setUpdaterState] = useState(null);
   const [showUpdateBanner, setShowUpdateBanner] = useState(true);
@@ -233,7 +233,7 @@ export default function App() {
           micAnalyser.getFloatTimeDomainData(micData);
           micLevel = Math.min(1, rms(micData) * 4);
         }
-        setAudioLevels({ mic: micLevel, system: sysLevel });
+        audioMeter.emit({ mic: micLevel, system: sysLevel });
       }
       meterRafId = requestAnimationFrame(tick);
     }
@@ -245,7 +245,7 @@ export default function App() {
       }
       sysAnalyser = null;
       micAnalyser = null;
-      setAudioLevels({ mic: 0, system: 0 });
+      audioMeter.reset();
     }
 
     window.meetmind.capture.onStart(async () => {
@@ -605,7 +605,7 @@ export default function App() {
         <TopBar />
 
         {isRecording && (
-          <RecordingBar startedAt={recordingStartedAt} onStop={stopRecording} audioLevels={audioLevels} />
+          <RecordingBar startedAt={recordingStartedAt} onStop={stopRecording} />
         )}
 
         <main className="flex-1 min-h-0 overflow-hidden">
