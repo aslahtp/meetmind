@@ -186,7 +186,7 @@ Supporting pieces: `RecordingBar.jsx` (persistent recording control), `Processin
 template, `AudioPlayer.jsx` streaming from `meetmind-audio://`), `ui/` (Dialog, ConfirmDialog).
 
 State/plumbing: `lib/app-context.js`, `lib/hooks.js`, `lib/status.js`, `lib/format.js`,
-`lib/platform.js`, `lib/scrollMemory.js`.
+`lib/platform.js`, `lib/scrollMemory.js`, `lib/audioMeter.js`, `lib/greeting.js`.
 
 Styling: Tailwind CSS (`darkMode: 'class'`, with `<html class="dark">` toggled by preload/React
 based on the `theme` setting) driven by CSS custom properties in `renderer/styles/globals.css`

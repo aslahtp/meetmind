@@ -1,10 +1,17 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-01
+updated: 2026-10-02
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.1.2] - 2026-10-02
+
+### Fixed
+
+- Dashboard greeting is now memoized per visit, preventing it from rapidly cycling through random greetings during re-renders.
+- Audio level metering (~30 fps) is decoupled from root `App` state into an isolated pub/sub listener, eliminating full-app and dashboard re-renders while recording.
 
 ## [4.1.1] - 2026-10-01
 
