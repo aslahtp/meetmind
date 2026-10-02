@@ -113,14 +113,14 @@ importers:
         specifier: ^7.22.0
         version: 7.22.0(encoding@0.1.13)(supports-color@8.1.1)
       '@google/generative-ai':
-        specifier: ^0.21.0
-        version: 0.21.0
+        specifier: ^0.24.1
+        version: 0.24.1
       '@notionhq/client':
         specifier: ^2.3.0
         version: 2.3.0(encoding@0.1.13)
       assemblyai:
-        specifier: ^4.41.2
-        version: 4.41.2
+        specifier: ^4.41.5
+        version: 4.41.5
       electron-store:
         specifier: ^8.2.0
         version: 8.2.0
@@ -160,7 +160,7 @@ importers:
         version: 0.5.20(tailwindcss@3.4.19)
       '@vitejs/plugin-react':
         specifier: ^4.7.0
-        version: 4.7.0(supports-color@8.1.1)(vite@6.4.3(jiti@1.21.7))
+        version: 4.7.0(supports-color@8.1.1)(vite@6.4.3(@types/node@26.6.2)(jiti@1.21.7))
       autoprefixer:
         specifier: ^10.6.1
         version: 10.6.1(postcss@8.5.28)
@@ -205,16 +205,16 @@ importers:
         version: 18.3.1(react@18.3.1)
       sharp:
         specifier: ^0.35.4
-        version: 0.35.4
+        version: 0.35.4(@types/node@26.6.2)
       tailwindcss:
         specifier: ^3.4.19
         version: 3.4.19
       vite:
         specifier: ^6.4.3
-        version: 6.4.3(jiti@1.21.7)
+        version: 6.4.3(@types/node@26.6.2)(jiti@1.21.7)
       vitest:
         specifier: ^5.0.1
-        version: 5.0.1(vite@6.4.3(jiti@1.21.7))
+        version: 5.0.1(@types/node@26.6.2)(vite@6.4.3(@types/node@26.6.2)(jiti@1.21.7))
 
 packages:
 
@@ -555,8 +555,8 @@ packages:
     resolution: {integrity: sha512-W98gTQOAntEeEQ7/pZxSQXxfUO5CiQcXJRsxBpUa6UU25n8YN/VtogPBi0H+MAmUrn/6bY/sBhFansoWEsr2/g==}
     engines: {node: '>=18'}
 
-  '@google/generative-ai@0.21.0':
-    resolution: {integrity: sha512-7XhUbtnlkSEZK15kN3t+tzIMxsbKm/dSkKBFalj+20NvPKe1kBY7mR2P7vuijEn+f06z5+A8bVGKO0v39cr6Wg==}
+  '@google/generative-ai@0.24.1':
+    resolution: {integrity: sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q==}
     engines: {node: '>=18.0.0'}
 
   '@humanfs/core@0.19.2':
@@ -1236,8 +1236,8 @@ packages:
     resolution: {integrity: sha512-3duEwti880xqi4eAMN8AyR4a0ByT90zoYdLlevfrvU43vb0YZwZVfxOgxWrLXXXpyugL0hNZc9G6BiB5B3nUug==}
     engines: {node: '>=8'}
 
-  assemblyai@4.41.2:
-    resolution: {integrity: sha512-KAPPmZRY24YJbz0Eo0n5tO4guCVV5FqNZ/06ibFhE7RwAG3tNT0Wvdl5aQHY/oB7Pr9Mjq67h9okrCacTAJLSA==}
+  assemblyai@4.41.5:
+    resolution: {integrity: sha512-WmPvxdynKfwjlSooJTLbWYmOnyKPHBbL98Pi61DQhZA8Up4sfIpTvIl/1fPahGJZFAVFz8uNCNqHGtytyO/WAw==}
     engines: {node: '>=18'}
 
   assert-plus@1.0.0:
@@ -4366,7 +4366,7 @@ snapshots:
       - encoding
       - supports-color
 
-  '@google/generative-ai@0.21.0': {}
+  '@google/generative-ai@0.24.1': {}
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -4785,7 +4785,7 @@ snapshots:
 
   '@ungap/structured-clone@1.4.0': {}
 
-  '@vitejs/plugin-react@4.7.0(supports-color@8.1.1)(vite@6.4.3(jiti@1.21.7))':
+  '@vitejs/plugin-react@4.7.0(supports-color@8.1.1)(vite@6.4.3(@types/node@26.6.2)(jiti@1.21.7))':
     dependencies:
       '@babel/core': 7.29.7(supports-color@8.1.1)
       '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7(supports-color@8.1.1))
@@ -4793,18 +4793,18 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 6.4.3(jiti@1.21.7)
+      vite: 6.4.3(@types/node@26.6.2)(jiti@1.21.7)
     transitivePeerDependencies:
       - supports-color
 
-  '@vitest/mocker@5.0.1(vite@6.4.3(jiti@1.21.7))':
+  '@vitest/mocker@5.0.1(vite@6.4.3(@types/node@26.6.2)(jiti@1.21.7))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.1
       estree-walker: 3.0.3
       magic-string: 1.4.2
     optionalDependencies:
-      vite: 6.4.3(jiti@1.21.7)
+      vite: 6.4.3(@types/node@26.6.2)(jiti@1.21.7)
 
   '@vitest/spy@5.0.1': {}
 
@@ -5028,7 +5028,7 @@ snapshots:
 
   arrify@2.0.1: {}
 
-  assemblyai@4.41.2:
+  assemblyai@4.41.5:
     dependencies:
       ws: 8.21.3
     transitivePeerDependencies:
@@ -7840,7 +7840,7 @@ snapshots:
       es-errors: 1.3.0
       es-object-atoms: 1.1.2
 
-  sharp@0.35.4:
+  sharp@0.35.4(@types/node@26.6.2):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
@@ -7871,6 +7871,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.4
       '@img/sharp-win32-ia32': 0.35.4
       '@img/sharp-win32-x64': 0.35.4
+      '@types/node': 26.6.2
 
   shebang-command@2.0.0:
     dependencies:
@@ -8341,7 +8342,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite@6.4.3(jiti@1.21.7):
+  vite@6.4.3(@types/node@26.6.2)(jiti@1.21.7):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.7)
@@ -8350,13 +8351,14 @@ snapshots:
       rollup: 4.63.5
       tinyglobby: 0.2.17
     optionalDependencies:
+      '@types/node': 26.6.2
       fsevents: 2.3.3
       jiti: 1.21.7
 
-  vitest@5.0.1(vite@6.4.3(jiti@1.21.7)):
+  vitest@5.0.1(@types/node@26.6.2)(vite@6.4.3(@types/node@26.6.2)(jiti@1.21.7)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.1(vite@6.4.3(jiti@1.21.7))
+      '@vitest/mocker': 5.0.1(vite@6.4.3(@types/node@26.6.2)(jiti@1.21.7))
       chai: 6.2.2
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -8367,8 +8369,10 @@ snapshots:
       tinybench: 6.1.4
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
-      vite: 6.4.3(jiti@1.21.7)
+      vite: 6.4.3(@types/node@26.6.2)(jiti@1.21.7)
       why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 26.6.2
     transitivePeerDependencies:
       - msw
 

@@ -54,9 +54,9 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.22.0",
-    "@google/generative-ai": "^0.21.0",
+    "@google/generative-ai": "^0.24.1",
     "@notionhq/client": "^2.3.0",
-    "assemblyai": "^4.41.2",
+    "assemblyai": "^4.41.5",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.9",
     "fluent-ffmpeg": "^2.1.3",
