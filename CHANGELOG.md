@@ -1,10 +1,16 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-02
+updated: 2026-10-03
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.1.3] - 2026-10-03
+
+### Changed
+
+- Groq provider icon now uses the official brand mark (orange lightning bolt) instead of a generic SVG "G" path.
 
 ## [4.1.2] - 2026-10-02
 
