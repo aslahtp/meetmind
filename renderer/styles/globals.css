@@ -146,10 +146,13 @@ h1, h2, h3, h4 {
            disabled:cursor-not-allowed disabled:opacity-40;
   }
 
-  /* Sunshine Filled Button — the single primary action per view. */
+  /* Sunshine Filled Button — the single primary action per view. The yellow is the same in both
+     themes, so signal red inside it (e.g. the Record dot) keeps the light-theme value rather than
+     the lighter dark-theme coral, which is too weak on yellow. Keep in sync with :root. */
   .btn-sunshine {
     @apply btn bg-sunshine text-on-sunshine border-sunshine
            hover:bg-sunshine-deep hover:border-sunshine-deep;
+    --color-signal: 200 65 50;
   }
   /* Ink Button — derived from the Dark Filter Chip; a view's main action when yellow is spent. */
   .btn-ink {

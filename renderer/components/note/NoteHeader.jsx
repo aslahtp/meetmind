@@ -1,9 +1,12 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
+  ChevronDown,
+  ExternalLink,
   Copy,
   Check,
   FileDown,
+  Trash2,
   CloudUpload,
   Loader2,
   AlertTriangle,
@@ -81,6 +84,107 @@ function metaChips(session, notes, providers) {
   return chips;
 }
 
+const MENU_ITEM = 'flex w-full items-center gap-8 rounded-input px-16 py-8 text-left text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06] focus-visible:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
+
+// A single "Notion" button for a meeting that already has a page; it opens a small menu with
+// the two things you can do with that page: open it, or replace it with the current notes.
+function NotionMenu({ notionUrl, uploading, updateDisabled, updateTitle, onUpdate }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const items = () => [...(menuRef.current?.querySelectorAll('[role="menuitem"]:not(:disabled)') || [])];
+    items()[0]?.focus();
+    const onPointerDown = (e) => {
+      if (!rootRef.current?.contains(e.target)) setOpen(false);
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+        triggerRef.current?.focus();
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const list = items();
+        if (!list.length) return;
+        const at = list.indexOf(document.activeElement);
+        const step = e.key === 'ArrowDown' ? 1 : -1;
+        list[(at + step + list.length) % list.length].focus();
+      } else if (e.key === 'Tab') {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [open]);
+
+  const choose = (action) => {
+    setOpen(false);
+    action();
+  };
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={uploading}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={uploading ? 'Updating the Notion page…' : 'Notion page'}
+        className="btn-ghost px-16 py-4 text-caption"
+      >
+        {uploading ? <Loader2 size={14} strokeWidth={2} className="spinner" /> : <NotionIcon size={14} />}
+        {uploading ? 'Updating…' : 'Notion'}
+        <ChevronDown
+          size={14}
+          strokeWidth={1.75}
+          aria-hidden="true"
+          className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label="Notion page"
+          className="floating rounded-image absolute right-0 top-full mt-8 z-30 min-w-[200px] p-4 fade-in"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => choose(() => window.meetmind.shell.openExternal(notionUrl))}
+            className={MENU_ITEM}
+          >
+            <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
+            Open in Notion
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => choose(onUpdate)}
+            disabled={updateDisabled}
+            title={updateTitle}
+            className={MENU_ITEM}
+          >
+            <CloudUpload size={14} strokeWidth={1.75} aria-hidden="true" />
+            Update page
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Slim sticky bar: back, view tabs and note actions on one row. The meeting
 // title only appears here once the in-page title has scrolled out of view.
 // A 1fr/auto/1fr grid keeps the tabs centred on the bar whatever the widths of
@@ -106,10 +210,12 @@ export function NoteToolbar({
   uploading,
   onSyncNotion,
   editing,
+  onDelete,
+  deleting,
 }) {
   const lockTitle = editing ? { title: EDITING_HINT } : {};
   return (
-    <header className="flex-shrink-0 border-b border-ink bg-paper">
+    <header className="relative z-20 flex-shrink-0 border-b border-ink bg-paper">
       <div className="w-full px-24 py-8 grid grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)] items-center gap-16">
         <div className="flex items-center gap-16 min-w-0">
           <IconButton label="Back to meetings" onClick={onBack} className="flex-shrink-0">
@@ -179,33 +285,13 @@ export function NoteToolbar({
               </button>
 
               {notionUrl ? (
-                // One Notion pill, marked by the logo: open the page, or replace it with the current notes.
-                <div role="group" aria-label="Notion page" className="inline-flex items-stretch rounded-full border border-ink">
-                  <button
-                    type="button"
-                    onClick={() => window.meetmind.shell.openExternal(notionUrl)}
-                    className="inline-flex items-center gap-8 rounded-l-full pl-16 pr-8 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06]"
-                    title="Open in Notion"
-                    aria-label="Open in Notion"
-                  >
-                    <NotionIcon size={16} />
-                    <span>Open</span>
-                  </button>
-                  <span className="w-px my-4 bg-ink/30" aria-hidden="true" />
-                  <button
-                    type="button"
-                    onClick={onSyncNotion}
-                    disabled={editing || uploading || busy}
-                    aria-label={uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
-                    title={editing ? EDITING_HINT : uploading ? 'Updating the Notion page…' : 'Update the Notion page with the current notes'}
-                    className="inline-flex items-center gap-8 rounded-r-full pl-8 pr-16 py-4 text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {uploading
-                      ? <Loader2 size={14} strokeWidth={2} className="spinner" />
-                      : <CloudUpload size={14} strokeWidth={1.75} />}
-                    <span>{uploading ? 'Updating…' : 'Update'}</span>
-                  </button>
-                </div>
+                <NotionMenu
+                  notionUrl={notionUrl}
+                  uploading={uploading}
+                  updateDisabled={editing || uploading || busy}
+                  updateTitle={editing ? EDITING_HINT : 'Replace the Notion page with the current notes'}
+                  onUpdate={onSyncNotion}
+                />
               ) : (
                 <button
                   type="button"
@@ -220,6 +306,18 @@ export function NoteToolbar({
               )}
             </>
           )}
+
+          {/* Always available, including for failed or still-processing meetings that have no notes. */}
+          <IconButton
+            label={deleting ? 'Deleting meeting…' : 'Delete meeting'}
+            onClick={onDelete}
+            disabled={deleting || uploading}
+            className="hover:text-signal hover:border-signal"
+          >
+            {deleting
+              ? <Loader2 size={16} strokeWidth={1.75} className="spinner" />
+              : <Trash2 size={16} strokeWidth={1.75} />}
+          </IconButton>
         </div>
       </div>
     </header>

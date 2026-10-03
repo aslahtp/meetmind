@@ -241,7 +241,7 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
 
   return (
     <section className={className} aria-labelledby="upcoming-heading">
-      <div className="flex items-center justify-between gap-16 mb-16">
+      <div className="flex items-center justify-between gap-16 min-h-[32px] mb-16">
         <button
           type="button"
           onClick={toggleCollapsed}
@@ -254,9 +254,11 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
           <span id="upcoming-heading" className="eyebrow">Upcoming meetings</span>
           {events.length > 0 && <span className="pill-quiet tabular">{events.length}</span>}
         </button>
-        <IconButton label="Refresh calendar events" onClick={() => fetchEvents(true)} disabled={refreshing}>
-          <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
-        </IconButton>
+        {!collapsed && (
+          <IconButton label="Refresh calendar events" onClick={() => fetchEvents(true)} disabled={refreshing}>
+            <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
+          </IconButton>
+        )}
       </div>
 
       {!collapsed && (

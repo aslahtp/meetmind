@@ -6,6 +6,22 @@ updated: 2026-10-03
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.2.0] - 2026-10-03
+
+### Added
+
+- Delete button on the meeting page toolbar, available for every meeting including failed or processing ones; it asks for confirmation, then returns to the list.
+
+### Changed
+
+- On a meeting already synced to Notion, the split Open / Update pill is now one "Notion" button that opens a menu with "Open in Notion" and "Update page".
+- The top bar's Record button is now the yellow primary action (ink while the Dashboard setup card is showing); the empty-state "Start recording" buttons use the ink style so each view keeps one yellow button.
+- The upcoming-meetings refresh button now shows only while the section is expanded.
+
+### Removed
+
+- Theme toggle button removed from the top bar; the theme is still set in Settings → General.
+
 ## [4.1.3] - 2026-10-03
 
 ### Changed

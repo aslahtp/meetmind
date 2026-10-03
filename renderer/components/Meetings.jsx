@@ -139,8 +139,8 @@ export default function Meetings({ onOpenSession }) {
                 title="No meetings yet"
                 message="Record a meeting, import an audio file or paste a transcript to get started."
                 action={
-                  <button type="button" onClick={startRecording} disabled={isRecording} className="btn-sunshine">
-                    <span className="dot dot-sm dot-ink" aria-hidden="true" />
+                  <button type="button" onClick={startRecording} disabled={isRecording} className="btn-ink">
+                    <span className="dot dot-sm dot-signal" aria-hidden="true" />
                     Start recording
                   </button>
                 }

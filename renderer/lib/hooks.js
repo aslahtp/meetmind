@@ -35,25 +35,29 @@ export function useSessionActions() {
   const { refreshSessions, confirm, addToast } = useApp();
   const [deletingIds, setDeletingIds] = useState(new Set());
 
-  const handleDelete = async (session) => {
-    if (deletingIds.has(session.id)) return;
+  // Resolves true once the meeting is deleted. `animate: false` skips the wait for the list
+  // card's removal animation (the meeting page has no card to animate).
+  const handleDelete = async (session, { animate = true } = {}) => {
+    if (deletingIds.has(session.id)) return false;
     const ok = await confirm({
       title: 'Delete this meeting?',
       message: 'The recording, transcript and notes will be removed from this computer. This cannot be undone.',
       confirmLabel: 'Delete meeting',
       destructive: true,
     });
-    if (!ok) return;
+    if (!ok) return false;
 
     setDeletingIds((prev) => new Set(prev).add(session.id));
     try {
       await Promise.all([
         window.meetmind.sessions.delete(session.id),
-        new Promise((r) => setTimeout(r, REMOVE_ANIMATION_MS)),
+        new Promise((r) => setTimeout(r, animate ? REMOVE_ANIMATION_MS : 0)),
       ]);
       await refreshSessions();
+      return true;
     } catch (err) {
       addToast(`Couldn't delete the meeting: ${err.message}`, 'error');
+      return false;
     } finally {
       setDeletingIds((prev) => {
         const next = new Set(prev);

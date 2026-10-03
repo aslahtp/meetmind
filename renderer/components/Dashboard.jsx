@@ -316,9 +316,9 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
                       type="button"
                       onClick={startRecording}
                       disabled={isRecording}
-                      className={keysNotSet ? 'btn-ink' : 'btn-sunshine'}
+                      className="btn-ink"
                     >
-                      <span className={`dot dot-sm ${keysNotSet ? 'dot-signal' : 'dot-ink'}`} aria-hidden="true" />
+                      <span className="dot dot-sm dot-signal" aria-hidden="true" />
                       Start recording
                     </button>
                   }

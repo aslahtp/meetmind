@@ -4,9 +4,6 @@ import {
   X,
   Minus,
   Square,
-  Sun,
-  Moon,
-  Monitor,
   ArrowUpCircle,
   LayoutDashboard,
   CalendarDays,
@@ -552,12 +549,6 @@ export default function App() {
     await updateConfig('theme', validTheme);
   };
 
-  const toggleTheme = () => {
-    // Cycle: light -> dark -> system -> light
-    const nextTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
-    setTheme(nextTheme);
-  };
-
   const startRecording = async () => {
     const result = await window.meetmind.recording.start();
     if (result?.success) {
@@ -588,7 +579,7 @@ export default function App() {
     sessions, setSessions, refreshSessions, sessionsLoading, sessionsError,
     config, setConfigState, updateConfig, updateMultipleConfig,
     providers, setup,
-    theme, setTheme, toggleTheme,
+    theme, setTheme,
     isRecording, recordingSessionId, recordingStartedAt,
     startRecording, stopRecording,
     processing, trackProcessing,
@@ -669,14 +660,12 @@ const NAV_ITEMS = [
 
 function TopBar() {
   const {
-    view, setView, isRecording, startRecording, theme, toggleTheme, config,
+    view, setView, isRecording, startRecording, config, keysNotSet,
     processing, openSessionById,
   } = useApp();
 
   const items = NAV_ITEMS.filter((item) => item.view !== 'logs' || !config?.hideLogsInSidebar);
   const activeView = view === 'session' ? null : view;
-  const ThemeIcon = theme === 'system' ? Monitor : theme === 'dark' ? Moon : Sun;
-  const themeLabel = theme === 'system' ? 'System' : theme === 'dark' ? 'Dark' : 'Light';
   // The processing pill sizes itself to the free space this spacer represents.
   const spacerRef = useRef(null);
 
@@ -725,17 +714,14 @@ function TopBar() {
 
       <div ref={spacerRef} className="flex-1" />
 
-      {/* Status + actions: theme, then the live processing pill (animates in and out), then Record.
+      {/* Status + actions: the live processing pill (animates in and out), then Record, the app's
+          primary action (yellow; ink while the Dashboard's setup card holds the yellow instead).
           Spacing is per-item margins, not `gap`, so the collapsed pill slot leaves no extra space. */}
       <div className="titlebar-no-drag flex items-center">
-        <IconButton label={`Theme: ${themeLabel} (click to switch)`} onClick={toggleTheme}>
-          <ThemeIcon size={16} strokeWidth={1.75} />
-        </IconButton>
-
         <ProcessingIndicator processing={processing} onOpen={openSessionById} spacerRef={spacerRef} />
 
         {!isRecording && (
-          <button type="button" onClick={startRecording} className="btn-ghost btn-sm ml-8">
+          <button type="button" onClick={startRecording} className={`${keysNotSet ? 'btn-ink' : 'btn-sunshine'} btn-sm ml-8`}>
             <span className="dot dot-sm dot-signal" aria-hidden="true" />
             Record
           </button>

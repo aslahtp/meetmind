@@ -10,6 +10,7 @@ import { buildNotesMarkdown, parseNotesMarkdown, notesTitle } from './note/copyM
 import { EmptyState, StepBadge, ProgressBar, SaveBar, SegmentedControl } from './ui/index.jsx';
 import GeminiIcon from './GeminiIcon.jsx';
 import { formatDurationSeconds } from '../lib/format.js';
+import { useSessionActions } from '../lib/hooks.js';
 import { isProcessing, PIPELINE_STAGES, STAGE_LABELS, stageIndex } from '../lib/status.js';
 
 // ── Processing state ─────────────────────────────────────────────────────────
@@ -175,6 +176,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const [editMode, setEditMode] = useState('preview');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const { handleDelete, deletingIds } = useSessionActions();
   const scrollRef = useRef(null);
   const titleRef = useRef(null);
 
@@ -391,6 +393,13 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
     }
   };
 
+  const handleDeleteMeeting = async () => {
+    if (!(await handleDelete(session, { animate: false }))) return;
+    // The meeting is gone, so unsaved edits no longer matter: leave without the discard prompt.
+    setNavGuard(null);
+    await onBack();
+  };
+
   const handleCopy = async () => {
     if (!notes) return;
     try {
@@ -508,6 +517,8 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
         exporting={exporting}
         onExportPdf={handleExportPdf}
         editing={dirty}
+        onDelete={handleDeleteMeeting}
+        deleting={deletingIds.has(session.id)}
       />
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
