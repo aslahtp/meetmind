@@ -6,6 +6,19 @@ updated: 2026-10-03
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.3.0] - 2026-10-08
+
+### Added
+
+- Date range filtering on the Meetings page: pick a "from" and "to" date to narrow results to a calendar window.
+- Duration filter (< 15 min / 15–60 min / > 1 hour) on the Meetings page.
+- Platform filter (Google Meet / Zoom / Teams) on the Meetings page.
+- Content filters ("Has action items", "Has notes") on the Meetings page.
+- Sort selector: newest first (default), oldest first, longest first, shortest first, or title A–Z.
+- Collapsible "Filters" panel with active-filter summary chips when closed; individual filters can be dismissed from the chip.
+- "X meetings found" count and "Clear all filters" shortcut when any filter is active.
+- Pure `meetingFilters.js` utility module with 39 unit tests covering all filter/sort logic.
+
 ## [4.2.0] - 2026-10-03
 
 ### Added
