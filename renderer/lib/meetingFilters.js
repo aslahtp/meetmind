@@ -25,9 +25,9 @@ function durationSeconds(session) {
 
 export const DURATION_FILTERS = [
   { key: 'any',    label: 'Any length' },
-  { key: 'short',  label: '< 15 min',  max: 15 * 60 },
-  { key: 'medium', label: '15–60 min', min: 15 * 60, max: 60 * 60 },
-  { key: 'long',   label: '> 1 hour',  min: 60 * 60 },
+  { key: 'short',  label: 'Under 15 min', max: 15 * 60 },
+  { key: 'medium', label: '15–60 min',    min: 15 * 60, max: 60 * 60 },
+  { key: 'long',   label: 'Over 1 hour',  min: 60 * 60 },
 ];
 
 function matchesDuration(session, durationKey) {
@@ -65,6 +65,35 @@ function matchesPlatform(session, platformKey) {
 
 // ── Date range ──────────────────────────────────────────────────────────────
 
+function localIsoDate(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Relative presets are stored by key, not as dates, so "Last 7 days" stays relative to today
+// when the remembered filter is restored later. `days` counts today as the first day.
+export const DATE_PRESETS = [
+  { key: 'any',    label: 'Any time' },
+  { key: 'today',  label: 'Today',        days: 1 },
+  { key: '7d',     label: 'Last 7 days',  days: 7 },
+  { key: '30d',    label: 'Last 30 days', days: 30 },
+  { key: 'custom', label: 'Custom' },
+];
+
+/**
+ * Resolve a date preset (plus the custom range, used only for 'custom') to
+ * inclusive YYYY-MM-DD bounds. Either bound may be '' (open-ended).
+ */
+export function resolveDateRange(preset, dateFrom = '', dateTo = '', now = new Date()) {
+  if (preset === 'custom') return { dateFrom: dateFrom || '', dateTo: dateTo || '' };
+  const p = DATE_PRESETS.find((d) => d.key === preset);
+  if (!p?.days) return { dateFrom: '', dateTo: '' };
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (p.days - 1));
+  return { dateFrom: localIsoDate(from), dateTo: localIsoDate(now) };
+}
+
 /**
  * @param {string|null} dateFrom  YYYY-MM-DD string or falsy
  * @param {string|null} dateTo    YYYY-MM-DD string or falsy
@@ -75,11 +104,7 @@ function matchesDateRange(session, dateFrom, dateTo) {
   if (!ts) return false;
   // Compare as local-date strings (YYYY-MM-DD) so the filter boundaries
   // align with the user's calendar day regardless of timezone.
-  const sessionDate = new Date(ts);
-  const yyyy = sessionDate.getFullYear();
-  const mm = String(sessionDate.getMonth() + 1).padStart(2, '0');
-  const dd = String(sessionDate.getDate()).padStart(2, '0');
-  const localDate = `${yyyy}-${mm}-${dd}`;
+  const localDate = localIsoDate(new Date(ts));
   if (dateFrom && localDate < dateFrom) return false;
   if (dateTo && localDate > dateTo) return false;
   return true;
@@ -192,17 +217,25 @@ export function statusCounts(sessions) {
 }
 
 /**
- * True when any filter is active beyond the defaults.
+ * Number of filters set in the Filters panel (date, length, platform, content).
+ * Search, status and sort have their own always-visible controls, so they don't count.
+ */
+export function activeFilterCount(opts) {
+  return (
+    ((opts.dateFrom || '') !== '' || (opts.dateTo || '') !== '' ? 1 : 0) +
+    ((opts.duration || 'any') !== 'any' ? 1 : 0) +
+    ((opts.platform || 'any') !== 'any' ? 1 : 0) +
+    (opts.content || []).length
+  );
+}
+
+/**
+ * True when anything narrows the list. Sort only reorders it, so it never counts.
  */
 export function hasActiveFilters(opts) {
   return (
     (opts.query || '').trim() !== '' ||
     (opts.status || 'all') !== 'all' ||
-    (opts.duration || 'any') !== 'any' ||
-    (opts.platform || 'any') !== 'any' ||
-    (opts.dateFrom || '') !== '' ||
-    (opts.dateTo || '') !== '' ||
-    (opts.content || []).length > 0 ||
-    (opts.sort || 'newest') !== 'newest'
+    activeFilterCount(opts) > 0
   );
 }

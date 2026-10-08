@@ -4,6 +4,7 @@ import { sessionStatus } from '../../lib/status.js';
 
 export { default as Dialog } from './Dialog.jsx';
 export { useConfirmDialog } from './ConfirmDialog.jsx';
+export { default as Menu, MenuItem, MenuRadioItem, MenuLabel } from './Menu.jsx';
 
 // ── IconButton — icon-only buttons must carry an accessible label ─────────────
 export function IconButton({ label, children, className = '', pressed, ...rest }) {

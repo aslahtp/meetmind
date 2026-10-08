@@ -3,6 +3,8 @@ import {
   filterAndSort,
   statusCounts,
   hasActiveFilters,
+  activeFilterCount,
+  resolveDateRange,
   STATUS_FILTERS,
   DURATION_FILTERS,
   PLATFORM_FILTERS,
@@ -85,8 +87,8 @@ describe('hasActiveFilters', () => {
   it('returns true when query is set', () => {
     expect(hasActiveFilters({ query: 'hello' })).toBe(true);
   });
-  it('returns true when sort is not newest', () => {
-    expect(hasActiveFilters({ sort: 'oldest' })).toBe(true);
+  it('ignores sort, which only reorders the list', () => {
+    expect(hasActiveFilters({ sort: 'oldest' })).toBe(false);
   });
   it('returns true when duration is set', () => {
     expect(hasActiveFilters({ duration: 'short' })).toBe(true);
@@ -96,6 +98,43 @@ describe('hasActiveFilters', () => {
   });
   it('returns true when content filters are active', () => {
     expect(hasActiveFilters({ content: ['hasActions'] })).toBe(true);
+  });
+});
+
+// ── activeFilterCount ────────────────────────────────────────────────────────
+
+describe('activeFilterCount', () => {
+  it('is 0 for defaults, search, status and sort', () => {
+    expect(activeFilterCount({})).toBe(0);
+    expect(activeFilterCount({ query: 'x', status: 'notion', sort: 'title' })).toBe(0);
+  });
+  it('counts a date range once, even with both bounds', () => {
+    expect(activeFilterCount({ dateFrom: '2026-10-01', dateTo: '2026-10-08' })).toBe(1);
+  });
+  it('counts length, platform and each content filter', () => {
+    expect(activeFilterCount({ duration: 'long', platform: 'zoom', content: ['hasActions', 'hasNotes'] })).toBe(4);
+  });
+});
+
+// ── resolveDateRange ─────────────────────────────────────────────────────────
+
+describe('resolveDateRange', () => {
+  const now = new Date(2026, 9, 8, 15, 30); // Oct 8, 2026, local time
+
+  it('returns open bounds for "any"', () => {
+    expect(resolveDateRange('any', '2026-01-01', '2026-02-01', now)).toEqual({ dateFrom: '', dateTo: '' });
+  });
+  it('"today" covers only today', () => {
+    expect(resolveDateRange('today', '', '', now)).toEqual({ dateFrom: '2026-10-08', dateTo: '2026-10-08' });
+  });
+  it('"7d" counts today as the first of seven days', () => {
+    expect(resolveDateRange('7d', '', '', now)).toEqual({ dateFrom: '2026-10-02', dateTo: '2026-10-08' });
+  });
+  it('"30d" crosses month boundaries', () => {
+    expect(resolveDateRange('30d', '', '', now)).toEqual({ dateFrom: '2026-09-09', dateTo: '2026-10-08' });
+  });
+  it('"custom" passes the picked dates through', () => {
+    expect(resolveDateRange('custom', '2026-10-01', '', now)).toEqual({ dateFrom: '2026-10-01', dateTo: '' });
   });
 });
 

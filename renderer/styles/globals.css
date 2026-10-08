@@ -258,6 +258,23 @@ h1, h2, h3, h4 {
     outline: 2px solid rgb(var(--color-ink));
     outline-offset: 0;
   }
+  /* Compact date field (Meetings filters): sized to its content, with a quiet calendar glyph. */
+  .input-date {
+    @apply w-auto px-16 py-4 text-caption tabular-nums;
+  }
+  .input-date::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 150ms;
+  }
+  .input-date::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
+  /* Small ink count on a button, e.g. "Filters 2". */
+  .count-badge {
+    @apply inline-flex items-center justify-center min-w-[20px] h-[20px] px-4 rounded-full
+           bg-ink text-paper text-caption font-medium leading-none tabular-nums;
+  }
+
   .label {
     @apply block text-caption font-medium text-ink mb-8;
   }
