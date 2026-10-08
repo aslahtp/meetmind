@@ -6,6 +6,18 @@ updated: 2026-10-03
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.3.0] - 2026-10-08
+
+### Added
+
+- Meetings page "Filters" panel: date (Any time, Today, Last 7 days, Last 30 days or a custom from/to range), length (under 15 min, 15–60 min, over 1 hour), platform (Google Meet, Zoom, Teams) and content ("Has action items", "Has notes").
+- Sort menu on the Meetings page: newest first (default), oldest first, longest first, shortest first, or title A–Z; sorting never counts as a filter.
+- The Filters button shows how many filters are applied; with the panel closed, applied filters appear as dismissible chips beside an "N of M meetings" count and a "Clear all" shortcut.
+
+### Changed
+
+- The Notion menu on a meeting page now shares the Meetings sort menu's keyboard behaviour (arrow keys, Home/End, Escape).
+
 ## [4.2.0] - 2026-10-03
 
 ### Added

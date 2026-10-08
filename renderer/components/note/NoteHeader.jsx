@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useRef, useState } from 'react';
+import React, { forwardRef } from 'react';
 import {
   ChevronLeft,
   ChevronDown,
@@ -11,7 +11,7 @@ import {
   Loader2,
   AlertTriangle,
 } from 'lucide-react';
-import { IconButton, SegmentedControl } from '../ui/index.jsx';
+import { IconButton, SegmentedControl, Menu, MenuItem } from '../ui/index.jsx';
 import NotionIcon from '../NotionIcon.jsx';
 import { metaText } from './meta.js';
 import { meetingHostname, meetingPlatform } from '../../lib/platform.js';
@@ -84,104 +84,46 @@ function metaChips(session, notes, providers) {
   return chips;
 }
 
-const MENU_ITEM = 'flex w-full items-center gap-8 rounded-input px-16 py-8 text-left text-caption font-medium text-ink transition-colors duration-150 hover:bg-ink/[0.06] focus-visible:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
-
 // A single "Notion" button for a meeting that already has a page; it opens a small menu with
 // the two things you can do with that page: open it, or replace it with the current notes.
 function NotionMenu({ notionUrl, uploading, updateDisabled, updateTitle, onUpdate }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
-  const triggerRef = useRef(null);
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const items = () => [...(menuRef.current?.querySelectorAll('[role="menuitem"]:not(:disabled)') || [])];
-    items()[0]?.focus();
-    const onPointerDown = (e) => {
-      if (!rootRef.current?.contains(e.target)) setOpen(false);
-    };
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        setOpen(false);
-        triggerRef.current?.focus();
-      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        const list = items();
-        if (!list.length) return;
-        const at = list.indexOf(document.activeElement);
-        const step = e.key === 'ArrowDown' ? 1 : -1;
-        list[(at + step + list.length) % list.length].focus();
-      } else if (e.key === 'Tab') {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [open]);
-
-  const choose = (action) => {
-    setOpen(false);
-    action();
-  };
-
   return (
-    <div ref={rootRef} className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        disabled={uploading}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title={uploading ? 'Updating the Notion page…' : 'Notion page'}
-        className="btn-ghost px-16 py-4 text-caption"
-      >
-        {uploading ? <Loader2 size={14} strokeWidth={2} className="spinner" /> : <NotionIcon size={14} />}
-        {uploading ? 'Updating…' : 'Notion'}
-        <ChevronDown
-          size={14}
-          strokeWidth={1.75}
-          aria-hidden="true"
-          className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-
-      {open && (
-        <div
-          ref={menuRef}
-          role="menu"
-          aria-label="Notion page"
-          className="floating rounded-image absolute right-0 top-full mt-8 z-30 min-w-[200px] p-4 fade-in"
+    <Menu
+      label="Notion page"
+      trigger={({ open, ...props }) => (
+        <button
+          type="button"
+          {...props}
+          disabled={uploading}
+          title={uploading ? 'Updating the Notion page…' : 'Notion page'}
+          className="btn-ghost px-16 py-4 text-caption"
         >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => choose(() => window.meetmind.shell.openExternal(notionUrl))}
-            className={MENU_ITEM}
-          >
-            <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
-            Open in Notion
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => choose(onUpdate)}
-            disabled={updateDisabled}
-            title={updateTitle}
-            className={MENU_ITEM}
-          >
-            <CloudUpload size={14} strokeWidth={1.75} aria-hidden="true" />
-            Update page
-          </button>
-        </div>
+          {uploading ? <Loader2 size={14} strokeWidth={2} className="spinner" /> : <NotionIcon size={14} />}
+          {uploading ? 'Updating…' : 'Notion'}
+          <ChevronDown
+            size={14}
+            strokeWidth={1.75}
+            aria-hidden="true"
+            className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
       )}
-    </div>
+    >
+      <MenuItem
+        icon={<ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />}
+        onSelect={() => window.meetmind.shell.openExternal(notionUrl)}
+      >
+        Open in Notion
+      </MenuItem>
+      <MenuItem
+        icon={<CloudUpload size={14} strokeWidth={1.75} aria-hidden="true" />}
+        onSelect={onUpdate}
+        disabled={updateDisabled}
+        title={updateTitle}
+      >
+        Update page
+      </MenuItem>
+    </Menu>
   );
 }
 

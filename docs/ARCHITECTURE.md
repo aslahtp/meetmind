@@ -172,7 +172,9 @@ it.
 React 18 + Vite 6, no router: `renderer/app.jsx` is a single view-state switch between:
 
 - `Dashboard.jsx`: stats and a recent-sessions list.
-- `Meetings.jsx`: full session list.
+- `Meetings.jsx`: full session list with search, status chips, a sort menu and a Filters panel
+  (date preset or range, length, platform, content); the filter/sort logic is pure, in
+  `lib/meetingFilters.js`.
 - `NoteViewer.jsx` / `TranscriptViewer.jsx`: a completed session's notes or raw transcript.
 - `Settings.jsx`, composed of `settings/GeneralSection.jsx`, `TranscriptionSection.jsx`,
   `NotesSection.jsx`, `IntegrationsSection.jsx`, `SystemSection.jsx`: API keys, service
@@ -183,10 +185,11 @@ Supporting pieces: `RecordingBar.jsx` (persistent recording control), `Processin
 (pipeline progress), `SessionCard.jsx`, `UpcomingMeetings.jsx` (Google Calendar),
 `PasteTranscriptModal.jsx` (manual transcript import), `note/` (Markdown rendering,
 `copyMarkdown.js` for JSON<->Markdown conversion, `pdfDocument.jsx` for the PDF export
-template, `AudioPlayer.jsx` streaming from `meetmind-audio://`), `ui/` (Dialog, ConfirmDialog).
+template, `AudioPlayer.jsx` streaming from `meetmind-audio://`), `ui/` (Dialog, ConfirmDialog,
+`Menu.jsx` for keyboard-navigable dropdown menus).
 
 State/plumbing: `lib/app-context.js`, `lib/hooks.js`, `lib/status.js`, `lib/format.js`,
-`lib/platform.js`, `lib/scrollMemory.js`, `lib/audioMeter.js`, `lib/greeting.js`.
+`lib/platform.js`, `lib/meetingFilters.js`, `lib/scrollMemory.js`, `lib/audioMeter.js`, `lib/greeting.js`.
 
 Styling: Tailwind CSS (`darkMode: 'class'`, with `<html class="dark">` toggled by preload/React
 based on the `theme` setting) driven by CSS custom properties in `renderer/styles/globals.css`
