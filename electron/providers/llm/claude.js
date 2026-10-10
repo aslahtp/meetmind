@@ -85,11 +85,11 @@ async function test({ config, model }, deps = {}) {
 module.exports = {
   id: 'claude',
   name: 'Anthropic Claude',
-  badge: 'Claude 4',
+  badge: 'Claude 5',
   icon: 'claude',
   pricing: 'Pay-per-token, no free tier',
   description:
-    'Anthropic\'s Claude models excel at long-context reasoning and nuanced summarisation. Claude 4 Sonnet offers the best balance of quality and speed for meeting notes.',
+    "Anthropic's Claude models excel at long-context reasoning and nuanced summarisation. Claude Sonnet 5.5 offers the best balance of quality and speed for meeting notes.",
   credentials: [
     {
       configKey: 'claudeApiKey',
@@ -106,12 +106,19 @@ module.exports = {
     { text: 'Paste the key into the Anthropic API key field' },
   ],
   models: [
-    { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', badge: 'Default', description: 'Latest Claude 4 Sonnet — excellent note quality with a 200K context window. Best all-round choice.' },
-    { id: 'claude-opus-4-5', name: 'Claude Opus 4.5', badge: 'Pro', description: 'Most capable Claude model; highest quality for complex or lengthy meetings.' },
-    { id: 'claude-haiku-3-5', name: 'Claude Haiku 3.5', badge: 'Fast', description: 'Fastest and most affordable Claude model; good for short meetings.' },
+    { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', badge: 'Default', description: 'Balanced performance for production — best all-round choice for meeting notes with a 200K context window.' },
+    { id: 'claude-fable-5-1', name: 'Claude Fable 5.1', badge: 'Flagship', description: "Anthropic's most capable model; best for demanding reasoning and complex or lengthy meetings." },
+    { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', badge: 'Pro', description: 'Expert-level model optimised for agentic coding and knowledge work; high quality at lower cost than Fable.' },
+    { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', badge: 'Fast', description: 'Fastest and most cost-efficient Claude model; best for short meetings or high-volume use.' },
   ],
-  defaultModel: 'claude-sonnet-4-5',
+  defaultModel: 'claude-sonnet-5-5',
   allowCustomModel: true,
+  // Retired model IDs saved in older configs, mapped to their replacements.
+  _deprecatedModels: {
+    'claude-sonnet-4-5': 'claude-sonnet-5-5',
+    'claude-opus-4-5': 'claude-opus-5-5',
+    'claude-haiku-3-5': 'claude-haiku-5-5',
+  },
   generate,
   test,
 };

@@ -154,7 +154,7 @@ describe('Claude LLM', () => {
       fakeResponse(200, { content: [{ type: 'text', text: '  # Notes\n\nBody  ' }] })
     );
     const result = await claudeLlm.generate(
-      { systemPrompt: 's', userPrompt: 'u', model: 'claude-sonnet-4-5', config: { claudeApiKey: 'sk-ant-x' } },
+      { systemPrompt: 's', userPrompt: 'u', model: 'claude-sonnet-5-5', config: { claudeApiKey: 'sk-ant-x' } },
       { fetchImpl }
     );
     expect(result).toBe('# Notes\n\nBody');
