@@ -19,6 +19,7 @@ const llmRegistry = createRegistry('llm', ['generate', 'test']);
 [
   require('./llm/gemini'),
   require('./llm/groq'),
+  require('./llm/claude'),
 ].forEach((p) => llmRegistry.register(p));
 
 const registries = { stt: sttRegistry, llm: llmRegistry };
