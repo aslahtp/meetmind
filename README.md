@@ -46,8 +46,7 @@ Because MeetMind records audio on your own PC, nothing joins the meeting as a pa
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark.png">
-    <img src="docs/screenshots/dashboard.png" alt="MeetMind dashboard showing meeting stats and a list of recent recorded meetings" width="800">
+    <img src="docs/screenshots/home.png" alt="MeetMind dashboard showing meeting stats and a list of recent recorded meetings" width="800">
   </picture>
 </p>
 
