@@ -72,7 +72,7 @@ Because MeetMind records audio on your own PC, nothing joins the meeting as a pa
 
 1. **Record.** Click the MeetMind button in Google Meet or Zoom, press **Record** in the app, or accept the reminder when a Google Calendar meeting starts. MeetMind captures system audio (WASAPI loopback) and your microphone together.
 2. **Transcribe.** When you stop, the audio goes to your chosen speech-to-text engine, which returns a transcript with speaker labels (diarization).
-3. **Summarize.** Gemini or Groq (your choice) turns the transcript into meeting minutes — an executive summary, agenda, key decisions and an action items table with owners, deadlines and priorities — as Markdown or structured JSON.
+3. **Summarize.** Gemini, Groq or Claude (your choice) turns the transcript into meeting minutes — an executive summary, agenda, key decisions and an action items table with owners, deadlines and priorities — as Markdown or structured JSON.
 4. **Share.** Read and search the notes in the app, export a PDF, copy Markdown, or sync a formatted page to Notion automatically.
 
 ---
@@ -82,7 +82,7 @@ Because MeetMind records audio on your own PC, nothing joins the meeting as a pa
 - **System audio + microphone recording**: records both sides of any call on Windows, with FFmpeg installed from inside the app.
 - **Choice of speech-to-text**: AssemblyAI, Google Cloud Speech-to-Text (v1 and v2), Sarvam AI or Groq Whisper, with a model picker for each. All except Groq label speakers (diarization).
 - **English–Malayalam code-switching**: accurate transcripts of mixed-language meetings with Sarvam AI's `saaras:v3` model.
-- **Choice of note-generation model**: Google Gemini or Groq (Llama 3.3, GPT-OSS), with a model picker and optional custom model ID. Executive-style Markdown or structured JSON notes, an editable system prompt, and an automatic fallback that can be any provider and model (for example Groq first, Gemini as backup).
+- **Choice of note-generation model**: Google Gemini, Groq (Llama 3.3, GPT-OSS) or Anthropic Claude (Sonnet 4.5, Opus 4.5, Haiku 3.5), with a model picker and optional custom model ID. Executive-style Markdown or structured JSON notes, an editable system prompt, and an automatic fallback that can be any provider and model (for example Groq first, Gemini as backup).
 - **Easy to extend**: every speech-to-text and LLM engine is a small self-describing module, so adding a provider needs one file and one registry line (see [docs/ADDING_PROVIDERS.md](docs/ADDING_PROVIDERS.md)).
 - **Google Meet and Zoom extension**: a floating overlay in Chrome with one-click recording and live processing status.
 - **Google Calendar integration**: see upcoming meetings on the dashboard and get a notification to start recording when one begins.
@@ -221,7 +221,7 @@ Not currently. MeetMind is built for Windows 10 and 11 because it relies on Wind
 
 ### Where is my data stored? Is it private?
 
-Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to the note-generation provider you choose (Gemini or Groq), using your own API keys. Notion sync is optional.
+Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to the note-generation provider you choose (Gemini, Groq or Claude), using your own API keys. Notion sync is optional.
 
 ### Which languages are supported?
 

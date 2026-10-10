@@ -5,7 +5,7 @@ title: "MeetMind: open-source AI meeting notes for Windows"
 abstract: >-
   MeetMind is an open-source Windows desktop app that records system audio and
   microphone, transcribes meetings with AssemblyAI, Google Cloud Speech-to-Text,
-  Sarvam AI or Groq, generates meeting minutes with Google Gemini or Groq, and syncs them to
+  Sarvam AI or Groq, generates meeting minutes with Google Gemini, Groq or Anthropic Claude, and syncs them to
   Notion. A Chrome extension adds one-click recording to Google Meet and Zoom.
 authors:
   - given-names: Aslah

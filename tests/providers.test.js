@@ -10,6 +10,7 @@ const { createRegistry } = require('../electron/providers/registry.js');
 const wav = require('../electron/providers/shared/wav.js');
 const groqStt = require('../electron/providers/stt/groq.js');
 const groqLlm = require('../electron/providers/llm/groq.js');
+const claudeLlm = require('../electron/providers/llm/claude.js');
 const { generateNotes } = require('../electron/services/notes.js');
 const { migrateLegacyModels } = require('../electron/utils/configMigration.js');
 
@@ -41,6 +42,10 @@ describe('provider registry contract', () => {
   it('includes Groq for both STT and LLM', () => {
     expect(sttRegistry.has('groq')).toBe(true);
     expect(llmRegistry.has('groq')).toBe(true);
+  });
+
+  it('includes Claude in the LLM registry', () => {
+    expect(llmRegistry.has('claude')).toBe(true);
   });
 
   it('serializes descriptors without functions', () => {
@@ -140,6 +145,36 @@ describe('Groq LLM', () => {
     await expect(
       groqLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: { groqApiKey: 'k' } }, { fetchImpl })
     ).rejects.toThrow(/tokens-per-minute/);
+  });
+});
+
+describe('Claude LLM', () => {
+  it('calls /v1/messages and returns trimmed text', async () => {
+    const fetchImpl = vi.fn(async () =>
+      fakeResponse(200, { content: [{ type: 'text', text: '  # Notes\n\nBody  ' }] })
+    );
+    const result = await claudeLlm.generate(
+      { systemPrompt: 's', userPrompt: 'u', model: 'claude-sonnet-5-5', config: { claudeApiKey: 'sk-ant-x' } },
+      { fetchImpl }
+    );
+    expect(result).toBe('# Notes\n\nBody');
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toContain('/v1/messages');
+    expect(init.headers['x-api-key']).toBe('sk-ant-x');
+    expect(JSON.parse(init.body).system).toBe('s');
+  });
+
+  it('maps rate-limit errors to an actionable message', async () => {
+    const fetchImpl = async () => fakeResponse(429, { error: { message: 'rate limited' } });
+    await expect(
+      claudeLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: { claudeApiKey: 'k' } }, { fetchImpl })
+    ).rejects.toThrow(/rate-limited/);
+  });
+
+  it('requires an API key', async () => {
+    await expect(
+      claudeLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: {} })
+    ).rejects.toThrow(/API key/);
   });
 });
 

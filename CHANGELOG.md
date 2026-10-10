@@ -6,6 +6,12 @@ updated: 2026-10-03
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.4.0] - 2026-10-11
+
+### Added
+
+- Anthropic Claude as an LLM provider for notes generation: Claude Sonnet 5.5 (default), Fable 5.1 (flagship), Opus 5.5, and Haiku 5.5 are available in Settings under Note Generation. The provider uses the `/v1/messages` API directly (no SDK); configure a `claudeApiKey` from the Anthropic Console.
+
 ## [4.3.0] - 2026-10-08
 
 ### Added
