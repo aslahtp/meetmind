@@ -76,8 +76,15 @@ jobs:
       - name: Fetch FFmpeg (checksum-verified)
         run: node scripts/fetch-ffmpeg.js --arch arm64
 
+      # electron-builder skips all macOS signing on pull-request builds (it checks GITHUB_BASE_REF)
+      # unless CSC_FOR_PULL_REQUEST is set, leaving Electron's original signature on a modified
+      # bundle, which `codesign --verify` rejects. Its concern is signing secrets reaching fork
+      # PRs; the ad-hoc signing used here (`identity: "-"`) needs no certificate, and this job
+      # has no secrets.
       - name: Build unpacked app
         run: pnpm run build:mac:dir
+        env:
+          CSC_FOR_PULL_REQUEST: 'true'
 
       - name: Check signature and Info.plist
         run: |
