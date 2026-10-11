@@ -8,9 +8,7 @@ import MacPermissions from '../renderer/components/settings/MacPermissions.jsx';
 // at least renders it to markup to catch crashes and check the copy.
 function render(ctx) {
   return renderToStaticMarkup(
-    <AppContext.Provider value={ctx}>
-      <MacPermissions />
-    </AppContext.Provider>,
+    React.createElement(AppContext.Provider, { value: ctx }, React.createElement(MacPermissions)),
   );
 }
 

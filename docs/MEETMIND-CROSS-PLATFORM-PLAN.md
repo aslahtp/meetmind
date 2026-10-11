@@ -4,6 +4,28 @@ Target: macOS and Linux support alongside Windows, with CI/CD producing installe
 
 Baseline: MeetMind 3.6.2 as described in `docs/ARCHITECTURE.md`.
 
+> **Status (4.6.0): macOS shipped as a beta; Linux not started.** The macOS sections below are
+> superseded by what was built; `docs/ARCHITECTURE.md` describes it. Decisions that differ from
+> this plan:
+>
+> - **Capture**: Electron's own loopback (Electron 44, CoreAudio Tap API, macOS 14.2+) rather than
+>   a Swift helper (option A). Because its behaviour varies by video source, the source is a
+>   setting (`macCaptureStrategy`: screen / frame / picker) with an in-app "Test system audio"
+>   check. The helper stays the fallback plan if testers find loopback unreliable.
+> - **Minimum macOS 14.2**, separate arm64 and x64 DMGs (no universal build).
+> - **Unsigned for now**: ad-hoc signed with electron-builder 26 (`identity: "-"`), no hardened
+>   runtime or notarization, so the updater only checks for updates on macOS and opens the
+>   release page (section 5.5 still applies once there is a Developer ID).
+> - **No ffmpeg `avfoundation` fallback**: the renderer records the mic alone if system audio is
+>   unavailable.
+> - **FFmpeg**: pinned per-arch builds from ffmpeg.martin-riedl.de with SHA-256 checks
+>   (`electron/audio/ffmpeg-sources.js`, `scripts/fetch-ffmpeg.js`); the in-app download goes to
+>   `userData/ffmpeg`.
+> - **Screen Recording can be requested programmatically** with `CGRequestScreenCaptureAccess()`
+>   (section 5.4 below says it can't); `electron/services/permissions.js` uses it.
+> - **Meeting detection on macOS** (CoreAudio process list + CoreGraphics window titles) is not
+>   built yet.
+
 > **How to read this plan.** Items marked **[verify]** are things I am not fully certain about, or that may have changed since my knowledge cutoff (framework versions, OS APIs, runner availability, pricing). Check each one against current official docs before committing to it. A consolidated list is in section 10.
 
 ## 1. Decision: stay on Electron
