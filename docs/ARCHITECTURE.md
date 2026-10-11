@@ -235,9 +235,9 @@ The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) d
 - Two consecutive positive polls emit `meeting-detected`; 15 s with no positive poll emits
   `meeting-ended`. "Not now" suppresses a meeting until it ends.
 
-`main.js` turns those events into overlay states: `prompt` (Start recording / Not now),
+`main.js` turns those events into overlay states, each a single compact row: `prompt` (Record / ×),
 `recording` (timer + Stop), `ended` ("Meeting ended?": it asks, never stops on its own),
-`processing`, `complete` (Open notes) and `error`. Recordings started from the app, tray or
+`processing`, `complete` (Open) and `error`. Recordings started from the app, tray or
 extension show the overlay too, and processing updates apply only to the session the overlay is
 following. `overlay/overlay-window.js` owns the window: frameless, transparent, always on top,
 `focusable: false` and shown with `showInactive()` so it never takes focus from the call,

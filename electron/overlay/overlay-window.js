@@ -7,7 +7,7 @@ const { BrowserWindow, screen } = require('electron');
 
 const isDev = process.env.NODE_ENV === 'development';
 const WIDTH = 360;
-const INITIAL_HEIGHT = 160;
+const INITIAL_HEIGHT = 56;
 const MARGIN = 24;
 
 let win = null;

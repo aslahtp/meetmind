@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic, Square, X, Loader2, ArrowUpRight } from 'lucide-react';
+import { Mic, Square, X, Loader2 } from 'lucide-react';
 import { IconButton, ProgressBar } from '../ui/index.jsx';
 import { formatClock } from '../../lib/format.js';
 import { useNow } from '../../lib/hooks.js';
 import { STAGE_LABELS } from '../../lib/status.js';
 
-// The floating meeting overlay. Main owns all state and pushes it on overlay:state; this
-// component only renders it and sends the user's choice back. Modes: prompt, recording, ended,
-// processing, complete, error (anything else renders nothing).
+// The floating meeting overlay: one compact row (brand tile, two-line status, one action, close).
+// Main owns all state and pushes it on overlay:state; this component only renders it and sends the
+// user's choice back. Modes: prompt, recording, ended, processing, complete, error (anything else
+// renders nothing).
 
 const api = window.meetmindOverlay;
 
@@ -17,43 +18,45 @@ function applyTheme(theme) {
   root.classList.toggle('light', theme !== 'dark');
 }
 
-function BrandMark() {
+// The mic tile carries the state as a corner Status Dot (DESIGN.md), ringed in paper so it
+// reads against the tile's hairline; while processing, the mic becomes a spinner instead.
+function BrandMark({ dot, busy }) {
   return (
-    <span className="tile inline-flex items-center justify-center flex-shrink-0 w-32 h-32 text-ink" aria-hidden="true">
-      <Mic size={16} strokeWidth={1.75} />
+    <span className="tile relative inline-flex items-center justify-center flex-shrink-0 w-32 h-32 text-ink" aria-hidden="true">
+      {busy
+        ? <Loader2 size={16} strokeWidth={1.75} className="spinner" />
+        : <Mic size={16} strokeWidth={1.75} />}
+      {dot && <span className={`dot ${dot} absolute -top-4 -right-4 border-2 border-paper`} />}
     </span>
   );
 }
 
-function Header({ dot, label, onClose, closeLabel = 'Hide' }) {
+// Two short lines: the status, and a graphite detail line (or any node).
+function Status({ label, detail, title }) {
   return (
-    <div className="flex items-center gap-8">
-      <BrandMark />
-      {dot}
-      <span className="eyebrow flex-1 min-w-0 truncate">{label}</span>
-      <IconButton label={closeLabel} onClick={onClose}>
-        <X size={16} strokeWidth={2} />
-      </IconButton>
+    <div className="flex-1 min-w-0 leading-tight" title={title}>
+      <p className="text-caption leading-tight font-medium text-ink whitespace-nowrap">{label}</p>
+      {typeof detail === 'string'
+        ? <p className="text-caption leading-tight text-graphite truncate">{detail}</p>
+        : detail}
     </div>
+  );
+}
+
+function Close({ label = 'Hide', onClick }) {
+  return (
+    <IconButton label={label} onClick={onClick}>
+      <X size={14} strokeWidth={2} />
+    </IconButton>
   );
 }
 
 function Elapsed({ startedAt }) {
   const now = useNow(1000);
-  const seconds = startedAt ? (now - startedAt) / 1000 : 0;
-  return (
-    <span className="tabular text-body-sm font-medium text-ink" title="Recording time">
-      {formatClock(seconds)}
-    </span>
-  );
+  return <span className="tabular">{formatClock(startedAt ? (now - startedAt) / 1000 : 0)}</span>;
 }
 
-function meetingCaption(meeting) {
-  if (!meeting) return '';
-  // Desktop apps without a meeting title already show the platform as the title.
-  const platform = meeting.title !== meeting.platformLabel ? meeting.platformLabel : '';
-  return [platform, meeting.appLabel].filter(Boolean).join(' · ');
-}
+const Spinner = () => <Loader2 size={14} strokeWidth={2} className="spinner" aria-hidden="true" />;
 
 export default function MeetingOverlay() {
   const [state, setState] = useState(null);
@@ -101,96 +104,89 @@ export default function MeetingOverlay() {
 
   const { meeting, startedAt, sessionId } = state;
   const dismiss = () => api.dismiss();
+  const meetingName = meeting?.title || meeting?.platformLabel || '';
 
-  let body;
+  const BADGES = {
+    prompt: 'dot-mint',
+    recording: 'dot-signal dot-live',
+    ended: 'dot-graphite',
+    complete: 'dot-mint',
+    error: 'dot-signal',
+  };
+
+  let row;
   if (mode === 'prompt') {
-    body = (
+    row = (
       <>
-        <Header dot={<span className="dot dot-sm dot-mint" aria-hidden="true" />} label="Meeting detected" onClose={dismiss} closeLabel="Dismiss" />
-        <p className="mt-16 text-body-sm font-medium text-ink truncate" title={meeting?.title}>{meeting?.title || 'Meeting'}</p>
-        <p className="text-caption text-graphite truncate">{meetingCaption(meeting)}</p>
-        {error && <p className="mt-8 text-caption text-signal">{error}</p>}
-        <div className="mt-16 flex items-center gap-8">
-          <button type="button" className="btn btn-sunshine btn-sm" disabled={busy} onClick={() => run(api.start)}>
-            {busy ? <Loader2 size={14} strokeWidth={2} className="spinner" aria-hidden="true" /> : <span className="dot dot-sm dot-signal" aria-hidden="true" />}
-            Start recording
-          </button>
-          <button type="button" className="btn btn-quiet btn-sm" disabled={busy} onClick={dismiss}>Not now</button>
-        </div>
+        <Status
+          label="Meeting detected"
+          detail={error || meetingName}
+          title={[meeting?.title, meeting?.platformLabel, meeting?.appLabel].filter(Boolean).join(' · ')}
+        />
+        <button type="button" className="btn btn-sunshine btn-sm" disabled={busy} onClick={() => run(api.start)}>
+          {busy ? <Spinner /> : <span className="dot dot-sm dot-signal" aria-hidden="true" />}
+          Record
+        </button>
+        <Close label="Not now" onClick={dismiss} />
       </>
     );
   } else if (mode === 'recording') {
-    body = (
+    row = (
       <>
-        <Header dot={<span className="dot dot-sm dot-signal dot-live" aria-hidden="true" />} label="Recording" onClose={dismiss} />
-        <div className="mt-16 flex items-center gap-16">
-          <p className="flex-1 min-w-0 text-caption text-graphite truncate" title={meeting?.title}>
-            {meeting?.title || 'Recording system audio and mic'}
-          </p>
-          <Elapsed startedAt={startedAt} />
-          <button type="button" className="btn btn-ink btn-sm" disabled={busy} onClick={() => run(api.stop)}>
-            {busy
-              ? <Loader2 size={14} strokeWidth={2} className="spinner" aria-hidden="true" />
-              : <Square size={12} strokeWidth={2} fill="currentColor" aria-hidden="true" />}
-            Stop
-          </button>
-        </div>
-        {error && <p className="mt-8 text-caption text-signal">{error}</p>}
+        <Status
+          label={<>Recording · <Elapsed startedAt={startedAt} /></>}
+          detail={error || meetingName || 'System audio and mic'}
+        />
+        <button type="button" className="btn btn-ink btn-sm" disabled={busy} onClick={() => run(api.stop)}>
+          {busy ? <Spinner /> : <Square size={10} strokeWidth={2} fill="currentColor" aria-hidden="true" />}
+          Stop
+        </button>
+        <Close onClick={dismiss} />
       </>
     );
   } else if (mode === 'ended') {
-    body = (
+    row = (
       <>
-        <Header dot={<span className="dot dot-sm dot-graphite" aria-hidden="true" />} label="Meeting ended?" onClose={() => api.keepRecording()} closeLabel="Keep recording" />
-        <div className="mt-16 flex items-center gap-16">
-          <p className="flex-1 min-w-0 text-body-sm font-medium text-ink">The call looks finished.</p>
-          <Elapsed startedAt={startedAt} />
-        </div>
-        <p className="text-caption text-graphite">Stop recording and write the notes?</p>
-        {error && <p className="mt-8 text-caption text-signal">{error}</p>}
-        <div className="mt-16 flex items-center gap-8">
-          <button type="button" className="btn btn-sunshine btn-sm" disabled={busy} onClick={() => run(api.stop)}>
-            {busy && <Loader2 size={14} strokeWidth={2} className="spinner" aria-hidden="true" />}
-            Stop recording
-          </button>
-          <button type="button" className="btn btn-quiet btn-sm" disabled={busy} onClick={() => api.keepRecording()}>Keep recording</button>
-        </div>
+        <Status
+          label="Meeting ended?"
+          detail={error || <p className="text-caption leading-tight text-graphite truncate">Recorded <Elapsed startedAt={startedAt} /></p>}
+        />
+        <button type="button" className="btn btn-sunshine btn-sm" disabled={busy} onClick={() => run(api.stop)}>
+          {busy && <Spinner />}
+          Stop
+        </button>
+        <button type="button" className="btn btn-quiet btn-sm" disabled={busy} onClick={() => api.keepRecording()}>Keep</button>
       </>
     );
   } else if (mode === 'processing') {
     const pct = Math.max(0, Math.min(100, Math.round(state.percent || 0)));
-    body = (
+    row = (
       <>
-        <Header dot={<Loader2 size={14} strokeWidth={2} className="spinner text-graphite flex-shrink-0" aria-hidden="true" />} label="Processing" onClose={dismiss} />
-        <div className="mt-16 flex items-center gap-16">
-          <p className="flex-1 min-w-0 text-body-sm font-medium text-ink truncate">{STAGE_LABELS[state.stage] || 'Processing'}</p>
-          <span className="tabular text-caption text-graphite">{pct}%</span>
-        </div>
-        <div className="mt-8"><ProgressBar value={pct} label="Processing progress" /></div>
+        <Status
+          label={<>{STAGE_LABELS[state.stage] || 'Processing'} · <span className="tabular text-graphite">{pct}%</span></>}
+          detail={<div className="mt-4"><ProgressBar value={pct} label="Processing progress" /></div>}
+        />
+        <Close onClick={dismiss} />
       </>
     );
   } else if (mode === 'complete') {
-    body = (
+    row = (
       <>
-        <Header dot={<span className="dot dot-sm dot-mint" aria-hidden="true" />} label="Notes ready" onClose={dismiss} />
-        <p className="mt-16 text-body-sm font-medium text-ink truncate">{meeting?.title || 'Your meeting notes are ready.'}</p>
-        <div className="mt-16 flex items-center gap-8">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.openSession(sessionId)}>
-            Open notes
-            <ArrowUpRight size={14} strokeWidth={2} aria-hidden="true" />
-          </button>
-        </div>
+        <Status label="Notes ready" detail={meetingName} />
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.openSession(sessionId)}>Open</button>
+        <Close onClick={dismiss} />
       </>
     );
   } else {
-    body = (
+    row = (
       <>
-        <Header dot={<span className="dot dot-sm dot-signal" aria-hidden="true" />} label="Processing failed" onClose={dismiss} />
-        <p className="mt-16 text-body-sm font-medium text-ink">Couldn’t write notes for this meeting.</p>
-        {state.error && <p className="text-caption text-graphite line-clamp-2" title={state.error}>{state.error}</p>}
-        <div className="mt-16 flex items-center gap-8">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.openSession(sessionId)}>Open MeetMind</button>
-        </div>
+        <Status
+          label="Processing failed"
+          detail={state.error || 'Couldn’t write notes for this meeting.'}
+          title={state.error}
+        />
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.openSession(sessionId)}>Open</button>
+        <Close onClick={dismiss} />
       </>
     );
   }
@@ -201,9 +197,10 @@ export default function MeetingOverlay() {
       key={mode}
       aria-label="MeetMind meeting overlay"
       aria-live="polite"
-      className="floating rounded-card p-16 fade-in select-none"
+      className="floating rounded-card p-8 flex items-center gap-8 fade-in select-none"
     >
-      {body}
+      <BrandMark dot={BADGES[mode]} busy={mode === 'processing'} />
+      {row}
     </section>
   );
 }
