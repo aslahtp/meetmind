@@ -18,6 +18,11 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 - The Chrome extension is now optional; it keeps working alongside the desktop overlay.
 
+### Fixed
+
+- The Generate notes and Regenerate buttons and the empty notes view show the selected note-generation provider's icon (Gemini, Groq or Claude) instead of always Gemini.
+- The Google Cloud key guide no longer says the key must also go into the Gemini field, since Gemini is only one of the notes providers.
+
 ## [4.4.0] - 2026-10-11
 
 ### Added

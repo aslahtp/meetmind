@@ -8,7 +8,7 @@ import AudioPlayer from './note/AudioPlayer.jsx';
 import { MarkdownNoteView } from './note/markdown.jsx';
 import { buildNotesMarkdown, parseNotesMarkdown, notesTitle } from './note/copyMarkdown.js';
 import { EmptyState, StepBadge, ProgressBar, SaveBar, SegmentedControl } from './ui/index.jsx';
-import GeminiIcon from './GeminiIcon.jsx';
+import { useNotesProviderIcon } from './settings/providers/providerIcons.js';
 import { formatDurationSeconds } from '../lib/format.js';
 import { useSessionActions } from '../lib/hooks.js';
 import { isProcessing, PIPELINE_STAGES, STAGE_LABELS, stageIndex } from '../lib/status.js';
@@ -60,6 +60,7 @@ function ProcessingCard({ stage, percent, includeNotion, onRestart }) {
 // ── Summary tab ──────────────────────────────────────────────────────────────
 
 function SummaryTab({ notes, title, noSpeech, transcriptionFailed, failureMessage, isError, busy, onGenerate, onRetry }) {
+  const NotesIcon = useNotesProviderIcon();
   if (notes) {
     return notes._rawMarkdown
       ? <MarkdownNoteView markdown={notes._rawMarkdown} omitTitle={title} />
@@ -102,7 +103,7 @@ function SummaryTab({ notes, title, noSpeech, transcriptionFailed, failureMessag
   return (
     <EmptyState
       compact
-      icon={<GeminiIcon size={24} />}
+      icon={<NotesIcon size={24} />}
       title={isError ? 'Processing failed' : 'Notes not ready yet'}
       message={
         isError
@@ -165,6 +166,7 @@ function MarkdownEditor({ value, onChange, structured }) {
 
 export default function NoteViewer({ session, onBack, onRefresh }) {
   const { processing, trackProcessing, addToast, confirm, config, setNavGuard } = useApp();
+  const NotesIcon = useNotesProviderIcon();
   const [activeTab, setActiveTab] = useState('summary');
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
@@ -331,7 +333,7 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
       // Pasted transcripts have no recording to transcribe again.
       unavailable: session.audio_path ? null : 'No recording to transcribe again',
     }
-    : { label: 'Regenerate', title: 'Regenerate notes', icon: GeminiIcon, onClick: handleRegenerate, unavailable: null };
+    : { label: 'Regenerate', title: 'Regenerate notes', icon: NotesIcon, onClick: handleRegenerate, unavailable: null };
 
   // First sync creates the Notion page. Updating replaces it: the main process creates a fresh
   // page from the current notes, then moves the old one to Notion's trash (no duplicates).

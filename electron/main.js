@@ -1266,7 +1266,7 @@ function registerIpcHandlers() {
     return { success: false, error: 'Unknown stage' };
   });
 
-  // Create a session from a pasted transcript (skip STT, go straight to Gemini)
+  // Create a session from a pasted transcript (skip STT, go straight to note generation)
   ipcMain.handle('session:create-from-transcript', async (_e, { title, transcriptText }) => {
     const { v4: uuidv4 } = require('uuid');
 
@@ -1304,7 +1304,7 @@ function registerIpcHandlers() {
       status:     'generating',
     });
 
-    // Run Gemini + optional Notion upload asynchronously so the IPC call returns immediately
+    // Run note generation + optional Notion upload asynchronously so the IPC call returns immediately
     // and the renderer can listen on processing:progress / processing:complete as usual.
     (async () => {
       const sendProgress = (stage, percent) => {

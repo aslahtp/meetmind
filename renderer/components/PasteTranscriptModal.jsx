@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, ClipboardPaste } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import { Dialog, TextField, StatusDot } from './ui/index.jsx';
-import GeminiIcon from './GeminiIcon.jsx';
+import { useNotesProviderIcon } from './settings/providers/providerIcons.js';
 import { STAGE_LABELS } from '../lib/status.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -21,6 +21,7 @@ function defaultTitle() {
 
 export default function PasteTranscriptModal({ onClose }) {
   const { openSession, refreshSessions, trackProcessing } = useApp();
+  const NotesIcon = useNotesProviderIcon();
 
   const [title, setTitle] = useState(defaultTitle);
   const [transcript, setTranscript] = useState('');
@@ -109,7 +110,7 @@ export default function PasteTranscriptModal({ onClose }) {
                 </>
               ) : (
                 <>
-                  <GeminiIcon size={14} />
+                  <NotesIcon size={14} />
                   Generate notes
                 </>
               )}

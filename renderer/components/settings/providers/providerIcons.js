@@ -1,4 +1,5 @@
 import { Sparkles } from 'lucide-react';
+import { useApp } from '../../../lib/app-context.js';
 import GoogleCloudIcon from '../../GoogleCloudIcon.jsx';
 import SarvamIcon from '../../SarvamIcon.jsx';
 import AssemblyAiIcon from '../../AssemblyAiIcon.jsx';
@@ -19,4 +20,10 @@ const ICONS = {
 
 export function providerIcon(iconId) {
   return ICONS[iconId] || Sparkles;
+}
+
+/** Icon of the note-generation provider selected in Settings (generic until providers load). */
+export function useNotesProviderIcon() {
+  const { setup } = useApp();
+  return providerIcon(setup?.llm?.icon);
 }

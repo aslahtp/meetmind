@@ -511,7 +511,7 @@ module.exports = {
   guide: [
     { text: 'Go to Google AI Studio', url: 'https://aistudio.google.com/app/apikey' },
     { text: 'Click "Get API Key" → "Create API Key"' },
-    { text: 'Copy the key and paste it into both the Google Cloud STT and Gemini fields' },
+    { text: 'Copy the key and paste it into the Google Cloud STT field (if you use Gemini for notes, the same key works there too)' },
     { text: '(Optional) For Cloud STT v2, enable the Cloud Speech-to-Text API in Google Cloud Console', url: 'https://console.cloud.google.com/apis/library/speech.googleapis.com' },
   ],
   models: [

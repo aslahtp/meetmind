@@ -20,7 +20,7 @@ written meeting notes. It:
    the same time, on the user's own PC. Nothing joins the meeting as a bot or participant.
 2. Sends the recording to a speech to text engine chosen by the user (AssemblyAI, Google Cloud
    Speech to Text v1/v2, Sarvam AI, or Groq Whisper) to get a speaker labeled transcript.
-3. Sends the transcript to the user's chosen LLM (Google Gemini or Groq, with an optional cross-provider fallback) to produce structured meeting notes (executive
+3. Sends the transcript to the user's chosen LLM (Google Gemini, Groq or Anthropic Claude, with an optional cross-provider fallback) to produce structured meeting notes (executive
    summary, agenda, decisions, an action items table) as either structured JSON or Markdown.
 4. Stores everything locally in a SQLite database (via `sql.js`), and optionally exports a PDF,
    copies Markdown, or syncs a formatted page to Notion.
@@ -58,7 +58,7 @@ Three build artifacts come out of this one repository:
         v                                            |
  runProcessingPipeline() in main.js  ------------------+
    Stage 1: electron/services/transcription.js  -> electron/providers/stt/* (Google / AssemblyAI / Sarvam / Groq)
-   Stage 2: electron/services/notes.js          -> electron/providers/llm/* (Gemini / Groq; JSON or Markdown notes)
+   Stage 2: electron/services/notes.js          -> electron/providers/llm/* (Gemini / Groq / Claude; JSON or Markdown notes)
    Stage 3: electron/services/notion.js         (optional, if configured)
         |
         v
@@ -208,7 +208,7 @@ based on the `theme` setting) driven by CSS custom properties in `renderer/style
 (`--color-*` tokens), consumed via Tailwind arbitrary values, e.g.
 `bg-[rgb(var(--color-background))]`, rather than hardcoded hex colors. Icons from
 `lucide-react` plus a handful of hand-authored brand icon components
-(`GeminiIcon`, `AssemblyAiIcon`, `SarvamIcon`, `GroqIcon`, `NotionIcon`, `GoogleCloudIcon`,
+(`GeminiIcon`, `ClaudeIcon`, `AssemblyAiIcon`, `SarvamIcon`, `GroqIcon`, `NotionIcon`, `GoogleCloudIcon`,
 `GoogleCalendarIcon`). Notes/transcript Markdown rendering uses `react-markdown` +
 `remark-gfm`, shared between the in-app notes view and the PDF export document.
 
@@ -385,7 +385,10 @@ fallback). Providers only return raw text.
   (default), `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `llama-3.1-8b-instant`. JSON mode sends
   `response_format: {type: "json_object"}`. Free-tier tokens-per-minute limits can reject long
   transcripts (HTTP 413/429); the error says so and the fallback below covers it.
-- Both allow a custom model ID.
+- **Claude** (`llm/claude.js`, Anthropic Messages API `POST /v1/messages` via `fetch`, no SDK):
+  `claude-sonnet-5-5` (default), `claude-fable-5-1`, `claude-opus-5-5`, `claude-haiku-5-5`.
+  Authenticated with `claudeApiKey` (`x-api-key` + `anthropic-version` headers).
+- All three allow a custom model ID.
 
 Two output modes, controlled by `noteOutputMode` (the model is asked for JSON or Markdown):
 
@@ -448,7 +451,7 @@ in-progress recording indefinitely.
 ### 6.2 Settings (`electron/utils/config.js`)
 
 Wraps `electron-store` (itself backed by a JSON file in `userData`) with a typed schema covering:
-API keys (`googleApiKey`, `geminiApiKey`, `assemblyAiApiKey`, `sarvamApiKey`, `groqApiKey`,
+API keys (`googleApiKey`, `geminiApiKey`, `claudeApiKey`, `assemblyAiApiKey`, `sarvamApiKey`, `groqApiKey`,
 Notion, Google Calendar OAuth client; the provider ones are generated from the provider
 registries), service and model selection (`sttService`, `sttModels`, `llmProvider`,
 `llmModels`, `llmFallback`), audio device selection, diarization parameters
@@ -590,6 +593,7 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 | Google Cloud Speech-to-Text v2 | Transcription (`chirp_3` sync, or BatchRecognize for long audio) | Service account Bearer token (no API-key auth) | `electron/providers/stt/google.js` |
 | Google Cloud Storage | Staging WAV files for v2 BatchRecognize | Service account key file | `electron/providers/stt/google.js` (`@google-cloud/storage`) |
 | Google Gemini API | Meeting notes generation (Stage 2) | API key | `electron/providers/llm/gemini.js` (`@google/generative-ai`) |
+| Anthropic Claude API | Notes generation (Sonnet, Fable, Opus, Haiku) | API key | `electron/providers/llm/claude.js` (REST via `fetch`) |
 | Groq | Notes generation (Llama, GPT-OSS) and Whisper transcription | API key (one key for both) | `electron/providers/llm/groq.js`, `electron/providers/stt/groq.js` (REST via `fetch`) |
 | AssemblyAI | Transcription (alternative engine) | API key | `electron/providers/stt/assemblyai.js` (`assemblyai` SDK + REST) |
 | Sarvam AI | Transcription, `saaras:v3` model for English/Malayalam code-switching | API key | `electron/providers/stt/sarvam.js` (REST) |

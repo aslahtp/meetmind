@@ -41,5 +41,5 @@
 1. Open the **MeetMind** desktop app.
 2. Join a meeting on **Google Meet** or **Zoom** in Chrome.
 3. Click the floating MeetMind overlay button to start recording.
-4. When finished, stop recording — MeetMind will automatically transcribe the audio, generate structured notes with Gemini, and sync to Notion.
+4. When finished, stop recording — MeetMind will automatically transcribe the audio, generate notes with your chosen model (Gemini, Groq or Claude), and sync to Notion if it's connected.
 
