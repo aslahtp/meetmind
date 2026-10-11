@@ -23,7 +23,7 @@ export default function GeneralSection({ form, onChange }) {
         icon={<Palette size={20} strokeWidth={1.75} className="text-ink" />}
       >
         <RowList>
-          <SettingRow label="Theme" description="Follow Windows or choose a theme.">
+          <SettingRow label="Theme" description="Follow your system or choose a theme.">
             <SegmentedControl
               role="radiogroup"
               label="Theme"
@@ -105,7 +105,7 @@ export default function GeneralSection({ form, onChange }) {
         <RowList>
           <SettingRow
             label="Launch on startup"
-            description="Start MeetMind automatically when Windows starts."
+            description="Start MeetMind automatically when you log in."
             htmlFor="pref-auto-launch"
           >
             <Switch

@@ -3,7 +3,7 @@ const { autoUpdater } = require('electron-updater');
 const { app } = require('electron');
 const logger = require('../utils/logger');
 const { getConfig, store } = require('../utils/config');
-const { getFfmpegPath, getFfprobePath } = require('../audio/ffmpeg-path');
+const { binaryName, getFfmpegPath, getFfprobePath } = require('../audio/ffmpeg-path');
 
 const MAX_CONSECUTIVE_FAILURES = 3; // background checks pause after this many failures in a row
 const BACKGROUND_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -60,8 +60,8 @@ function compareVersions(a, b) {
  */
 function verifyBundledResources() {
   const checks = [
-    { name: 'ffmpeg.exe', path: getFfmpegPath() },
-    { name: 'ffprobe.exe', path: getFfprobePath() },
+    { name: binaryName('ffmpeg', process.platform), path: getFfmpegPath() },
+    { name: binaryName('ffprobe', process.platform), path: getFfprobePath() },
   ];
   const missing = checks.filter((c) => !fs.existsSync(c.path)).map((c) => c.name);
   return { ok: missing.length === 0, missing };

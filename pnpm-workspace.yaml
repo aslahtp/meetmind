@@ -1,9 +1,13 @@
 allowBuilds:
-  electron: true
+  # electron-winstaller (pulled in by electron-builder) only picks a 7-Zip binary for
+  # Squirrel.Windows targets; MeetMind builds NSIS, so the script never needs to run.
+  electron-winstaller: false
   esbuild: true
   # koffi's install script only builds from source; the prebuilt binary comes from its
   # @koromix/koffi-<platform> optional dependency, so the script never needs to run.
   koffi: false
+# Electron 42+ has no install script: it downloads its binary the first time it is launched,
+# or explicitly with `pnpm exec install-electron`.
 nodeLinker: hoisted
 # pnpm would otherwise reinstall before every `pnpm run` whenever package.json changes (even a
 # version bump). That reinstall replaces node_modules/electron, which fails while the app is

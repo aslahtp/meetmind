@@ -22,6 +22,7 @@ import { markScrollRestore, cancelScrollRestore } from './lib/scrollMemory.js';
 import LogsViewer from './components/LogsViewer.jsx';
 import RecordingBar from './components/RecordingBar.jsx';
 import { audioMeter } from './lib/audioMeter.js';
+import { isWindows } from './lib/os.js';
 import { IconButton, StatusDot, useConfirmDialog } from './components/ui/index.jsx';
 
 // ── Toast System ──────────────────────────────────────────────────────────────
@@ -182,8 +183,9 @@ export default function App() {
 
   // Request microphone access at startup so Windows adds this app to the
   // Privacy → Microphone list and allows FFmpeg (a desktop app) to capture audio.
+  // Windows only: on macOS this would raise the permission prompt at every launch.
   useEffect(() => {
-    if (!navigator.mediaDevices?.getUserMedia) return;
+    if (!isWindows || !navigator.mediaDevices?.getUserMedia) return;
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then((stream) => { stream.getTracks().forEach((t) => t.stop()); })
       .catch(() => { /* permission denied — user will see guidance in Settings */ });
@@ -245,18 +247,34 @@ export default function App() {
       audioMeter.reset();
     }
 
+    // System audio via Electron loopback. getDisplayMedia must ask for video too; that track is
+    // stopped at once. Returns null when the OS gives no system audio (permission denied, or no
+    // audio track): on Windows main then falls back to FFmpeg/WASAPI, which can still capture it,
+    // so we fail; elsewhere there is no such fallback, so the caller records the mic alone.
+    async function openSystemStream() {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+        stream.getVideoTracks().forEach((t) => t.stop());
+        if (stream.getAudioTracks().length > 0) return stream;
+        stream.getTracks().forEach((t) => t.stop());
+        if (isWindows) throw new Error('System audio capture returned no audio track');
+      } catch (err) {
+        if (isWindows) throw err;
+        console.warn('System audio unavailable, recording microphone only:', err);
+      }
+      return null;
+    }
+
     window.meetmind.capture.onStart(async () => {
       try {
-        const sysStream = await navigator.mediaDevices.getDisplayMedia({
-          audio: true,
-          video: true,
-        });
-        sysStream.getVideoTracks().forEach((t) => t.stop());
+        const sysStream = await openSystemStream();
 
         let micStream = null;
         try {
           micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         } catch { /* mic unavailable — system audio only */ }
+
+        if (!sysStream && !micStream) throw new Error('No audio source available (microphone access denied?)');
 
         streams = [sysStream, micStream].filter(Boolean);
 
@@ -264,11 +282,13 @@ export default function App() {
         const dest = ctx.createMediaStreamDestination();
 
         // System audio — source → analyser → dest
-        const sysSource = ctx.createMediaStreamSource(sysStream);
-        sysAnalyser = ctx.createAnalyser();
-        sysAnalyser.fftSize = 256;
-        sysSource.connect(sysAnalyser);
-        sysSource.connect(dest);
+        if (sysStream) {
+          const sysSource = ctx.createMediaStreamSource(sysStream);
+          sysAnalyser = ctx.createAnalyser();
+          sysAnalyser.fftSize = 256;
+          sysSource.connect(sysAnalyser);
+          sysSource.connect(dest);
+        }
 
         // Microphone — source → analyser → dest
         if (micStream) {
@@ -299,7 +319,10 @@ export default function App() {
         // Emit chunks every 1 second (1000ms) for real-time disk streaming
         mediaRecorder.start(1000);
 
-        window.meetmind.capture.sendStarted();
+        window.meetmind.capture.sendStarted({ systemAudio: !!sysStream, mic: !!micStream });
+        if (!sysStream) {
+          addToast('Recording your microphone only: system audio is unavailable. Check Screen & System Audio Recording permission.', 'warning');
+        }
       } catch (err) {
         console.error('Renderer audio capture failed:', err);
         stopMeterLoop();
@@ -334,7 +357,7 @@ export default function App() {
         window.meetmind.capture.sendAudioData(new ArrayBuffer(0));
       }
     });
-  }, []);
+  }, [addToast]); // addToast is stable, so the listeners are registered once
 
   const refreshSessions = useCallback(async () => {
     if (!window.meetmind) return;

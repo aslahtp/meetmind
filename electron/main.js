@@ -423,7 +423,11 @@ function requestRendererCaptureStart() {
       return;
     }
 
-    function onStarted() { cleanup(); resolve(true); }
+    function onStarted(_e, sources) {
+      cleanup();
+      if (sources && !sources.systemAudio) logger.warn('Renderer capture started without system audio (microphone only)');
+      resolve(true);
+    }
     function onFailed() { cleanup(); resolve(false); }
     function cleanup() {
       clearTimeout(timer);
@@ -690,12 +694,8 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
       // transcribe() throws for silent files; if we get here but with empty results,
       // treat it the same way (STT may return empty for near-silence)
       if (!transcript || transcript.length === 0) {
-        throw new Error(
-          'No speech detected in the recording. ' +
-          'Stereo Mix only captures audio playing through your speakers. ' +
-          'To test capture: play a video or music while recording. ' +
-          'To capture your voice: select your microphone in Settings → Audio.'
-        );
+        const { silenceHints } = require('./audio/audio-hints');
+        throw new Error(`No speech detected in the recording. ${silenceHints(process.platform).join(' ')}`);
       }
 
       abortIfCancelled();
@@ -1362,51 +1362,26 @@ function registerIpcHandlers() {
 
   // ── FFmpeg check ──────────────────────────────────────────────────────────
   ipcMain.handle('ffmpeg:check', () => {
-    const { getFfmpegPath, getFfprobePath } = require('./audio/ffmpeg-path');
+    const { locate } = require('./audio/ffmpeg-path');
     const { spawnSync } = require('child_process');
 
-    function probeBinary(bundledPath, systemName) {
-      // 1. Bundled binary
-      if (fs.existsSync(bundledPath)) {
-        try {
-          const result = spawnSync(bundledPath, ['-version'], { encoding: 'utf8', timeout: 5000 });
-          const versionLine = (result.stdout || result.stderr || '').split('\n')[0] || '';
-          const match = versionLine.match(/version ([^\s]+)/i);
-          return {
-            found: true,
-            source: 'bundled',
-            path: bundledPath,
-            version: match ? match[1] : 'unknown',
-          };
-        } catch {
-          return { found: true, source: 'bundled', path: bundledPath, version: 'unknown' };
-        }
-      }
-
-      // 2. System PATH fallback
+    // Bundled binary first, then the in-app install (macOS), Homebrew, and finally PATH.
+    function probeBinary(tool) {
+      const hit = locate(tool);
+      if (!hit) return { found: false, source: null, path: null, version: null };
       try {
-        const result = spawnSync(systemName, ['-version'], { encoding: 'utf8', timeout: 5000 });
-        const output = result.stdout || result.stderr || '';
-        if (result.status === 0 || output.includes('version')) {
-          const versionLine = output.split('\n')[0] || '';
-          const match = versionLine.match(/version ([^\s]+)/i);
-          return {
-            found: true,
-            source: 'system',
-            path: systemName,
-            version: match ? match[1] : 'unknown',
-          };
-        }
+        const result = spawnSync(hit.path, ['-version'], { encoding: 'utf8', timeout: 5000 });
+        const versionLine = (result.stdout || result.stderr || '').split('\n')[0] || '';
+        const match = versionLine.match(/version ([^\s]+)/i);
+        return { found: true, source: hit.source, path: hit.path, version: match ? match[1] : 'unknown' };
       } catch {
-        // not on PATH
+        return { found: true, source: hit.source, path: hit.path, version: 'unknown' };
       }
-
-      return { found: false, source: null, path: null, version: null };
     }
 
     return {
-      ffmpeg: probeBinary(getFfmpegPath(), 'ffmpeg'),
-      ffprobe: probeBinary(getFfprobePath(), 'ffprobe'),
+      ffmpeg: probeBinary('ffmpeg'),
+      ffprobe: probeBinary('ffprobe'),
     };
   });
 

@@ -52,6 +52,9 @@ contextBridge.exposeInMainWorld('meetmind', {
   // Effective theme ('light' | 'dark') at launch, for index.html's pre-paint script.
   startupTheme,
 
+  // Host OS ('win32' | 'darwin' | ...), for OS-specific copy and window chrome. See renderer/lib/os.js.
+  platform: process.platform,
+
   // Window controls (frameless window)
   window: {
     minimize:    () => ipcRenderer.invoke('window:minimize'),
@@ -143,7 +146,7 @@ contextBridge.exposeInMainWorld('meetmind', {
   capture: {
     onStart: (callback) => { ipcRenderer.on('capture:start', () => callback()); },
     onStop: (callback) => { ipcRenderer.on('capture:stop', () => callback()); },
-    sendStarted: () => ipcRenderer.send('capture:started'),
+    sendStarted: (sources) => ipcRenderer.send('capture:started', sources),
     sendFailed: (error) => ipcRenderer.send('capture:failed', error),
     sendChunk: (buffer) => ipcRenderer.send('capture:chunk', buffer),
     sendAudioData: (buffer) => ipcRenderer.send('capture:audio-data', buffer),

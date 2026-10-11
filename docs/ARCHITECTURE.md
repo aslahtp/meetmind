@@ -280,10 +280,15 @@ ffmpeg DirectShow (`dshow`) capture combining the microphone and system audio, u
 
 ### 4.3 FFmpeg resolution
 
-`electron/audio/ffmpeg-path.js` resolves the ffmpeg/ffprobe binary path in this order: a bundled
-copy under Electron's `extraResources` (production installs), then a locally committed copy at
-`assets/ffmpeg/` (dev machines that downloaded it manually), then a runtime download via the
-`ffmpeg:install` IPC handler, which fetches a build from
+`electron/audio/ffmpeg-path.js` resolves the ffmpeg/ffprobe binary path (`ffmpeg.exe` on
+Windows, `ffmpeg` elsewhere) in this order: a bundled copy under Electron's `extraResources`
+(production installs) or a local copy at `assets/ffmpeg/` (dev machines that downloaded it
+manually; per-arch `assets/ffmpeg/mac-<arch>/` on macOS), then on macOS the in-app install in
+`userData/ffmpeg/` and Homebrew's `/opt/homebrew/bin` and `/usr/local/bin` (Finder-launched apps
+don't inherit the shell PATH), and finally the bare command on PATH. The candidate list is built
+by the pure `ffmpegCandidates()` (unit-tested in `tests/ffmpeg-path.test.js`). If nothing is
+found, Settings → System offers a runtime download via the `ffmpeg:install` IPC handler, which
+fetches a build from
 [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) (the same builds as
 [GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg) on GitHub). FFmpeg binaries are never
 committed to git (they exceed GitHub's 100 MB file limit and CI's repo-hygiene job actively
@@ -637,8 +642,8 @@ From `package.json` (pnpm, Node 22.12+, Windows only).
 
 | Package | Version | Purpose |
 | --- | --- | --- |
-| `electron` | ^33.4.11 | Runtime (pinned exact version also set in `electron-builder.yml`) |
-| `electron-builder` | ^25.1.8 | Packaging the Windows NSIS installer |
+| `electron` | ^44.7.0 | Runtime (pinned exact version also set in `electron-builder.yml`). Since Electron 42 the package has no install script: the binary downloads the first time Electron is launched, or with `pnpm exec install-electron` |
+| `electron-builder` | ^26.17.0 | Packaging the Windows NSIS installer |
 | `react`, `react-dom` | ^18.3.1 | Renderer UI framework |
 | `vite`, `@vitejs/plugin-react` | ^6.4.3 / ^4.7.0 | Renderer dev server and build |
 | `vitest` | ^5.0.1 | Test runner (`tests/**/*.test.{js,jsx}`, Node environment) |
@@ -651,8 +656,9 @@ From `package.json` (pnpm, Node 22.12+, Windows only).
 | `rcedit` | ^5.0.2 | Editing the packaged `.exe`'s resources (icon, version info) |
 
 pnpm specifics: `pnpm-workspace.yaml` sets `nodeLinker: hoisted` so electron-builder sees a flat
-`node_modules` tree, and `allowBuilds` lists dependencies permitted to run install scripts
-(extend with `pnpm approve-builds <pkg>`). `verifyDepsBeforeRun: warn` stops `pnpm run` from
+`node_modules` tree, and `allowBuilds` records which dependencies may run install scripts
+(extend with `pnpm approve-builds <pkg>`; `koffi` and `electron-winstaller` are explicitly
+denied because their scripts aren't needed). `verifyDepsBeforeRun: warn` stops `pnpm run` from
 silently reinstalling after `package.json` changes without an explicit `pnpm install`, because
 that reinstall replaces `node_modules/electron` out from under a currently-running app.
 `minimumReleaseAge: 1440` is a supply-chain guard: pnpm refuses to install a package version

@@ -20,7 +20,8 @@ const SKILL_DIR = __dirname;
 const ROOT = path.resolve(SKILL_DIR, '../../..');
 const OUT = path.join(SKILL_DIR, 'shots');
 const PROFILE = path.join(SKILL_DIR, '.profile');
-const ELECTRON = path.join(ROOT, 'node_modules/electron/dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
+// require('electron') from Node returns the binary path, downloading it on first use (Electron 42+).
+const ELECTRON = require(path.join(ROOT, 'node_modules/electron'));
 
 let electron;
 try {

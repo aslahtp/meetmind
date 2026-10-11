@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, RefreshCw, RotateCcw, Download, ArrowUpCircle, FileAudio } from 'lucide-react';
 import { StatusDot, ProgressBar } from '../ui/index.jsx';
 import { SettingsGroup, ExternalLink } from './SettingsParts.jsx';
+import { isMac } from '../../lib/os.js';
 
 const BINARIES = [
   { key: 'ffmpeg', label: 'ffmpeg', desc: 'Audio capture & conversion' },
@@ -12,10 +13,17 @@ const BINARIES = [
 const UPDATE_RECHECK_MS = 60 * 1000;
 
 const INSTALL_STAGE_HINT = {
-  download: 'Downloading from gyan.dev (~80 MB)…',
+  download: 'Downloading FFmpeg (~80 MB)…',
   extract: 'Extracting archive…',
-  copy: 'Installing to app directory…',
+  copy: 'Installing…',
 };
+
+// Package-manager alternative to the in-app download, per OS.
+const PACKAGE_MANAGER = isMac
+  ? { title: 'Or install with Homebrew', command: 'brew install ffmpeg', hint: 'Run in Terminal, then check again.' }
+  : { title: 'Or install with Windows Package Manager', command: 'winget install Gyan.FFmpeg', hint: 'Run in PowerShell or Command Prompt, then restart MeetMind and check again.' };
+
+const SOURCE_LABEL = { bundled: '(bundled)', installed: '(installed)', system: '(system)' };
 
 function StatusLine({ tone, children, className = '' }) {
   return (
@@ -204,7 +212,7 @@ export default function SystemSection({ active }) {
                     </div>
                     <span className="text-caption text-graphite tabular flex-shrink-0">
                       {stat?.found
-                        ? `${stat.version && stat.version !== 'unknown' ? `${stat.version} ` : ''}${stat.source === 'bundled' ? '(bundled)' : '(system)'}`
+                        ? `${stat.version && stat.version !== 'unknown' ? `${stat.version} ` : ''}${SOURCE_LABEL[stat.source] || '(system)'}`
                         : 'Not found'}
                     </span>
                   </div>
@@ -258,7 +266,7 @@ export default function SystemSection({ active }) {
                 <div>
                   <p className="text-body-sm font-medium text-ink">Install automatically</p>
                   <p className="hint mt-4">
-                    Downloads ffmpeg &amp; ffprobe from gyan.dev (~80 MB) and installs them into the app directory.
+                    Downloads ffmpeg &amp; ffprobe (~80 MB) and installs them for MeetMind.
                   </p>
                   <button type="button" onClick={handleInstallFfmpeg} className="btn-ink btn-sm mt-16">
                     <Download size={14} strokeWidth={1.75} />
@@ -267,9 +275,9 @@ export default function SystemSection({ active }) {
                 </div>
 
                 <div className="rule pt-24">
-                  <p className="text-body-sm font-medium text-ink">Or install with Windows Package Manager</p>
-                  <code className="code-box block select-all mt-8">winget install Gyan.FFmpeg</code>
-                  <p className="hint mt-8">Run in PowerShell or Command Prompt, then restart MeetMind and check again.</p>
+                  <p className="text-body-sm font-medium text-ink">{PACKAGE_MANAGER.title}</p>
+                  <code className="code-box block select-all mt-8">{PACKAGE_MANAGER.command}</code>
+                  <p className="hint mt-8">{PACKAGE_MANAGER.hint}</p>
                 </div>
 
                 <ExternalLink href="https://ffmpeg.org/download.html">Official FFmpeg download page</ExternalLink>

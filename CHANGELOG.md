@@ -6,6 +6,16 @@ updated: 2026-10-11
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.6.0] - 2026-10-11
+
+### Changed
+
+- Upgraded to Electron 44 (from 33) and electron-builder 26, groundwork for macOS support.
+- Silent-recording and "no speech detected" errors give OS-specific steps and no longer point to a "Settings → Audio" tab that no longer exists.
+- Settings copy is OS-neutral: the theme follows "your system", launch on startup runs "when you log in", and the FFmpeg card no longer names the download host or install folder.
+- FFmpeg lookup also finds an in-app install in the app data folder and Homebrew's locations on macOS.
+- Outside Windows, a recording falls back to the microphone alone (with a warning) when system audio is unavailable, instead of failing to start; Windows still falls back to FFmpeg capture.
+
 ## [4.5.0] - 2026-10-11
 
 ### Added

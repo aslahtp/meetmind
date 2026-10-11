@@ -14,6 +14,10 @@ win:
   icon: icons/icon.ico
   signAndEditExecutable: false
   artifactName: "${productName}-Setup-${version}.${ext}"
+  # Ship only the Windows x64 koffi binary (see the koffi note under asarUnpack).
+  files:
+    - "!node_modules/@koromix/koffi-darwin-*/**"
+    - "!node_modules/@koromix/koffi-win32-{arm64,ia32}/**"
 
 afterPack: scripts/after-pack.js
 
@@ -54,8 +58,11 @@ files:
   - assets/icons/**
   - package.json
   - "!assets/ffmpeg/**"
+  # koffi's optional dependencies cover every OS/CPU; only Windows and macOS builds exist, and
+  # each platform section below drops the other platform's binaries.
+  - "!node_modules/@koromix/koffi-{android,freebsd,linux,openbsd}-*/**"
 
-electronVersion: "33.4.11"
+electronVersion: "44.7.0"
 
 publish:
   provider: github
