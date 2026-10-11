@@ -11,6 +11,7 @@
 /electron/services/updater.js  @aslahtp
 # Downloads and pins of the FFmpeg binaries shipped in, or installed by, the app
 /electron/audio/ffmpeg-sources.js        @aslahtp
+/electron/audio/ffmpeg-fetch.js          @aslahtp
 /electron/services/ffmpeg-installer.js   @aslahtp
 /electron/utils/download.js              @aslahtp
 /assets/entitlements.mac.plist           @aslahtp

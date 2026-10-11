@@ -101,7 +101,9 @@ files:
   # each platform section below drops the other platform's binaries.
   - "!node_modules/@koromix/koffi-{android,freebsd,linux,openbsd}-*/**"
 
-electronVersion: "44.7.0"
+# No `electronVersion`: electron-builder packages the Electron the lockfile installed
+# (node_modules/electron), so the shipped runtime always matches dev and tests. A pin here
+# drifted whenever Dependabot bumped `electron` in package.json.
 
 publish:
   provider: github

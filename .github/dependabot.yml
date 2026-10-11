@@ -1,9 +1,12 @@
 version: 2
 
 updates:
-  # Keep workflow actions current (security fixes land in new action versions).
+  # Keep workflow actions current (security fixes land in new action versions). `/` covers only
+  # .github/workflows; the composite setup action pins its own actions, so list it too.
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/*
     schedule:
       interval: monthly
     cooldown:

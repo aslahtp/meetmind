@@ -4,12 +4,19 @@ Place the FFmpeg binaries here before building or running the app from source. e
 bundles them into the app as `resources/ffmpeg/`. They are never committed (too large for git, and
 CI's repo-hygiene check rejects them).
 
+The quickest way is `pnpm run fetch-ffmpeg`: it downloads the pinned build for your OS (the one
+the releases ship; pins in `electron/audio/ffmpeg-sources.js`), checks its SHA-256 and puts the
+files where they belong.
+
 ## Windows
 
 Required files, at the root of this folder:
 
 - `ffmpeg.exe` — FFmpeg encoder/decoder (required for audio capture)
 - `ffprobe.exe` — FFmpeg probe tool (used for media durations)
+
+`pnpm run fetch-ffmpeg` puts the pinned essentials build here (from GyanD/codexffmpeg, the same
+builds gyan.dev serves). To do it by hand:
 
 1. Go to https://www.gyan.dev/ffmpeg/builds/ (recommended Windows builds)
 2. Download `ffmpeg-release-essentials.zip` (the "essentials" build)

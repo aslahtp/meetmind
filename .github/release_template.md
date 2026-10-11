@@ -16,6 +16,12 @@
 
   - `meetmind-extension.zip` - for manual installation of the extension.
 
+Every download has a signed build-provenance attestation. To check that a file was built by this repository's release workflow from the tagged commit, run (with the [GitHub CLI](https://cli.github.com/)):
+
+```bash
+gh attestation verify MeetMind-x.y.z-arm64.dmg --repo aslahtp/meetmind
+```
+
 ## Setup
 
 ### Windows App
