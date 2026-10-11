@@ -20,7 +20,7 @@ written meeting notes. It:
    the same time, on the user's own PC. Nothing joins the meeting as a bot or participant.
 2. Sends the recording to a speech to text engine chosen by the user (AssemblyAI, Google Cloud
    Speech to Text v1/v2, Sarvam AI, or Groq Whisper) to get a speaker labeled transcript.
-3. Sends the transcript to the user's chosen LLM (Google Gemini or Groq, with an optional cross-provider fallback) to produce structured meeting notes (executive
+3. Sends the transcript to the user's chosen LLM (Google Gemini, Groq or Anthropic Claude, with an optional cross-provider fallback) to produce structured meeting notes (executive
    summary, agenda, decisions, an action items table) as either structured JSON or Markdown.
 4. Stores everything locally in a SQLite database (via `sql.js`), and optionally exports a PDF,
    copies Markdown, or syncs a formatted page to Notion.
@@ -30,7 +30,7 @@ Three build artifacts come out of this one repository:
 | Artifact | Source | Purpose |
 | --- | --- | --- |
 | Electron desktop app | `electron/` (main process) + `renderer/` (React UI) | The app itself: recording, processing pipeline, notes UI, settings |
-| Chrome MV3 extension | `extension/` | Bridges Google Meet / Zoom tabs to the desktop app: adds a record button and a floating overlay |
+| Chrome MV3 extension | `extension/` | Optional. Bridges Google Meet / Zoom tabs to the desktop app: adds a record button and an in-tab overlay. The desktop app detects meetings on its own (section 3.4) |
 | Marketing site | `site/` | Static GitHub Pages site (`https://aslahtp.github.io/meetmind/`) |
 
 ### 1.1 High level data flow
@@ -58,7 +58,7 @@ Three build artifacts come out of this one repository:
         v                                            |
  runProcessingPipeline() in main.js  ------------------+
    Stage 1: electron/services/transcription.js  -> electron/providers/stt/* (Google / AssemblyAI / Sarvam / Groq)
-   Stage 2: electron/services/notes.js          -> electron/providers/llm/* (Gemini / Groq; JSON or Markdown notes)
+   Stage 2: electron/services/notes.js          -> electron/providers/llm/* (Gemini / Groq / Claude; JSON or Markdown notes)
    Stage 3: electron/services/notion.js         (optional, if configured)
         |
         v
@@ -111,6 +111,9 @@ Owns:
   `meetmind-audio://session/<sessionId>` (preferred) and a legacy
   `meetmind-audio://<sessionId>` form.
 - Every `ipcMain.handle` channel (the full list is in section 3.2).
+- Native meeting detection and the floating meeting overlay window (section 3.4): one
+  `overlayState` object, updated by `broadcastStatus()` alongside every status message sent to
+  the extension.
 - The recording state machine (`isRecording` flag, start/stop orchestration, fallback capture
   path selection).
 - `runProcessingPipeline()`: the three-stage transcribe -> notes -> Notion pipeline described in
@@ -157,8 +160,13 @@ explicit allowlist of valid channel names (`recording:started`, `recording:stopp
 `recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
 `processing:error`, `processing:cancelled`, `ws:extension-connected`, `ws:recording-requested`,
 `sessions:durations-updated`, `updater:status`, `calendar:meeting-starting`,
-`llm:fallback-used`, `log:entry`) so the renderer cannot subscribe to an arbitrary IPC
-channel.
+`llm:fallback-used`, `log:entry`, `app:open-session`) so the renderer cannot subscribe to an
+arbitrary IPC channel.
+
+The meeting overlay window uses its own, smaller preload (`electron/overlay-preload.js`, run
+sandboxed) exposing only `window.meetmindOverlay`: `overlay:get-state`, `overlay:start`,
+`overlay:stop`, `overlay:dismiss`, `overlay:keep-recording`, `overlay:open-session` (invoke),
+`overlay:resize` and `overlay:closed` (send), and the `overlay:state` / `overlay:theme` push events.
 
 Preload also injects the startup theme class (`light`/`dark`) onto `<html>` synchronously, by
 reading a `--meetmind-theme=` argument that main passes via
@@ -191,14 +199,53 @@ template, `AudioPlayer.jsx` streaming from `meetmind-audio://`), `ui/` (Dialog, 
 State/plumbing: `lib/app-context.js`, `lib/hooks.js`, `lib/status.js`, `lib/format.js`,
 `lib/platform.js`, `lib/meetingFilters.js`, `lib/scrollMemory.js`, `lib/audioMeter.js`, `lib/greeting.js`.
 
+A second Vite entry, `renderer/overlay.html` -> `overlay.jsx` ->
+`components/overlay/MeetingOverlay.jsx`, renders the floating meeting overlay (section 3.4)
+with the same `globals.css` design-system classes.
+
 Styling: Tailwind CSS (`darkMode: 'class'`, with `<html class="dark">` toggled by preload/React
 based on the `theme` setting) driven by CSS custom properties in `renderer/styles/globals.css`
 (`--color-*` tokens), consumed via Tailwind arbitrary values, e.g.
 `bg-[rgb(var(--color-background))]`, rather than hardcoded hex colors. Icons from
 `lucide-react` plus a handful of hand-authored brand icon components
-(`GeminiIcon`, `AssemblyAiIcon`, `SarvamIcon`, `GroqIcon`, `NotionIcon`, `GoogleCloudIcon`,
+(`GeminiIcon`, `ClaudeIcon`, `AssemblyAiIcon`, `SarvamIcon`, `GroqIcon`, `NotionIcon`, `GoogleCloudIcon`,
 `GoogleCalendarIcon`). Notes/transcript Markdown rendering uses `react-markdown` +
 `remark-gfm`, shared between the in-app notes view and the PDF export document.
+
+### 3.4 Meeting detection and overlay (`electron/detection/`, `electron/overlay/`)
+
+The desktop app notices calls by itself, without the extension, the way Notion's and Granola's
+desktop apps do. `detection/meeting-detector.js` polls every 1.5 s, using two Win32 reads made
+through `koffi` FFI in `detection/win32.js` (loaded lazily, so a load failure only disables
+detection):
+
+- **Who holds the mic**: the privacy-indicator consent registry
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone`
+  (`NonPackaged\<path with # for \>` for win32 apps, package family names for packaged apps). An
+  app is using the mic right now when its `LastUsedTimeStop` is `0`. MeetMind's own exe is ignored.
+- **Window titles**: `EnumWindows` + `GetWindowTextW`, with the owning exe resolved via
+  `QueryFullProcessImageNameW`.
+
+The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) decide:
+
+- A browser (Chrome, Edge, Brave, Firefox, Opera, Vivaldi, Arc) holding the mic counts as a
+  meeting only if it showed a Google Meet, Zoom web or Teams web title in the last 2 minutes, so
+  switching tabs mid-call keeps the meeting but voice search on another site never prompts.
+- The Zoom and Teams desktop apps holding the mic count on their own.
+- Two consecutive positive polls emit `meeting-detected`; 15 s with no positive poll emits
+  `meeting-ended`. "Not now" suppresses a meeting until it ends.
+
+`main.js` turns those events into overlay states, each a single compact row: `prompt` (Record / ×),
+`recording` (timer + Stop), `ended` ("Meeting ended?": it asks, never stops on its own),
+`processing`, `complete` (Open) and `error`. Recordings started from the app, tray or
+extension show the overlay too, and processing updates apply only to the session the overlay is
+following. `overlay/overlay-window.js` owns the window: frameless, transparent, always on top,
+`focusable: false` and shown with `showInactive()` so it never takes focus from the call,
+placed at the top centre of the display showing the meeting, and sized to the card's reported
+height. The bar animates open (the mic tile drops in, then unfolds to full width) and closed (it
+collapses back to the tile and lifts away; `renderer/styles/overlay.css`). To hide, main sends a
+hidden state and waits for the renderer's `overlay:closed` after the close animation, with a
+1.2 s fallback. The `meetingDetection` setting (default on) turns detection and the overlay off.
 
 ---
 
@@ -338,7 +385,10 @@ fallback). Providers only return raw text.
   (default), `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `llama-3.1-8b-instant`. JSON mode sends
   `response_format: {type: "json_object"}`. Free-tier tokens-per-minute limits can reject long
   transcripts (HTTP 413/429); the error says so and the fallback below covers it.
-- Both allow a custom model ID.
+- **Claude** (`llm/claude.js`, Anthropic Messages API `POST /v1/messages` via `fetch`, no SDK):
+  `claude-sonnet-5-5` (default), `claude-fable-5-1`, `claude-opus-5-5`, `claude-haiku-5-5`.
+  Authenticated with `claudeApiKey` (`x-api-key` + `anthropic-version` headers).
+- All three allow a custom model ID.
 
 Two output modes, controlled by `noteOutputMode` (the model is asked for JSON or Markdown):
 
@@ -401,13 +451,14 @@ in-progress recording indefinitely.
 ### 6.2 Settings (`electron/utils/config.js`)
 
 Wraps `electron-store` (itself backed by a JSON file in `userData`) with a typed schema covering:
-API keys (`googleApiKey`, `geminiApiKey`, `assemblyAiApiKey`, `sarvamApiKey`, `groqApiKey`,
+API keys (`googleApiKey`, `geminiApiKey`, `claudeApiKey`, `assemblyAiApiKey`, `sarvamApiKey`, `groqApiKey`,
 Notion, Google Calendar OAuth client; the provider ones are generated from the provider
 registries), service and model selection (`sttService`, `sttModels`, `llmProvider`,
 `llmModels`, `llmFallback`), audio device selection, diarization parameters
 (`enableDiarization`, `minSpeakers`, `maxSpeakers`), output preferences (`noteOutputMode`,
 `language`, custom `geminiSystemPrompt`), UI preferences (`theme`, `autoLaunch`,
-`hideLogsInSidebar`, `pinNotesViewToggle`, `dashboardRecentLimit`), update behavior
+`hideLogsInSidebar`, `pinNotesViewToggle`, `dashboardRecentLimit`), meeting detection
+(`meetingDetection`, default `true`), update behavior
 (`autoCheckUpdates`), PDF export (`pdfExportDir`, `pdfIncludeTranscript`), and the WebSocket
 port (`websocketPort`, default `39842`).
 
@@ -542,6 +593,7 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 | Google Cloud Speech-to-Text v2 | Transcription (`chirp_3` sync, or BatchRecognize for long audio) | Service account Bearer token (no API-key auth) | `electron/providers/stt/google.js` |
 | Google Cloud Storage | Staging WAV files for v2 BatchRecognize | Service account key file | `electron/providers/stt/google.js` (`@google-cloud/storage`) |
 | Google Gemini API | Meeting notes generation (Stage 2) | API key | `electron/providers/llm/gemini.js` (`@google/generative-ai`) |
+| Anthropic Claude API | Notes generation (Sonnet, Fable, Opus, Haiku) | API key | `electron/providers/llm/claude.js` (REST via `fetch`) |
 | Groq | Notes generation (Llama, GPT-OSS) and Whisper transcription | API key (one key for both) | `electron/providers/llm/groq.js`, `electron/providers/stt/groq.js` (REST via `fetch`) |
 | AssemblyAI | Transcription (alternative engine) | API key | `electron/providers/stt/assemblyai.js` (`assemblyai` SDK + REST) |
 | Sarvam AI | Transcription, `saaras:v3` model for English/Malayalam code-switching | API key | `electron/providers/stt/sarvam.js` (REST) |
@@ -573,6 +625,7 @@ From `package.json` (pnpm, Node 22.12+, Windows only).
 | `electron-updater` | ^6.8.9 | Auto-update via GitHub Releases |
 | `fluent-ffmpeg` | ^2.1.3 | ffmpeg process control (audio capture and conversion) |
 | `googleapis` | ^176.0.0 | Google Calendar OAuth2 + Calendar API client |
+| `koffi` | ^3.3.3 | FFI to `user32`/`kernel32`/`advapi32` for meeting detection (mic users, window titles); prebuilt binary from its `@koromix/koffi-win32-x64` optional dependency, so its install script stays disabled in `allowBuilds` |
 | `lucide-react` | ^1.48.0 | Renderer icon set |
 | `react-markdown` | ^10.1.0 | Notes/transcript Markdown rendering (in-app and PDF) |
 | `remark-gfm` | ^4.0.1 | GitHub-flavored Markdown extensions (tables, task lists) for `react-markdown` |
@@ -633,6 +686,10 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   authentication token exchanged, so any locally running process capable of spoofing that
   origin header (in practice, only the extension's own runtime does this reliably) is trusted;
   this is an accepted tradeoff for a purely local, single-user bridge.
+- **Meeting detection** reads only local state (the mic consent registry and visible window
+  titles); nothing it reads leaves the machine or is stored beyond the detected meeting's title.
+  The overlay window runs sandboxed with its own minimal preload, denies navigation and new
+  windows, and can only start or stop a recording through main.
 - **API keys and OAuth tokens at rest**: stored via `electron-store` in a JSON file under the
   OS user profile, in plaintext. There is no OS keychain (Windows Credential Manager) integration
   and no additional at-rest encryption layer. This is a known limitation, not a hidden one:
@@ -662,7 +719,8 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
 - **Renderer**: Vite (`vite.config.js`, `root: 'renderer'`) builds to `dist/renderer/`. The app
   version is injected into the renderer bundle at build time as a `__APP_VERSION__` global,
   read straight from `package.json` so the UI's displayed version can never drift from the
-  packaged app's actual version.
+  packaged app's actual version. There are two HTML entries: `index.html` (the app) and
+  `overlay.html` (the meeting overlay window).
 - **Extension**: `scripts/build-extension.js` zips `extension/` into
   `dist/meetmind-extension.zip` (`pnpm run build:ext`).
 - **Electron packaging** (`electron-builder.yml`): `appId: com.meetmind.app`, Windows NSIS
@@ -673,7 +731,9 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   explicitly excluded from the `asar` archive's `files` list (`!assets/ffmpeg/**`) since ffmpeg
   needs to run as a native subprocess, not live inside the packed archive. `electronVersion` is
   pinned to the exact same version as the `electron` devDependency, so electron-builder never
-  silently packages a mismatched runtime.
+  silently packages a mismatched runtime. `asarUnpack` keeps `koffi` and its
+  `@koromix/koffi-*` native binary outside the archive, since a `.node` file can't be loaded from
+  inside it.
 - **Build must include `dist/renderer/**` in `build.files`**; since `dist/` is gitignored,
   omitting this would ship an installer whose window is blank (a documented, previously-hit
   failure mode, called out explicitly in `AGENTS.md`'s "Learned Workspace Facts").
@@ -733,6 +793,7 @@ Current coverage is pure logic only:
 | `tests/format.test.js` | Formatting helpers (`renderer/lib/format.js`) |
 | `tests/markdown.test.jsx` | Markdown rendering (`renderer/components/note/markdown.jsx`) |
 | `tests/pdf-export.test.js` | PDF file naming (`electron/services/pdf-export.js`) |
+| `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, meeting window titles, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
 
 This suite does **not** cover the UI, IPC handlers, the recording state machine, or any of the
 third-party API integrations. Per `AGENTS.md`, UI and main-process changes must additionally be
@@ -754,6 +815,10 @@ Structural limitations, by design rather than oversight:
 
 - **Windows only.** The audio capture path (WASAPI loopback, DirectShow fallback) and the
   installer are Windows-specific; there is no macOS or Linux build target.
+- **Meeting detection sees titles, not URLs.** A browser only exposes its active tab's title,
+  so the meeting URL is unknown, and a meeting is recognised by its tab title (`Meet - …`,
+  `Zoom Meeting`, `… | Microsoft Teams`). Other call apps (Slack, Discord, Webex) are recorded
+  fine but not detected.
 - **No database migrations.** `sessions` table changes have so far been additive
   (`CREATE TABLE IF NOT EXISTS` plus new nullable columns); a genuinely breaking schema change
   would need a migration strategy that does not exist yet.

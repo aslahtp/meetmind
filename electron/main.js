@@ -17,6 +17,8 @@ const { exportPdf, buildPdfFileName, resolveExportDir } = require('./services/pd
 const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState } = require('./services/updater');
 const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEvents, startEventPoller, stopEventPoller } = require('./services/google-calendar');
 const db = require('./db/sessions');
+const meetingDetector = require('./detection/meeting-detector');
+const { showOverlay, hideOverlay, overlayClosed, destroyOverlay, resizeOverlay, setOverlayTheme } = require('./overlay/overlay-window');
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -180,13 +182,17 @@ function focusMainWindow() {
 
 // ── Window ──────────────────────────────────────────────────────────────────
 
+// The theme actually shown ('light' | 'dark') for a theme setting, resolving 'system'.
+function resolveEffectiveTheme(themeSetting) {
+  return themeSetting === 'system'
+    ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
+    : (themeSetting === 'dark' ? 'dark' : 'light');
+}
+
 // Window background painted before the renderer's first frame — must match the
 // theme the renderer is about to apply, otherwise the window flashes.
 function resolveStartupBackgroundColor(themeSetting) {
-  const effective = themeSetting === 'system'
-    ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
-    : (themeSetting === 'dark' ? 'dark' : 'light');
-  return effective === 'light' ? '#f8f5ed' : '#1a1813';  // matches --color-paper
+  return resolveEffectiveTheme(themeSetting) === 'light' ? '#f8f5ed' : '#1a1813';  // matches --color-paper
 }
 
 function createMainWindow() {
@@ -497,7 +503,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
 
       updateTrayMenu();
       sendToRenderer('recording:started', { sessionId: currentSessionId });
-      broadcastToExtension({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
+      broadcastStatus({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
       logger.info('Recording started (renderer capture)', { sessionId: currentSessionId });
       return { success: true, sessionId: currentSessionId };
     }
@@ -509,7 +515,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
     isRecording = true;
     updateTrayMenu();
     sendToRenderer('recording:started', { sessionId: currentSessionId });
-    broadcastToExtension({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
+    broadcastStatus({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
     logger.info('Recording started (FFmpeg fallback)', { sessionId: currentSessionId });
     return { success: true, sessionId: currentSessionId };
   } catch (err) {
@@ -592,7 +598,7 @@ async function handleStopRecording() {
 
     updateTrayMenu();
     sendToRenderer('recording:stopped', { sessionId: currentSessionId, audioPath });
-    broadcastToExtension({ type: 'RECORDING_STOPPED' });
+    broadcastStatus({ type: 'RECORDING_STOPPED', sessionId: currentSessionId });
     logger.info('Recording stopped', { sessionId: currentSessionId, audioPath });
 
     runProcessingPipeline(currentSessionId, audioPath);
@@ -635,7 +641,7 @@ function hasReusableTranscript(session) {
 async function runProcessingPipeline(sessionId, audioPath, options = {}) {
   const sendProgress = (stage, percent) => {
     sendToRenderer('processing:progress', { stage, percent });
-    broadcastToExtension({ type: 'PROCESSING_PROGRESS', stage, percent });
+    broadcastStatus({ type: 'PROCESSING_PROGRESS', stage, percent, sessionId });
   };
 
   // Abort guard — called before each expensive stage so a session deleted
@@ -727,7 +733,7 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     }
 
     sendToRenderer('processing:complete', { sessionId, notionUrl });
-    broadcastToExtension({ type: 'PROCESSING_COMPLETE', notionUrl, sessionId });
+    broadcastStatus({ type: 'PROCESSING_COMPLETE', notionUrl, sessionId });
     logger.info('Processing pipeline complete', { sessionId, notionUrl });
   } catch (err) {
     // If the session was deleted, silently drop the pipeline — no error toast,
@@ -736,12 +742,113 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
       cancelledSessions.delete(sessionId);
       logger.info('Processing pipeline cancelled (session deleted)', { sessionId });
       sendToRenderer('processing:cancelled', { sessionId });
+      syncOverlayWithStatus({ type: 'PROCESSING_CANCELLED', sessionId });
       return;
     }
     logger.error('Processing pipeline error', { sessionId, error: err.message });
     db.updateSession(sessionId, { status: 'error', last_error: err.message });
     sendToRenderer('processing:error', { sessionId, error: err.message });
-    broadcastToExtension({ type: 'PROCESSING_ERROR', error: err.message });
+    broadcastStatus({ type: 'PROCESSING_ERROR', error: err.message, sessionId });
+  }
+}
+
+// ── Meeting overlay ──────────────────────────────────────────────────────────
+// One state object drives the floating overlay (electron/overlay/overlay-window.js). Native
+// meeting detection opens it with a "Start recording" prompt; recording and processing status
+// keep it in step, whichever surface (overlay, app, tray or extension) started the recording.
+
+let overlayState = { mode: 'hidden' };   // prompt | recording | ended | processing | complete | error | hidden
+let overlayHideTimer = null;
+
+function isMeetingDetectionEnabled() {
+  return getConfig().meetingDetection !== false;
+}
+
+function setOverlay(next, { autoHideMs } = {}) {
+  clearTimeout(overlayHideTimer);
+  overlayState = next;
+  if (next.mode === 'hidden' || !isMeetingDetectionEnabled()) {
+    hideOverlay();
+    return;
+  }
+  showOverlay(overlayState, {
+    theme: resolveEffectiveTheme(getConfig().theme || 'light'),
+    bounds: next.meeting?.bounds || null,
+  });
+  if (autoHideMs) {
+    overlayHideTimer = setTimeout(() => setOverlay({ ...overlayState, mode: 'hidden' }), autoHideMs);
+  }
+}
+
+// Mirrors a recording/processing status message onto the overlay. Processing updates only
+// apply to the session the overlay is following, so retrying an old meeting never pops it up.
+function syncOverlayWithStatus(message) {
+  const following = message.sessionId && message.sessionId === overlayState.sessionId;
+  switch (message.type) {
+    case 'RECORDING_STARTED':
+      setOverlay({
+        mode: 'recording',
+        meeting: overlayState.mode === 'prompt' ? overlayState.meeting : meetingDetector.activeMeeting(),
+        sessionId: message.sessionId,
+        startedAt: Date.now(),
+      });
+      break;
+    case 'RECORDING_STOPPED':
+      if (following) setOverlay({ ...overlayState, mode: 'processing', stage: 'transcribing', percent: 0 });
+      break;
+    case 'PROCESSING_PROGRESS':
+      if (following && overlayState.mode === 'processing') {
+        setOverlay({ ...overlayState, stage: message.stage, percent: message.percent });
+      }
+      break;
+    case 'PROCESSING_COMPLETE':
+      if (following && overlayState.mode === 'processing') {
+        setOverlay({ ...overlayState, mode: 'complete', percent: 100, notionUrl: message.notionUrl || null }, { autoHideMs: 10000 });
+      }
+      break;
+    case 'PROCESSING_ERROR':
+      if (following && overlayState.mode === 'processing') {
+        setOverlay({ ...overlayState, mode: 'error', error: message.error }, { autoHideMs: 8000 });
+      }
+      break;
+    case 'PROCESSING_CANCELLED':
+      if (following) setOverlay({ mode: 'hidden' });
+      break;
+    default:
+      break;
+  }
+}
+
+// Sends a status message to the Chrome extension and mirrors it on the desktop overlay.
+function broadcastStatus(message) {
+  broadcastToExtension(message);
+  syncOverlayWithStatus(message);
+}
+
+function handleMeetingDetected(meeting) {
+  if (isRecording) {
+    // Already recording (started some other way): just label the overlay with the meeting.
+    if (!overlayState.meeting) setOverlay({ ...overlayState, meeting });
+    return;
+  }
+  setOverlay({ mode: 'prompt', meeting });
+}
+
+// Never stops on its own: while recording, ask; while only prompting, withdraw the prompt.
+function handleMeetingEnded(meeting) {
+  if (isRecording) {
+    setOverlay({ ...overlayState, mode: 'ended' });
+  } else if (overlayState.mode === 'prompt' && overlayState.meeting?.key === meeting.key) {
+    setOverlay({ mode: 'hidden' });
+  }
+}
+
+function applyMeetingDetection(enabled) {
+  if (enabled) {
+    meetingDetector.start({ onDetected: handleMeetingDetected, onEnded: handleMeetingEnded });
+  } else {
+    meetingDetector.stop();
+    setOverlay({ mode: 'hidden' });
   }
 }
 
@@ -792,6 +899,8 @@ function registerIpcHandlers() {
     if (key === 'autoLaunch') {
       applyAutoLaunch(value);
     }
+    if (key === 'meetingDetection') applyMeetingDetection(value !== false);
+    if (key === 'theme') setOverlayTheme(resolveEffectiveTheme(value));
     return true;
   });
 
@@ -800,6 +909,8 @@ function registerIpcHandlers() {
     if ('autoLaunch' in updates) {
       applyAutoLaunch(updates.autoLaunch);
     }
+    if ('meetingDetection' in updates) applyMeetingDetection(updates.meetingDetection !== false);
+    if ('theme' in updates) setOverlayTheme(resolveEffectiveTheme(updates.theme));
     return true;
   });
 
@@ -808,6 +919,37 @@ function registerIpcHandlers() {
   );
 
   ipcMain.handle('recording:stop', () => handleStopRecording());
+
+  // ── Meeting overlay ───────────────────────────────────────────────────────
+  ipcMain.handle('overlay:get-state', () => overlayState);
+
+  ipcMain.handle('overlay:start', () => {
+    if (overlayState.mode !== 'prompt') return { success: false, error: 'Nothing to record' };
+    return handleStartRecording(null, '', overlayState.meeting?.title || '');
+  });
+
+  ipcMain.handle('overlay:stop', () => handleStopRecording());
+
+  ipcMain.handle('overlay:dismiss', () => {
+    if (overlayState.mode === 'prompt' && overlayState.meeting?.key) meetingDetector.dismiss(overlayState.meeting.key);
+    setOverlay({ ...overlayState, mode: 'hidden' });
+    return true;
+  });
+
+  ipcMain.handle('overlay:keep-recording', () => {
+    if (isRecording && overlayState.mode === 'ended') setOverlay({ ...overlayState, mode: 'recording' });
+    return true;
+  });
+
+  ipcMain.handle('overlay:open-session', (_e, sessionId) => {
+    focusMainWindow();
+    if (typeof sessionId === 'string' && sessionId) sendToRenderer('app:open-session', { sessionId });
+    setOverlay({ ...overlayState, mode: 'hidden' });
+    return true;
+  });
+
+  ipcMain.on('overlay:resize', (_e, height) => resizeOverlay(height));
+  ipcMain.on('overlay:closed', () => overlayClosed());
 
   // Incremental audio chunk from renderer capture — append to disk
   ipcMain.on('capture:chunk', (_e, buffer) => {
@@ -1124,7 +1266,7 @@ function registerIpcHandlers() {
     return { success: false, error: 'Unknown stage' };
   });
 
-  // Create a session from a pasted transcript (skip STT, go straight to Gemini)
+  // Create a session from a pasted transcript (skip STT, go straight to note generation)
   ipcMain.handle('session:create-from-transcript', async (_e, { title, transcriptText }) => {
     const { v4: uuidv4 } = require('uuid');
 
@@ -1162,7 +1304,7 @@ function registerIpcHandlers() {
       status:     'generating',
     });
 
-    // Run Gemini + optional Notion upload asynchronously so the IPC call returns immediately
+    // Run note generation + optional Notion upload asynchronously so the IPC call returns immediately
     // and the renderer can listen on processing:progress / processing:complete as usual.
     (async () => {
       const sendProgress = (stage, percent) => {
@@ -1717,6 +1859,9 @@ app.whenReady().then(async () => {
   // Start calendar event poller if connected
   startCalendarPoller(config);
 
+  if (config.meetingDetection !== false) applyMeetingDetection(true);
+  nativeTheme.on('updated', () => setOverlayTheme(resolveEffectiveTheme(getConfig().theme || 'light')));
+
   app.on('activate', () => {
     focusMainWindow();
   });
@@ -1733,6 +1878,8 @@ app.on('before-quit', () => {
   app.isQuitting = true;
   stopWebSocketServer();
   stopEventPoller();
+  meetingDetector.stop();
+  destroyOverlay();
   logger.info('MeetMind shutting down');
 });
 

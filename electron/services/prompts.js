@@ -59,7 +59,7 @@ const DEFAULT_SYSTEM_PROMPT = `Write for someone who was not in the meeting. Eac
 \`\`\``;
 
 // Default system prompt for Markdown output mode.
-// When this (or any custom prompt that doesn't instruct JSON) is used, Gemini
+// When this (or any custom prompt that doesn't instruct JSON) is used, the model
 // returns plain Markdown and the renderer switches to a prose markdown view.
 const DEFAULT_MD_SYSTEM_PROMPT = `# Role Definition
 

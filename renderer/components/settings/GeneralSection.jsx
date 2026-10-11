@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sun, Moon, Monitor, Palette, Power } from 'lucide-react';
+import { Sun, Moon, Monitor, Palette, Power, Radar } from 'lucide-react';
 import { useApp } from '../../lib/app-context.js';
 import { SegmentedControl, Switch } from '../ui/index.jsx';
 import { SettingsGroup, SettingRow, RowList } from './SettingsParts.jsx';
@@ -75,6 +75,27 @@ export default function GeneralSection({ form, onChange }) {
               label="Audio waveform"
               checked={form.showAudioWaveform !== false}
               onChange={(v) => onChange('showAudioWaveform', v)}
+            />
+          </SettingRow>
+        </RowList>
+      </SettingsGroup>
+
+      <SettingsGroup
+        title="Meeting detection"
+        description="Works without the browser extension."
+        icon={<Radar size={20} strokeWidth={1.75} className="text-ink" />}
+      >
+        <RowList>
+          <SettingRow
+            label="Detect meetings"
+            description="Shows a floating prompt to record when Google Meet, Zoom or Teams starts using your microphone, and keeps a timer on screen while you record."
+            htmlFor="pref-meeting-detection"
+          >
+            <Switch
+              id="pref-meeting-detection"
+              label="Detect meetings"
+              checked={form.meetingDetection !== false}
+              onChange={(v) => onChange('meetingDetection', v)}
             />
           </SettingRow>
         </RowList>

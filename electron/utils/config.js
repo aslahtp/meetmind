@@ -106,6 +106,10 @@ const schema = {
     type: 'boolean',
     default: true,
   },
+  meetingDetection: {
+    type: 'boolean',
+    default: true,
+  },
   googleCalendarClientId: {
     type: 'string',
     default: '',
@@ -223,6 +227,7 @@ function getConfig() {
     hideLogsInSidebar:         store.get('hideLogsInSidebar') || false,
     pinNotesViewToggle:        store.get('pinNotesViewToggle') !== false,
     showAudioWaveform:         store.get('showAudioWaveform') !== false,
+    meetingDetection:          store.get('meetingDetection') !== false,
     googleCalendarClientId:    store.get('googleCalendarClientId') || '',
     googleCalendarClientSecret: store.get('googleCalendarClientSecret') || '',
     googleCalendarRefreshToken: store.get('googleCalendarRefreshToken') || '',

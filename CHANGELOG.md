@@ -1,10 +1,27 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-03
+updated: 2026-10-11
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.5.0] - 2026-10-11
+
+### Added
+
+- Native meeting detection, no browser extension needed: when Google Meet, Zoom or Microsoft Teams (in a browser or the desktop app) starts using the microphone, a slim overlay unfolds at the top centre of the screen and offers to record; it collapses away when dismissed.
+- The overlay stays on screen while recording with a timer and Stop button, asks "Meeting ended?" when the call finishes (it never stops on its own), then shows processing progress and a button to open the notes.
+- "Detect meetings" switch in Settings › General › Meeting detection (on by default).
+
+### Changed
+
+- The Chrome extension is now optional; it keeps working alongside the desktop overlay.
+
+### Fixed
+
+- The Generate notes and Regenerate buttons and the empty notes view show the selected note-generation provider's icon (Gemini, Groq or Claude) instead of always Gemini.
+- The Google Cloud key guide no longer says the key must also go into the Gemini field, since Gemini is only one of the notes providers.
 
 ## [4.4.0] - 2026-10-11
 

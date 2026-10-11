@@ -8,7 +8,7 @@
 </h1>
 
 <p><strong>Open-source AI meeting notes app for Windows.</strong><br>
-Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, and sync the minutes to Notion — no meeting bot joins your call.</p>
+Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, Groq or Claude, and sync the minutes to Notion — no meeting bot joins your call.</p>
 
 <p>
   <a href="https://github.com/aslahtp/meetmind/releases/latest"><strong>Download for Windows</strong></a> ·
@@ -32,6 +32,7 @@ Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, a
 [![AssemblyAI](https://img.shields.io/badge/AssemblyAI-f97316?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyBoZWlnaHQ9IjFlbSIgdmlld0JveD0iMCAwIDI0IDI0IiB3aWR0aD0iMWVtIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0xMC41OTUgMS41YTMuNjk1IDMuNjk1IDAgMDAtMy40NDQgMi4zNTVMMCAyMi4yNmg1LjQzMmw1LjYyOS0xNC40ODZoLjAwMmEuOTYuOTYgMCAwMTEuNzgyIDBoLjc1VjQuODM1aC0xLjM5M0wxMy40OTggMS41aC0yLjkwMnoiIGZpbGw9IndoaXRlIj48L3BhdGg+PHBhdGggZD0iTTcuMTUxIDMuODU1YTMuNjk1IDMuNjk1IDAgMDEzLjI2LTIuMzVsLS4wMDItLjAwNUgxMy40MDVjMS41MjQgMCAyLjg5My45MzYgMy40NDQgMi4zNTVMMjQgMjIuMjZoLTUuNTI1TDExLjU0IDQuNDEzYTIuNTI4IDIuNTI4IDAgMDAtNC42MDkuMDA2bC4yMi0uNTY0eiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjcpIj48L3BhdGg+PC9zdmc+)](https://www.assemblyai.com/)
 [![Sarvam AI](https://img.shields.io/badge/Sarvam_AI-10b981?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNTMgMjUwIj48ZyBmaWxsPSIjZmZmIj48cGF0aCBkPSJtMjUyIDEwOS0xLTMtMTQtMTctMS0yLTEyLTEwLTEtMWgtMXYtMWwtMS0xNS0xLTItNy0yMi0xLTMtMS0xaC0xbC0zLTEtMTAtMy0xMS0yaC0yMGwtMTEtMTEtMi0xLTIyLTE0aC0ybC0zIDEtMjAgMTFoLTFsLTEgMS0xMyAxMS0xNS0xaC0zbC0yMyAzLTMgMS0xIDF2MWwtMiAyLTggMjEtMSAyLTMgMTctMTQgMTFMMiA5OWwtMSAyLTEgMXYxbDEgMyA3IDIyIDEgMnYxbDggMTMtNCAxNnYybC0xIDIzIDEgM3YxbDEgMSAyIDIgMTkgMTJoMWwxIDEgMTYgNSA3IDE1IDEgMiAxNSAxOCAyIDJ2MWg1bDEwLTEgMTEtMiAxLTFoMmwxNi02IDE1IDdoMmwyMiA1aDRsMS0xIDE3LTE3IDEtMSAxLTIgNS04di0xbDMtNXYtMWgybDE0LTQgMS0xaDFsMjAtMTEgMS0xIDItMXYtMmwxLTF2LTFsMS0yM3YtMmwtMi04LTEtN3YtMWwtMS0xaDF2LTFoMWw3LTExIDEtMSAxLTIgOC0yMXYtMmwxLTF6bS0zOC0yOHYybC0zIDE2djFsLTEgMy0yIDYtMTgtMTMtMS0xaC0xbC0yLTF2LTFsMS0zLTEtMjEgNyAyaDFsMyAxIDE0IDZ6bS0yNSA1NC01IDUgNCA5IDUgMTl2MWwtMSAxLTE5IDRoLTJsLTggMS0yIDctMSAyLTggMTctMSAyLTEtMS0xOC05LTEtMS03LTUtNiA0LTIgMS0xNyA4LTIgMXYtMWgtMWwtNy0xOHYtMmwtMi04aC02bC0zLTFoLTFsLTktMi05LTNoLTFsLTEtMXYtMmw2LTE4IDEtMSAxLTMgMi01LTQtNC0xLTEtMS0xLTYtOC01LTgtMS0yIDItMSAxNS05IDEtMSAyLTEgNi0zdi05bDItMTl2LTJoNGwxNyAyIDIgMSA4IDIgNC03aDF2LTFsMTQtMTMgMS0xIDIgMSAxMyAxNHYxbDEgMSA0IDYgNy0xIDEtMWgxcTExLTIgMjAtMWgxbDEgMnYyMWwtMSA3IDcgNCAyIDEgMTUgMTAgMSAxIDEgMS0xIDFxLTkgMTMtMTIgMTV6TTY3IDg4djRoLTJsLTIgMS0xIDEtMTYgMTAtMS02aC0xdi0zbC0yLTE2di0zbDMtMSAxNi02IDMtMSA0LTF6bTExNi01M2gybDIwIDR2MWw3IDE5djNsMSAydjZsLTEzLTUtMy0xLTExLTItMy05LTEtMy04LTE1em0tMTkgMSAxIDJoMWw4IDE1IDEgMyAyIDUtMjIgMmgtMmwtMSAxLTEtMi0xLTItMTQtMTUgNi0zaDFsMy0xdi0xbDE1LTR6bS01NS0xNiAxLTFoMWwxOC0xMGgxbDE4IDExIDEgMiA3IDYtMTMgNS0zIDEtMiAxLTggNC04LTUtMy0xaC0xbC0xNy03ek05NCAzNmwxLTJoM2wxNyA2djFoMmwxIDEgNCAyaC0xbC0xNSAxNXYxaC0xbC0xIDJoLTFsLTMtMS0xOS0zIDQtOXpNNDMgNTZsMS0yIDgtMTkgMjEtM2gxM2wtOCAxMy0yIDMtNCAxMGgtMWwtOSAyLTMgMS0xNyA2em0tMjYgNzF2LTFsLTEtMS02LTE5di0xbDEtMXE2LTkgMTMtMTVsMTAtOCAyIDE2IDEgNCAzIDEwdjFxMCAxIDAgMGwtNiA3LTEgMS0xIDItOSAxNXptMjQgNzAtMS0xaC0xbC0xOC0xMXYtMjJsMS0yIDItMTAgMTMgMTIgMSAxIDEgMSA4IDUgMSAxdjE0bDMgMTZ6bTE0LTU1LTYgMTktNS0zLTEtMS0xLTEtMTItMTEtMi0yIDEtMyA5LTE0IDEtMSAxLTIgMy00IDUgOCA3IDggMSAyIDEgMS0xIDN6bTYgNjEtMS0zLTMtMTZ2LTlsOCAyIDExIDNoNHYybDEgMnEzIDEwIDggMTlsLTYgMWgtNmwtMTMtMXptNDQgMzItMiAxaC0xbC0xMCAyLTEwIDFoLTFsLTEyLTE2LTEtMmgtMWwtNC05IDE4IDFoM2wxMC0yIDcgOSAxNCAxMnptMjItOS0zIDItMi0yLTEzLTEwLTItMi00LTYgMjAtOSAxLTEgMSAxaDFsMSAxIDE5IDEwLTMgNC0yIDEtMSAxem01Ni0xMC00IDctMSAyLTEgMS0xMyAxNGgtMXEtMTEgMC0yMC00aC0ybC05LTQgMTQtMTAgMS0yIDEtMSA3LTcgMTAgMmg0em0xMS0zM3Y0bC00IDE2LTEgM3YxaC0yMWwtMS0xLTgtMSA5LTE5IDEtMnYtMWgybDItMSAyMS00em0yLTM3LTItNCAxLTEgMi0xIDEzLTE3IDQgNCAxIDEgMSAzIDEgMSA3IDE0djFsMSAxdjFoLTFsLTEgMXYxbC0xMyAxMC0zIDItNiAzem0zMiA0NC0xOCAxMGgtMWwtMSAxLTggMiAzLTE1IDEtNHYtMTBsOS01IDMtMiAxMi05djFsMSA4djJ6bTE2LTc5LTggMjAtMSAxdjFsLTQgNy03LTEzdi0xbC0yLTItNy05IDQtOSAxLTN2LTFsMy0xNSA3IDYgMSAyIDEgMXoiLz48cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Im0xMzUgMTM0LTkgNy04LTctNy05IDctOSA4LTcgOSA3IDcgOXoiIGNsaXAtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=)](https://dashboard.sarvam.ai/)
 [![Groq](https://img.shields.io/badge/Groq-f55036?style=flat-square)](https://groq.com/)
+[![Claude](https://img.shields.io/badge/Claude_API-D97757?style=flat-square&logo=anthropic&logoColor=white)](https://console.anthropic.com/)
 [![Google STT](https://img.shields.io/badge/Google_STT-4285f4?style=flat-square&logo=googlecloud&logoColor=white)](https://cloud.google.com/speech-to-text)
 [![Notion](https://img.shields.io/badge/Notion-000000?style=flat-square&logo=notion)](https://www.notion.so/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-MV3-4285F4?style=flat-square&logo=googlechrome)](https://developer.chrome.com/docs/extensions/)
@@ -40,7 +41,7 @@ Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, a
 
 ## What is MeetMind?
 
-**MeetMind is a free, open-source (MIT) desktop app for Windows 10 and 11 that turns online meetings into written meeting notes.** It records your computer's system audio and your microphone at the same time, sends the recording to the speech-to-text service you choose (**AssemblyAI**, **Google Cloud Speech-to-Text**, **Sarvam AI** or **Groq**), and uses **Google Gemini** or **Groq** to write a speaker-labelled summary with decisions and action items. Notes are stored locally in SQLite and can be exported to PDF, copied as Markdown or pushed to a **Notion** page. A companion **Chrome extension** adds a record button to Google Meet and Zoom so recording starts in one click.
+**MeetMind is a free, open-source (MIT) desktop app for Windows 10 and 11 that turns online meetings into written meeting notes.** It records your computer's system audio and your microphone at the same time, sends the recording to the speech-to-text service you choose (**AssemblyAI**, **Google Cloud Speech-to-Text**, **Sarvam AI** or **Groq**), and uses **Google Gemini**, **Groq** or **Anthropic Claude** to write a speaker-labelled summary with decisions and action items. Notes are stored locally in SQLite and can be exported to PDF, copied as Markdown or pushed to a **Notion** page. When Google Meet, Zoom or Teams starts using your microphone, a small overlay offers to start recording; an optional **Chrome extension** also adds a record button inside Meet and Zoom tabs.
 
 Because MeetMind records audio on your own PC, nothing joins the meeting as a participant, and it works with any app that plays sound — Google Meet, Zoom, Microsoft Teams, Slack huddles, Discord, or a local recording file.
 
@@ -82,9 +83,10 @@ Because MeetMind records audio on your own PC, nothing joins the meeting as a pa
 - **System audio + microphone recording**: records both sides of any call on Windows, with FFmpeg installed from inside the app.
 - **Choice of speech-to-text**: AssemblyAI, Google Cloud Speech-to-Text (v1 and v2), Sarvam AI or Groq Whisper, with a model picker for each. All except Groq label speakers (diarization).
 - **English–Malayalam code-switching**: accurate transcripts of mixed-language meetings with Sarvam AI's `saaras:v3` model.
-- **Choice of note-generation model**: Google Gemini, Groq (Llama 3.3, GPT-OSS) or Anthropic Claude (Sonnet 4.5, Opus 4.5, Haiku 3.5), with a model picker and optional custom model ID. Executive-style Markdown or structured JSON notes, an editable system prompt, and an automatic fallback that can be any provider and model (for example Groq first, Gemini as backup).
+- **Choice of note-generation model**: Google Gemini, Groq (Llama 3.3, GPT-OSS) or Anthropic Claude (Sonnet 5.5, Fable 5.1, Opus 5.5, Haiku 5.5), with a model picker and optional custom model ID. Executive-style Markdown or structured JSON notes, an editable system prompt, and an automatic fallback that can be any provider and model (for example Groq first, Gemini as backup).
 - **Easy to extend**: every speech-to-text and LLM engine is a small self-describing module, so adding a provider needs one file and one registry line (see [docs/ADDING_PROVIDERS.md](docs/ADDING_PROVIDERS.md)).
-- **Google Meet and Zoom extension**: a floating overlay in Chrome with one-click recording and live processing status.
+- **Automatic meeting detection**: when Google Meet, Zoom or Microsoft Teams starts using your microphone, a floating overlay offers to record, then shows the timer, a "Meeting ended?" prompt and processing status. No browser extension needed.
+- **Optional Google Meet and Zoom extension**: a floating overlay inside the Chrome tab with one-click recording and live processing status.
 - **Google Calendar integration**: see upcoming meetings on the dashboard and get a notification to start recording when one begins.
 - **Notion sync**: notes become native Notion blocks (headings, tables, to-dos); re-syncing replaces the old page instead of duplicating it.
 - **PDF and Markdown export**: save dated PDFs (optionally with the transcript) or copy the notes as Markdown.
@@ -124,13 +126,19 @@ Because MeetMind records audio on your own PC, nothing joins the meeting as a pa
    - **Groq Whisper**: paste your Groq API key ([get one in the Groq console](https://console.groq.com/keys)). Fast and cheap, but no speaker labels.
 
    Each engine has a model picker below its key.
-3. In **Settings → Notes**, choose **Gemini** ([API key from Google AI Studio](https://aistudio.google.com/app/apikey)) or **Groq** ([API key from the Groq console](https://console.groq.com/keys)) and pick a model. Optionally set a fallback provider and model in case the first one fails (Groq's free tier can reject very long transcripts).
+3. In **Settings → Notes**, choose **Gemini** ([API key from Google AI Studio](https://aistudio.google.com/app/apikey)), **Groq** ([API key from the Groq console](https://console.groq.com/keys)) or **Claude** ([API key from the Anthropic console](https://console.anthropic.com/settings/keys)) and pick a model. Optionally set a fallback provider and model in case the first one fails (Groq's free tier can reject very long transcripts).
 4. In **Settings → System**, click **Download & Install FFmpeg** if it is not already installed.
 5. Optional: in **Settings → Integrations**, connect **Notion** and **Google Calendar**.
 
 Every API key field in Settings has a "How to get a key" guide next to it.
 
-### Chrome extension (Google Meet and Zoom)
+### Meeting detection
+
+MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay unfolds at the top centre of the screen with a **Record** button. Turn it off in **Settings → General → Meeting detection**.
+
+### Chrome extension (optional)
+
+The extension adds a record button inside Google Meet and Zoom tabs. You don't need it for meeting detection.
 
 1. Download and extract `meetmind-extension.zip` from the [latest release](https://github.com/aslahtp/meetmind/releases/latest).
 2. Open Chrome and go to `chrome://extensions`.
@@ -179,7 +187,7 @@ Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** a
 On first run, open **Settings** and add:
 
 - **Speech-to-text**: an AssemblyAI, Google Cloud, Sarvam AI or Groq API key.
-- **Notes**: a Gemini ([get it here](https://aistudio.google.com/app/apikey)) or Groq ([get it here](https://console.groq.com/keys)) API key. One Groq key covers both speech-to-text and notes.
+- **Notes**: a Gemini ([get it here](https://aistudio.google.com/app/apikey)), Groq ([get it here](https://console.groq.com/keys)) or Anthropic Claude ([get it here](https://console.anthropic.com/settings/keys)) API key. One Groq key covers both speech-to-text and notes.
 - **Notion** (optional): an integration token and a parent page or database ID.
 
 See [AGENTS.md](AGENTS.md) for an architecture overview of the main process, renderer, processing pipeline and extension bridge.
@@ -213,7 +221,7 @@ No. MeetMind records the audio playing on your own computer plus your microphone
 
 ### Which meeting apps does it work with?
 
-Any app that plays audio on Windows: Google Meet, Zoom, Microsoft Teams, Slack, Discord, Webex and others. The Chrome extension adds a one-click record button specifically for Google Meet and Zoom in the browser.
+Any app that plays audio on Windows: Google Meet, Zoom, Microsoft Teams, Slack, Discord, Webex and others. For Google Meet, Zoom and Teams, MeetMind also detects the call and offers to start recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs.
 
 ### Does MeetMind work on macOS or Linux?
 

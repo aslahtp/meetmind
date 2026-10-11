@@ -417,7 +417,7 @@ export default function App() {
       setRecordingStartedAt((prev) => prev || Date.now());
     });
 
-    // Stops can come from the button, the tray or the extension — the pipeline
+    // Stops can come from the button, the tray, the meeting overlay or the extension — the pipeline
     // always follows, so start tracking its progress here.
     const unsubRecordingStopped = window.meetmind.on('recording:stopped', ({ sessionId } = {}) => {
       setIsRecording(false);
@@ -514,6 +514,12 @@ export default function App() {
     const session = await window.meetmind.sessions.get(sessionId);
     if (session) openSession(session);
   }, [openSession]);
+
+  // "Open notes" on the desktop meeting overlay.
+  useEffect(() => {
+    if (!window.meetmind) return undefined;
+    return window.meetmind.on('app:open-session', ({ sessionId } = {}) => openSessionById(sessionId));
+  }, [openSessionById]);
 
   const updateConfig = async (key, value) => {
     await window.meetmind.config.set(key, value);
