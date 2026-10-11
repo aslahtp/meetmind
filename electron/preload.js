@@ -198,6 +198,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'calendar:meeting-starting',
       'llm:fallback-used',
       'log:entry',
+      'app:open-session',
     ];
     if (validChannels.includes(channel)) {
       const subscription = (_event, ...args) => callback(...args);

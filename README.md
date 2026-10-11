@@ -84,7 +84,8 @@ Because MeetMind records audio on your own PC, nothing joins the meeting as a pa
 - **English–Malayalam code-switching**: accurate transcripts of mixed-language meetings with Sarvam AI's `saaras:v3` model.
 - **Choice of note-generation model**: Google Gemini, Groq (Llama 3.3, GPT-OSS) or Anthropic Claude (Sonnet 4.5, Opus 4.5, Haiku 3.5), with a model picker and optional custom model ID. Executive-style Markdown or structured JSON notes, an editable system prompt, and an automatic fallback that can be any provider and model (for example Groq first, Gemini as backup).
 - **Easy to extend**: every speech-to-text and LLM engine is a small self-describing module, so adding a provider needs one file and one registry line (see [docs/ADDING_PROVIDERS.md](docs/ADDING_PROVIDERS.md)).
-- **Google Meet and Zoom extension**: a floating overlay in Chrome with one-click recording and live processing status.
+- **Automatic meeting detection**: when Google Meet, Zoom or Microsoft Teams starts using your microphone, a floating overlay offers to record, then shows the timer, a "Meeting ended?" prompt and processing status. No browser extension needed.
+- **Optional Google Meet and Zoom extension**: a floating overlay inside the Chrome tab with one-click recording and live processing status.
 - **Google Calendar integration**: see upcoming meetings on the dashboard and get a notification to start recording when one begins.
 - **Notion sync**: notes become native Notion blocks (headings, tables, to-dos); re-syncing replaces the old page instead of duplicating it.
 - **PDF and Markdown export**: save dated PDFs (optionally with the transcript) or copy the notes as Markdown.
@@ -130,7 +131,13 @@ Because MeetMind records audio on your own PC, nothing joins the meeting as a pa
 
 Every API key field in Settings has a "How to get a key" guide next to it.
 
-### Chrome extension (Google Meet and Zoom)
+### Meeting detection
+
+MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a small overlay appears in the bottom-right corner with **Start recording**. Turn it off in **Settings → General → Meeting detection**.
+
+### Chrome extension (optional)
+
+The extension adds a record button inside Google Meet and Zoom tabs. You don't need it for meeting detection.
 
 1. Download and extract `meetmind-extension.zip` from the [latest release](https://github.com/aslahtp/meetmind/releases/latest).
 2. Open Chrome and go to `chrome://extensions`.
@@ -213,7 +220,7 @@ No. MeetMind records the audio playing on your own computer plus your microphone
 
 ### Which meeting apps does it work with?
 
-Any app that plays audio on Windows: Google Meet, Zoom, Microsoft Teams, Slack, Discord, Webex and others. The Chrome extension adds a one-click record button specifically for Google Meet and Zoom in the browser.
+Any app that plays audio on Windows: Google Meet, Zoom, Microsoft Teams, Slack, Discord, Webex and others. For Google Meet, Zoom and Teams, MeetMind also detects the call and offers to start recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs.
 
 ### Does MeetMind work on macOS or Linux?
 

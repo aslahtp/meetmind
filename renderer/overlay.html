@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:;" />
+  <title>MeetMind</title>
+  <!-- Apply the theme before the first paint (the overlay preload passes the effective theme). -->
+  <script>
+    try {
+      var t = window.meetmindOverlay && window.meetmindOverlay.startupTheme;
+      document.documentElement.classList.add(t === 'dark' ? 'dark' : 'light');
+    } catch (e) { /* theme is cosmetic */ }
+  </script>
+  <!-- The window itself is transparent; only the card paints. -->
+  <style>
+    html, body, #root { background: transparent !important; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="./overlay.jsx"></script>
+</body>
+</html>

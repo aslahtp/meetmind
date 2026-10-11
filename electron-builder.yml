@@ -42,6 +42,11 @@ extraResources:
       - "**/*"
 
 asar: true
+# koffi (meeting detection's Win32 FFI) loads a native .node file, which can't be loaded from
+# inside the asar archive. Electron redirects these paths to app.asar.unpacked.
+asarUnpack:
+  - node_modules/koffi/**
+  - node_modules/@koromix/**
 
 files:
   - dist/renderer/**

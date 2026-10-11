@@ -59,6 +59,7 @@ Screenshots are written to `.claude/skills/run-meetmind/shots/<name>.png` (gitig
 | `size <w> <h>` | Resize the window (the minimum is 800×600) |
 | `scroll <dy>` | Wheel-scroll the main content |
 | `wait <ms>` / `eval <js>` / `errors` / `quit` | Wait / evaluate in the renderer / print console errors / exit |
+| `owait [ms]` / `oss <name>` / `oclick <name>` / `oeval <js>` | Meeting overlay window: wait until it is visible, screenshot it, click one of its buttons, evaluate in it |
 
 ## Run (human path)
 

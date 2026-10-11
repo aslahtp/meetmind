@@ -234,7 +234,7 @@ async function launch() {
     app, page, errors,
     async size(w, hgt) {
       await app.evaluate(({ BrowserWindow }, [W, H]) => {
-        const win = BrowserWindow.getAllWindows()[0];
+        const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().includes('overlay.html'));
         win.unmaximize(); win.setSize(W, H); win.center(); win.show();
       }, [w, hgt]);
       await page.waitForTimeout(300);
@@ -260,6 +260,28 @@ async function launch() {
     },
     // Wheel events only scroll if the pointer is over the scroll container, not the top bar.
     async scroll(dy) { await page.mouse.move(550, 500); await page.mouse.wheel(0, dy); await page.waitForTimeout(300); },
+    // The floating meeting overlay is a second window (renderer/overlay.html), created on first use.
+    overlayPage() { return app.windows().find((p) => p.url().includes('overlay.html')); },
+    async overlayWait(timeoutMs = 20000) {
+      const until = Date.now() + timeoutMs;
+      while (Date.now() < until) {
+        const p = h.overlayPage();
+        const visible = p && await app.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows().some((w) => w.webContents.getURL().includes('overlay.html') && w.isVisible()));
+        if (visible && await p.locator('section').count()) return p;
+        await page.waitForTimeout(250);
+      }
+      throw new Error('overlay did not appear');
+    },
+    async overlaySs(name) {
+      const p = h.overlayPage();
+      if (!p) throw new Error('no overlay window');
+      fs.mkdirSync(OUT, { recursive: true });
+      await p.waitForTimeout(400);
+      const file = path.join(OUT, `${name}.png`);
+      await p.screenshot({ path: file });
+      console.log('shot', path.relative(ROOT, file));
+    },
   };
 
   await h.size(1100, 720);
@@ -297,6 +319,7 @@ async function tour(h) {
 //   nav <Dashboard|Meetings|Settings|Logs>   tab <name>   click <button name>   fclick <name>   dclick <name in dialog>
 //   ss <name>        theme <light|dark|system>   size <w> <h>   scroll <dy>
 //   focus <css>      type <text>      key <Key>        wait <ms>   eval <js expression>   errors   quit
+//   owait [ms]       oss <name>       oclick <name>    oeval <js>   (the floating meeting overlay window)
 async function repl(h) {
   const rl = readline.createInterface({ input: process.stdin, terminal: false });
   for await (const raw of rl) {
@@ -321,9 +344,13 @@ async function repl(h) {
       else if (cmd === 'key') await h.page.keyboard.press(arg);
       else if (cmd === 'wait') await h.page.waitForTimeout(Number(arg) || 500);
       else if (cmd === 'eval') console.log('=>', JSON.stringify(await h.page.evaluate(arg)));
+      else if (cmd === 'owait') await h.overlayWait(Number(arg) || 20000);
+      else if (cmd === 'oss') await h.overlaySs(arg || `overlay-${Date.now()}`);
+      else if (cmd === 'oclick') { await h.overlayPage().getByRole('button', { name: arg }).first().click({ timeout: 10000 }); await h.page.waitForTimeout(300); }
+      else if (cmd === 'oeval') console.log('=>', JSON.stringify(await h.overlayPage().evaluate(arg)));
       else if (cmd === 'errors') console.log('errors:', JSON.stringify(h.errors));
       else console.log('unknown command:', cmd);
-      if (cmd !== 'eval' && cmd !== 'errors' && cmd !== 'ss') console.log('ok', line);
+      if (!['eval', 'oeval', 'errors', 'ss', 'oss'].includes(cmd)) console.log('ok', line);
     } catch (e) {
       console.log('ERR', line, '-', e.message.split('\n')[0]);
     }

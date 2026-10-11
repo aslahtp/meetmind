@@ -66,7 +66,8 @@
           "English and Malayalam code-switching with Sarvam AI saaras:v3",
           "AI meeting minutes with Google Gemini, Groq or Anthropic Claude: summary, decisions and action items",
           "Selectable model for every speech-to-text and note-generation engine, with cross-provider fallback",
-          "Chrome extension for Google Meet and Zoom",
+          "Automatic meeting detection for Google Meet, Zoom and Teams with a floating record prompt",
+          "Optional Chrome extension for Google Meet and Zoom",
           "Google Calendar reminders to start recording",
           "Notion sync",
           "PDF and Markdown export",
@@ -90,7 +91,7 @@
         "mainEntity": [
           { "@type": "Question", "name": "Is MeetMind free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you connect, and Gemini and Groq (free tiers) and AssemblyAI (signup credit) can be used at no cost for moderate use." } },
           { "@type": "Question", "name": "Does a bot join my meeting?", "acceptedAnswer": { "@type": "Answer", "text": "No. MeetMind records the audio playing on your own computer plus your microphone, so no extra participant appears in Google Meet, Zoom or Teams." } },
-          { "@type": "Question", "name": "Which meeting apps does MeetMind work with?", "acceptedAnswer": { "@type": "Answer", "text": "Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and Webex. The Chrome extension adds a one-click record button for Google Meet and Zoom in the browser." } },
+          { "@type": "Question", "name": "Which meeting apps does MeetMind work with?", "acceptedAnswer": { "@type": "Answer", "text": "Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and Webex. For Google Meet, Zoom and Teams, MeetMind detects the call and offers to start recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs." } },
           { "@type": "Question", "name": "Does MeetMind work on macOS or Linux?", "acceptedAnswer": { "@type": "Answer", "text": "Not currently. MeetMind is built for Windows 10 and 11 because it relies on Windows audio loopback capture." } },
           { "@type": "Question", "name": "Where is my meeting data stored?", "acceptedAnswer": { "@type": "Answer", "text": "Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to Gemini, using your own API keys." } },
           { "@type": "Question", "name": "Which languages does MeetMind support?", "acceptedAnswer": { "@type": "Answer", "text": "Language support depends on the speech-to-text engine you choose. For meetings that mix English and Malayalam, Sarvam AI's saaras:v3 model handles code-switching within a sentence." } },
@@ -1278,9 +1279,15 @@
     <symbol id="i-gemini" viewBox="0 0 65 65">
       <path fill="currentColor" stroke="none" d="M32.447 0c.68 0 1.273.465 1.439 1.125a38.904 38.904 0 001.999 5.905c2.152 5 5.105 9.376 8.854 13.125 3.751 3.75 8.126 6.703 13.125 8.855a38.98 38.98 0 005.906 1.999c.66.166 1.124.758 1.124 1.438 0 .68-.464 1.273-1.125 1.439a38.902 38.902 0 00-5.905 1.999c-5 2.152-9.375 5.105-13.125 8.854-3.749 3.751-6.702 8.126-8.854 13.125a38.973 38.973 0 00-2 5.906 1.485 1.485 0 01-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a38.913 38.913 0 00-2-5.905c-2.151-5-5.103-9.375-8.854-13.125-3.75-3.749-8.125-6.702-13.125-8.854a38.973 38.973 0 00-5.905-2A1.485 1.485 0 010 32.448c0-.68.465-1.272 1.125-1.438a38.903 38.903 0 005.905-2c5-2.151 9.376-5.104 13.125-8.854 3.75-3.749 6.703-8.125 8.855-13.125a38.972 38.972 0 001.999-5.905A1.485 1.485 0 0132.447 0z" />
     </symbol>
-    <symbol id="i-puzzle" viewBox="0 0 24 24">
-      <path
-        d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z" />
+    <symbol id="i-radar" viewBox="0 0 24 24">
+      <path d="M19.07 4.93A10 10 0 0 0 6.99 3.34" />
+      <path d="M4 6h.01" />
+      <path d="M2.29 9.62A10 10 0 1 0 21.31 8.35" />
+      <path d="M16.24 7.76A6 6 0 1 0 8.23 16.67" />
+      <path d="M12 18h.01" />
+      <path d="M17.99 11.66A6 6 0 0 1 15.77 16.67" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="m13.41 10.59 5.66-5.66" />
     </symbol>
     <symbol id="i-download" viewBox="0 0 24 24">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1529,10 +1536,10 @@
           </div>
           <div class="card" data-reveal style="--stagger: 4;">
             <div class="tile" aria-hidden="true"><svg class="icon">
-                <use href="#i-puzzle" />
+                <use href="#i-radar" />
               </svg></div>
-            <h3>Google Meet &amp; Zoom extension</h3>
-            <p>A floating Chrome overlay with one-click recording and live processing status.</p>
+            <h3>Automatic meeting detection</h3>
+            <p>When Google Meet, Zoom or Teams picks up your mic, a floating prompt offers to record. No browser extension needed.</p>
           </div>
           <div class="card" data-reveal style="--stagger: 5;">
             <div class="tile" aria-hidden="true"><svg class="icon">
@@ -1717,7 +1724,8 @@
             <div class="answer">
               <div>
                 <p>Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and
-                  Webex. The Chrome extension adds a one-click record button for Google Meet and Zoom in the browser.
+                  Webex. For Google Meet, Zoom and Teams, MeetMind detects the call and offers to start recording; the
+                  optional Chrome extension adds a record button inside Meet and Zoom tabs.
                 </p>
               </div>
             </div>

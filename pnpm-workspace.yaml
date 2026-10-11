@@ -1,6 +1,9 @@
 allowBuilds:
   electron: true
   esbuild: true
+  # koffi's install script only builds from source; the prebuilt binary comes from its
+  # @koromix/koffi-<platform> optional dependency, so the script never needs to run.
+  koffi: false
 nodeLinker: hoisted
 # pnpm would otherwise reinstall before every `pnpm run` whenever package.json changes (even a
 # version bump). That reinstall replaces node_modules/electron, which fails while the app is
