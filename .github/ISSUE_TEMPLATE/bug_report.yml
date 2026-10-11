@@ -44,6 +44,7 @@ body:
         - PDF / Markdown export
         - Chrome extension (Google Meet / Zoom)
         - Installer / updates / FFmpeg
+        - macOS permissions / system audio
         - Other
     validations:
       required: true
@@ -67,10 +68,11 @@ body:
         - Anthropic Claude
         - Not relevant
   - type: input
-    id: windows
+    id: os
     attributes:
-      label: Windows version
-      placeholder: Windows 11 23H2
+      label: Operating system and version
+      description: On a Mac, also say Apple silicon or Intel.
+      placeholder: Windows 11 23H2 / macOS 15.4 (Apple silicon)
   - type: textarea
     id: logs
     attributes:

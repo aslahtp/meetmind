@@ -1,12 +1,19 @@
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
-const { app } = require('electron');
+const { app, shell } = require('electron');
 const logger = require('../utils/logger');
 const { getConfig, store } = require('../utils/config');
 const { binaryName, getFfmpegPath, getFfprobePath } = require('../audio/ffmpeg-path');
 
 const MAX_CONSECUTIVE_FAILURES = 3; // background checks pause after this many failures in a row
 const BACKGROUND_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const RELEASES_URL = 'https://github.com/aslahtp/meetmind/releases';
+
+// macOS builds are ad-hoc signed, and Squirrel.Mac refuses to install an update into an app
+// without a stable signature. Until there is a Developer ID, the Mac app only checks
+// latest-mac.yml and sends the user to the release page to download the new DMG. Flip this to
+// true once mac builds are Developer ID signed and notarized.
+const CAN_SELF_UPDATE = process.platform !== 'darwin';
 
 let currentStatus = 'idle'; // 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
 let updateInfo = null;
@@ -38,6 +45,7 @@ function getUpdaterState() {
     backgroundChecksSuspended,
     postUpdateCheck,
     isPackaged: app.isPackaged,
+    canSelfUpdate: CAN_SELF_UPDATE,
   };
 }
 
@@ -274,7 +282,8 @@ async function checkForUpdates(manual = false) {
 /**
  * Explicitly starts downloading the update the last check found. Requires an 'available'
  * update in hand — never called automatically, so nothing downloads without this being invoked
- * by a direct user action (button click).
+ * by a direct user action (button click). Where the app can't update itself (unsigned macOS
+ * builds), opens the release page instead.
  */
 async function downloadUpdate() {
   if (currentStatus !== 'available' || !updateInfo?.version) {
@@ -286,6 +295,11 @@ async function downloadUpdate() {
       currentVersion: app.getVersion(),
     });
     return { success: false, error: 'Reported update version is not newer than the installed version' };
+  }
+
+  if (!CAN_SELF_UPDATE) {
+    await shell.openExternal(`${RELEASES_URL}/tag/v${updateInfo.version}`);
+    return { success: true, openedReleasePage: true };
   }
 
   try {

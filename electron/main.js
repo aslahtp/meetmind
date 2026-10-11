@@ -1,3 +1,10 @@
+// `--smoke`: headless self-test for CI (electron/smoke.js). It must run before anything below
+// loads, because the config store opens the profile folder as soon as it is required.
+if (process.argv.includes('--smoke')) {
+  require('./smoke');
+  return;
+}
+
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -19,8 +26,11 @@ const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEve
 const db = require('./db/sessions');
 const meetingDetector = require('./detection/meeting-detector');
 const { showOverlay, hideOverlay, overlayClosed, destroyOverlay, resizeOverlay, setOverlayTheme } = require('./overlay/overlay-window');
+const { getPermissionStatus, requestPermission, openPermissionSettings } = require('./services/permissions');
+const { normalizeMacCaptureStrategy } = require('./audio/mac-capture');
 
 const isDev = process.env.NODE_ENV === 'development';
+const isMac = process.platform === 'darwin';
 
 // ── Auto-launch helpers ──────────────────────────────────────────────────────
 // On Windows + NSIS, Electron writes to HKCU\…\Run. The registry key name is
@@ -126,6 +136,16 @@ if (!gotSingleInstanceLock) {
   });
 }
 
+// macOS delivers meetmind:// links through open-url, not argv. Registered before `ready` so the
+// link that launched the app isn't lost; at launch the window opens anyway, so it only needs
+// focusing once the app is up.
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (!url.startsWith('meetmind://')) return;
+  logger.info('Opened via protocol', { protocolUrl: url });
+  if (app.isReady()) focusMainWindow();
+});
+
 // Only the packaged app should own meetmind://.
 // Registering from `pnpm run dev` steals the handler and points it at electron.exe,
 // so "Open App" from the extension fails after install.
@@ -215,8 +235,11 @@ function createMainWindow() {
     minWidth: 800,
     minHeight: 600,
     backgroundColor,
-    frame: false,            // Custom titlebar in renderer — no native frame at all
-    backgroundMaterial: 'none',
+    // Custom titlebar in the renderer. macOS keeps its native traffic lights, inset into the
+    // renderer's top bar (which leaves room for them); Windows has no native frame at all.
+    ...(isMac
+      ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 24, y: 25 } }
+      : { frame: false, backgroundMaterial: 'none', icon: getAppIconPath() }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -226,7 +249,6 @@ function createMainWindow() {
       additionalArguments: [`--meetmind-theme=${savedTheme}`],
     },
     show: false,
-    icon: getAppIconPath(),
   });
 
   const rendererUrl = isDev
@@ -260,17 +282,7 @@ function createMainWindow() {
     }
   });
 
-  // Auto-approve system audio loopback capture (no picker dialog).
-  // Electron's loopback mode captures all system audio via Chromium's WASAPI
-  // layer — works with speakers, headphones, USB, and Bluetooth output.
-  mainWindow.webContents.session.setDisplayMediaRequestHandler((_request, callback) => {
-    desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-      if (sources.length === 0) { callback(); return; }
-      callback({ video: sources[0], audio: 'loopback' });
-    }).catch(() => {
-      callback();
-    });
-  }, { useSystemPicker: false });
+  installDisplayMediaHandler();
 
   // Intercept all _blank window.open() calls and route to OS system browser.
   // Without this, Electron would open a new BrowserWindow for every outbound link.
@@ -286,6 +298,54 @@ function createMainWindow() {
   }
 
   return mainWindow;
+}
+
+// ── System audio (getDisplayMedia) ──────────────────────────────────────────
+// The renderer captures system audio with getDisplayMedia(); this handler approves it without a
+// picker and asks Electron for 'loopback' audio. On Windows that is Chromium's WASAPI loopback,
+// which captures all system audio (speakers, headphones, USB, Bluetooth). On macOS 14.2+ it is
+// the CoreAudio Tap API; how the required video source is supplied is configurable there (see
+// electron/audio/mac-capture.js), and Settings' "Test system audio" can try each strategy.
+
+// Strategy for the test capture currently running, overriding config.macCaptureStrategy.
+let testCaptureStrategy = null;
+
+function screenLoopbackHandler(_request, callback) {
+  desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+    if (sources.length === 0) { callback(); return; }
+    callback({ video: sources[0], audio: 'loopback' });
+  }).catch(() => {
+    callback();
+  });
+}
+
+// Own window frame as the video source (macOS 'frame' strategy); a screen if there's no frame.
+function frameLoopbackHandler(request, callback) {
+  if (request.frame) callback({ video: request.frame, audio: 'loopback' });
+  else screenLoopbackHandler(request, callback);
+}
+
+function currentMacCaptureStrategy() {
+  return normalizeMacCaptureStrategy(testCaptureStrategy || getConfig().macCaptureStrategy);
+}
+
+function installDisplayMediaHandler() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const session = mainWindow.webContents.session;
+  if (!isMac) {
+    session.setDisplayMediaRequestHandler(screenLoopbackHandler, { useSystemPicker: false });
+    return;
+  }
+  const strategy = currentMacCaptureStrategy();
+  if (strategy === 'picker') {
+    // macOS 15+ shows its own picker (the handler then isn't called); 14.x falls back to it.
+    session.setDisplayMediaRequestHandler(screenLoopbackHandler, { useSystemPicker: true });
+  } else {
+    session.setDisplayMediaRequestHandler(
+      strategy === 'frame' ? frameLoopbackHandler : screenLoopbackHandler,
+      { useSystemPicker: false },
+    );
+  }
 }
 
 function resolveIconPath(...candidates) {
@@ -305,6 +365,17 @@ function getAppIconPath() {
 }
 
 function getTrayIcon() {
+  // macOS menu bar: a monochrome template image (trayTemplate@2x.png is picked up for Retina),
+  // which macOS tints to match light and dark menu bars.
+  if (isMac) {
+    const templatePath = resolveIconPath(path.join(__dirname, '../assets/icons/trayTemplate.png'));
+    if (templatePath) {
+      const image = nativeImage.createFromPath(templatePath);
+      image.setTemplateImage(true);
+      return image;
+    }
+  }
+
   // Windows tray looks crisp at 16/32; avoid empty/placeholder images.
   const trayPath = resolveIconPath(
     path.join(__dirname, '../assets/icons/icon32.png'),
@@ -323,6 +394,38 @@ function getTrayIcon() {
     image = image.resize({ width: 32, height: 32, quality: 'best' });
   }
   return image;
+}
+
+// ── macOS application menu ──────────────────────────────────────────────────
+// macOS shows a menu bar for the focused app; without Edit/Window menus the standard shortcuts
+// (⌘C/⌘V/⌘A, ⌘W, ⌘M) don't work. Windows has a frameless window and no menu.
+
+function createAppMenu() {
+  if (!isMac) return;
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        {
+          label: 'Settings…',
+          accelerator: 'Cmd+,',
+          click: () => { focusMainWindow(); sendToRenderer('app:navigate', 'settings'); },
+        },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'windowMenu' },
+  ];
+  if (isDev) template.push({ role: 'viewMenu' });
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 // ── Tray ─────────────────────────────────────────────────────────────────────
@@ -362,7 +465,7 @@ function updateTrayMenu() {
     menuItems.push({ type: 'separator' });
   } else if (updaterState.status === 'available') {
     menuItems.push({
-      label: `⬇ Download Update (v${updaterState.updateInfo?.version || ''})`,
+      label: `⬇ ${updaterState.canSelfUpdate ? 'Download Update' : 'Get Update from GitHub'} (v${updaterState.updateInfo?.version || ''})`,
       click: async () => { focusMainWindow(); await downloadUpdate(); },
     });
     menuItems.push({ type: 'separator' });
@@ -439,7 +542,9 @@ function requestRendererCaptureStart() {
     ipcMain.once('capture:failed', onFailed);
     sendToRenderer('capture:start');
 
-    const timer = setTimeout(() => { cleanup(); resolve(false); }, 6000);
+    // macOS may show permission prompts (screen & system audio, microphone) on the first
+    // recording, so give the user time to answer them.
+    const timer = setTimeout(() => { cleanup(); resolve(false); }, isMac ? 60000 : 6000);
   });
 }
 
@@ -490,6 +595,13 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
   });
 
   try {
+    // macOS: ask for the microphone up front (no-op once decided). If it's denied the renderer
+    // still records system audio alone.
+    if (isMac) {
+      const { granted } = await requestPermission('microphone');
+      if (!granted) logger.warn('Microphone access denied; recording system audio only');
+    }
+
     // Primary: renderer captures system audio (Electron loopback) + mic via Web Audio
     const rendererOk = await requestRendererCaptureStart();
 
@@ -510,6 +622,14 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
       broadcastStatus({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
       logger.info('Recording started (renderer capture)', { sessionId: currentSessionId });
       return { success: true, sessionId: currentSessionId };
+    }
+
+    // The FFmpeg fallback records through Windows devices (WASAPI loopback / DirectShow) only.
+    if (isMac) {
+      throw new Error(
+        'Could not start recording. Check that MeetMind may use the microphone and Screen & System Audio Recording ' +
+        '(System Settings → Privacy & Security), then try again.'
+      );
     }
 
     // Fallback: FFmpeg dshow recording (mic + Stereo Mix if available)
@@ -901,6 +1021,7 @@ function registerIpcHandlers() {
     }
     if (key === 'meetingDetection') applyMeetingDetection(value !== false);
     if (key === 'theme') setOverlayTheme(resolveEffectiveTheme(value));
+    if (key === 'macCaptureStrategy') installDisplayMediaHandler();
     return true;
   });
 
@@ -911,6 +1032,26 @@ function registerIpcHandlers() {
     }
     if ('meetingDetection' in updates) applyMeetingDetection(updates.meetingDetection !== false);
     if ('theme' in updates) setOverlayTheme(resolveEffectiveTheme(updates.theme));
+    if ('macCaptureStrategy' in updates) installDisplayMediaHandler();
+    return true;
+  });
+
+  // ── macOS permissions + system-audio test (Settings › System) ─────────────
+  ipcMain.handle('permissions:status', () => getPermissionStatus());
+  ipcMain.handle('permissions:request', (_e, kind) => requestPermission(kind));
+  ipcMain.handle('permissions:open-settings', (_e, kind) => openPermissionSettings(kind));
+
+  // "Test system audio" runs one short renderer capture per strategy: main swaps the
+  // display-media handler to that strategy for the test, then restores the configured one.
+  ipcMain.handle('capture:test-begin', (_e, strategy) => {
+    if (isRecording) return { success: false, error: 'Stop the current recording first' };
+    testCaptureStrategy = normalizeMacCaptureStrategy(strategy);
+    installDisplayMediaHandler();
+    return { success: true, strategy: testCaptureStrategy };
+  });
+  ipcMain.handle('capture:test-end', () => {
+    testCaptureStrategy = null;
+    installDisplayMediaHandler();
     return true;
   });
 
@@ -967,9 +1108,11 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('audio:list-devices', () => listAudioDevices());
+  // FFmpeg device capture (the recording fallback) uses Windows devices only.
+  const FFMPEG_DEVICES_UNSUPPORTED = 'FFmpeg device capture is only available on Windows';
+  ipcMain.handle('audio:list-devices', () => (isMac ? { all: [], error: FFMPEG_DEVICES_UNSUPPORTED } : listAudioDevices()));
 
-  ipcMain.handle('audio:probe-device', (_e, device) => probeAudioDevice(device));
+  ipcMain.handle('audio:probe-device', (_e, device) => (isMac ? { error: FFMPEG_DEVICES_UNSUPPORTED } : probeAudioDevice(device)));
 
   ipcMain.handle('audio:import-file', async () => {
     const parentWin = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
@@ -1386,122 +1529,13 @@ function registerIpcHandlers() {
   });
 
   // ── FFmpeg install ─────────────────────────────────────────────────────────
-  ipcMain.handle('ffmpeg:install', async () => {
-    const os = require('os');
-    const { spawnSync } = require('child_process');
-
-    // Where to install
-    const targetDir = app.isPackaged
-      ? path.join(process.resourcesPath, 'ffmpeg')
-      : path.join(app.getAppPath(), 'assets', 'ffmpeg');
-
-    const tmpRoot = path.join(os.tmpdir(), `meetmind-ffmpeg-${Date.now()}`);
-    const zipPath = path.join(tmpRoot, 'ffmpeg.zip');
-    const extractDir = path.join(tmpRoot, 'extracted');
-
-    const sendProgress = (stage, percent, message) => {
+  ipcMain.handle('ffmpeg:install', () => {
+    const { installFfmpeg } = require('./services/ffmpeg-installer');
+    return installFfmpeg((stage, percent, message) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('ffmpeg:install-progress', { stage, percent, message });
       }
-    };
-
-    try {
-      fs.mkdirSync(tmpRoot, { recursive: true });
-      fs.mkdirSync(targetDir, { recursive: true });
-
-      // ── 1. Download ────────────────────────────────────────────────────────
-      sendProgress('download', 0, 'Starting download…');
-      const DOWNLOAD_URL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip';
-
-      await new Promise((resolve, reject) => {
-        let fileStream = null;
-
-        function doGet(url, redirectsLeft = 8) {
-          const mod = url.startsWith('https') ? require('https') : require('http');
-          mod.get(url, { headers: { 'User-Agent': 'MeetMind-Installer/1.0' } }, (res) => {
-            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-              if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
-              return doGet(res.headers.location, redirectsLeft - 1);
-            }
-            if (res.statusCode !== 200) {
-              return reject(new Error(`Download failed: HTTP ${res.statusCode}`));
-            }
-
-            const total = parseInt(res.headers['content-length'] || '0', 10);
-            let downloaded = 0;
-            fileStream = fs.createWriteStream(zipPath);
-
-            res.on('data', (chunk) => {
-              downloaded += chunk.length;
-              const mb = (downloaded / 1024 / 1024).toFixed(1);
-              const pct = total > 0 ? Math.round((downloaded / total) * 65) : 0;
-              sendProgress('download', pct, `Downloading… ${mb} MB${total > 0 ? ` / ${(total / 1024 / 1024).toFixed(0)} MB` : ''}`);
-            });
-
-            res.pipe(fileStream);
-            fileStream.on('finish', () => { fileStream.close(); resolve(); });
-            fileStream.on('error', reject);
-            res.on('error', reject);
-          }).on('error', reject);
-        }
-
-        doGet(DOWNLOAD_URL);
-      });
-
-      // ── 2. Extract ─────────────────────────────────────────────────────────
-      sendProgress('extract', 68, 'Extracting archive…');
-      fs.mkdirSync(extractDir, { recursive: true });
-
-      const extract = spawnSync(
-        'powershell',
-        ['-NoProfile', '-NonInteractive', '-Command',
-          `Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${extractDir}" -Force`],
-        { timeout: 120_000, encoding: 'utf8' }
-      );
-
-      if (extract.status !== 0) {
-        throw new Error(`Extraction failed:\n${(extract.stderr || extract.stdout || '').trim()}`);
-      }
-
-      // ── 3. Find binaries ───────────────────────────────────────────────────
-      sendProgress('copy', 88, 'Locating binaries…');
-
-      function findAll(dir, names) {
-        const found = {};
-        function walk(d) {
-          for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
-            const full = path.join(d, entry.name);
-            if (entry.isDirectory()) {
-              walk(full);
-            } else if (names.includes(entry.name.toLowerCase())) {
-              found[entry.name.toLowerCase()] = full;
-            }
-          }
-        }
-        walk(dir);
-        return found;
-      }
-
-      const binaries = findAll(extractDir, ['ffmpeg.exe', 'ffprobe.exe']);
-      if (!binaries['ffmpeg.exe']) throw new Error('ffmpeg.exe not found in downloaded archive');
-      if (!binaries['ffprobe.exe']) throw new Error('ffprobe.exe not found in downloaded archive');
-
-      // ── 4. Copy ────────────────────────────────────────────────────────────
-      sendProgress('copy', 93, 'Installing binaries…');
-      fs.copyFileSync(binaries['ffmpeg.exe'],  path.join(targetDir, 'ffmpeg.exe'));
-      fs.copyFileSync(binaries['ffprobe.exe'], path.join(targetDir, 'ffprobe.exe'));
-
-      sendProgress('done', 100, 'FFmpeg installed successfully!');
-      logger.info('FFmpeg installed', { targetDir });
-      return { success: true };
-
-    } catch (err) {
-      logger.error('FFmpeg install failed', { error: err.message });
-      sendProgress('error', 0, err.message);
-      return { success: false, error: err.message };
-    } finally {
-      try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
-    }
+    });
   });
 
   // ── Google Calendar ──────────────────────────────────────────────────────
@@ -1775,6 +1809,9 @@ app.whenReady().then(async () => {
     }
   });
 
+  createAppMenu();
+  // Packaged mac apps get their Dock icon from the bundle's .icns; in dev it's Electron's.
+  if (isMac && !app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../assets/icons/icon.png'));
   createMainWindow();
   createTray();
 
@@ -1824,11 +1861,6 @@ app.whenReady().then(async () => {
       }
     });
 
-  app.on('open-url', (event, url) => {
-    event.preventDefault();
-    if (url.startsWith('meetmind://')) focusMainWindow();
-  });
-
   applyAutoLaunch(config.autoLaunch);
 
   // Start calendar event poller if connected
@@ -1843,10 +1875,8 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Keep running in tray on Windows
-  if (process.platform !== 'darwin') {
-    // Don't quit — stay in tray
-  }
+  // Don't quit: MeetMind keeps running in the tray (Windows) or menu bar (macOS). Closing the
+  // window only hides it (see the 'close' handler); Quit is in the tray menu, or ⌘Q on macOS.
 });
 
 app.on('before-quit', () => {
@@ -1866,17 +1896,19 @@ function startCalendarPoller(config) {
   startEventPoller(config, (event) => {
     logger.info('Calendar meeting starting', { title: event.title, start: event.start });
 
-    // System notification
+    // System notification. macOS (Electron 42+) shows notifications only for signed apps; an
+    // unsigned build gets 'failed', and the in-app prompt below is all the user sees.
     if (Notification.isSupported()) {
       const notif = new Notification({
         title: 'Meeting Starting',
         body: `"${event.title}" is starting now.${event.meetingLink ? ' Click to start recording.' : ''}`,
-        icon: nativeImage.createFromPath(
-          path.join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'assets', 'icons', 'icon.png')
-        ),
+        icon: nativeImage.createFromPath(path.join(__dirname, '../assets/icons/icon.png')),
       });
       notif.on('click', () => {
         focusMainWindow();
+      });
+      notif.on('failed', (_e, error) => {
+        logger.warn('System notification failed; showing the in-app prompt only', { error });
       });
       notif.show();
     }

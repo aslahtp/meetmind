@@ -1,7 +1,8 @@
 name: CI
 
-# Lint, tests, build, secret scan and dependency audit. Runs on every PR and push to main,
-# and is called by the release workflow (release.yml) as a gate before the installer is built.
+# Lint, tests, build (including a macOS app build + smoke test), secret scan and dependency
+# audit. Runs on every PR and push to main, and is called by the release workflow (release.yml)
+# as a gate before the installers are built.
 #
 # Public repo: fork PRs run this with a read-only token and no secrets (`pull_request`, never
 # `pull_request_target`), so untrusted PR code can't write to the repo. Keep it that way.
@@ -54,6 +55,57 @@ jobs:
       - name: Build extension
         run: pnpm run build:ext
 
+  # macOS has no maintainer hardware, so every PR builds the unsigned Apple Silicon app, checks
+  # it, and runs its headless self-test (electron/smoke.js): config + DB, the bundled FFmpeg,
+  # WebM→WAV, koffi and the permissions API. The zipped .app is kept for testers.
+  mac-build:
+    name: macOS build & smoke test
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup
+        uses: $/.github/actions/setup
+
+      - name: Test
+        run: pnpm run test
+
+      - name: Fetch FFmpeg (checksum-verified)
+        run: node scripts/fetch-ffmpeg.js --arch arm64
+
+      - name: Build unpacked app
+        run: pnpm run build:mac:dir
+
+      - name: Check signature and Info.plist
+        run: |
+          app=dist/desktop/mac-arm64/MeetMind.app
+          codesign --verify --deep --strict --verbose=2 "$app"
+          plist="$app/Contents/Info.plist"
+          for key in NSMicrophoneUsageDescription NSAudioCaptureUsageDescription LSMinimumSystemVersion; do
+            echo "$key: $(plutil -extract "$key" raw "$plist")"
+          done
+          test -x "$app/Contents/Resources/ffmpeg/ffmpeg"
+          test -x "$app/Contents/Resources/ffmpeg/ffprobe"
+
+      - name: Smoke test
+        run: |
+          dist/desktop/mac-arm64/MeetMind.app/Contents/MacOS/MeetMind --smoke | tee smoke.txt
+          grep -q '^MEETMIND_SMOKE {"ok":true' smoke.txt
+
+      - name: Zip app for testers
+        run: ditto -c -k --keepParent dist/desktop/mac-arm64/MeetMind.app MeetMind-mac-arm64.zip
+
+      - name: Upload app
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: MeetMind-mac-arm64
+          path: MeetMind-mac-arm64.zip
+          if-no-files-found: error
+          retention-days: 7
+
   repo-hygiene:
     name: Repo hygiene
     runs-on: ubuntu-latest
@@ -71,8 +123,9 @@ jobs:
             echo "::error::package-lock.json or yarn.lock is committed; this repo uses pnpm."
             status=1
           fi
-          # FFmpeg and other binaries are downloaded at build time, never committed.
-          binaries=$(git ls-files '*.exe' '*.dll' '*.msi')
+          # FFmpeg and other binaries are downloaded at build time, never committed. macOS
+          # binaries have no extension, so anything in assets/ffmpeg/ but its README counts too.
+          binaries=$( { git ls-files '*.exe' '*.dll' '*.msi' '*.dylib'; git ls-files 'assets/ffmpeg/' | grep -v '^assets/ffmpeg/README\.md$'; } || true)
           if [ -n "$binaries" ]; then
             echo "::error::Binaries are committed:"; echo "$binaries"
             status=1

@@ -2,6 +2,7 @@ const Store = require('electron-store');
 const { DEFAULT_SYSTEM_PROMPT } = require('../services/prompts');
 const { sttRegistry, llmRegistry, providerConfigKeys } = require('../providers');
 const { migrateLegacyModels } = require('./configMigration');
+const { DEFAULT_MAC_CAPTURE_STRATEGY, normalizeMacCaptureStrategy } = require('../audio/mac-capture');
 
 const schema = {
   notionToken: {
@@ -110,6 +111,11 @@ const schema = {
     type: 'boolean',
     default: true,
   },
+  // macOS only: how system audio is captured (see electron/audio/mac-capture.js).
+  macCaptureStrategy: {
+    type: 'string',
+    default: DEFAULT_MAC_CAPTURE_STRATEGY,
+  },
   googleCalendarClientId: {
     type: 'string',
     default: '',
@@ -138,7 +144,7 @@ const schema = {
     type: 'boolean',
     default: true,
   },
-  // PDF export: '' means the Windows Downloads folder (resolved when exporting).
+  // PDF export: '' means the Downloads folder (resolved when exporting).
   pdfExportDir: {
     type: 'string',
     default: '',
@@ -228,6 +234,7 @@ function getConfig() {
     pinNotesViewToggle:        store.get('pinNotesViewToggle') !== false,
     showAudioWaveform:         store.get('showAudioWaveform') !== false,
     meetingDetection:          store.get('meetingDetection') !== false,
+    macCaptureStrategy:        normalizeMacCaptureStrategy(store.get('macCaptureStrategy')),
     googleCalendarClientId:    store.get('googleCalendarClientId') || '',
     googleCalendarClientSecret: store.get('googleCalendarClientSecret') || '',
     googleCalendarRefreshToken: store.get('googleCalendarRefreshToken') || '',

@@ -150,6 +150,16 @@ contextBridge.exposeInMainWorld('meetmind', {
     sendFailed: (error) => ipcRenderer.send('capture:failed', error),
     sendChunk: (buffer) => ipcRenderer.send('capture:chunk', buffer),
     sendAudioData: (buffer) => ipcRenderer.send('capture:audio-data', buffer),
+    // Settings' "Test system audio": switch the macOS capture strategy for one test capture.
+    testBegin: (strategy) => ipcRenderer.invoke('capture:test-begin', strategy),
+    testEnd: () => ipcRenderer.invoke('capture:test-end'),
+  },
+
+  // macOS privacy permissions (microphone, Screen & System Audio Recording)
+  permissions: {
+    status: () => ipcRenderer.invoke('permissions:status'),
+    request: (kind) => ipcRenderer.invoke('permissions:request', kind),
+    openSettings: (kind) => ipcRenderer.invoke('permissions:open-settings', kind),
   },
 
   // Google Calendar
@@ -202,6 +212,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'llm:fallback-used',
       'log:entry',
       'app:open-session',
+      'app:navigate',
     ];
     if (validChannels.includes(channel)) {
       const subscription = (_event, ...args) => callback(...args);

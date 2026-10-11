@@ -1,12 +1,12 @@
 cff-version: 1.2.0
 message: "If you use MeetMind in your work, please cite it using these metadata."
 type: software
-title: "MeetMind: open-source AI meeting notes for Windows"
+title: "MeetMind: open-source AI meeting notes for Windows and macOS"
 abstract: >-
-  MeetMind is an open-source Windows desktop app that records system audio and
+  MeetMind is an open-source desktop app for Windows and macOS that records system audio and
   microphone, transcribes meetings with AssemblyAI, Google Cloud Speech-to-Text,
   Sarvam AI or Groq, generates meeting minutes with Google Gemini, Groq or Anthropic Claude, and syncs them to
-  Notion. It detects Google Meet, Zoom and Teams calls and offers to record from a floating
+  Notion. On Windows it detects Google Meet, Zoom and Teams calls and offers to record from a floating
   overlay; an optional Chrome extension adds a record button inside Meet and Zoom tabs.
 authors:
   - given-names: Aslah

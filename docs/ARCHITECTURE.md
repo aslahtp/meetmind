@@ -13,11 +13,12 @@ For contributor commands and day to day workflow rules see [`AGENTS.md`](../AGEN
 
 ## 1. What MeetMind is
 
-MeetMind is a free, MIT licensed, Windows only desktop app that turns online meetings into
-written meeting notes. It:
+MeetMind is a free, MIT licensed desktop app for Windows 10/11 and (as a beta) macOS 14.2+ that
+turns online meetings into written meeting notes. It:
 
-1. Records system audio (via WASAPI loopback or a DirectShow fallback) and the microphone at
-   the same time, on the user's own PC. Nothing joins the meeting as a bot or participant.
+1. Records system audio (Windows: WASAPI loopback, or a DirectShow fallback; macOS: the CoreAudio
+   Tap API) and the microphone at the same time, on the user's own computer. Nothing joins the
+   meeting as a bot or participant.
 2. Sends the recording to a speech to text engine chosen by the user (AssemblyAI, Google Cloud
    Speech to Text v1/v2, Sarvam AI, or Groq Whisper) to get a speaker labeled transcript.
 3. Sends the transcript to the user's chosen LLM (Google Gemini, Groq or Anthropic Claude, with an optional cross-provider fallback) to produce structured meeting notes (executive
@@ -51,7 +52,7 @@ Three build artifacts come out of this one repository:
  electron/main.js (recording state machine)          | PROCESSING_PROGRESS,
         |                                            | PROCESSING_COMPLETE
         | renderer capture (primary) or               |
-        | ffmpeg dshow capture (fallback)             |
+        | ffmpeg dshow capture (Windows fallback)     |
         v                                            |
  electron/audio/recorder.js -> .webm/.wav on disk     |
         |                                            |
@@ -76,17 +77,17 @@ Three build artifacts come out of this one repository:
 electron/        Main process, IPC handlers, recording state machine, all backend services
 renderer/        React renderer (Vite), the app's UI
 extension/       Chrome MV3 extension (background worker, content script, overlay, popup)
-assets/          Icons (source + generated), FFmpeg placeholder dir, NSIS installer script
+assets/          Icons (source + generated), FFmpeg placeholder dir, NSIS installer script, macOS entitlements
 scripts/         Build/tooling scripts (icon generation, extension zipping, release notes, etc.)
 tests/           Vitest suite (pure logic only, kept out of electron-builder's file set)
 docs/            This file, GCS setup guide, known issues, new-features notes, brand assets, screenshots
 site/            Static marketing site published to GitHub Pages
 .github/         Workflows, reusable actions, CODEOWNERS, Dependabot config
-electron-builder.yml   Packaging config for the Windows NSIS installer
+electron-builder.yml   Packaging config: Windows NSIS installer, macOS DMGs + update zips
 vite.config.js         Renderer build config
 vitest.config.mjs      Test runner config (separate root from vite.config.js)
 eslint.config.mjs      Flat ESLint config, scoped per directory
-pnpm-workspace.yaml    pnpm settings (hoisted node_modules, allowBuilds, minimumReleaseAge)
+pnpm-workspace.yaml    pnpm settings (hoisted node_modules, supportedArchitectures, allowBuilds, minimumReleaseAge)
 ```
 
 ---
@@ -97,13 +98,22 @@ pnpm-workspace.yaml    pnpm settings (hoisted node_modules, allowBuilds, minimum
 
 Owns:
 
-- The `BrowserWindow` (frameless, custom titlebar controlled by renderer via `window:*` IPC),
-  the tray icon, and `app.requestSingleInstanceLock()` to prevent duplicate windows/tray icons
-  on relaunch (focuses the existing window on `second-instance` instead).
+- The `BrowserWindow` (custom titlebar in the renderer: frameless on Windows, with the window
+  buttons drawn by the renderer and driven by `window:*` IPC; on macOS `titleBarStyle:
+  'hiddenInset'` keeps the native traffic lights inset into the renderer's top bar, which leaves
+  room for them and hides its own buttons), the tray icon (a monochrome `trayTemplate.png` in the
+  macOS menu bar), the macOS application menu (`createAppMenu()`: About, Settings… ⌘, which sends
+  `app:navigate`, Hide/Quit, Edit and Window menus), and `app.requestSingleInstanceLock()` to
+  prevent duplicate windows/tray icons on relaunch (focuses the existing window on
+  `second-instance` instead). Closing the window only hides it on both platforms.
 - Registration of the `meetmind://` custom protocol as the app's default protocol client, but
   **only when packaged** (`app.isPackaged`). Registering it from `pnpm run dev` would steal the
   handler and point "Open App" links at the raw `electron.exe`, breaking the flow after a real
-  install.
+  install. Windows delivers links in `argv` (`second-instance`, or `process.argv` on a cold
+  start); macOS delivers them through `open-url`, registered before `ready` so the link that
+  launched the app isn't lost, and gets the scheme from electron-builder's `protocols`.
+- `--smoke` (checked on the first line of `main.js`, before anything else loads): hands over to
+  `electron/smoke.js`, a headless self-test of the packaged app run by CI (section 16).
 - Registration of a second custom protocol, `meetmind-audio://`, as a privileged, streaming
   scheme (`protocol.registerSchemesAsPrivileged`, called before `app.whenReady()`). This is how
   the renderer's `<audio>` player streams a session's recording straight off disk, with HTTP
@@ -137,11 +147,12 @@ grouped by feature:
 
 | Namespace | Channels | Purpose |
 | --- | --- | --- |
-| `window` | `window:minimize/maximize/close/isMaximized` | Custom titlebar controls (frameless window) |
+| `platform` | (value, not a channel) | `process.platform`, read by the renderer through `renderer/lib/os.js` (`isMac`, `isWindows`) |
+| `window` | `window:minimize/maximize/close/isMaximized` | Custom titlebar controls (frameless window; Windows only, macOS uses its traffic lights) |
 | `shell` | `shell:open-external` | Open a URL in the system default browser |
 | `logs` | `logs:get`, `logs:clear`, `logs:openFolder` | Backing store for the Logs viewer |
 | `config` | `config:get`, `config:set`, `config:set-multiple` | Settings read/write |
-| `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:import-file` | Recording control and device enumeration |
+| `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:import-file` | Recording control and device enumeration (FFmpeg devices are Windows-only; macOS returns an error) |
 | `sessions` | `sessions:list`, `session:get/delete/update-notes/open-recording/create-from-transcript` | Session CRUD |
 | `dialog` | `dialog:choose-folder` | Native folder picker |
 | `pdf` | `pdf:export`, `pdf:reveal`, `pdf:default-dir` | PDF export |
@@ -149,19 +160,20 @@ grouped by feature:
 | `providers` | `providers:list`, `providers:test` | Provider descriptors (models, credential fields, guides) and generic connection test |
 | `gemini` | `gemini:default-system-prompt`, `gemini:default-md-system-prompt` | Default prompt text for Settings |
 | `processing` | `processing:run`, `processing:retry` | Manually (re)run the pipeline on a session |
-| `capture` | `capture:start/stop` (main -> renderer), `capture:started/failed/chunk/audio-data` (renderer -> main) | Renderer-side system audio capture handshake |
+| `capture` | `capture:start/stop` (main -> renderer), `capture:started/failed/chunk/audio-data` (renderer -> main; `capture:started` carries `{ systemAudio, mic }`), `capture:test-begin/test-end` (invoke) | Renderer-side system audio capture handshake; the test pair switches the macOS capture strategy for Settings' "Test system audio" |
+| `permissions` | `permissions:status`, `permissions:request`, `permissions:open-settings` | macOS microphone and Screen & System Audio Recording status, prompts, and System Settings deep links (`not-applicable` elsewhere) |
 | `calendar` | `calendar:auth/disconnect/events/status` | Google Calendar OAuth and event polling |
 | `updater` | `updater:check/download/install/get-status` | Auto-update control |
 | `app` | `app:version` | App version string |
-| `ffmpeg` | `ffmpeg:check`, `ffmpeg:install`, `ffmpeg:onProgress` | FFmpeg presence check and runtime download |
+| `ffmpeg` | `ffmpeg:check`, `ffmpeg:install`, `ffmpeg:onProgress` | FFmpeg presence check (`source`: bundled, installed or system) and runtime download |
 
 Event subscriptions go through a single `on(channel, callback)` / `off(...)` pair with an
 explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
 `recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
 `processing:error`, `processing:cancelled`, `ws:extension-connected`, `ws:recording-requested`,
 `sessions:durations-updated`, `updater:status`, `calendar:meeting-starting`,
-`llm:fallback-used`, `log:entry`, `app:open-session`) so the renderer cannot subscribe to an
-arbitrary IPC channel.
+`llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.
+Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
 
 The meeting overlay window uses its own, smaller preload (`electron/overlay-preload.js`, run
 sandboxed) exposing only `window.meetmindOverlay`: `overlay:get-state`, `overlay:start`,
@@ -186,7 +198,10 @@ React 18 + Vite 6, no router: `renderer/app.jsx` is a single view-state switch b
 - `NoteViewer.jsx` / `TranscriptViewer.jsx`: a completed session's notes or raw transcript.
 - `Settings.jsx`, composed of `settings/GeneralSection.jsx`, `TranscriptionSection.jsx`,
   `NotesSection.jsx`, `IntegrationsSection.jsx`, `SystemSection.jsx`: API keys, service
-  selection, FFmpeg install flow, onboarding.
+  selection, FFmpeg install flow, onboarding. On macOS, `SystemSection` also shows
+  `settings/MacPermissions.jsx`: permission statuses and the "Test system audio" check, which
+  records 3 s with each capture strategy and offers to switch to one that heard audio
+  (`lib/audioTest.js`).
 - `LogsViewer.jsx`: tails `electron/utils/logger.js` output live via the `log:entry` IPC event.
 
 Supporting pieces: `RecordingBar.jsx` (persistent recording control), `ProcessingIndicator.jsx`
@@ -197,7 +212,8 @@ template, `AudioPlayer.jsx` streaming from `meetmind-audio://`), `ui/` (Dialog, 
 `Menu.jsx` for keyboard-navigable dropdown menus).
 
 State/plumbing: `lib/app-context.js`, `lib/hooks.js`, `lib/status.js`, `lib/format.js`,
-`lib/platform.js`, `lib/meetingFilters.js`, `lib/scrollMemory.js`, `lib/audioMeter.js`, `lib/greeting.js`.
+`lib/platform.js` (meeting platforms), `lib/os.js` (host OS), `lib/meetingFilters.js`, `lib/scrollMemory.js`,
+`lib/audioMeter.js`, `lib/audioTest.js`, `lib/greeting.js`.
 
 A second Vite entry, `renderer/overlay.html` -> `overlay.jsx` ->
 `components/overlay/MeetingOverlay.jsx`, renders the floating meeting overlay (section 3.4)
@@ -215,7 +231,9 @@ based on the `theme` setting) driven by CSS custom properties in `renderer/style
 ### 3.4 Meeting detection and overlay (`electron/detection/`, `electron/overlay/`)
 
 The desktop app notices calls by itself, without the extension, the way Notion's and Granola's
-desktop apps do. `detection/meeting-detector.js` polls every 1.5 s, using two Win32 reads made
+desktop apps do. This is Windows-only for now: on macOS `win32.js` reports itself unavailable,
+the detector logs that and stays off, and Settings shows "Not available on macOS yet" instead of
+the switch. `detection/meeting-detector.js` polls every 1.5 s, using two Win32 reads made
 through `koffi` FFI in `detection/win32.js` (loaded lazily, so a load failure only disables
 detection):
 
@@ -240,7 +258,9 @@ The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) d
 `processing`, `complete` (Open) and `error`. Recordings started from the app, tray or
 extension show the overlay too, and processing updates apply only to the session the overlay is
 following. `overlay/overlay-window.js` owns the window: frameless, transparent, always on top,
-`focusable: false` and shown with `showInactive()` so it never takes focus from the call,
+`focusable: false` and shown with `showInactive()` so it never takes focus from the call (on
+macOS a `type: 'panel'` window, which also floats over full-screen apps and every Space without
+the Dock flicker `setVisibleOnAllWorkspaces` causes there),
 placed at the top centre of the display showing the meeting, and sized to the card's reported
 height. The bar animates open (the mic tile drops in, then unfolds to full width) and closed (it
 collapses back to the tile and lifts away; `renderer/styles/overlay.css`). To hide, main sends a
@@ -251,7 +271,7 @@ hidden state and waits for the renderer's `overlay:closed` after the close anima
 
 ## 4. Audio capture pipeline
 
-MeetMind has two independent capture paths, tried in order.
+MeetMind has two independent capture paths, tried in order (the second on Windows only).
 
 ### 4.1 Primary path: renderer capture
 
@@ -262,9 +282,30 @@ in-progress `.webm` file on disk as it arrives, so a crash mid-recording still l
 partial file. On stop, `convertWebmToWav()` (`electron/audio/recorder.js`, ffmpeg-backed)
 produces the final `.wav` used by the transcription stage.
 
-### 4.2 Fallback path: direct ffmpeg capture
+Main's display-media handler (`installDisplayMediaHandler()`) approves the request without a
+picker and answers with `audio: 'loopback'`:
 
-If renderer capture fails to start, `handleStartRecording()` in `main.js` falls back to a direct
+- **Windows**: Chromium's WASAPI loopback, capturing whatever the default output device plays.
+  The video source is a screen from `desktopCapturer`; the renderer stops that track at once.
+- **macOS 14.2+**: the CoreAudio Tap API (Electron 39+), which needs `NSAudioCaptureUsageDescription`
+  in Info.plist (without it macOS returns a silent stream with no error) and the user's Screen &
+  System Audio Recording permission. Electron's macOS loopback is new and behaves differently
+  per video source, so the source is configurable as `config.macCaptureStrategy`
+  (`electron/audio/mac-capture.js`): `screen` (default; a `desktopCapturer` screen), `frame`
+  (MeetMind's own frame, which may avoid the Screen Recording prompt) or `picker` (the macOS
+  system picker). Settings › System › "Test system audio" runs a 3 s capture per strategy via
+  `capture:test-begin`/`capture:test-end` and lets the user switch. On macOS `main.js` asks for
+  microphone access before a recording and allows 60 s for the renderer to start (permission
+  prompts), versus 6 s on Windows.
+
+If the renderer gets no system audio (the request is refused, or the stream has no audio track),
+it fails on Windows, so main falls back to 4.2, which can still capture it; on other platforms
+it records the microphone alone and shows a warning.
+
+### 4.2 Fallback path: direct ffmpeg capture (Windows)
+
+If renderer capture fails to start, `handleStartRecording()` in `main.js` falls back on Windows
+to a direct
 ffmpeg DirectShow (`dshow`) capture combining the microphone and system audio, using
 `electron/audio/mixer.js`:
 
@@ -278,6 +319,10 @@ ffmpeg DirectShow (`dshow`) capture combining the microphone and system audio, u
   the two input streams; `parseDeviceList`, `detectDshowLoopback`, `detectMicrophone` handle
   device enumeration and classification.
 
+macOS has no fallback (ffmpeg's `avfoundation` can't capture system audio without a virtual
+device, and the renderer already covers the mic-only case): a failed start ends with an error
+pointing at the Privacy & Security permissions.
+
 ### 4.3 FFmpeg resolution
 
 `electron/audio/ffmpeg-path.js` resolves the ffmpeg/ffprobe binary path (`ffmpeg.exe` on
@@ -287,12 +332,23 @@ manually; per-arch `assets/ffmpeg/mac-<arch>/` on macOS), then on macOS the in-a
 `userData/ffmpeg/` and Homebrew's `/opt/homebrew/bin` and `/usr/local/bin` (Finder-launched apps
 don't inherit the shell PATH), and finally the bare command on PATH. The candidate list is built
 by the pure `ffmpegCandidates()` (unit-tested in `tests/ffmpeg-path.test.js`). If nothing is
-found, Settings → System offers a runtime download via the `ffmpeg:install` IPC handler, which
-fetches a build from
-[gyan.dev](https://www.gyan.dev/ffmpeg/builds/) (the same builds as
-[GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg) on GitHub). FFmpeg binaries are never
-committed to git (they exceed GitHub's 100 MB file limit and CI's repo-hygiene job actively
-rejects any `.exe`/`.dll`/`.msi` in the tree).
+found, Settings → System offers a runtime download via the `ffmpeg:install` IPC handler
+(`electron/services/ffmpeg-installer.js`):
+
+- **Windows**: the current essentials build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)
+  (the same builds as [GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg) on GitHub),
+  copied next to where the bundled copy lives.
+- **macOS**: the release build for the Mac's architecture pinned in
+  `electron/audio/ffmpeg-sources.js` ([ffmpeg.martin-riedl.de](https://ffmpeg.martin-riedl.de/),
+  static and Developer ID signed). Each zip is checked against its pinned SHA-256
+  (`electron/utils/download.js`), unpacked with `ditto` and installed into `userData/ffmpeg/`,
+  never inside the app bundle, whose signature it would break. The same pins feed
+  `scripts/fetch-ffmpeg.js`, which stages `assets/ffmpeg/mac-<arch>/` for builds. Intel release
+  builds there end in January 2027, so the pinned x64 zips need mirroring before then.
+
+FFmpeg binaries are never committed to git (they exceed GitHub's 100 MB file limit and CI's
+repo-hygiene job actively rejects any `.exe`/`.dll`/`.msi`/`.dylib`, or anything in
+`assets/ffmpeg/` but its README).
 
 ---
 

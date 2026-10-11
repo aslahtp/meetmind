@@ -3,6 +3,7 @@ import { Loader2, RefreshCw, RotateCcw, Download, ArrowUpCircle, FileAudio } fro
 import { StatusDot, ProgressBar } from '../ui/index.jsx';
 import { SettingsGroup, ExternalLink } from './SettingsParts.jsx';
 import { isMac } from '../../lib/os.js';
+import MacPermissions from './MacPermissions.jsx';
 
 const BINARIES = [
   { key: 'ffmpeg', label: 'ffmpeg', desc: 'Audio capture & conversion' },
@@ -171,8 +172,13 @@ export default function SystemSection({ active }) {
   const missingBinaries = ffmpegStatus && (!ffmpegStatus.ffmpeg?.found || !ffmpegStatus.ffprobe?.found);
   const progress = updaterStatus?.downloadProgress;
 
+  // Unsigned macOS builds can't replace themselves; "Download" opens the release page instead.
+  const canSelfUpdate = updaterStatus?.canSelfUpdate !== false;
+
   return (
     <div className="space-y-24">
+      {isMac && <MacPermissions />}
+
       {/* ── FFmpeg ─────────────────────────────────────────────────────────── */}
       <SettingsGroup
         title="FFmpeg & FFprobe"
@@ -351,7 +357,7 @@ export default function SystemSection({ active }) {
             {updaterStatus?.status === 'available' && (
               <button type="button" onClick={handleDownloadUpdate} disabled={downloadingUpdate} className="btn-ink btn-sm">
                 <Download size={14} strokeWidth={1.75} />
-                Download update
+                {canSelfUpdate ? 'Download update' : 'Download from GitHub'}
               </button>
             )}
 

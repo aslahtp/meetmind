@@ -22,7 +22,7 @@ import { markScrollRestore, cancelScrollRestore } from './lib/scrollMemory.js';
 import LogsViewer from './components/LogsViewer.jsx';
 import RecordingBar from './components/RecordingBar.jsx';
 import { audioMeter } from './lib/audioMeter.js';
-import { isWindows } from './lib/os.js';
+import { isMac, isWindows } from './lib/os.js';
 import { IconButton, StatusDot, useConfirmDialog } from './components/ui/index.jsx';
 
 // ── Toast System ──────────────────────────────────────────────────────────────
@@ -544,6 +544,14 @@ export default function App() {
     return window.meetmind.on('app:open-session', ({ sessionId } = {}) => openSessionById(sessionId));
   }, [openSessionById]);
 
+  // macOS app menu (e.g. Settings… ⌘,).
+  useEffect(() => {
+    if (!window.meetmind) return undefined;
+    return window.meetmind.on('app:navigate', (nextView) => {
+      if (['dashboard', 'meetings', 'settings', 'logs'].includes(nextView)) requestNavigate(nextView);
+    });
+  }, [requestNavigate]);
+
   const updateConfig = async (key, value) => {
     await window.meetmind.config.set(key, value);
     setConfigState((prev) => ({ ...prev, [key]: value }));
@@ -699,7 +707,9 @@ function TopBar() {
   const spacerRef = useRef(null);
 
   return (
-    <header className="titlebar-drag flex-shrink-0 h-64 flex items-center gap-16 lg:gap-24 pl-24 border-b border-ink bg-paper select-none">
+    // macOS keeps its native traffic lights (inset by main.js at x 24); the bar starts after them
+    // and has no custom window buttons on the right.
+    <header className={`titlebar-drag flex-shrink-0 h-64 flex items-center gap-16 lg:gap-24 ${isMac ? 'pl-[96px] pr-24' : 'pl-24'} border-b border-ink bg-paper select-none`}>
       {/* Wordmark */}
       <div className="flex items-center gap-8 flex-shrink-0">
         <span className="tile w-32 h-32 inline-flex items-center justify-center" aria-hidden="true">
@@ -757,7 +767,7 @@ function TopBar() {
         )}
       </div>
 
-      <WindowControls />
+      {!isMac && <WindowControls />}
     </header>
   );
 }

@@ -381,7 +381,7 @@ async function stopRecording() {
  */
 async function convertWebmToWav(webmPath, wavPath) {
   const ffmpegPath = resolveFfmpegPath();
-  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System Dependencies.');
+  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System.');
 
   return new Promise((resolve, reject) => {
     const args = [
@@ -417,7 +417,7 @@ async function convertWebmToWav(webmPath, wavPath) {
  */
 async function convertFileToWav(inputPath, wavPath) {
   const ffmpegPath = resolveFfmpegPath();
-  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System Dependencies.');
+  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System.');
 
   return new Promise((resolve, reject) => {
     const args = [

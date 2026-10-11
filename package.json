@@ -1,7 +1,7 @@
 {
   "name": "meetmind",
   "version": "4.6.0",
-  "description": "Open-source AI meeting notes app for Windows: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT, Sarvam AI or Groq, summarize with Gemini, Groq or Claude, and sync to Notion.",
+  "description": "Open-source AI meeting notes app for Windows and macOS: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT, Sarvam AI or Groq, summarize with Gemini, Groq or Claude, and sync to Notion.",
   "keywords": [
     "ai-meeting-notes",
     "meeting-notes",
@@ -21,6 +21,7 @@
     "malayalam",
     "electron",
     "windows",
+    "macos",
     "chrome-extension",
     "otter-alternative"
   ],
@@ -45,6 +46,10 @@
     "build:renderer": "vite build",
     "build:electron": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml",
     "build:dir": "vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --dir --config electron-builder.yml",
+    "prebuild:mac": "pnpm run generate-icons && pnpm run build:ext",
+    "build:mac": "vite build && electron-builder --mac --arm64 --x64 --config electron-builder.yml --publish never",
+    "build:mac:dir": "vite build && electron-builder --mac --dir --config electron-builder.yml",
+    "fetch-ffmpeg": "node scripts/fetch-ffmpeg.js",
     "build:ext": "node scripts/build-extension.js",
     "preview": "vite preview",
     "generate-icons": "node scripts/generate-icons.js",
