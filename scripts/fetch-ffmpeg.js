@@ -1,12 +1,14 @@
 /**
- * Downloads the pinned macOS FFmpeg builds (electron/audio/ffmpeg-sources.js), verifies each
- * SHA-256 and unpacks ffmpeg + ffprobe into assets/ffmpeg/mac-<arch>/, the folder
- * electron-builder bundles as resources/ffmpeg/. Used by CI and the release build; also handy
- * for a local macOS dev setup.
+ * Downloads the pinned FFmpeg build (electron/audio/ffmpeg-sources.js), verifies each SHA-256
+ * and puts ffmpeg + ffprobe where electron-builder bundles them as resources/ffmpeg/:
+ *   Windows → assets/ffmpeg/ffmpeg.exe, ffprobe.exe
+ *   macOS   → assets/ffmpeg/mac-<arch>/ffmpeg, ffprobe
+ * Used by CI and the release builds; also the quickest local dev setup.
  *
- * Run: node scripts/fetch-ffmpeg.js [--arch arm64|x64]...   (default: both)
- *
- * Windows builds are fetched by release.yml itself (gyan.dev, pinned there).
+ * Run: node scripts/fetch-ffmpeg.js [--platform win32|darwin] [--arch x64|arm64]... [--out <dir>]
+ *   --platform  defaults to this machine's
+ *   --arch      repeatable; defaults to both Mac architectures on darwin, x64 on win32
+ *   --out       put the binaries here instead (one arch only); handy for testing
  */
 
 'use strict';
@@ -14,60 +16,57 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFileSync } = require('child_process');
-const { downloadFile, assertSha256 } = require('../electron/utils/download');
-const { FFMPEG_VERSION, macFfmpegSources } = require('../electron/audio/ffmpeg-sources');
+const { fetchPinnedFfmpeg } = require('../electron/audio/ffmpeg-fetch');
+const { FFMPEG_VERSION, ffmpegDownloads } = require('../electron/audio/ffmpeg-sources');
 const { devBinaryDir } = require('../electron/audio/ffmpeg-path');
 
 const ROOT = path.join(__dirname, '..');
 
-function parseArches(argv) {
-  const arches = [];
+function parseArgs(argv) {
+  const opts = { platform: process.platform, arches: [], out: null };
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--arch' && argv[i + 1]) arches.push(argv[++i]);
+    const flag = argv[i];
+    const value = argv[i + 1];
+    if (flag === '--platform' && value) { opts.platform = value; i++; }
+    else if (flag === '--arch' && value) { opts.arches.push(value); i++; }
+    else if (flag === '--out' && value) { opts.out = path.resolve(value); i++; }
   }
-  return arches.length ? arches : ['arm64', 'x64'];
+  if (!opts.arches.length) opts.arches = opts.platform === 'darwin' ? ['arm64', 'x64'] : ['x64'];
+  if (opts.out && opts.arches.length > 1) throw new Error('--out takes a single --arch');
+  return opts;
 }
 
-function unzip(zipPath, destDir) {
-  // ditto ships with macOS; unzip covers Linux runners and local checks elsewhere.
-  if (process.platform === 'darwin') execFileSync('/usr/bin/ditto', ['-x', '-k', zipPath, destDir]);
-  else execFileSync('unzip', ['-o', '-q', zipPath, '-d', destDir]);
-}
-
-async function fetchArch(arch) {
-  const sources = macFfmpegSources('darwin', arch);
-  if (!sources) throw new Error(`No pinned macOS FFmpeg build for arch "${arch}"`);
-  const outDir = path.join(ROOT, 'assets', 'ffmpeg', devBinaryDir('darwin', arch));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `meetmind-ffmpeg-${arch}-`));
-  fs.mkdirSync(outDir, { recursive: true });
-
+async function fetchArch(platform, arch, out) {
+  if (!ffmpegDownloads(platform, arch)) throw new Error(`No pinned FFmpeg build for ${platform} ${arch}`);
+  const outDir = out || path.join(ROOT, 'assets', 'ffmpeg', devBinaryDir(platform, arch));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `meetmind-ffmpeg-${platform}-${arch}-`));
   try {
-    for (const tool of ['ffmpeg', 'ffprobe']) {
-      const { url, sha256 } = sources[tool];
-      const zipPath = path.join(tmp, `${tool}.zip`);
-      console.log(`[fetch-ffmpeg] ${arch} ${tool}: ${url}`);
-      const actual = await downloadFile(url, zipPath, { userAgent: 'MeetMind-Build/1.0' });
-      assertSha256(actual, sha256, `${arch}/${tool}.zip`);
-      const extractDir = path.join(tmp, tool);
-      fs.mkdirSync(extractDir);
-      unzip(zipPath, extractDir);
-      const binary = path.join(extractDir, tool);
-      if (!fs.existsSync(binary)) throw new Error(`${tool} missing from ${url}`);
-      const dest = path.join(outDir, tool);
-      fs.copyFileSync(binary, dest);
-      fs.chmodSync(dest, 0o755);
-      console.log(`[fetch-ffmpeg] ${arch} ${tool}: verified ${actual} -> ${path.relative(ROOT, dest)}`);
+    let lastIndex = -1;
+    const installed = await fetchPinnedFfmpeg({
+      platform,
+      arch,
+      outDir,
+      tmpDir,
+      userAgent: 'MeetMind-Build/1.0',
+      onProgress: ({ stage, index, count }) => {
+        if (stage === 'download' && index !== lastIndex) {
+          lastIndex = index;
+          console.log(`[fetch-ffmpeg] ${platform}-${arch}: download ${index + 1}/${count}`);
+        }
+      },
+    });
+    for (const file of Object.values(installed)) {
+      console.log(`[fetch-ffmpeg] ${platform}-${arch}: verified -> ${path.relative(ROOT, file) || file}`);
     }
   } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
 (async () => {
-  const arches = parseArches(process.argv.slice(2));
-  console.log(`[fetch-ffmpeg] FFmpeg ${FFMPEG_VERSION} for macOS: ${arches.join(', ')}`);
-  for (const arch of arches) await fetchArch(arch);
+  const { platform, arches, out } = parseArgs(process.argv.slice(2));
+  console.log(`[fetch-ffmpeg] FFmpeg ${FFMPEG_VERSION} for ${platform}: ${arches.join(', ')}`);
+  for (const arch of arches) await fetchArch(platform, arch, out);
 })().catch((err) => {
   console.error(`[fetch-ffmpeg] ${err.message}`);
   process.exit(1);

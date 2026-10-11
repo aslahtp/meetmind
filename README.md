@@ -145,6 +145,12 @@ MeetMind for macOS needs **macOS 14.2 or later**. It's a beta: it isn't signed b
 
 Because the beta isn't signed, macOS forgets its permissions after each update (allow them again), and updates are installed by downloading the new DMG: MeetMind tells you when one is available and opens the release page.
 
+To check that a download really was built by this repository's release workflow (releases from 4.6.1 on carry signed build-provenance attestations), use the [GitHub CLI](https://cli.github.com/):
+
+```bash
+gh attestation verify MeetMind-x.y.z-arm64.dmg --repo aslahtp/meetmind
+```
+
 ### Meeting detection
 
 On Windows, MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay unfolds at the top centre of the screen with a **Record** button. Turn it off in **Settings → General → Meeting detection**. Meeting detection isn't available on macOS yet.
@@ -176,20 +182,14 @@ pnpm install
 
 ### 2. FFmpeg
 
-Let the app install FFmpeg for you (**Settings → System → Download & Install FFmpeg**), or put it in place yourself.
-
-On Windows, download the essentials build from [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/) and place the executables in:
+Fetch the pinned, checksum-verified FFmpeg build for your OS (the same one the releases ship):
 
 ```bash
-assets/ffmpeg/ffmpeg.exe
-assets/ffmpeg/ffprobe.exe
+pnpm run fetch-ffmpeg                     # Windows: assets/ffmpeg/ffmpeg.exe, ffprobe.exe
+pnpm run fetch-ffmpeg -- --arch arm64     # macOS: just your Mac's architecture (or x64)
 ```
 
-On macOS, fetch the pinned, checksum-verified build for your Mac into `assets/ffmpeg/mac-arm64/` (or `mac-x64/`), or just `brew install ffmpeg`:
-
-```bash
-pnpm run fetch-ffmpeg -- --arch arm64
-```
+Alternatively, let the app install it (**Settings → System → Download & Install FFmpeg**), or on macOS just `brew install ffmpeg`.
 
 ### 3. Run
 
@@ -217,9 +217,10 @@ See [AGENTS.md](AGENTS.md) for an architecture overview of the main process, ren
 
 ## 🚢 Building for production
 
-**Windows:** place `ffmpeg.exe` and `ffprobe.exe` in `assets/ffmpeg/` first, then run:
+**Windows:** fetch FFmpeg into `assets/ffmpeg/` first, then build:
 
 ```bash
+pnpm run fetch-ffmpeg
 pnpm run build
 ```
 

@@ -333,19 +333,22 @@ manually; per-arch `assets/ffmpeg/mac-<arch>/` on macOS), then on macOS the in-a
 don't inherit the shell PATH), and finally the bare command on PATH. The candidate list is built
 by the pure `ffmpegCandidates()` (unit-tested in `tests/ffmpeg-path.test.js`). If nothing is
 found, Settings → System offers a runtime download via the `ffmpeg:install` IPC handler
-(`electron/services/ffmpeg-installer.js`):
+(`electron/services/ffmpeg-installer.js`).
 
-- **Windows**: the current essentials build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)
-  (the same builds as [GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg) on GitHub),
-  copied next to where the bundled copy lives.
-- **macOS**: the release build for the Mac's architecture pinned in
-  `electron/audio/ffmpeg-sources.js` ([ffmpeg.martin-riedl.de](https://ffmpeg.martin-riedl.de/),
-  static and Developer ID signed). Each zip is checked against its pinned SHA-256
-  (`electron/utils/download.js`), unpacked with `ditto` and installed into `userData/ffmpeg/`,
-  never inside the app bundle, whose signature it would break. The same pins feed
-  `scripts/fetch-ffmpeg.js`, which stages `assets/ffmpeg/mac-<arch>/` for builds. Intel release
-  builds there end in January 2027, so the pinned x64 zips need mirroring before then (see
-  [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)).
+Every FFmpeg MeetMind ships or installs comes from one table of pinned downloads,
+`electron/audio/ffmpeg-sources.js`, and goes through `electron/audio/ffmpeg-fetch.js`: each zip
+is checked against its pinned SHA-256 (`electron/utils/download.js`) before it is unpacked
+(PowerShell `Expand-Archive` on Windows, `ditto` on macOS). The same code serves the in-app
+installer and `scripts/fetch-ffmpeg.js`, which stages the binaries for CI and release builds.
+
+- **Windows**: the essentials build from [GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg)
+  on GitHub (the same builds [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) serves), one zip with
+  both executables. The in-app installer copies them next to where the bundled copy lives.
+- **macOS**: per-architecture release builds from
+  [ffmpeg.martin-riedl.de](https://ffmpeg.martin-riedl.de/) (static, Developer ID signed), one zip
+  per tool. The in-app installer puts them in `userData/ffmpeg/`, never inside the app bundle,
+  whose signature it would break. Intel release builds there end in January 2027, so the pinned
+  x64 zips need mirroring before then (see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)).
 
 FFmpeg binaries are never committed to git (they exceed GitHub's 100 MB file limit and CI's
 repo-hygiene job actively rejects any `.exe`/`.dll`/`.msi`/`.dylib`, or anything in
@@ -671,8 +674,9 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 | Notion API | Optional notes sync (Stage 3) | Internal integration token | `electron/services/notion.js` (`@notionhq/client`) |
 | Google Calendar API | Optional upcoming-meeting reminders | OAuth2 (user-supplied client ID/secret) | `electron/services/google-calendar.js` (`googleapis`) |
 | GitHub Releases | Auto-update distribution | none (public releases) | `electron-updater`, configured in `electron-builder.yml` |
-| gyan.dev / GyanD/codexffmpeg | Windows FFmpeg binary distribution | none | `ffmpeg:install` IPC handler; pinned + SHA-256 verified in `release.yml` for the bundled build |
-| ffmpeg.martin-riedl.de | macOS FFmpeg binaries (arm64 + x64) | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and the macOS `ffmpeg:install` |
+| GyanD/codexffmpeg (gyan.dev builds) | Windows FFmpeg binaries | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
+| ffmpeg.martin-riedl.de | macOS FFmpeg binaries (arm64 + x64) | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
+| Sigstore (via `actions/attest`) | Signed build-provenance attestations for release files | GitHub OIDC (release workflow only) | `attest` job in `release.yml` |
 
 All of the above except GitHub Releases and FFmpeg distribution are bring-your-own-credentials:
 MeetMind ships no API keys or secrets of its own. Every key lives in the user's local
@@ -709,7 +713,7 @@ From `package.json` (pnpm, Node 22.12+, Windows or macOS).
 
 | Package | Version | Purpose |
 | --- | --- | --- |
-| `electron` | ^44.7.0 | Runtime (pinned exact version also set in `electron-builder.yml`). Since Electron 42 the package has no install script: the binary downloads the first time Electron is launched, or with `pnpm exec install-electron` |
+| `electron` | ^44.7.0 | Runtime; electron-builder packages the version the lockfile installed. Since Electron 42 the package has no install script: the binary downloads the first time Electron is launched, or with `pnpm exec install-electron` |
 | `electron-builder` | ^26.17.0 | Packaging the Windows NSIS installer and the macOS DMGs (26.0.13+ is needed for ad-hoc `identity: "-"` signing) |
 | `react`, `react-dom` | ^18.3.1 | Renderer UI framework |
 | `vite`, `@vitejs/plugin-react` | ^6.4.3 / ^4.7.0 | Renderer dev server and build |
@@ -810,9 +814,10 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   FFmpeg is pulled in as per-platform `extraResources` (`assets/ffmpeg/*.exe` on Windows,
   `assets/ffmpeg/mac-${arch}/` on macOS -> `ffmpeg/` in the packaged app),
   explicitly excluded from the `asar` archive's `files` list (`!assets/ffmpeg/**`) since ffmpeg
-  needs to run as a native subprocess, not live inside the packed archive. `electronVersion` is
-  pinned to the exact same version as the `electron` devDependency, so electron-builder never
-  silently packages a mismatched runtime. `asarUnpack` keeps `koffi` and its
+  needs to run as a native subprocess, not live inside the packed archive. There is deliberately
+  no `electronVersion`: electron-builder packages the Electron installed from the lockfile
+  (`node_modules/electron`), so the shipped runtime always matches dev and the tests (a pin there
+  drifted whenever Dependabot bumped `electron` in `package.json`). `asarUnpack` keeps `koffi` and its
   `@koromix/koffi-*` native binary outside the archive, since a `.node` file can't be loaded from
   inside it.
 - **macOS packaging** (`mac:` in `electron-builder.yml`): `dmg` + `zip` targets for `arm64` and
@@ -829,9 +834,8 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   omitting this would ship an installer whose window is blank (a documented, previously-hit
   failure mode, called out explicitly in `AGENTS.md`'s "Learned Workspace Facts").
 - **Production build** (`pnpm run build`) requires `assets/ffmpeg/ffmpeg.exe` and
-  `assets/ffmpeg/ffprobe.exe` to already exist locally (not committed); developers get FFmpeg
-  from the app's own Settings screen download flow or directly from gyan.dev. `pnpm run
-  build:mac` needs `pnpm run fetch-ffmpeg` first.
+  `assets/ffmpeg/ffprobe.exe` to already exist locally (not committed), and `pnpm run build:mac`
+  needs `assets/ffmpeg/mac-<arch>/`; `pnpm run fetch-ffmpeg` stages either from the pins.
 - **`pnpm run build:dir`** / **`pnpm run build:mac:dir`**: production renderer build + an
   unpacked Electron app under `dist/desktop/`, for fast local iteration without building the full
   installer.
@@ -839,6 +843,8 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   profile, opens no window, checks config + DB, finds and runs ffmpeg/ffprobe, encodes a 1 s Opus
   WebM and converts it with `convertWebmToWav`, loads koffi, queries the permissions API and the
   meeting-detection backend, prints `MEETMIND_SMOKE {json}` and exits non-zero on any failure.
+  `scripts/check-smoke.js` reads that output in CI, fails the step unless every check passed,
+  and writes a table of the checks to the job summary.
 
 ---
 
@@ -849,23 +855,29 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
 
 - **`ci.yml`**: runs on every PR against `main` and every push to `main`; also a reusable
   workflow (`workflow_call`) invoked by `release.yml` as a required gate. Jobs: lint
-  (`pnpm run lint`), test (`pnpm run test`), build the renderer and the extension, `mac-build` on
-  `macos-latest` (tests, fetch the pinned arm64 FFmpeg, `build:mac:dir`, `codesign --verify`,
-  Info.plist privacy keys, `--smoke`, and the zipped `.app` uploaded as a 7-day artifact for
-  testers; no secrets, so it is safe on fork PRs), a repo-hygiene job (rejects a committed
+  (`pnpm run lint`), test (`pnpm run test`), build the renderer and the extension;
+  `windows-build` on `windows-latest` (tests, fetch the pinned FFmpeg, `build:dir`, `--smoke`);
+  `mac-build` on `macos-latest` (tests, fetch the pinned arm64 FFmpeg, `build:mac:dir`,
+  `codesign --verify`, Info.plist privacy keys, `--smoke`, and the zipped `.app` uploaded as a
+  7-day artifact for testers); a `changes` job that skips those two builds on PRs touching only
+  docs (a skipped job still satisfies a required check); a repo-hygiene job (rejects a committed
   npm/yarn lockfile, committed `.exe`/`.dll`/`.msi`/`.dylib` or anything in `assets/ffmpeg/` but
   its README, a real `.env` file, or any file over 10 MB), a gitleaks secret scan (checksum-verified download) over the full git
   history, `pnpm audit --prod --audit-level high`, and a zizmor audit of the workflows
-  themselves.
+  themselves. No job has secrets, so all of it is safe on fork PRs.
 - **`release.yml`**: triggers on a push to `main` that touches `package.json` (i.e. a version
   bump). Calls `ci.yml` as a gate first. The `build` job then builds the Windows installer with a
-  read-only token and no dependency cache, bundling FFmpeg at a pinned version
-  (`FFMPEG_VERSION`) checked against a pinned SHA-256 (`FFMPEG_SHA256`), from the same builds
-  gyan.dev serves (GyanD/codexffmpeg releases), then smoke-tests the unpacked app. The `build-mac`
+  read-only token and no dependency cache, bundling the pinned, checksum-verified FFmpeg
+  (`scripts/fetch-ffmpeg.js`), then smoke-tests the unpacked app. The `build-mac`
   job (`macos-latest`, same read-only/no-cache rules) fetches the pinned macOS FFmpeg for arm64
-  and x64, runs `pnpm run build:mac`, verifies both apps' signatures and bundled FFmpeg, and
-  smoke-tests the arm64 app; signing secrets would go in a protected environment on this job
-  once there is a Developer ID. A separate `publish` job, the only one granted
+  and x64, runs `pnpm run build:mac`, verifies both apps' signatures and bundled FFmpeg and that
+  `latest-mac.yml` lists both update zips, and smoke-tests the arm64 app; signing secrets would
+  go in a protected environment on this job once there is a Developer ID. An `attest` job, the
+  only one with `id-token: write` and `attestations: write` and running no project code, signs
+  SLSA build provenance (`actions/attest`, Sigstore) for the installer, both DMGs, the mac update
+  zips and the extension, so anyone can check a download with
+  `gh attestation verify <file> --repo aslahtp/meetmind`. A separate `publish` job, which waits
+  for the attestations, the only one granted
   `contents: write`, runs no dependency code and no third-party actions, and creates the GitHub
   release (Windows installer, both DMGs, the mac update zips, `latest.yml`, `latest-mac.yml`,
   blockmaps and the extension) using the runner's own `gh` CLI. `pnpm run build` is always invoked with
@@ -875,10 +887,14 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   `.github/` changes are exempt; a `skip-version-check` label overrides it for the rest). Also
   runs a dependency-review check that fails a PR adding a runtime dependency with a
   high-severity advisory.
-- **`codeql.yml`**: CodeQL security analysis on PRs, pushes to `main`, and weekly on a schedule.
+- **`codeql.yml`**: CodeQL security analysis of the JavaScript and of the workflows themselves
+  (`actions` language, alongside zizmor) on PRs, pushes to `main`, and weekly on a schedule.
 - **`pages.yml`**: publishes `site/` to GitHub Pages.
 - **`.github/dependabot.yml`**: grouped weekly minor/patch dependency update PRs and monthly
-  GitHub Actions updates, each with a 7-day cooldown.
+  GitHub Actions updates (the workflows and the composite `.github/actions/setup`), each with a
+  7-day cooldown.
+- Every job sets `timeout-minutes` (smoke-test steps 3 minutes), so a hung build or app fails
+  fast instead of running for GitHub's 6-hour default.
 - **`.github/CODEOWNERS`**: requires maintainer review specifically for workflow files,
   dependency manifests, build config, and the auto-updater code.
 

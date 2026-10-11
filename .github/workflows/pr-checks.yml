@@ -23,6 +23,7 @@ jobs:
   version-changelog:
     name: Version & changelog
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Dependabot PRs and PRs labelled `skip-version-check` (comments/formatting only) are exempt.
     # Checks the PR author, not `github.actor` (whoever last triggered the run can differ).
     if: github.event.pull_request.user.login != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-version-check')
@@ -71,6 +72,7 @@ jobs:
   dependency-review:
     name: Dependency review
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

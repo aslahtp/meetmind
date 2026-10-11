@@ -1,10 +1,21 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.6.1] - 2026-10-12
+
+### Added
+
+- Every release download (Windows installer, macOS DMGs and update zips, extension) comes with a signed build-provenance attestation; check one with `gh attestation verify <file> --repo aslahtp/meetmind`.
+
+### Changed
+
+- The in-app FFmpeg download on Windows installs the same pinned build the installer ships and checks its SHA-256, instead of whatever gyan.dev's latest build is.
+- `pnpm run fetch-ffmpeg` sets up FFmpeg for development and builds on Windows too.
 
 ## [4.6.0] - 2026-10-11
 

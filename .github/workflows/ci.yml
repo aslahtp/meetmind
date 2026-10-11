@@ -34,6 +34,7 @@ jobs:
   lint-test-build:
     name: Lint, test & build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,12 +56,91 @@ jobs:
       - name: Build extension
         run: pnpm run build:ext
 
+  # Whether a PR touches anything that can change the packaged apps. Docs-only PRs skip the
+  # Windows and macOS builds below (a skipped job still satisfies a required status check).
+  # Pushes and release runs (workflow_call) always build.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify changed files
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Same docs/metadata list as pr-checks.yml's version check, plus the website. Workflow
+          # and action changes (.github/) always build: they're what the builds run.
+          app=$(git diff --name-only "$BASE_SHA"...HEAD \
+            | grep -vE '^(docs/|\.claude/|site/)|\.md$|^(LICENSE|CITATION\.cff|llms\.txt)$|^\.github/(ISSUE_TEMPLATE/|CODEOWNERS$|release_template\.md$)' || true)
+          if [ -n "$app" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "Only docs changed; skipping the app builds." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # The Windows release is built only by release.yml, so every PR also packages the unpacked
+  # Windows app (the same electron-builder config, FFmpeg pin and koffi binaries the installer
+  # ships) and runs its headless self-test, to catch packaging breaks before a release does.
+  windows-build:
+    name: Windows build & smoke test
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup
+        uses: $/.github/actions/setup
+
+      # Also catches Windows-only failures in the pure-logic tests (paths, line endings).
+      - name: Test
+        shell: bash
+        run: pnpm run test
+
+      - name: Fetch FFmpeg (checksum-verified)
+        shell: bash
+        run: node scripts/fetch-ffmpeg.js --platform win32
+
+      # bash: under the default pwsh the runner's pnpm shim exits 0 without running the script.
+      - name: Build unpacked app
+        shell: bash
+        run: pnpm run build:dir
+
+      - name: Smoke test
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          dist/desktop/win-unpacked/MeetMind.exe --smoke > smoke.txt || true
+          node scripts/check-smoke.js smoke.txt "Windows x64"
+
   # macOS has no maintainer hardware, so every PR builds the unsigned Apple Silicon app, checks
   # it, and runs its headless self-test (electron/smoke.js): config + DB, the bundled FFmpeg,
   # WebM→WAV, koffi and the permissions API. The zipped .app is kept for testers.
   mac-build:
     name: macOS build & smoke test
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -74,7 +154,7 @@ jobs:
         run: pnpm run test
 
       - name: Fetch FFmpeg (checksum-verified)
-        run: node scripts/fetch-ffmpeg.js --arch arm64
+        run: node scripts/fetch-ffmpeg.js --platform darwin --arch arm64
 
       # electron-builder skips all macOS signing on pull-request builds (it checks GITHUB_BASE_REF)
       # unless CSC_FOR_PULL_REQUEST is set, leaving Electron's original signature on a modified
@@ -98,13 +178,17 @@ jobs:
           test -x "$app/Contents/Resources/ffmpeg/ffprobe"
 
       - name: Smoke test
+        timeout-minutes: 3
         run: |
-          dist/desktop/mac-arm64/MeetMind.app/Contents/MacOS/MeetMind --smoke | tee smoke.txt
-          grep -q '^MEETMIND_SMOKE {"ok":true' smoke.txt
+          dist/desktop/mac-arm64/MeetMind.app/Contents/MacOS/MeetMind --smoke > smoke.txt || true
+          node scripts/check-smoke.js smoke.txt "macOS arm64"
 
+      # ditto keeps the bundle's symlinks and permissions; fastest compression level, since this is
+      # a 7-day test artifact, not a release download.
       - name: Zip app for testers
-        run: ditto -c -k --keepParent dist/desktop/mac-arm64/MeetMind.app MeetMind-mac-arm64.zip
+        run: ditto -c -k --zlibCompressionLevel 1 --keepParent dist/desktop/mac-arm64/MeetMind.app MeetMind-mac-arm64.zip
 
+      # Already a zip: compressing it again only costs time.
       - name: Upload app
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -112,10 +196,12 @@ jobs:
           path: MeetMind-mac-arm64.zip
           if-no-files-found: error
           retention-days: 7
+          compression-level: 0
 
   repo-hygiene:
     name: Repo hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -154,6 +240,7 @@ jobs:
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -175,6 +262,7 @@ jobs:
   dependency-audit:
     name: Dependency audit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -195,6 +283,7 @@ jobs:
   workflow-security:
     name: Workflow security (zizmor)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
