@@ -6,12 +6,12 @@ Thanks for helping improve MeetMind. Bug reports, feature ideas, documentation f
 
 - Search [existing issues](https://github.com/aslahtp/meetmind/issues) first.
 - Use the **Bug report** or **Feature request** template when opening a new issue.
-- For bugs, include your MeetMind version (Settings → System), Windows version, the speech-to-text engine you use, and relevant lines from the in-app **Logs** page. Remove API keys and meeting content before posting.
+- For bugs, include your MeetMind version (Settings → System), your operating system and version, the speech-to-text engine you use, and relevant lines from the in-app **Logs** page. Remove API keys and meeting content before posting.
 - Report security vulnerabilities privately; see [SECURITY.md](SECURITY.md).
 
 ## Development setup
 
-MeetMind is a Windows-only Electron app. You need Windows 10/11, Node.js 22.12+ and [pnpm](https://pnpm.io/) (never npm or npx).
+MeetMind is an Electron app for Windows and macOS. You need Windows 10/11 or macOS 14.2+, Node.js 22.12+ and [pnpm](https://pnpm.io/) (never npm or npx). Meeting detection and the FFmpeg recording fallback are Windows-only; on a Mac, run `pnpm run fetch-ffmpeg -- --arch arm64` (or `--arch x64`) once, or install FFmpeg with Homebrew.
 
 ```bash
 git clone https://github.com/aslahtp/meetmind.git
@@ -34,8 +34,8 @@ pnpm run dev
 1. Fork the repository and create a branch from `main`.
 2. Keep each pull request focused on one change.
 3. Describe what changed, why, and how you tested it; include screenshots for UI changes.
-4. Make sure `pnpm run build:dir` still succeeds if you touched packaging or the main process.
-5. CI must pass: lint, tests, build, secret scan, dependency audit, CodeQL, and the version/changelog check. For comment- or formatting-only changes, a maintainer can add the `skip-version-check` label.
+4. Make sure `pnpm run build:dir` (Windows) or `pnpm run build:mac:dir` (macOS) still succeeds if you touched packaging or the main process.
+5. CI must pass: lint, tests, build, the macOS build and smoke test, secret scan, dependency audit, CodeQL, and the version/changelog check. For comment- or formatting-only changes, a maintainer can add the `skip-version-check` label.
 6. If this is your first PR, a maintainer approves the CI run before it starts. Changes to `.github/`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `electron-builder.yml` or `scripts/` need maintainer review (see `.github/CODEOWNERS`). Pin any new GitHub Action to a full commit SHA, and add dependencies with `pnpm add`, which refuses versions less than a day old; see [AGENTS.md](AGENTS.md#cicd).
 
 By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE) and that you will follow the [Code of Conduct](CODE_OF_CONDUCT.md).

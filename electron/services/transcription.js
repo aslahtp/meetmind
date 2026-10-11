@@ -2,6 +2,7 @@ const fs = require('fs');
 const logger = require('../providers/shared/log');
 const { sttRegistry } = require('../providers');
 const { getWavDurationSeconds, getWavPeakAmplitude } = require('../providers/shared/wav');
+const { silenceHints } = require('../audio/audio-hints');
 
 /**
  * Transcription controller. Validates the recording, then hands it to the
@@ -39,21 +40,15 @@ async function transcribe(wavPath, config, onProgress) {
 
   if (peakAmplitude < 200) {
     const windowDetail = ampResult.windows.map((w) => `${w.label}=${w.peak}`).join(', ');
+    const hints = silenceHints(process.platform);
     logger.warn('Recording is silent (peak amplitude below threshold)', {
       peakAmplitude,
       windows: ampResult.windows,
-      hint: [
-        'Check Windows Settings → Privacy & security → Microphone → enable "Let desktop apps access your microphone".',
-        'In Windows Sound → Recording → right-click your Microphone → Properties → Levels → set to 80–100 and unmute.',
-        'If using headphones/USB/Bluetooth: select "WASAPI Loopback" in MeetMind Settings → Audio (Stereo Mix only captures from built-in speakers).',
-        'Test by playing a YouTube video while recording for a few seconds.',
-      ],
+      hint: hints,
     });
     throw new Error(
       `The recording is completely silent (peak=${peakAmplitude}, per-section: ${windowDetail}). ` +
-      'Likely causes: (1) Windows microphone privacy is blocking the app — go to Settings → Privacy & security → Microphone → enable "Let desktop apps access your microphone". ' +
-      '(2) Microphone level is at 0 or muted — open Windows Sound → Recording → Microphone → Properties → Levels and set to 80+. ' +
-      '(3) System audio device (Stereo Mix) only captures built-in speaker output — if using headphones, switch to "WASAPI Loopback" in MeetMind Settings → Audio.'
+      hints.map((h, i) => `(${i + 1}) ${h}`).join(' ')
     );
   }
 

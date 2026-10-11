@@ -4,11 +4,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MeetMind — Free open-source AI meeting notes app for Windows</title>
+  <title>MeetMind — Free open-source AI meeting notes app for Windows and macOS</title>
   <meta name="description"
-    content="MeetMind records Google Meet, Zoom and any call on Windows, transcribes it with AssemblyAI, Google STT, Sarvam AI or Groq, and writes meeting minutes with Gemini, Groq or Claude. Free, open source, no meeting bot, syncs to Notion.">
+    content="MeetMind records Google Meet, Zoom and any call on Windows or macOS, transcribes it with AssemblyAI, Google STT, Sarvam AI or Groq, and writes meeting minutes with Gemini, Groq or Claude. Free, open source, no meeting bot, syncs to Notion.">
   <meta name="keywords"
-    content="AI meeting notes, meeting transcription, meeting minutes, AI note taker, Windows, Google Meet, Zoom, Notion, Gemini, Groq, Claude, Anthropic, AssemblyAI, Sarvam AI, Malayalam, open source, Otter alternative">
+    content="AI meeting notes, meeting transcription, meeting minutes, AI note taker, Windows, macOS, Google Meet, Zoom, Notion, Gemini, Groq, Claude, Anthropic, AssemblyAI, Sarvam AI, Malayalam, open source, Otter alternative">
   <meta name="author" content="Aslah">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="color-scheme" content="light dark">
@@ -22,16 +22,16 @@
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="MeetMind">
-  <meta property="og:title" content="MeetMind — Open-source AI meeting notes for Windows">
+  <meta property="og:title" content="MeetMind — Open-source AI meeting notes for Windows and macOS">
   <meta property="og:description"
     content="Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, Groq or Claude, and sync the minutes to Notion. Free, open source, no meeting bot.">
   <meta property="og:url" content="https://aslahtp.github.io/meetmind/">
   <meta property="og:image" content="https://aslahtp.github.io/meetmind/og-image.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
-  <meta property="og:image:alt" content="MeetMind: AI meeting notes for Windows, with the app dashboard">
+  <meta property="og:image:alt" content="MeetMind: AI meeting notes for Windows and macOS, with the app dashboard">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="MeetMind — Open-source AI meeting notes for Windows">
+  <meta name="twitter:title" content="MeetMind — Open-source AI meeting notes for Windows and macOS">
   <meta name="twitter:description"
     content="Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, Groq or Claude, and sync the minutes to Notion. Free, open source, no meeting bot.">
   <meta name="twitter:image" content="https://aslahtp.github.io/meetmind/og-image.png">
@@ -44,11 +44,11 @@
         "@type": "SoftwareApplication",
         "@id": "https://aslahtp.github.io/meetmind/#app",
         "name": "MeetMind",
-        "description": "Open-source AI meeting notes app for Windows. Records system audio and microphone, transcribes with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, generates meeting minutes with Google Gemini, Groq or Anthropic Claude, and syncs them to Notion. A Chrome extension adds one-click recording to Google Meet and Zoom.",
+        "description": "Open-source AI meeting notes app for Windows and macOS. Records system audio and microphone, transcribes with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, generates meeting minutes with Google Gemini, Groq or Anthropic Claude, and syncs them to Notion. A Chrome extension adds one-click recording to Google Meet and Zoom.",
         "url": "https://aslahtp.github.io/meetmind/",
         "applicationCategory": "BusinessApplication",
         "applicationSubCategory": "Meeting notes and transcription",
-        "operatingSystem": "Windows 10, Windows 11",
+        "operatingSystem": "Windows 10, Windows 11, macOS 14.2 or later",
         "softwareVersion": "__VERSION__",
         "downloadUrl": "https://github.com/aslahtp/meetmind/releases/latest",
         "installUrl": "https://github.com/aslahtp/meetmind/releases/latest",
@@ -60,13 +60,13 @@
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "author": { "@type": "Person", "name": "Aslah", "url": "https://github.com/aslahtp" },
         "featureList": [
-          "Records system audio and microphone together on Windows",
+          "Records system audio and microphone together on Windows and macOS",
           "Transcription with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq",
           "Speaker diarization",
           "English and Malayalam code-switching with Sarvam AI saaras:v3",
           "AI meeting minutes with Google Gemini, Groq or Anthropic Claude: summary, decisions and action items",
           "Selectable model for every speech-to-text and note-generation engine, with cross-provider fallback",
-          "Automatic meeting detection for Google Meet, Zoom and Teams with a floating record prompt",
+          "Automatic meeting detection for Google Meet, Zoom and Teams with a floating record prompt (Windows)",
           "Optional Chrome extension for Google Meet and Zoom",
           "Google Calendar reminders to start recording",
           "Notion sync",
@@ -91,8 +91,8 @@
         "mainEntity": [
           { "@type": "Question", "name": "Is MeetMind free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you connect, and Gemini and Groq (free tiers) and AssemblyAI (signup credit) can be used at no cost for moderate use." } },
           { "@type": "Question", "name": "Does a bot join my meeting?", "acceptedAnswer": { "@type": "Answer", "text": "No. MeetMind records the audio playing on your own computer plus your microphone, so no extra participant appears in Google Meet, Zoom or Teams." } },
-          { "@type": "Question", "name": "Which meeting apps does MeetMind work with?", "acceptedAnswer": { "@type": "Answer", "text": "Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and Webex. For Google Meet, Zoom and Teams, MeetMind detects the call and offers to start recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs." } },
-          { "@type": "Question", "name": "Does MeetMind work on macOS or Linux?", "acceptedAnswer": { "@type": "Answer", "text": "Not currently. MeetMind is built for Windows 10 and 11 because it relies on Windows audio loopback capture." } },
+          { "@type": "Question", "name": "Which meeting apps does MeetMind work with?", "acceptedAnswer": { "@type": "Answer", "text": "Any app that plays audio on your computer, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and Webex. On Windows, for Google Meet, Zoom and Teams, MeetMind detects the call and offers to start recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs." } },
+          { "@type": "Question", "name": "Does MeetMind work on macOS or Linux?", "acceptedAnswer": { "@type": "Answer", "text": "macOS: yes, as a beta for macOS 14.2 and later on Apple silicon and Intel Macs. It records system audio with the Core Audio capture added in macOS 14.2; meeting detection isn't available on macOS yet. Linux isn't supported." } },
           { "@type": "Question", "name": "Where is my meeting data stored?", "acceptedAnswer": { "@type": "Answer", "text": "Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to the note-generation provider you choose (Gemini, Groq or Claude), using your own API keys." } },
           { "@type": "Question", "name": "Which languages does MeetMind support?", "acceptedAnswer": { "@type": "Answer", "text": "Language support depends on the speech-to-text engine you choose. For meetings that mix English and Malayalam, Sarvam AI's saaras:v3 model handles code-switching within a sentence." } },
           { "@type": "Question", "name": "How is MeetMind different from Otter.ai or Fireflies.ai?", "acceptedAnswer": { "@type": "Answer", "text": "Hosted note takers such as Otter.ai and Fireflies.ai are subscription services that typically join calls as a bot and keep recordings on their servers. MeetMind is an open-source desktop app that records locally without a bot, lets you choose the transcription provider, stores notes on your machine, and costs nothing beyond your own API usage." } },
@@ -1371,24 +1371,24 @@
     <section class="hero center" style="padding-top: 32px;">
       <div class="wrap">
         <span class="badge" data-reveal="sm" style="--stagger: 0;"><span class="dot" aria-hidden="true"></span><span
-            class="label">Open source · Windows</span></span>
-        <h1 class="display" data-reveal="lg" style="--stagger: 1;">AI meeting notes for Windows, without a meeting bot
+            class="label">Open source · Windows &amp; macOS</span></span>
+        <h1 class="display" data-reveal="lg" style="--stagger: 1;">AI meeting notes for Windows and Mac, without a meeting bot
         </h1>
-        <p class="sub" data-reveal style="--stagger: 2;">MeetMind records Google Meet, Zoom or any call on your PC,
+        <p class="sub" data-reveal style="--stagger: 2;">MeetMind records Google Meet, Zoom or any call on your computer,
           transcribes it with AssemblyAI, Google Speech-to-Text, Sarvam AI or Groq, and writes clear meeting minutes with
           Gemini, Groq or Claude — then syncs them to Notion.</p>
         <div class="actions" data-reveal style="--stagger: 3;">
           <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"
               aria-hidden="true">
               <use href="#i-download" />
-            </svg>Download for Windows</a>
+            </svg>Download for Windows or Mac</a>
           <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind"><svg class="icon icon-brand"
               aria-hidden="true">
               <use href="#i-github" />
             </svg>View source on GitHub</a>
         </div>
         <p class="caption" data-reveal="sm" style="--stagger: 4; margin-top: 16px;">Version __VERSION__ · Windows 10
-          &amp; 11 · MIT license</p>
+          &amp; 11 · macOS 14.2+ (beta) · MIT license</p>
         <div class="frame hero-frame" data-reveal style="--stagger: 5;">
           <picture>
             <source data-dark-source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard-dark.png">
@@ -1423,11 +1423,11 @@
         <span class="badge" data-reveal="sm"><span class="num">1</span><span class="label">What it is</span></span>
         <h2 class="display" id="what" data-reveal="lg">What is MeetMind?</h2>
         <div class="definition" data-reveal>
-          <p><strong style="font-weight: 500;">MeetMind is a free, open-source desktop app for Windows that turns online
+          <p><strong style="font-weight: 500;">MeetMind is a free, open-source desktop app for Windows and macOS that turns online
               meetings into written meeting notes.</strong> It records your computer's system audio and your microphone
             together, transcribes the recording with the speech-to-text service you choose, and uses Google Gemini, Groq
             or Anthropic Claude to write a speaker-labelled summary with decisions and action items.</p>
-          <p>Because recording happens on your own PC, nothing joins the call as a participant, and it works with any
+          <p>Because recording happens on your own computer, nothing joins the call as a participant, and it works with any
             app that plays sound: Google Meet, Zoom, Microsoft Teams, Slack, Discord or a file you already have. Notes
             stay in a local database and can be exported to PDF, copied as Markdown or synced to Notion.</p>
         </div>
@@ -1505,8 +1505,8 @@
                 <use href="#i-monitor" />
               </svg></div>
             <h3>System audio + microphone</h3>
-            <p>Records both sides of any call on Windows through WASAPI loopback, with FFmpeg installed from inside the
-              app.</p>
+            <p>Records both sides of any call: through WASAPI loopback on Windows and Core Audio on macOS, with FFmpeg
+              bundled or installed from inside the app.</p>
           </div>
           <div class="card" data-reveal style="--stagger: 1;">
             <div class="tile" aria-hidden="true"><svg class="icon">
@@ -1539,7 +1539,7 @@
                 <use href="#i-radar" />
               </svg></div>
             <h3>Automatic meeting detection</h3>
-            <p>When Google Meet, Zoom or Teams picks up your mic, a floating prompt offers to record. No browser extension needed.</p>
+            <p>On Windows, when Google Meet, Zoom or Teams picks up your mic, a floating prompt offers to record. No browser extension needed. Coming to macOS.</p>
           </div>
           <div class="card" data-reveal style="--stagger: 5;">
             <div class="tile" aria-hidden="true"><svg class="icon">
@@ -1679,7 +1679,7 @@
               </tr>
               <tr style="--ri:5">
                 <th scope="row">Platform</th>
-                <td class="us">Windows 10/11</td>
+                <td class="us">Windows 10/11, macOS 14.2+ (beta)</td>
                 <td>Web, mobile and desktop</td>
               </tr>
             </tbody>
@@ -1723,8 +1723,9 @@
                 </svg></span></summary>
             <div class="answer">
               <div>
-                <p>Any app that plays audio on Windows, including Google Meet, Zoom, Microsoft Teams, Slack, Discord and
-                  Webex. For Google Meet, Zoom and Teams, MeetMind detects the call and offers to start recording; the
+                <p>Any app that plays audio on your computer, including Google Meet, Zoom, Microsoft Teams, Slack, Discord
+                  and Webex. On Windows, for Google Meet, Zoom and Teams, MeetMind detects the call and offers to start
+                  recording; the
                   optional Chrome extension adds a record button inside Meet and Zoom tabs.
                 </p>
               </div>
@@ -1736,8 +1737,9 @@
                 </svg></span></summary>
             <div class="answer">
               <div>
-                <p>Not currently. MeetMind is built for Windows 10 and 11 because it relies on Windows audio loopback
-                  capture.</p>
+                <p>macOS: yes, as a beta for macOS 14.2 and later on Apple silicon and Intel Macs. It records system
+                  audio with the Core Audio capture added in macOS 14.2; meeting detection isn't available on macOS yet.
+                  Linux isn't supported.</p>
               </div>
             </div>
           </details>

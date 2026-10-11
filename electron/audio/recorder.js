@@ -235,7 +235,7 @@ async function startRecording(sessionId) {
   }
 
   const ffmpegPath = resolveFfmpegPath();
-  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System Dependencies.');
+  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System.');
   const config = getConfig();
 
   let systemDevice = config.systemAudioDevice;
@@ -251,8 +251,8 @@ async function startRecording(sessionId) {
 
   if (!systemDevice && !micDevice) {
     throw new Error(
-      'No audio input devices found. In Settings → Audio: click "Detect devices". ' +
-      'If none appear, add FFmpeg (ffmpeg.exe) to assets/ffmpeg/, enable "Stereo Mix" in Windows Sound → Recording, or use a virtual cable (e.g. VB-Audio).'
+      'No audio input devices found. Check that FFmpeg is installed (Settings → System), ' +
+      'enable "Stereo Mix" in Windows Sound → Recording, or use a virtual cable (e.g. VB-Audio).'
     );
   }
 
@@ -381,7 +381,7 @@ async function stopRecording() {
  */
 async function convertWebmToWav(webmPath, wavPath) {
   const ffmpegPath = resolveFfmpegPath();
-  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System Dependencies.');
+  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System.');
 
   return new Promise((resolve, reject) => {
     const args = [
@@ -417,7 +417,7 @@ async function convertWebmToWav(webmPath, wavPath) {
  */
 async function convertFileToWav(inputPath, wavPath) {
   const ffmpegPath = resolveFfmpegPath();
-  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System Dependencies.');
+  if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System.');
 
   return new Promise((resolve, reject) => {
     const args = [

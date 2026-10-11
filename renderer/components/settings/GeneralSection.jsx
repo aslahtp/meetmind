@@ -3,6 +3,7 @@ import { Sun, Moon, Monitor, Palette, Power, Radar } from 'lucide-react';
 import { useApp } from '../../lib/app-context.js';
 import { SegmentedControl, Switch } from '../ui/index.jsx';
 import { SettingsGroup, SettingRow, RowList } from './SettingsParts.jsx';
+import { isMac } from '../../lib/os.js';
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -23,7 +24,7 @@ export default function GeneralSection({ form, onChange }) {
         icon={<Palette size={20} strokeWidth={1.75} className="text-ink" />}
       >
         <RowList>
-          <SettingRow label="Theme" description="Follow Windows or choose a theme.">
+          <SettingRow label="Theme" description="Follow your system or choose a theme.">
             <SegmentedControl
               role="radiogroup"
               label="Theme"
@@ -88,15 +89,19 @@ export default function GeneralSection({ form, onChange }) {
         <RowList>
           <SettingRow
             label="Detect meetings"
-            description="Shows a floating prompt to record when Google Meet, Zoom or Teams starts using your microphone, and keeps a timer on screen while you record."
-            htmlFor="pref-meeting-detection"
+            description={isMac
+              ? 'Not available on macOS yet. Start recordings with Record, or from the Chrome extension.'
+              : 'Shows a floating prompt to record when Google Meet, Zoom or Teams starts using your microphone, and keeps a timer on screen while you record.'}
+            htmlFor={isMac ? undefined : 'pref-meeting-detection'}
           >
-            <Switch
-              id="pref-meeting-detection"
-              label="Detect meetings"
-              checked={form.meetingDetection !== false}
-              onChange={(v) => onChange('meetingDetection', v)}
-            />
+            {!isMac && (
+              <Switch
+                id="pref-meeting-detection"
+                label="Detect meetings"
+                checked={form.meetingDetection !== false}
+                onChange={(v) => onChange('meetingDetection', v)}
+              />
+            )}
           </SettingRow>
         </RowList>
       </SettingsGroup>
@@ -105,7 +110,7 @@ export default function GeneralSection({ form, onChange }) {
         <RowList>
           <SettingRow
             label="Launch on startup"
-            description="Start MeetMind automatically when Windows starts."
+            description="Start MeetMind automatically when you log in."
             htmlFor="pref-auto-launch"
           >
             <Switch

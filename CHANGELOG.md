@@ -6,6 +6,31 @@ updated: 2026-10-11
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.6.0] - 2026-10-11
+
+### Added
+
+- macOS app (beta) for macOS 14.2 and later: separate Apple silicon and Intel DMGs with FFmpeg bundled, recording system audio through Core Audio plus the microphone.
+- macOS window with native traffic lights, an app menu (Settings… ⌘,), a menu-bar icon that follows light and dark mode, and `meetmind://` links that also work when they launch the app.
+- Settings › System › Permissions on macOS: microphone and Screen & System Audio Recording status, with Allow / Open System Settings buttons.
+- Settings › System › Test system audio on macOS: records 3 seconds with each capture method and lets you switch to one that hears your Mac's audio.
+- The in-app FFmpeg download works on macOS, with each download checked against a pinned SHA-256.
+- Each release's apps run a headless `--smoke` self-test in CI, and every pull request builds and checks the macOS app.
+
+### Changed
+
+- Upgraded to Electron 44 (from 33) and electron-builder 26.
+- Silent-recording and "no speech detected" errors give OS-specific steps and no longer point to a "Settings → Audio" tab that no longer exists.
+- Settings copy is OS-neutral: the theme follows "your system", launch on startup runs "when you log in", and the FFmpeg card no longer names the download host or install folder.
+- FFmpeg lookup also finds an in-app install in the app data folder and Homebrew's locations on macOS.
+- Outside Windows, a recording falls back to the microphone alone (with a warning) when system audio is unavailable, instead of failing to start; Windows still falls back to FFmpeg capture.
+- On macOS, "Download update" opens the release page, because the unsigned beta can't install updates itself; meeting detection isn't available on macOS yet.
+- The Windows installer no longer bundles FFmpeg's README alongside the binaries.
+
+### Fixed
+
+- Calendar "meeting starting" notifications use the app icon again (the packaged app pointed at a path that didn't exist).
+
 ## [4.5.0] - 2026-10-11
 
 ### Added

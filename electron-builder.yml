@@ -14,6 +14,54 @@ win:
   icon: icons/icon.ico
   signAndEditExecutable: false
   artifactName: "${productName}-Setup-${version}.${ext}"
+  # Ship only the Windows x64 koffi binary (see the koffi note under asarUnpack).
+  files:
+    - "!node_modules/@koromix/koffi-darwin-*/**"
+    - "!node_modules/@koromix/koffi-win32-{arm64,ia32}/**"
+  # ffmpeg.exe / ffprobe.exe sit at the root of assets/ffmpeg/ (README and mac-* folders stay out).
+  extraResources:
+    - from: assets/ffmpeg/
+      to: ffmpeg/
+      filter:
+        - "*.exe"
+
+# macOS: separate Apple Silicon and Intel builds (`pnpm run build:mac` builds both in one run so a
+# single latest-mac.yml lists both). Ad-hoc signed until there is an Apple Developer ID: set
+# `identity` to the Developer ID name, `hardenedRuntime: true` and `notarize: true` then.
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    # The zip is what electron-updater reads from latest-mac.yml.
+    - target: zip
+      arch: [arm64, x64]
+  category: public.app-category.productivity
+  icon: icons/icon.png
+  minimumSystemVersion: "14.2"
+  identity: "-"
+  hardenedRuntime: false
+  notarize: false
+  # Relative to the project root, not `buildResources`: electron-builder hands these paths to
+  # codesign as-is.
+  entitlements: assets/entitlements.mac.plist
+  entitlementsInherit: assets/entitlements.mac.plist
+  # Applies to the update zip (MeetMind-X.Y.Z-arm64-mac.zip); the DMG name is set under `dmg`.
+  # Keep ${arch} in the name: electron-updater picks the arm64/x64 file by it.
+  artifactName: "${productName}-${version}-${arch}-mac.${ext}"
+  extendInfo:
+    NSMicrophoneUsageDescription: MeetMind records your microphone during meetings you choose to record.
+    # Without this, macOS 14.2+ hands back a silent system-audio stream with no error.
+    NSAudioCaptureUsageDescription: MeetMind records the meeting audio playing on your Mac so other participants are included in your notes.
+  # Pinned FFmpeg for this arch, fetched by scripts/fetch-ffmpeg.js.
+  extraResources:
+    - from: assets/ffmpeg/mac-${arch}/
+      to: ffmpeg/
+  files:
+    - "!node_modules/@koromix/koffi-win32-*/**"
+
+# What users download: MeetMind-X.Y.Z-arm64.dmg (Apple Silicon) / MeetMind-X.Y.Z-x64.dmg (Intel).
+dmg:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
 
 afterPack: scripts/after-pack.js
 
@@ -35,15 +83,10 @@ protocols:
     schemes:
       - meetmind
 
-extraResources:
-  - from: assets/ffmpeg/
-    to: ffmpeg/
-    filter:
-      - "**/*"
-
 asar: true
-# koffi (meeting detection's Win32 FFI) loads a native .node file, which can't be loaded from
-# inside the asar archive. Electron redirects these paths to app.asar.unpacked.
+# koffi (meeting detection's FFI, plus the macOS screen-capture permission check) loads a native
+# .node file, which can't be loaded from inside the asar archive. Electron redirects these paths
+# to app.asar.unpacked.
 asarUnpack:
   - node_modules/koffi/**
   - node_modules/@koromix/**
@@ -54,8 +97,11 @@ files:
   - assets/icons/**
   - package.json
   - "!assets/ffmpeg/**"
+  # koffi's optional dependencies cover every OS/CPU; only Windows and macOS builds exist, and
+  # each platform section below drops the other platform's binaries.
+  - "!node_modules/@koromix/koffi-{android,freebsd,linux,openbsd}-*/**"
 
-electronVersion: "33.4.11"
+electronVersion: "44.7.0"
 
 publish:
   provider: github

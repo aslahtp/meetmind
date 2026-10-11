@@ -5,7 +5,7 @@ name: Build
 # Supply-chain hardening (public repo): actions are pinned to commit SHAs; the build job runs
 # all dependency code with a read-only token and no dependency cache; only the small publish
 # job, which runs no dependency code or third-party actions, gets `contents: write`. FFmpeg (shipped inside the
-# installer) is a pinned version checked against its SHA-256.
+# Windows installer and the macOS apps) is a pinned version checked against its SHA-256.
 
 on:
   push:
@@ -134,6 +134,13 @@ jobs:
           pnpm run build
           ls -l dist/desktop/*.exe dist/meetmind-extension.zip
 
+      # Headless self-test of the packaged app (electron/smoke.js): bundled FFmpeg, koffi, DB.
+      - name: Smoke test
+        shell: bash
+        run: |
+          dist/desktop/win-unpacked/MeetMind.exe --smoke | tee smoke.txt
+          grep -q '^MEETMIND_SMOKE {"ok":true' smoke.txt
+
       - name: Upload release files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -146,9 +153,63 @@ jobs:
             dist/desktop/latest.yml
             dist/meetmind-extension.zip
 
+  # macOS DMGs (Apple Silicon + Intel), ad-hoc signed: there is no Apple Developer ID yet. Both
+  # arches build in one electron-builder run so a single latest-mac.yml lists both. FFmpeg comes
+  # from the per-arch pins in electron/audio/ffmpeg-sources.js, each checked against its SHA-256.
+  # When signing is added: give this job a protected environment holding CSC_LINK,
+  # CSC_KEY_PASSWORD and the APPLE_API_KEY* notarization secrets, and update electron-builder.yml.
+  build-mac:
+    name: Build macOS app
+    needs: [check-version, checks]
+    if: needs.check-version.outputs.release_needed == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No cache: the app is built from a clean, lockfile-verified install.
+      - name: Setup
+        uses: $/.github/actions/setup
+        with:
+          cache: 'false'
+
+      - name: Download FFmpeg Binaries (checksum-verified)
+        run: node scripts/fetch-ffmpeg.js --arch arm64 --arch x64
+
+      # `build:mac` passes --publish never, like `build`.
+      - name: Build macOS App
+        run: |
+          pnpm run build:mac
+          ls -l dist/desktop/*.dmg dist/desktop/*-mac.zip dist/desktop/latest-mac.yml
+
+      - name: Verify apps
+        run: |
+          for app in dist/desktop/mac-arm64/MeetMind.app dist/desktop/mac/MeetMind.app; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+            test -x "$app/Contents/Resources/ffmpeg/ffmpeg"
+          done
+          dist/desktop/mac-arm64/MeetMind.app/Contents/MacOS/MeetMind --smoke | tee smoke.txt
+          grep -q '^MEETMIND_SMOKE {"ok":true' smoke.txt
+
+      - name: Upload release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-files-mac
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist/desktop/*.dmg
+            dist/desktop/*-mac.zip
+            dist/desktop/*.blockmap
+            dist/desktop/latest-mac.yml
+
   publish:
     name: Publish Release
-    needs: [check-version, build]
+    needs: [check-version, build, build-mac]
     runs-on: ubuntu-latest
     # The only job with write access; it runs no project dependencies.
     permissions:
@@ -166,6 +227,13 @@ jobs:
           name: release-files
           path: release-files
 
+      # Uploaded from dist/desktop/ only, so these land at the folder root.
+      - name: Download macOS release files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-files-mac
+          path: release-files-mac
+
       - name: Generate Release Notes from Template and CHANGELOG
         run: node scripts/generate-release-notes.js
         env:
@@ -179,4 +247,16 @@ jobs:
           TAG: ${{ needs.check-version.outputs.tag }}
         run: |
           shopt -s failglob
-          gh release create "$TAG"             --repo "$GITHUB_REPOSITORY"             --target "$GITHUB_SHA"             --title "MeetMind $TAG"             --notes-file release_notes.md             release-files/desktop/*.exe             release-files/desktop/*.blockmap             release-files/desktop/latest.yml             release-files/meetmind-extension.zip
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "MeetMind $TAG" \
+            --notes-file release_notes.md \
+            release-files/desktop/*.exe \
+            release-files/desktop/*.blockmap \
+            release-files/desktop/latest.yml \
+            release-files-mac/*.dmg \
+            release-files-mac/*-mac.zip \
+            release-files-mac/*.blockmap \
+            release-files-mac/latest-mac.yml \
+            release-files/meetmind-extension.zip

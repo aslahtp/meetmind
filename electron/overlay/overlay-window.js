@@ -6,6 +6,7 @@ const path = require('path');
 const { BrowserWindow, screen } = require('electron');
 
 const isDev = process.env.NODE_ENV === 'development';
+const isMac = process.platform === 'darwin';
 const WIDTH = 360;
 const INITIAL_HEIGHT = 56;
 const TOP_MARGIN = 12;
@@ -53,6 +54,8 @@ function create(theme) {
     show: false,
     hasShadow: false,
     title: 'MeetMind',
+    // macOS: a non-activating panel floats over full-screen apps and shows on every Space.
+    ...(isMac ? { type: 'panel' } : {}),
     webPreferences: {
       preload: path.join(__dirname, '..', 'overlay-preload.js'),
       contextIsolation: true,
@@ -62,7 +65,9 @@ function create(theme) {
     },
   });
   win.setAlwaysOnTop(true, 'screen-saver');
-  win.setVisibleOnAllWorkspaces(true);
+  // On macOS the panel type already covers every Space; this call would briefly turn the app
+  // into a UI element there, flickering its Dock icon.
+  if (!isMac) win.setVisibleOnAllWorkspaces(true);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.on('closed', () => { win = null; clearTimeout(closeTimer); });

@@ -11,7 +11,7 @@ MeetMind is an Electron app (React + Tailwind renderer in `renderer/`, main proc
 - seeds four demo meetings (complete JSON notes, failed, processing, and Markdown notes);
 - runs either a scripted screenshot **tour** or a **repl** that reads one command per line from stdin.
 
-All paths below are relative to the repo root. Verified on Windows 11 (Git Bash), Node 24, Electron 33. Linux/xvfb was not tried.
+All paths below are relative to the repo root. Verified on Windows 11 (Git Bash), Node 24, Electron 44 (the driver resolves the binary via `require('electron')`, which downloads it on first use). Linux/xvfb was not tried.
 
 ## Setup (once)
 
