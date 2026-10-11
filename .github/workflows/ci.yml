@@ -183,9 +183,12 @@ jobs:
           dist/desktop/mac-arm64/MeetMind.app/Contents/MacOS/MeetMind --smoke > smoke.txt || true
           node scripts/check-smoke.js smoke.txt "macOS arm64"
 
+      # ditto keeps the bundle's symlinks and permissions; fastest compression level, since this is
+      # a 7-day test artifact, not a release download.
       - name: Zip app for testers
-        run: ditto -c -k --keepParent dist/desktop/mac-arm64/MeetMind.app MeetMind-mac-arm64.zip
+        run: ditto -c -k --zlibCompressionLevel 1 --keepParent dist/desktop/mac-arm64/MeetMind.app MeetMind-mac-arm64.zip
 
+      # Already a zip: compressing it again only costs time.
       - name: Upload app
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -193,6 +196,7 @@ jobs:
           path: MeetMind-mac-arm64.zip
           if-no-files-found: error
           retention-days: 7
+          compression-level: 0
 
   repo-hygiene:
     name: Repo hygiene

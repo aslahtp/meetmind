@@ -123,6 +123,8 @@ jobs:
           name: release-files
           if-no-files-found: error
           retention-days: 7
+          # The installer and extension are already compressed; the rest is a few KB.
+          compression-level: 0
           path: |
             dist/desktop/*.exe
             dist/desktop/*.blockmap
@@ -187,6 +189,8 @@ jobs:
           name: release-files-mac
           if-no-files-found: error
           retention-days: 7
+          # DMGs and zips are already compressed; recompressing ~800 MB only costs time.
+          compression-level: 0
           path: |
             dist/desktop/*.dmg
             dist/desktop/*-mac.zip
