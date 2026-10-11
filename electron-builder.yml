@@ -41,8 +41,10 @@ mac:
   identity: "-"
   hardenedRuntime: false
   notarize: false
-  entitlements: entitlements.mac.plist
-  entitlementsInherit: entitlements.mac.plist
+  # Relative to the project root, not `buildResources`: electron-builder hands these paths to
+  # codesign as-is.
+  entitlements: assets/entitlements.mac.plist
+  entitlementsInherit: assets/entitlements.mac.plist
   # Applies to the update zip (MeetMind-X.Y.Z-arm64-mac.zip); the DMG name is set under `dmg`.
   # Keep ${arch} in the name: electron-updater picks the arm64/x64 file by it.
   artifactName: "${productName}-${version}-${arch}-mac.${ext}"
