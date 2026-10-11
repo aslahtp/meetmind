@@ -344,7 +344,8 @@ found, Settings → System offers a runtime download via the `ffmpeg:install` IP
   (`electron/utils/download.js`), unpacked with `ditto` and installed into `userData/ffmpeg/`,
   never inside the app bundle, whose signature it would break. The same pins feed
   `scripts/fetch-ffmpeg.js`, which stages `assets/ffmpeg/mac-<arch>/` for builds. Intel release
-  builds there end in January 2027, so the pinned x64 zips need mirroring before then.
+  builds there end in January 2027, so the pinned x64 zips need mirroring before then (see
+  [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)).
 
 FFmpeg binaries are never committed to git (they exceed GitHub's 100 MB file limit and CI's
 repo-hygiene job actively rejects any `.exe`/`.dll`/`.msi`/`.dylib`, or anything in
@@ -920,7 +921,8 @@ includes a Markdown round-trip bug where a fenced code block inside a list-based
 (Action Items, Participants, Notable Mentions, or a topic's Options Discussed/Open Questions)
 gets flattened into extra list items on save, because the list-line parser in
 `copyMarkdown.js` does not track code-fence state independently of the section splitter that
-does track it.
+does track it, and the pinned Intel Mac FFmpeg downloads, whose host stops publishing Intel builds
+in January 2027 and which need mirroring before a removal breaks releases.
 
 Structural limitations, by design rather than oversight:
 

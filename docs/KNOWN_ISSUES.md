@@ -49,3 +49,28 @@ Don't put code blocks under Action Items, Participants, Notable Mentions, or a t
 ### Fix
 
 Track ``` / `~~~` fences in `listItems` and in `parseTopic`'s list modes, and skip list lines inside a fence. Those sections have no field for a code block, so the block would still be dropped, but it would no longer create items. Add a case to `tests/copyMarkdown.test.js` covering a fenced list under Action Items. This changes what saving an edit produces, so give it a changelog entry.
+
+---
+
+## Intel Mac FFmpeg source ends in January 2027
+
+**Affects:** macOS releases (the Intel DMG and, through it, the whole release) and the in-app FFmpeg download on Intel Macs. Windows and Apple silicon downloads are not affected by this source change, but a failed Intel download still blocks the whole release.
+
+### What happens
+
+The macOS FFmpeg builds come from [ffmpeg.martin-riedl.de](https://ffmpeg.martin-riedl.de/), pinned by URL and SHA-256 in `electron/audio/ffmpeg-sources.js`. The site says its macOS Intel (amd64) release builds stop in January 2027. It doesn't say whether existing files stay online.
+
+- **If the pinned Intel files are removed:** `scripts/fetch-ffmpeg.js` fails in the `build-mac` job of `release.yml`, and because `publish` needs both build jobs, no release (Windows included) is published. The in-app **Download & Install FFmpeg** (and post-update **Repair now**) fails for Intel Mac users.
+- **If they stay online:** nothing breaks, but there is no newer Intel build to move to, so Intel users stay on FFmpeg 9.0.2 (no security fixes) unless another source is found.
+
+### Why
+
+Every pinned download is fetched from a third-party host at build and install time, and the Intel pins point at builds the host is retiring. The SHA-256 check guarantees the files can't be swapped, not that they stay available.
+
+### Workaround
+
+None needed until the files disappear. If a release fails at **Download FFmpeg Binaries** with an HTTP 404 for an `amd64` URL, apply the fix below.
+
+### Fix
+
+Before January 2027, mirror the two pinned Intel zips (`.../macos/amd64/1789931006_9.0.2/ffmpeg.zip` and `ffprobe.zip`) somewhere MeetMind controls, for example as assets of a dedicated GitHub release in this repo (tag `ffmpeg-mac-x64-9.0.2`), and point the two `x64` URLs in `electron/audio/ffmpeg-sources.js` at the mirror. Keep the SHA-256 values unchanged: the files are byte-for-byte the same, so the existing checksum check still proves they weren't altered. Link the matching FFmpeg source from that release, as FFmpeg's LGPL/GPL licence expects of anyone redistributing the binaries (which the DMGs already do). Longer term, Apple's macOS 26 is the last release for Intel Macs, so dropping the Intel DMG may eventually be simpler than keeping its FFmpeg current. Changing the URLs changes where the app downloads from, so give it a changelog entry.

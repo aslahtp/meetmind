@@ -5,7 +5,7 @@
 // zip). Every file is verified against the SHA-256 below before it is used. To bump: take the
 // new release's versioned URLs and their .sha256 files, download each zip, check the hash
 // yourself, then update this table. Intel (amd64) release builds there end in January 2027;
-// mirror the pinned x64 zips before then.
+// mirror the pinned x64 zips before then (see docs/KNOWN_ISSUES.md).
 //
 // Windows is not listed here: release.yml pins its own gyan.dev build, and the in-app installer
 // on Windows keeps downloading gyan.dev's current essentials build.
