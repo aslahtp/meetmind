@@ -166,7 +166,7 @@ arbitrary IPC channel.
 The meeting overlay window uses its own, smaller preload (`electron/overlay-preload.js`, run
 sandboxed) exposing only `window.meetmindOverlay`: `overlay:get-state`, `overlay:start`,
 `overlay:stop`, `overlay:dismiss`, `overlay:keep-recording`, `overlay:open-session` (invoke),
-`overlay:resize` (send), and the `overlay:state` / `overlay:theme` push events.
+`overlay:resize` and `overlay:closed` (send), and the `overlay:state` / `overlay:theme` push events.
 
 Preload also injects the startup theme class (`light`/`dark`) onto `<html>` synchronously, by
 reading a `--meetmind-theme=` argument that main passes via
@@ -241,8 +241,11 @@ The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) d
 extension show the overlay too, and processing updates apply only to the session the overlay is
 following. `overlay/overlay-window.js` owns the window: frameless, transparent, always on top,
 `focusable: false` and shown with `showInactive()` so it never takes focus from the call,
-placed bottom-right of the display showing the meeting, and sized to the card's reported
-height. The `meetingDetection` setting (default on) turns detection and the overlay off.
+placed at the top centre of the display showing the meeting, and sized to the card's reported
+height. The bar animates open (the mic tile drops in, then unfolds to full width) and closed (it
+collapses back to the tile and lifts away; `renderer/styles/overlay.css`). To hide, main sends a
+hidden state and waits for the renderer's `overlay:closed` after the close animation, with a
+1.2 s fallback. The `meetingDetection` setting (default on) turns detection and the overlay off.
 
 ---
 

@@ -18,7 +18,7 @@ const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, 
 const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEvents, startEventPoller, stopEventPoller } = require('./services/google-calendar');
 const db = require('./db/sessions');
 const meetingDetector = require('./detection/meeting-detector');
-const { showOverlay, hideOverlay, destroyOverlay, resizeOverlay, setOverlayTheme } = require('./overlay/overlay-window');
+const { showOverlay, hideOverlay, overlayClosed, destroyOverlay, resizeOverlay, setOverlayTheme } = require('./overlay/overlay-window');
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -949,6 +949,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.on('overlay:resize', (_e, height) => resizeOverlay(height));
+  ipcMain.on('overlay:closed', () => overlayClosed());
 
   // Incremental audio chunk from renderer capture — append to disk
   ipcMain.on('capture:chunk', (_e, buffer) => {

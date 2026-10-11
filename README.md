@@ -133,7 +133,7 @@ Every API key field in Settings has a "How to get a key" guide next to it.
 
 ### Meeting detection
 
-MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay appears in the bottom-right corner with a **Record** button. Turn it off in **Settings → General → Meeting detection**.
+MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay unfolds at the top centre of the screen with a **Record** button. Turn it off in **Settings → General → Meeting detection**.
 
 ### Chrome extension (optional)
 

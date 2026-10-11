@@ -10,7 +10,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 ### Added
 
-- Native meeting detection, no browser extension needed: when Google Meet, Zoom or Microsoft Teams (in a browser or the desktop app) starts using the microphone, a slim floating overlay offers to record.
+- Native meeting detection, no browser extension needed: when Google Meet, Zoom or Microsoft Teams (in a browser or the desktop app) starts using the microphone, a slim overlay unfolds at the top centre of the screen and offers to record; it collapses away when dismissed.
 - The overlay stays on screen while recording with a timer and Stop button, asks "Meeting ended?" when the call finishes (it never stops on its own), then shows processing progress and a button to open the notes.
 - "Detect meetings" switch in Settings › General › Meeting detection (on by default).
 

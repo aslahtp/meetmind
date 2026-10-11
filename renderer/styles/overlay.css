@@ -1,0 +1,76 @@
+/* Meeting overlay motion. Flat, per DESIGN.md: only width, scale and opacity move; no blur,
+   no shadow. Opening: the bar drops from the top edge as the mic tile, unfolds to full width,
+   then its content slides in and the status badge pops. Closing plays it in reverse and lifts
+   away; main hides the window once overlayBarLift ends. */
+
+.overlay-bar {
+  width: 360px;
+  margin: 0 auto;
+  overflow: hidden;
+  transform-origin: 50% 0;
+}
+
+/* The row keeps its full width while the bar is narrower, so text never reflows mid-animation:
+   360px bar - 2 × 2px border - 2 × 8px padding. */
+.overlay-row { width: 340px; }
+
+.overlay-bar.is-opening {
+  animation:
+    overlayBarDrop 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    overlayBarExpand 520ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+}
+.overlay-bar.is-closing {
+  animation:
+    overlayBarCollapse 300ms cubic-bezier(0.64, 0, 0.78, 0) 120ms both,
+    overlayBarLift 200ms cubic-bezier(0.4, 0, 1, 1) 420ms both;
+}
+
+.overlay-rest { animation: overlayContentIn 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.is-closing .overlay-rest { animation: overlayContentOut 140ms ease-in both !important; }
+
+.overlay-badge { animation: overlayBadgeIn 340ms cubic-bezier(0.34, 1.56, 0.64, 1) 600ms both; }
+.is-closing .overlay-badge { animation: overlayBadgeOut 120ms ease-in both; }
+
+@keyframes overlayBarDrop {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes overlayBarExpand {
+  from { width: 56px; }
+  to   { width: 360px; }
+}
+@keyframes overlayBarCollapse {
+  from { width: 360px; }
+  to   { width: 56px; }
+}
+@keyframes overlayBarLift {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: scale(0.4); }
+}
+@keyframes overlayContentIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes overlayContentOut {
+  to { opacity: 0; transform: translateX(-8px); }
+}
+@keyframes overlayBadgeIn {
+  from { transform: scale(0); }
+  to   { transform: scale(1); }
+}
+@keyframes overlayBadgeOut {
+  to { transform: scale(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-bar.is-opening { animation: overlayBarFadeIn 120ms ease-out both; }
+  .overlay-bar.is-closing { animation: overlayBarLift 120ms ease-in both; }
+  .overlay-rest,
+  .overlay-badge,
+  .is-closing .overlay-rest,
+  .is-closing .overlay-badge { animation: none !important; }
+}
+@keyframes overlayBarFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

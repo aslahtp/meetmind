@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Square, X, Loader2 } from 'lucide-react';
 import { IconButton, ProgressBar } from '../ui/index.jsx';
 import { formatClock } from '../../lib/format.js';
@@ -6,11 +6,14 @@ import { useNow } from '../../lib/hooks.js';
 import { STAGE_LABELS } from '../../lib/status.js';
 
 // The floating meeting overlay: one compact row (brand tile, two-line status, one action, close).
-// Main owns all state and pushes it on overlay:state; this component only renders it and sends the
-// user's choice back. Modes: prompt, recording, ended, processing, complete, error (anything else
-// renders nothing).
+// Main owns all state and pushes it on overlay:state; this component only renders it, animates it
+// in and out (styles/overlay.css), and sends the user's choice back. Modes: prompt, recording,
+// ended, processing, complete, error. Any other mode collapses the bar, then tells main to hide
+// the window.
 
 const api = window.meetmindOverlay;
+const VISIBLE_MODES = new Set(['prompt', 'recording', 'ended', 'processing', 'complete', 'error']);
+const OPEN_CONTENT_DELAY_MS = 420;   // the row's content waits for the bar to unfold
 
 function applyTheme(theme) {
   const root = document.documentElement;
@@ -26,7 +29,11 @@ function BrandMark({ dot, busy }) {
       {busy
         ? <Loader2 size={16} strokeWidth={1.75} className="spinner" />
         : <Mic size={16} strokeWidth={1.75} />}
-      {dot && <span className={`dot ${dot} absolute -top-4 -right-4 border-2 border-paper`} />}
+      {dot && (
+        <span className="overlay-badge absolute -top-4 -right-4 flex">
+          <span className={`dot ${dot} border-2 border-paper`} />
+        </span>
+      )}
     </span>
   );
 }
@@ -56,21 +63,64 @@ function Elapsed({ startedAt }) {
   return <span className="tabular">{formatClock(startedAt ? (now - startedAt) / 1000 : 0)}</span>;
 }
 
+// The row's content after the tile. Keyed by mode, so each state slides in; only the content
+// mounted as the bar opens waits for it to unfold.
+function Reveal({ opening, children }) {
+  const [delay] = useState(() => (opening ? OPEN_CONTENT_DELAY_MS : 0));
+  return (
+    <div className="overlay-rest flex-1 min-w-0 flex items-center gap-8" style={{ animationDelay: `${delay}ms` }}>
+      {children}
+    </div>
+  );
+}
+
 const Spinner = () => <Loader2 size={14} strokeWidth={2} className="spinner" aria-hidden="true" />;
 
 export default function MeetingOverlay() {
-  const [state, setState] = useState(null);
+  const [state, setState] = useState(null);       // last visible state, kept while the bar collapses
+  const [phase, setPhase] = useState('closed');   // open | closing | closed
+  const [openKey, setOpenKey] = useState(0);      // remounts the bar so the opening animation replays
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const cardRef = useRef(null);
+  const phaseRef = useRef('closed');
+  const openedAtRef = useRef(0);
+
+  const goTo = (next) => { phaseRef.current = next; setPhase(next); };
+
+  const close = useCallback(() => {
+    if (phaseRef.current === 'open') goTo('closing');
+  }, []);
+
+  const apply = useCallback((next) => {
+    if (next && VISIBLE_MODES.has(next.mode)) {
+      setState(next);
+      if (phaseRef.current !== 'open') {
+        openedAtRef.current = Date.now();
+        setOpenKey((k) => k + 1);
+        goTo('open');
+      }
+    } else {
+      close();
+    }
+  }, [close]);
 
   useEffect(() => {
     if (!api) return undefined;
-    api.getState().then(setState).catch(() => {});
-    const offState = api.onState((next) => setState(next));
+    api.getState().then(apply).catch(() => {});
+    const offState = api.onState(apply);
     const offTheme = api.onTheme(applyTheme);
     return () => { offState(); offTheme(); };
-  }, []);
+  }, [apply]);
+
+  // The last closing animation has finished: unmount, and let main hide the window.
+  const onAnimationEnd = (e) => {
+    if (e.target !== cardRef.current || e.animationName !== 'overlayBarLift') return;
+    if (phaseRef.current !== 'closing') return;
+    goTo('closed');
+    setState(null);
+    api.closed();
+  };
 
   // A new mode starts clean: no leftover error or disabled buttons.
   const mode = state?.mode;
@@ -83,7 +133,7 @@ export default function MeetingOverlay() {
     const observer = new ResizeObserver(() => api.resize(el.offsetHeight));
     observer.observe(el);
     return () => observer.disconnect();
-  }, [mode]);
+  }, [mode, openKey]);
 
   const run = async (action) => {
     setBusy(true);
@@ -100,10 +150,11 @@ export default function MeetingOverlay() {
     }
   };
 
-  if (!state || !['prompt', 'recording', 'ended', 'processing', 'complete', 'error'].includes(mode)) return null;
+  if (phase === 'closed' || !state) return null;
 
   const { meeting, startedAt, sessionId } = state;
-  const dismiss = () => api.dismiss();
+  // Collapse straight away on click; main confirms with a hidden state, which is then a no-op.
+  const dismiss = () => { close(); api.dismiss(); };
   const meetingName = meeting?.title || meeting?.platformLabel || '';
 
   const BADGES = {
@@ -194,13 +245,16 @@ export default function MeetingOverlay() {
   return (
     <section
       ref={cardRef}
-      key={mode}
+      key={openKey}
       aria-label="MeetMind meeting overlay"
       aria-live="polite"
-      className="floating rounded-card p-8 flex items-center gap-8 fade-in select-none"
+      onAnimationEnd={onAnimationEnd}
+      className={`overlay-bar floating rounded-card p-8 select-none ${phase === 'closing' ? 'is-closing' : 'is-opening'}`}
     >
-      <BrandMark dot={BADGES[mode]} busy={mode === 'processing'} />
-      {row}
+      <div className="overlay-row flex items-center gap-8">
+        <BrandMark dot={BADGES[mode]} busy={mode === 'processing'} />
+        <Reveal key={mode} opening={Date.now() - openedAtRef.current < OPEN_CONTENT_DELAY_MS}>{row}</Reveal>
+      </div>
     </section>
   );
 }
