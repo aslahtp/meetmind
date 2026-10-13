@@ -6,6 +6,12 @@ updated: 2026-10-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.7.0] - 2026-10-13
+
+### Added
+
+- Meeting overlay bar is now horizontally draggable (default position remains centred); resets to centre on each new appearance.
+
 ## [4.6.1] - 2026-10-12
 
 ### Added

@@ -86,6 +86,32 @@ export default function MeetingOverlay() {
   const phaseRef = useRef('closed');
   const openedAtRef = useRef(0);
 
+  // Horizontal drag state — the bar is centred by default; dragging sends deltas to main.
+  const dragRef = useRef({ active: false, startX: 0 });
+
+  const onPointerDown = useCallback((e) => {
+    // Let buttons / interactive children handle their own clicks.
+    if (e.target.closest('button, [role="button"]')) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { active: true, startX: e.screenX };
+  }, []);
+
+  const onPointerMove = useCallback((e) => {
+    const d = dragRef.current;
+    if (!d.active) return;
+    const delta = e.screenX - d.startX;
+    if (delta !== 0) {
+      d.startX = e.screenX;
+      api.move(delta);
+    }
+  }, []);
+
+  const onPointerUp = useCallback((e) => {
+    if (!dragRef.current.active) return;
+    dragRef.current.active = false;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  }, []);
+
   const goTo = (next) => { phaseRef.current = next; setPhase(next); };
 
   const close = useCallback(() => {
@@ -249,7 +275,10 @@ export default function MeetingOverlay() {
       aria-label="MeetMind meeting overlay"
       aria-live="polite"
       onAnimationEnd={onAnimationEnd}
-      className={`overlay-bar floating rounded-card p-8 select-none ${phase === 'closing' ? 'is-closing' : 'is-opening'}`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      className={`overlay-bar overlay-draggable floating rounded-card p-8 select-none ${phase === 'closing' ? 'is-closing' : 'is-opening'}`}
     >
       <div className="overlay-row flex items-center gap-8">
         <BrandMark dot={BADGES[mode]} busy={mode === 'processing'} />
