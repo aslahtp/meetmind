@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('meetmindOverlay', {
   keepRecording: () => ipcRenderer.invoke('overlay:keep-recording'),
   openSession:   (sessionId) => ipcRenderer.invoke('overlay:open-session', sessionId),
   resize:        (height) => ipcRenderer.send('overlay:resize', height),
+  move:          (deltaX) => ipcRenderer.send('overlay:move', deltaX),
   closed:        () => ipcRenderer.send('overlay:closed'),
   onState:       (callback) => subscribe('overlay:state', callback),
   onTheme:       (callback) => subscribe('overlay:theme', callback),

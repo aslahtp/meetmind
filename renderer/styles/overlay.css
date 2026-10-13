@@ -10,6 +10,11 @@
   transform-origin: 50% 0;
 }
 
+/* Grab cursor so the bar feels movable; buttons keep their own pointer cursor. */
+.overlay-draggable { cursor: grab; }
+.overlay-draggable:active { cursor: grabbing; }
+.overlay-draggable button { cursor: pointer; }
+
 /* The row keeps its full width while the bar is narrower, so text never reflows mid-animation:
    360px bar - 2 × 2px border - 2 × 8px padding. */
 .overlay-row { width: 340px; }

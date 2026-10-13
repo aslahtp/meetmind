@@ -16,6 +16,7 @@ let win = null;
 let latestState = null;
 let anchorBounds = null;
 let closeTimer = null;
+let userOffsetX = 0;   // horizontal pixels from centre; positive = right
 
 function isAlive() {
   return !!win && !win.isDestroyed();
@@ -32,10 +33,10 @@ function targetPosition() {
   const usable = anchorBounds && anchorBounds.width > 200 && anchorBounds.x > -10000 && anchorBounds.y > -10000;
   const display = usable ? screen.getDisplayMatching(anchorBounds) : screen.getPrimaryDisplay();
   const area = display.workArea;
-  return {
-    x: Math.round(area.x + (area.width - WIDTH) / 2),
-    y: Math.round(area.y + TOP_MARGIN),
-  };
+  const centreX = Math.round(area.x + (area.width - WIDTH) / 2);
+  // Clamp so the bar stays fully within the work area.
+  const x = Math.max(area.x, Math.min(area.x + area.width - WIDTH, centreX + userOffsetX));
+  return { x, y: Math.round(area.y + TOP_MARGIN) };
 }
 
 function create(theme) {
@@ -85,6 +86,7 @@ function showOverlay(state, { theme = 'light', bounds = null } = {}) {
   clearTimeout(closeTimer);
   latestState = state;
   if (bounds) anchorBounds = bounds;
+  userOffsetX = 0;   // each show starts centred
   if (!isAlive()) create(theme);
   const { height } = win.getBounds();
   win.setBounds({ ...targetPosition(), width: WIDTH, height });
@@ -111,6 +113,7 @@ function hideOverlay(state = { mode: 'hidden' }) {
 function overlayClosed() {
   clearTimeout(closeTimer);
   anchorBounds = null;
+  userOffsetX = 0;
   if (isAlive() && !(latestState && latestState.mode !== 'hidden')) win.hide();
 }
 
@@ -127,6 +130,14 @@ function resizeOverlay(height) {
   win.setBounds({ ...targetPosition(), width: WIDTH, height: h });
 }
 
+// Move the overlay horizontally by a pixel delta (from the renderer's pointer drag).
+function moveOverlay(deltaX) {
+  if (!isAlive()) return;
+  userOffsetX += Math.round(Number(deltaX) || 0);
+  const { height } = win.getBounds();
+  win.setBounds({ ...targetPosition(), width: WIDTH, height });
+}
+
 function setOverlayTheme(theme) {
   send('overlay:theme', theme);
 }
@@ -136,5 +147,5 @@ function isOverlayVisible() {
 }
 
 module.exports = {
-  showOverlay, updateOverlay, hideOverlay, overlayClosed, destroyOverlay, resizeOverlay, setOverlayTheme, isOverlayVisible,
+  showOverlay, updateOverlay, hideOverlay, overlayClosed, destroyOverlay, resizeOverlay, moveOverlay, setOverlayTheme, isOverlayVisible,
 };

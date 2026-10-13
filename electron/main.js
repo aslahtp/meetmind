@@ -25,7 +25,7 @@ const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, 
 const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEvents, startEventPoller, stopEventPoller } = require('./services/google-calendar');
 const db = require('./db/sessions');
 const meetingDetector = require('./detection/meeting-detector');
-const { showOverlay, hideOverlay, overlayClosed, destroyOverlay, resizeOverlay, setOverlayTheme } = require('./overlay/overlay-window');
+const { showOverlay, hideOverlay, overlayClosed, destroyOverlay, resizeOverlay, moveOverlay, setOverlayTheme } = require('./overlay/overlay-window');
 const { getPermissionStatus, requestPermission, openPermissionSettings } = require('./services/permissions');
 const { normalizeMacCaptureStrategy } = require('./audio/mac-capture');
 
@@ -1090,6 +1090,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.on('overlay:resize', (_e, height) => resizeOverlay(height));
+  ipcMain.on('overlay:move', (_e, deltaX) => moveOverlay(deltaX));
   ipcMain.on('overlay:closed', () => overlayClosed());
 
   // Incremental audio chunk from renderer capture — append to disk
