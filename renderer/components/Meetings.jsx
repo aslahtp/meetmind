@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   RefreshCw, Upload, ClipboardList, Search, X, Mic, Check,
   ArrowUpDown, ChevronDown, SlidersHorizontal,
+  Layers, AlertCircle, Loader, BookMarked,
 } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import PasteTranscriptModal from './PasteTranscriptModal.jsx';
@@ -27,6 +28,14 @@ import {
 } from '../lib/meetingFilters.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Map STATUS_FILTERS icon keys to Lucide components. */
+const FILTER_ICONS = {
+  layers:   Layers,
+  alert:    AlertCircle,
+  loader:   Loader,
+  bookmark: BookMarked,
+};
 
 const asOptions = (list) => list.map((f) => ({ value: f.key, label: f.label }));
 const DATE_OPTIONS = asOptions(DATE_PRESETS);
@@ -464,6 +473,7 @@ export default function Meetings({ onOpenSession }) {
                 <div role="group" aria-label="Filter by status" className="flex flex-wrap items-center gap-8">
                   {STATUS_FILTERS.map((f) => {
                     const active = status === f.key;
+                    const Icon = FILTER_ICONS[f.icon];
                     return (
                       <button
                         key={f.key}
@@ -472,6 +482,17 @@ export default function Meetings({ onOpenSession }) {
                         onClick={() => setStatus(active && f.key !== 'all' ? 'all' : f.key)}
                         className={active ? 'chip-dark' : 'pill'}
                       >
+                        {/* Animated icon reveal matching the TopBar nav pattern */}
+                        {Icon && (
+                          <span
+                            aria-hidden="true"
+                            className={`inline-flex items-center overflow-hidden transition-[max-width,margin-right,opacity] duration-200 ease-out ${
+                              active ? 'max-w-[14px] mr-4 opacity-100' : 'max-w-[0px] mr-0 opacity-0'
+                            }`}
+                          >
+                            <Icon size={14} strokeWidth={1.75} className="flex-shrink-0" />
+                          </span>
+                        )}
                         {f.label}
                         <span className={`tabular ${active ? 'text-paper/70' : 'text-graphite'}`}>{counts[f.key]}</span>
                       </button>

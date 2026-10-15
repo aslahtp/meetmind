@@ -6,6 +6,12 @@ updated: 2026-10-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.7.1] - 2026-10-15
+
+### Changed
+
+- Meetings page status filter pills now show animated icons (Layers, AlertCircle, Loader, BookMarked) that reveal on selection, matching the top bar navigation pattern.
+
 ## [4.7.0] - 2026-10-13
 
 ### Added
