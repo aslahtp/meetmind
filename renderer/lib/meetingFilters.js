@@ -7,10 +7,10 @@ import { isProcessing } from './status.js';
 // ── Status filters ──────────────────────────────────────────────────────────
 
 export const STATUS_FILTERS = [
-  { key: 'all',        label: 'All',             test: () => true },
-  { key: 'attention',  label: 'Needs attention', test: (s) => s.status === 'error' },
-  { key: 'processing', label: 'Processing',      test: (s) => isProcessing(s.status) },
-  { key: 'notion',     label: 'In Notion',       test: (s) => !!s.notion_page_url },
+  { key: 'all',        label: 'All',             icon: 'layers',      test: () => true },
+  { key: 'attention',  label: 'Needs attention', icon: 'alert',       test: (s) => s.status === 'error' },
+  { key: 'processing', label: 'Processing',      icon: 'loader',      test: (s) => isProcessing(s.status) },
+  { key: 'notion',     label: 'In Notion',       icon: 'bookmark',    test: (s) => !!s.notion_page_url },
 ];
 
 // ── Duration buckets ────────────────────────────────────────────────────────
