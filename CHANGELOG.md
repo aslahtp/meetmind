@@ -6,6 +6,22 @@ updated: 2026-10-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.8.0] - 2026-10-17
+
+### Added
+
+- Dashboard search button that opens Meetings with the search field focused.
+- Meetings search covers titles, notes (sections, decisions, action items, participants) and transcripts, ranked by relevance with a "Best match" sort while searching.
+- Search understands related words (e.g. "deadline" finds "due"), other word forms, typos, as-you-type prefixes and "quoted phrases", and shows the matching passage highlighted on each result.
+
+### Changed
+
+- Dashboard and Meetings "Paste transcript" and "Import audio" (and the Dashboard search button) are now icon buttons that expand into a labelled pill on hover or keyboard focus; the Dashboard's meeting count stays centred while they expand.
+
+### Fixed
+
+- The "Has notes" filter now finds meetings with sectioned or Markdown notes.
+
 ## [4.7.1] - 2026-10-15
 
 ### Changed

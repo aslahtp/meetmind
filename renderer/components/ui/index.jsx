@@ -1,10 +1,41 @@
 import React, { useId, useRef, useState } from 'react';
 import { Eye, EyeOff, Loader2, Check } from 'lucide-react';
 import { sessionStatus } from '../../lib/status.js';
+import { highlightParts } from '../../lib/meetingSearch.js';
 
 export { default as Dialog } from './Dialog.jsx';
 export { useConfirmDialog } from './ConfirmDialog.jsx';
 export { default as Menu, MenuItem, MenuRadioItem, MenuLabel } from './Menu.jsx';
+
+// ── HighlightedText — wraps matches in <mark> ─────────────────────────────────
+// `query` marks literal substrings; `terms` (search keys from searchSessions) marks whole
+// words that match, including stemmed forms, synonyms and corrected typos.
+export function HighlightedText({ text, query, terms }) {
+  if (!text) return null;
+  if (terms) {
+    return highlightParts(text, terms).map((part, i) =>
+      part.hit ? <mark key={i}>{part.text}</mark> : <React.Fragment key={i}>{part.text}</React.Fragment>,
+    );
+  }
+  if (!query) return text;
+  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+  return parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase()
+      ? <mark key={i}>{part}</mark>
+      : <React.Fragment key={i}>{part}</React.Fragment>
+  );
+}
+
+// ── ExpandingButton — icon at rest, labelled pill on hover/focus ──────────────
+// The label stays in the DOM (only clipped), so it's still the accessible name.
+export function ExpandingButton({ icon, label, className = '', ...rest }) {
+  return (
+    <button type="button" className={`icon-pill ${className}`} {...rest}>
+      {icon}
+      <span className="icon-pill-label">{label}</span>
+    </button>
+  );
+}
 
 // ── IconButton — icon-only buttons must carry an accessible label ─────────────
 export function IconButton({ label, children, className = '', pressed, ...rest }) {

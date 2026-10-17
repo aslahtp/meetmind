@@ -180,6 +180,25 @@ h1, h2, h3, h4 {
            disabled:cursor-not-allowed disabled:opacity-40;
   }
 
+  /* Icon button that grows into a labelled ghost pill on hover or keyboard focus.
+     At rest it matches .icon-btn, so it sits in a row of icon buttons. */
+  .icon-pill {
+    @apply inline-flex items-center h-32 px-8 rounded-full border border-transparent
+           text-caption font-medium leading-none whitespace-nowrap text-graphite
+           transition-[color,border-color,padding] duration-200 ease-out
+           hover:text-ink hover:border-ink hover:px-16
+           focus-visible:text-ink focus-visible:border-ink focus-visible:px-16
+           disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .icon-pill-label {
+    @apply max-w-0 ml-0 opacity-0 overflow-hidden
+           transition-[max-width,margin-left,opacity] duration-200 ease-out;
+  }
+  .icon-pill:hover .icon-pill-label,
+  .icon-pill:focus-visible .icon-pill-label {
+    @apply max-w-[160px] ml-8 opacity-100;
+  }
+
   /* Feature Card — outline, not fill. */
   .card {
     @apply bg-paper border border-ink rounded-card p-32;

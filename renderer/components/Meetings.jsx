@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react';
 import {
   RefreshCw, Upload, ClipboardList, Search, X, Mic, Check,
   ArrowUpDown, ChevronDown, SlidersHorizontal,
@@ -8,11 +8,12 @@ import { useApp } from '../lib/app-context.js';
 import PasteTranscriptModal from './PasteTranscriptModal.jsx';
 import { SessionList, SessionListSkeleton } from './SessionCard.jsx';
 import {
-  PageHeader, IconButton, EmptyState, Skeleton, StatusDot, SegmentedControl,
+  PageHeader, IconButton, ExpandingButton, EmptyState, Skeleton, StatusDot, SegmentedControl,
   Menu, MenuRadioItem, MenuLabel,
 } from './ui/index.jsx';
 import { useDelayedFlag, useSessionActions, SKELETON_DELAY_MS } from '../lib/hooks.js';
-import { useScrollMemory, useRememberedState } from '../lib/scrollMemory.js';
+import { useScrollMemory, useRememberedState, consumeFocus } from '../lib/scrollMemory.js';
+import { searchSessions } from '../lib/meetingSearch.js';
 import {
   STATUS_FILTERS,
   DATE_PRESETS,
@@ -73,9 +74,15 @@ function MeetingsSkeleton() {
   );
 }
 
-/** Sort dropdown: a ghost pill naming the current order, opening a checked radio menu. */
-function SortMenu({ value, onChange }) {
-  const current = SORT_OPTIONS.find((o) => o.key === value) || SORT_OPTIONS[0];
+/**
+ * Sort dropdown: a ghost pill naming the current order, opening a checked radio menu.
+ * "Best match" is offered, first, only while searching.
+ */
+function SortMenu({ value, onChange, searching }) {
+  const relevance = SORT_OPTIONS.find((o) => o.key === 'relevance');
+  const others = SORT_OPTIONS.filter((o) => o.key !== 'relevance');
+  const options = searching ? [relevance, ...others] : others;
+  const current = options.find((o) => o.key === value) || options[0];
   return (
     <Menu
       label="Sort meetings"
@@ -101,7 +108,7 @@ function SortMenu({ value, onChange }) {
       )}
     >
       <MenuLabel>Sort by</MenuLabel>
-      {SORT_OPTIONS.map((o) => (
+      {options.map((o) => (
         <MenuRadioItem key={o.key} checked={o.key === current.key} onSelect={() => onChange(o.key)}>
           {o.label}
         </MenuRadioItem>
@@ -218,20 +225,44 @@ export default function Meetings({ onOpenSession }) {
   const [platform, setPlatform] = useRememberedState('meetings:platform', 'any');
   const [content, setContent] = useRememberedState('meetings:content', []);
   const [sort, setSort] = useRememberedState('meetings:sort', 'newest');
+  // While searching, results get their own order (best match by default), so a search
+  // doesn't overwrite the sort the plain list uses.
+  const [searchSort, setSearchSort] = useRememberedState('meetings:searchSort', 'relevance');
   const [filtersOpen, setFiltersOpen] = useRememberedState('meetings:filtersOpen', false);
+
+  const searchRef = useRef(null);
 
   useEffect(() => {
     refreshSessions();
   }, [refreshSessions]);
 
+  // The Dashboard's search button asks for the field to be focused on arrival. The field only
+  // exists once meetings have loaded and there are some; otherwise the request just lapses.
+  const hasSessions = sessions.length > 0;
+  useEffect(() => {
+    if (sessionsLoading || !consumeFocus('meetings:search')) return;
+    searchRef.current?.focus();
+    searchRef.current?.select();
+  }, [sessionsLoading, hasSessions]);
+
   const counts = useMemo(() => statusCounts(sessions), [sessions]);
+
+  // Search runs over full notes and transcripts; deferring keeps typing responsive.
+  const deferredQuery = useDeferredValue(query);
+  const searching = query.trim() !== '';
+  const activeSort = searching ? searchSort : sort;
+  const setActiveSort = searching ? setSearchSort : setSort;
+  const searchResults = useMemo(() => searchSessions(sessions, deferredQuery), [sessions, deferredQuery]);
 
   const filterOpts = useMemo(() => {
     const { dateFrom, dateTo } = resolveDateRange(datePreset, customFrom, customTo);
-    return { query, status, duration, platform, dateFrom, dateTo, content, sort };
-  }, [query, status, datePreset, customFrom, customTo, duration, platform, content, sort]);
+    return { query, status, duration, platform, dateFrom, dateTo, content, sort: activeSort };
+  }, [query, status, datePreset, customFrom, customTo, duration, platform, content, activeSort]);
 
-  const visible = useMemo(() => filterAndSort(sessions, filterOpts), [sessions, filterOpts]);
+  const visible = useMemo(
+    () => filterAndSort(sessions, { ...filterOpts, searchResults }),
+    [sessions, filterOpts, searchResults],
+  );
   const isFiltered = hasActiveFilters(filterOpts);
   const panelCount = activeFilterCount(filterOpts);
 
@@ -314,14 +345,16 @@ export default function Meetings({ onOpenSession }) {
             subtitle={subtitle}
             actions={
               <>
-                <button type="button" onClick={openPaste} className="btn-ghost btn-sm">
-                  <ClipboardList size={16} strokeWidth={1.75} />
-                  Paste transcript
-                </button>
-                <button type="button" onClick={handleUploadAudio} className="btn-ghost btn-sm">
-                  <Upload size={16} strokeWidth={1.75} />
-                  Import audio
-                </button>
+                <ExpandingButton
+                  label="Paste transcript"
+                  icon={<ClipboardList size={16} strokeWidth={1.75} aria-hidden="true" />}
+                  onClick={openPaste}
+                />
+                <ExpandingButton
+                  label="Import audio"
+                  icon={<Upload size={16} strokeWidth={1.75} aria-hidden="true" />}
+                  onClick={handleUploadAudio}
+                />
                 <IconButton label="Refresh meetings" onClick={handleRefresh} disabled={refreshing}>
                   <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
                 </IconButton>
@@ -368,16 +401,18 @@ export default function Meetings({ onOpenSession }) {
                     className="absolute left-16 top-1/2 -translate-y-1/2 text-graphite pointer-events-none"
                   />
                   <input
+                    ref={searchRef}
                     type="search"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search meetings"
+                    placeholder="Search titles, notes and transcripts"
                     aria-label="Search meetings"
+                    title={'Finds related words, close spellings and partial matches. Use "quotes" for an exact phrase.'}
                     className="input pl-48"
                   />
                 </div>
 
-                <SortMenu value={sort} onChange={setSort} />
+                <SortMenu value={activeSort} onChange={setActiveSort} searching={searching} />
 
                 <button
                   type="button"
@@ -527,7 +562,7 @@ export default function Meetings({ onOpenSession }) {
                   }
                 />
               ) : (
-                <SessionList sessions={visible} onOpenSession={onOpenSession} />
+                <SessionList sessions={visible} onOpenSession={onOpenSession} matches={searchResults} />
               )}
             </>
           )}

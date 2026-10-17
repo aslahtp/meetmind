@@ -2,7 +2,7 @@ import React from 'react';
 import { Trash2, Loader2, ListChecks, Video, RotateCcw } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import NotionIcon from './NotionIcon.jsx';
-import { IconButton, StatusPill, StatusDot, Skeleton } from './ui/index.jsx';
+import { IconButton, StatusPill, StatusDot, Skeleton, HighlightedText } from './ui/index.jsx';
 import {
   formatDate,
   formatTime,
@@ -13,7 +13,8 @@ import {
 import { meetingHostname, meetingPlatform } from '../lib/platform.js';
 import { useSessionActions } from '../lib/hooks.js';
 
-export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting }) {
+// `match` is this session's searchSessions() result, shown as the passage that matched.
+export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting, match }) {
   const notes = session.notes;
   const duration = formatDurationSeconds(getSessionDuration(session));
   const startTime = formatTime(session.started_at);
@@ -47,6 +48,13 @@ export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting }) 
           <p className="text-caption text-graphite mt-4 tabular">
             {meta.join(' · ')}
           </p>
+          {match?.snippet && (
+            <p className="text-caption text-graphite mt-8 line-clamp-2">
+              <span className="font-medium text-ink">{match.label}</span>
+              <span aria-hidden="true"> · </span>
+              <HighlightedText text={match.snippet} terms={match.terms} />
+            </p>
+          )}
         </div>
 
         <div className="relative z-[1] flex items-center gap-8 flex-shrink-0">
@@ -136,7 +144,8 @@ export function SessionListSkeleton({ count = 3 }) {
 }
 
 // Session list shared by Dashboard and Meetings: wires delete + retry actions.
-export function SessionList({ sessions, onOpenSession }) {
+// `matches` (Meetings search) maps session id → searchSessions() result.
+export function SessionList({ sessions, onOpenSession, matches }) {
   const { trackProcessing } = useApp();
   const { deletingIds, handleDelete, handleRetry } = useSessionActions();
 
@@ -155,6 +164,7 @@ export function SessionList({ sessions, onOpenSession }) {
           onDelete={handleDelete}
           onRetry={onRetry}
           isDeleting={deletingIds.has(session.id)}
+          match={matches?.get(session.id)}
         />
       ))}
     </div>

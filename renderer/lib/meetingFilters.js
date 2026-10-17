@@ -3,6 +3,7 @@
 
 import { sessionDisplayTitle } from './format.js';
 import { isProcessing } from './status.js';
+import { searchSessions } from './meetingSearch.js';
 
 // ── Status filters ──────────────────────────────────────────────────────────
 
@@ -112,23 +113,17 @@ function matchesDateRange(session, dateFrom, dateTo) {
 
 // ── Content filters ─────────────────────────────────────────────────────────
 
+function hasNotes(notes) {
+  if (!notes || typeof notes !== 'object') return false;
+  if (typeof notes._rawMarkdown === 'string' && notes._rawMarkdown.trim()) return true;
+  if (typeof notes.summary === 'string' && notes.summary.trim()) return true;
+  return ['sections', 'topics', 'key_points', 'action_items'].some((k) => (notes[k]?.length || 0) > 0);
+}
+
 export const CONTENT_FILTERS = [
   { key: 'hasActions', label: 'Has action items', test: (s) => (s.notes?.action_items?.length || 0) > 0 },
-  { key: 'hasNotes',   label: 'Has notes',        test: (s) => !!(s.notes?.summary || s.notes?.meeting_title) },
+  { key: 'hasNotes',   label: 'Has notes',        test: (s) => hasNotes(s.notes) },
 ];
-
-// ── Text search ─────────────────────────────────────────────────────────────
-
-function matchesQuery(session, query) {
-  if (!query) return true;
-  const haystack = [
-    sessionDisplayTitle(session),
-    session.notes?.meeting_title,
-    session.notes?.summary,
-    session.meeting_url,
-  ].filter((v) => typeof v === 'string').join(' ').toLowerCase();
-  return haystack.includes(query);
-}
 
 // ── Sort options ────────────────────────────────────────────────────────────
 
@@ -138,11 +133,20 @@ export const SORT_OPTIONS = [
   { key: 'longest',  label: 'Longest first' },
   { key: 'shortest', label: 'Shortest first' },
   { key: 'title',    label: 'Title A–Z' },
+  // Only offered while searching; ranks by searchSessions() score.
+  { key: 'relevance', label: 'Best match' },
 ];
 
-function sortSessions(sessions, sortKey) {
+const newestFirst = (a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0);
+
+function sortSessions(sessions, sortKey, searchResults) {
   const arr = [...sessions];
   switch (sortKey) {
+    case 'relevance':
+      if (!searchResults) return arr.sort(newestFirst);
+      return arr.sort((a, b) =>
+        (searchResults.get(b.id)?.score || 0) - (searchResults.get(a.id)?.score || 0) || newestFirst(a, b),
+      );
     case 'oldest':
       return arr.sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0));
     case 'longest':
@@ -155,7 +159,7 @@ function sortSessions(sessions, sortKey) {
       );
     case 'newest':
     default:
-      return arr.sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0));
+      return arr.sort(newestFirst);
   }
 }
 
@@ -166,7 +170,8 @@ function sortSessions(sessions, sortKey) {
  *
  * @param {Array} sessions
  * @param {object} opts
- * @param {string}   opts.query       lowercased search text
+ * @param {string}   opts.query       search text (see meetingSearch.js)
+ * @param {Map|null} [opts.searchResults]  searchSessions(sessions, query), if already computed
  * @param {string}   opts.status      STATUS_FILTERS key
  * @param {string}   opts.duration    DURATION_FILTERS key
  * @param {string}   opts.platform    PLATFORM_FILTERS key
@@ -188,12 +193,12 @@ export function filterAndSort(sessions, opts) {
     sort = 'newest',
   } = opts;
 
-  const q = query.trim().toLowerCase();
+  const searchResults = opts.searchResults !== undefined ? opts.searchResults : searchSessions(sessions, query);
   const statusFilter = STATUS_FILTERS.find((f) => f.key === status) || STATUS_FILTERS[0];
 
   const filtered = sessions.filter((s) => {
     if (!statusFilter.test(s)) return false;
-    if (!matchesQuery(s, q)) return false;
+    if (searchResults && !searchResults.has(s.id)) return false;
     if (!matchesDuration(s, duration)) return false;
     if (!matchesPlatform(s, platform)) return false;
     if (!matchesDateRange(s, dateFrom, dateTo)) return false;
@@ -204,7 +209,7 @@ export function filterAndSort(sessions, opts) {
     return true;
   });
 
-  return sortSessions(filtered, sort);
+  return sortSessions(filtered, sort, searchResults);
 }
 
 /**

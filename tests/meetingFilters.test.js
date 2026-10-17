@@ -162,6 +162,21 @@ describe('filterAndSort — text search', () => {
     expect(result.length).toBe(1);
     expect(result[0].id).toBe('s6');
   });
+
+  it('searches note sections and transcripts', () => {
+    const extra = [
+      ...SESSIONS,
+      session({ id: 'n1', title: 'Sync', notes: { sections: [{ heading: 'Hiring', content: 'Two candidates left' }] } }),
+      session({ id: 'n2', title: 'Call', transcript: [{ speaker: 'A', text: 'Candidates are lined up' }] }),
+    ];
+    expect(filterAndSort(extra, { query: 'candidates' }).map((s) => s.id).sort()).toEqual(['n1', 'n2']);
+  });
+
+  it('uses precomputed searchResults when given', () => {
+    const searchResults = new Map([['s3', { score: 1 }]]);
+    const result = filterAndSort(SESSIONS, { query: 'anything', searchResults });
+    expect(result.map((s) => s.id)).toEqual(['s3']);
+  });
 });
 
 // ── filterAndSort — status ───────────────────────────────────────────────────
@@ -247,6 +262,15 @@ describe('filterAndSort — content filter', () => {
     expect(result.length).toBe(1);
     expect(result[0].id).toBe('s6');
   });
+
+  it('"hasNotes" recognises sectioned and Markdown notes', () => {
+    const extra = [
+      session({ id: 'json', notes: { sections: [{ heading: 'Plan', content: 'x' }] } }),
+      session({ id: 'md', notes: { _rawMarkdown: '# Notes' } }),
+      session({ id: 'empty', notes: { sections: [], _rawMarkdown: '  ' } }),
+    ];
+    expect(filterAndSort(extra, { content: ['hasNotes'] }).map((s) => s.id).sort()).toEqual(['json', 'md']);
+  });
 });
 
 // ── filterAndSort — sorting ──────────────────────────────────────────────────
@@ -274,6 +298,17 @@ describe('filterAndSort — sorting', () => {
   it('"shortest" puts the shortest session first', () => {
     const result = filterAndSort(SESSIONS, { sort: 'shortest' });
     expect(result[0].id).toBe('s4'); // 120s
+  });
+
+  it('"relevance" ranks by search score, newest first on ties', () => {
+    const searchResults = new Map([['s1', { score: 1 }], ['s3', { score: 5 }], ['s2', { score: 1 }]]);
+    const result = filterAndSort(SESSIONS, { query: 'x', searchResults, sort: 'relevance' });
+    expect(result.map((s) => s.id)).toEqual(['s3', 's1', 's2']);
+  });
+
+  it('"relevance" falls back to newest without a search', () => {
+    const result = filterAndSort(SESSIONS, { sort: 'relevance' });
+    expect(result[0].id).toBe('s1');
   });
 
   it('"title" sorts alphabetically', () => {

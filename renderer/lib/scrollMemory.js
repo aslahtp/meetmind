@@ -7,6 +7,7 @@ import { useLayoutEffect, useState } from 'react';
 const positions = new Map();     // key → last scrollTop
 const pendingRestore = new Set(); // keys to restore on their next mount
 const values = new Map();         // key → remembered UI state (search, filter…)
+const pendingFocus = new Set();   // keys of controls to focus once their page mounts
 
 // Give up waiting for content that never gets tall enough (e.g. the list shrank meanwhile).
 const RESTORE_TIMEOUT_MS = 1500;
@@ -17,6 +18,16 @@ export function markScrollRestore(key) {
 
 export function cancelScrollRestore(key) {
   pendingRestore.delete(key);
+}
+
+/** Ask the next page that owns `key` to focus that control once it's on screen. */
+export function requestFocus(key) {
+  pendingFocus.add(key);
+}
+
+/** True (once) if focus was requested for `key`. */
+export function consumeFocus(key) {
+  return pendingFocus.delete(key);
 }
 
 /**

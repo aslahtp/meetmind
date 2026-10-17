@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Check, Copy, Mic, X, ScrollText } from 'lucide-react';
-import { EmptyState } from './ui/index.jsx';
+import { EmptyState, HighlightedText } from './ui/index.jsx';
 import { speakerName } from '../lib/format.js';
 
 function formatTime(seconds) {
@@ -8,16 +8,6 @@ function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
   const s = Math.floor(seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
-}
-
-function HighlightedText({ text, query }) {
-  if (!query) return text;
-  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-  return parts.map((part, i) =>
-    part.toLowerCase() === query.toLowerCase()
-      ? <mark key={i}>{part}</mark>
-      : <React.Fragment key={i}>{part}</React.Fragment>
-  );
 }
 
 export default function TranscriptViewer({ transcript }) {
