@@ -14,6 +14,10 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 - Meetings search covers titles, notes (sections, decisions, action items, participants) and transcripts, ranked by relevance with a "Best match" sort while searching.
 - Search understands related words (e.g. "deadline" finds "due"), other word forms, typos, as-you-type prefixes and "quoted phrases", and shows the matching passage highlighted on each result.
 
+### Changed
+
+- Dashboard and Meetings "Paste transcript" and "Import audio" are now icon buttons that expand into a labelled pill on hover or keyboard focus.
+
 ### Fixed
 
 - The "Has notes" filter now finds meetings with sectioned or Markdown notes.

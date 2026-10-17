@@ -8,7 +8,7 @@ import { useApp } from '../lib/app-context.js';
 import PasteTranscriptModal from './PasteTranscriptModal.jsx';
 import { SessionList, SessionListSkeleton } from './SessionCard.jsx';
 import {
-  PageHeader, IconButton, EmptyState, Skeleton, StatusDot, SegmentedControl,
+  PageHeader, IconButton, ExpandingButton, EmptyState, Skeleton, StatusDot, SegmentedControl,
   Menu, MenuRadioItem, MenuLabel,
 } from './ui/index.jsx';
 import { useDelayedFlag, useSessionActions, SKELETON_DELAY_MS } from '../lib/hooks.js';
@@ -345,14 +345,16 @@ export default function Meetings({ onOpenSession }) {
             subtitle={subtitle}
             actions={
               <>
-                <button type="button" onClick={openPaste} className="btn-ghost btn-sm">
-                  <ClipboardList size={16} strokeWidth={1.75} />
-                  Paste transcript
-                </button>
-                <button type="button" onClick={handleUploadAudio} className="btn-ghost btn-sm">
-                  <Upload size={16} strokeWidth={1.75} />
-                  Import audio
-                </button>
+                <ExpandingButton
+                  label="Paste transcript"
+                  icon={<ClipboardList size={16} strokeWidth={1.75} aria-hidden="true" />}
+                  onClick={openPaste}
+                />
+                <ExpandingButton
+                  label="Import audio"
+                  icon={<Upload size={16} strokeWidth={1.75} aria-hidden="true" />}
+                  onClick={handleUploadAudio}
+                />
                 <IconButton label="Refresh meetings" onClick={handleRefresh} disabled={refreshing}>
                   <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
                 </IconButton>

@@ -26,6 +26,17 @@ export function HighlightedText({ text, query, terms }) {
   );
 }
 
+// ── ExpandingButton — icon at rest, labelled pill on hover/focus ──────────────
+// The label stays in the DOM (only clipped), so it's still the accessible name.
+export function ExpandingButton({ icon, label, className = '', ...rest }) {
+  return (
+    <button type="button" className={`icon-pill ${className}`} {...rest}>
+      {icon}
+      <span className="icon-pill-label">{label}</span>
+    </button>
+  );
+}
+
 // ── IconButton — icon-only buttons must carry an accessible label ─────────────
 export function IconButton({ label, children, className = '', pressed, ...rest }) {
   return (

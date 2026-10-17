@@ -14,6 +14,7 @@ import UpcomingMeetings from './UpcomingMeetings.jsx';
 import { SessionList, SessionListSkeleton } from './SessionCard.jsx';
 import {
   IconButton,
+  ExpandingButton,
   StepBadge,
   EmptyState,
   Skeleton,
@@ -55,10 +56,12 @@ function DashboardToolbar({ subtitle, actions, greetingText }) {
 
   return (
     <header className="flex-shrink-0 border-b border-ink bg-paper">
-      <div className="w-full px-24 py-8 min-h-[56px] flex items-center gap-16">
-        <h1 className="flex-shrink-0 text-body-sm font-medium text-ink whitespace-nowrap">{text}</h1>
-        <p className="flex-1 min-w-0 text-center text-caption text-graphite truncate">{subtitle}</p>
-        {actions && <div className="flex-shrink-0 flex items-center gap-8">{actions}</div>}
+      {/* Equal side columns keep the subtitle centred on the bar, so it stays put while an
+          action button expands on hover. */}
+      <div className="w-full px-24 py-8 min-h-[56px] grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-16">
+        <h1 className="min-w-0 text-body-sm font-medium text-ink whitespace-nowrap truncate">{text}</h1>
+        <p className="max-w-[320px] text-center text-caption text-graphite truncate">{subtitle}</p>
+        {actions && <div className="min-w-0 flex items-center justify-end gap-8">{actions}</div>}
       </div>
     </header>
   );
@@ -225,17 +228,21 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
 
   const headerActions = (
     <>
-      <button type="button" onClick={openPaste} className="btn-ghost px-16 py-4 text-caption">
-        <ClipboardList size={14} strokeWidth={1.75} />
-        Paste transcript
-      </button>
-      <button type="button" onClick={handleUploadAudio} className="btn-ghost px-16 py-4 text-caption">
-        <Upload size={14} strokeWidth={1.75} />
-        Import audio
-      </button>
-      <IconButton label="Search meetings" onClick={openSearch}>
-        <Search size={16} strokeWidth={1.75} />
-      </IconButton>
+      <ExpandingButton
+        label="Search meetings"
+        icon={<Search size={16} strokeWidth={1.75} aria-hidden="true" />}
+        onClick={openSearch}
+      />
+      <ExpandingButton
+        label="Paste transcript"
+        icon={<ClipboardList size={16} strokeWidth={1.75} aria-hidden="true" />}
+        onClick={openPaste}
+      />
+      <ExpandingButton
+        label="Import audio"
+        icon={<Upload size={16} strokeWidth={1.75} aria-hidden="true" />}
+        onClick={handleUploadAudio}
+      />
       <IconButton label="Refresh meetings" onClick={handleRefresh} disabled={refreshing}>
         <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
       </IconButton>
