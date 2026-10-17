@@ -6,6 +6,7 @@ import {
   X,
   ArrowRight,
   ClipboardList,
+  Search,
 } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import PasteTranscriptModal from './PasteTranscriptModal.jsx';
@@ -20,7 +21,7 @@ import {
 } from './ui/index.jsx';
 import { getSessionDuration, formatMinutes } from '../lib/format.js';
 import { useDelayedFlag, useSessionActions, SKELETON_DELAY_MS } from '../lib/hooks.js';
-import { useScrollMemory } from '../lib/scrollMemory.js';
+import { useScrollMemory, requestFocus } from '../lib/scrollMemory.js';
 import { greeting } from '../lib/greeting.js';
 
 export { greeting };
@@ -208,6 +209,10 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   };
 
   const openPaste = useCallback(() => setShowPasteModal(true), []);
+  const openSearch = () => {
+    requestFocus('meetings:search');
+    onNavigateToMeetings();
+  };
   const closePaste = useCallback(() => setShowPasteModal(false), []);
 
   // While loading, render the skeleton only once it's been slow enough to warrant
@@ -228,6 +233,9 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
         <Upload size={14} strokeWidth={1.75} />
         Import audio
       </button>
+      <IconButton label="Search meetings" onClick={openSearch}>
+        <Search size={16} strokeWidth={1.75} />
+      </IconButton>
       <IconButton label="Refresh meetings" onClick={handleRefresh} disabled={refreshing}>
         <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
       </IconButton>

@@ -75,7 +75,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 1. **Record.** Click the MeetMind button in Google Meet or Zoom, press **Record** in the app, or accept the reminder when a Google Calendar meeting starts. MeetMind captures system audio (WASAPI loopback on Windows, Core Audio on macOS) and your microphone together.
 2. **Transcribe.** When you stop, the audio goes to your chosen speech-to-text engine, which returns a transcript with speaker labels (diarization).
 3. **Summarize.** Gemini, Groq or Claude (your choice) turns the transcript into meeting minutes — an executive summary, agenda, key decisions and an action items table with owners, deadlines and priorities — as Markdown or structured JSON.
-4. **Share.** Read and search the notes in the app, export a PDF, copy Markdown, or sync a formatted page to Notion automatically.
+4. **Share.** Read and search notes and transcripts in the app, export a PDF, copy Markdown, or sync a formatted page to Notion automatically.
 
 ---
 
@@ -93,7 +93,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 - **PDF and Markdown export**: save dated PDFs (optionally with the transcript) or copy the notes as Markdown.
 - **Import existing audio or transcripts**: process WAV, MP3, M4A, MP4, WebM and other files, or paste a transcript to skip speech-to-text.
 - **Local-first storage**: recordings, transcripts and notes stay in a local SQLite database; retries reuse the saved transcript instead of paying for transcription twice.
-- **Searchable transcripts**: filter by speaker and search across every meeting.
+- **Search across every meeting**: titles, notes and transcripts, ranked by relevance, with related words, typo tolerance and the matching passage highlighted; filter a transcript by speaker.
 - **Light and dark themes**, keyboard-accessible UI, and in-app updates from GitHub Releases.
 
 ---

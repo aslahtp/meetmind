@@ -191,10 +191,16 @@ it.
 
 React 18 + Vite 6, no router: `renderer/app.jsx` is a single view-state switch between:
 
-- `Dashboard.jsx`: stats and a recent-sessions list.
+- `Dashboard.jsx`: stats and a recent-sessions list; its search button opens Meetings with the
+  search field focused (`requestFocus`/`consumeFocus` in `lib/scrollMemory.js`).
 - `Meetings.jsx`: full session list with search, status chips, a sort menu and a Filters panel
   (date preset or range, length, platform, content); the filter/sort logic is pure, in
-  `lib/meetingFilters.js`.
+  `lib/meetingFilters.js`. Search is `lib/meetingSearch.js`, run in the renderer over the notes
+  and transcripts `sessions:list` already returns: stemming, a curated meeting-vocabulary
+  concept map, BM25 ranking over weighted fields (title > headings/decisions/action items >
+  people > notes > transcript), typo and prefix matching against the corpus vocabulary, and
+  verbatim "quoted phrases", with the best-matching passage returned as a highlighted snippet.
+  No embeddings or network calls.
 - `NoteViewer.jsx` / `TranscriptViewer.jsx`: a completed session's notes or raw transcript.
 - `Settings.jsx`, composed of `settings/GeneralSection.jsx`, `TranscriptionSection.jsx`,
   `NotesSection.jsx`, `IntegrationsSection.jsx`, `SystemSection.jsx`: API keys, service
@@ -212,7 +218,7 @@ template, `AudioPlayer.jsx` streaming from `meetmind-audio://`), `ui/` (Dialog, 
 `Menu.jsx` for keyboard-navigable dropdown menus).
 
 State/plumbing: `lib/app-context.js`, `lib/hooks.js`, `lib/status.js`, `lib/format.js`,
-`lib/platform.js` (meeting platforms), `lib/os.js` (host OS), `lib/meetingFilters.js`, `lib/scrollMemory.js`,
+`lib/platform.js` (meeting platforms), `lib/os.js` (host OS), `lib/meetingFilters.js`, `lib/meetingSearch.js`, `lib/scrollMemory.js`,
 `lib/audioMeter.js`, `lib/audioTest.js`, `lib/greeting.js`.
 
 A second Vite entry, `renderer/overlay.html` -> `overlay.jsx` ->
@@ -913,6 +919,8 @@ Current coverage is pure logic only:
 | `tests/format.test.js` | Formatting helpers (`renderer/lib/format.js`) |
 | `tests/markdown.test.jsx` | Markdown rendering (`renderer/components/note/markdown.jsx`) |
 | `tests/pdf-export.test.js` | PDF file naming (`electron/services/pdf-export.js`) |
+| `tests/meetingFilters.test.js` | Meetings filters and sorting (`renderer/lib/meetingFilters.js`) |
+| `tests/meetingSearch.test.js` | Meeting search: stemming, concept map, typos, prefixes, phrases, ranking and snippets (`renderer/lib/meetingSearch.js`) |
 | `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, meeting window titles, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
 | `tests/ffmpeg-path.test.js` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.js`) and the per-OS silent-recording hints (`electron/audio/audio-hints.js`) |
 | `tests/macSupport.test.js` | macOS capture strategies (`electron/audio/mac-capture.js`), "Test system audio" verdicts (`renderer/lib/audioTest.js`), and the shape of the pinned macOS FFmpeg downloads (`electron/audio/ffmpeg-sources.js`) |
