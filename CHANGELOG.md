@@ -16,7 +16,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 ### Changed
 
-- Dashboard and Meetings "Paste transcript" and "Import audio" are now icon buttons that expand into a labelled pill on hover or keyboard focus.
+- Dashboard and Meetings "Paste transcript" and "Import audio" (and the Dashboard search button) are now icon buttons that expand into a labelled pill on hover or keyboard focus; the Dashboard's meeting count stays centred while they expand.
 
 ### Fixed
 
