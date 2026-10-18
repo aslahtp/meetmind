@@ -6,6 +6,12 @@ updated: 2026-10-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.9.0] - 2026-10-18
+
+### Changed
+
+- **Site**: Polished the GitHub Pages landing page with brand icons in the "Works with" cloud (Google Meet, Zoom, Teams, Slack, Discord, Webex, Notion, Calendar), provider logo marks in STT chips (AssemblyAI, Google Cloud, Groq), icons in the data-flow pipeline cards, a sticky frosted-glass header on scroll, a bouncing scroll-down indicator in the hero, hover-glow on chip and cloud-icon elements, and the actual MeetMind app icon in the CTA tile.
+
 ## [4.8.0] - 2026-10-17
 
 ### Added
