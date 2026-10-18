@@ -10,7 +10,14 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 ### Changed
 
-- **Site**: Polished the GitHub Pages landing page with brand icons in the "Works with" cloud (Google Meet, Zoom, Teams, Slack, Discord, Webex, Notion, Calendar), provider logo marks in STT chips (AssemblyAI, Google Cloud, Groq), icons in the data-flow pipeline cards, a sticky frosted-glass header on scroll, a bouncing scroll-down indicator in the hero, hover-glow on chip and cloud-icon elements, and the actual MeetMind app icon in the CTA tile.
+- **Site**: Real brand logos across the GitHub Pages landing page (meeting apps, speech-to-text and note providers, Notion, Markdown, Windows and macOS), shown in ink and tinted with the brand colour on hover.
+- **Site**: Sticky header that slims on scroll, highlights the section being read, and shows a Download button once the hero's buttons scroll away.
+- **Site**: Smoother motion: staggered one-shot scroll reveals, a highlighter stroke under the hero headline, hero screenshot parallax, animated FAQ open/close, data packets travelling along the data-flow connectors, and a pulsing app icon in the final call to action; all of it switches off with reduced motion.
+- **Site**: Layout fixes for phones and tablets: the comparison table stacks into labelled cards, the hero badge and buttons no longer overflow at 320px, and all sections share one content width.
+
+### Fixed
+
+- **Site**: Card reveal animations were cut short by the hover transition, the hero parallax never moved, and revealed content disappeared again when scrolled out of view.
 
 ## [4.8.0] - 2026-10-17
 

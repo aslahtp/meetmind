@@ -104,11 +104,13 @@
   </script>
 
   <script>
-    // Apply a saved theme choice before first paint so there is no flash.
+    // Before first paint: apply a saved theme choice (no flash) and opt in to scroll reveals.
     (function () {
+      var root = document.documentElement;
+      root.classList.add('js');
       try {
         var t = localStorage.getItem('meetmind-theme');
-        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+        if (t === 'light' || t === 'dark') root.setAttribute('data-theme', t);
       } catch (e) { }
     })();
   </script>
@@ -143,7 +145,7 @@
       --text-subheading: 20px;
       --text-heading-sm: 24px;
       --text-heading: 28px;
-      --text-display: clamp(40px, 7vw, 64px);
+      --text-display: clamp(34px, 5.2vw + 14px, 64px);
       --tracking-display: -0.016em;
       --tracking-badge: 0.286em;
 
@@ -155,6 +157,9 @@
       --page-max-width: 1200px;
       --section-gap: 64px;
       --card-padding: 32px;
+
+      --ease: cubic-bezier(.2, .7, .2, 1);
+      --ease-out: cubic-bezier(.16, 1, .3, 1);
       color-scheme: light;
     }
 
@@ -207,12 +212,8 @@
 
     html {
       scroll-behavior: smooth;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      html {
-        scroll-behavior: auto;
-      }
+      /* Anchor jumps land below the sticky header. */
+      scroll-padding-top: 80px;
     }
 
     body {
@@ -223,7 +224,7 @@
       font-size: var(--text-body);
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
+      overflow-x: clip;
     }
 
     a {
@@ -248,6 +249,7 @@
       border-radius: 4px;
     }
 
+    /* Lucide line icons */
     .icon {
       width: 20px;
       height: 20px;
@@ -259,17 +261,20 @@
       stroke-linejoin: round;
     }
 
-    /* Brand icons that use fill instead of stroke */
-    .icon-filled {
+    /* Filled brand marks: ink at rest, tinted with --brand on hover where a parent allows it. */
+    .logo {
+      width: 20px;
+      height: 20px;
+      flex: none;
       fill: currentColor;
-      stroke: none;
+      transition: color .3s ease;
     }
 
     .skip {
       position: absolute;
       left: 16px;
       top: -64px;
-      z-index: 10;
+      z-index: 30;
       background: var(--paper);
       border: 1px solid var(--ink);
       border-radius: var(--radius-buttons);
@@ -295,20 +300,19 @@
       }
     }
 
-    /* ── Header ───────────────────────────────────────────────────────────── */
+    /* ── Header ───────────────────────────────────────────────────────────── *
+     * Sticky, but flat: the same paper fill plus a hairline once the page scrolls.
+     */
     .site-header {
       position: sticky;
       top: 0;
-      z-index: 5;
+      z-index: 20;
       background: var(--paper);
-      transition: background-color .3s ease, border-color .3s ease;
       border-bottom: 1px solid transparent;
+      transition: border-color .3s ease;
     }
 
     .site-header.scrolled {
-      background: color-mix(in srgb, var(--paper) 85%, transparent);
-      backdrop-filter: blur(16px) saturate(1.4);
-      -webkit-backdrop-filter: blur(16px) saturate(1.4);
       border-bottom-color: var(--hairline-soft);
     }
 
@@ -317,36 +321,78 @@
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 24px 0;
+      padding: 20px 0;
+      transition: padding .35s var(--ease);
+    }
+
+    .scrolled .top {
+      padding: 12px 0;
     }
 
     .brand {
       display: block;
       flex: none;
+      border-radius: 8px;
     }
 
     .brand img {
       height: 36px;
       width: auto;
+      transition: height .35s var(--ease);
+    }
+
+    .scrolled .brand img {
+      height: 32px;
+    }
+
+    @media (max-width: 480px) {
+      .brand img {
+        height: 30px;
+      }
+
+      .scrolled .brand img {
+        height: 28px;
+      }
     }
 
     .top-nav {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
       font-size: var(--text-body-sm);
       font-weight: 500;
     }
 
-    .top-nav a {
+    .top-nav .link {
+      position: relative;
       text-decoration: none;
       color: var(--graphite);
       padding: 8px 12px;
       border-radius: var(--radius-tags);
+      transition: color .2s ease;
     }
 
-    .top-nav a:hover {
+    .top-nav .link::after {
+      content: "";
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 4px;
+      height: 1px;
+      background: currentColor;
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform .35s var(--ease);
+    }
+
+    .top-nav .link:hover,
+    .top-nav .link.active {
       color: var(--ink);
+    }
+
+    .top-nav .link:hover::after,
+    .top-nav .link.active::after {
+      transform: scaleX(1);
     }
 
     .top-nav .nav-github {
@@ -355,17 +401,83 @@
       gap: 8px;
     }
 
-    .icon-brand {
-      fill: currentColor;
-      stroke: none;
-      width: 18px;
-      height: 18px;
+    .top-nav .nav-github::after {
+      left: 38px;
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 759px) {
       .top-nav .hide-sm {
         display: none;
       }
+    }
+
+    @media (max-width: 479px) {
+      .top-nav .nav-github {
+        padding: 8px 10px;
+      }
+
+      .top-nav .nav-github .label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+
+      .top-nav .nav-github::after {
+        display: none;
+      }
+    }
+
+    @media (max-width: 379px) {
+      .show-cta .top-nav .nav-github {
+        display: none;
+      }
+    }
+
+    /* Download button that slides into the header once the hero's own button scrolls away,
+       so the single yellow action stays in view without ever showing twice. */
+    .nav-cta-slot {
+      display: grid;
+      grid-template-columns: 0fr;
+      visibility: hidden;
+      transition: grid-template-columns .45s var(--ease), visibility 0s linear .45s, margin .45s var(--ease);
+    }
+
+    .nav-cta-slot>div {
+      min-width: 0;
+      overflow: hidden;
+      /* Room for the focus ring inside the clipped slot. */
+      padding: 4px;
+      margin: -4px;
+    }
+
+    .show-cta .nav-cta-slot {
+      grid-template-columns: 1fr;
+      visibility: visible;
+      margin-left: 4px;
+      transition: grid-template-columns .45s var(--ease), visibility 0s, margin .45s var(--ease);
+    }
+
+    .nav-cta {
+      white-space: nowrap;
+      padding: 8px 16px;
+      font-size: var(--text-caption);
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: opacity .3s ease, transform .45s var(--ease), background-color .15s ease, border-color .15s ease;
+    }
+
+    .show-cta .nav-cta {
+      opacity: 1;
+      transform: none;
+      transition-delay: .1s, .1s, 0s, 0s;
+    }
+
+    .nav-cta .icon {
+      width: 16px;
+      height: 16px;
     }
 
     .theme-toggle {
@@ -393,6 +505,22 @@
     .theme-toggle .icon {
       width: 18px;
       height: 18px;
+      transition: transform .6s var(--ease-out);
+    }
+
+    .theme-toggle:hover .icon {
+      transform: rotate(-24deg);
+    }
+
+    .theme-toggle.spin .icon {
+      animation: toggle-spin .6s var(--ease-out);
+    }
+
+    @keyframes toggle-spin {
+      from {
+        transform: rotate(-180deg) scale(.4);
+        opacity: 0;
+      }
     }
 
     /* ── Sections & type ──────────────────────────────────────────────────── */
@@ -418,11 +546,18 @@
 
     .display {
       font-size: var(--text-display);
-      line-height: 1.25;
+      line-height: 1.2;
       letter-spacing: var(--tracking-display);
       max-width: 960px;
-      margin: 32px auto 16px;
+      margin: 24px auto 16px;
       text-wrap: balance;
+    }
+
+    @media (min-width: 720px) {
+      .display {
+        line-height: 1.25;
+        margin-top: 32px;
+      }
     }
 
     h3 {
@@ -451,245 +586,33 @@
       color: var(--graphite);
     }
 
-    /* ── Animation system ─────────────────────────────────────────────────── *
-     * Inspired by the Textura/Marloa spring-based animation vocabulary:
-     * - Scroll-triggered reveal (blur + rise + stagger) — cf. <Inview> / HEADING_MOTION
-     * - Parallax drift on hero image — cf. <SpringTrigger mode="scrub">
-     * - Spring-physics stat counters — cf. StatCounter (tension 22, friction 26)
-     * - FAQ accordion height springs — cf. faq-item.tsx spring height
-     * - Card hover lift — cf. <Hover> component
-     * - Data-flow connector pulse — cf. flow dot animation
-     * All CSS-only + IntersectionObserver; respects prefers-reduced-motion.
-     */
-
-    /* Status ping on the hero badge dot */
-    @keyframes ping {
-      0% {
-        transform: scale(1);
-        opacity: .8;
-      }
-
-      80%,
-      100% {
-        transform: scale(2.6);
-        opacity: 0;
+    @media (max-width: 480px) {
+      .sub {
+        font-size: 17px;
       }
     }
 
-    /* ── Scroll reveal: blur + rise + stagger ────────────────────────────── */
-    [data-reveal] {
-      opacity: 0;
-      transform: translateY(40px);
-      filter: blur(12px);
-      transition:
-        opacity .8s cubic-bezier(.2, .7, .2, 1),
-        transform .8s cubic-bezier(.2, .7, .2, 1),
-        filter .8s cubic-bezier(.2, .7, .2, 1);
-      transition-delay: calc(var(--stagger, 0) * 70ms);
+    /* Highlighter stroke drawn under the hero's key phrase. A band below the x-height keeps
+       ink-on-paper contrast in both themes, since the text itself never sits on the yellow. */
+    .mark {
+      background-image: linear-gradient(var(--sunshine), var(--sunshine));
+      background-repeat: no-repeat;
+      background-position: 0 92%;
+      background-size: 100% .2em;
+      padding-bottom: .04em;
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
     }
 
-    [data-reveal].revealed {
-      opacity: 1;
-      transform: none;
-      filter: none;
-    }
-
-    /* Smaller travel for badges and captions */
-    [data-reveal="sm"] {
-      transform: translateY(20px);
-      filter: blur(8px);
-    }
-
-    /* Larger travel for display headings — cf. DISPLAY_SPRING 60px + 20px blur */
-    [data-reveal="lg"] {
-      transform: translateY(60px);
-      filter: blur(20px);
-    }
-
-    /* ── Hero parallax ───────────────────────────────────────────────────── */
-    .hero-frame {
-      --parallax-y: 0;
-      transform: translateY(calc(var(--parallax-y) * 1px));
-      transition: transform .1s linear;
-    }
-
-    /* ── Card hover lift ─────────────────────────────────────────────────── */
-    .card {
-      transition: transform .25s cubic-bezier(.2, .7, .2, 1), box-shadow .25s ease;
-    }
-
-    .card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 8%, transparent);
-    }
-
-    /* ── Stat counter ────────────────────────────────────────────────────── */
-    .stat .value {
-      transition: filter .6s cubic-bezier(.2, .7, .2, 1), opacity .6s cubic-bezier(.2, .7, .2, 1);
-    }
-
-    /* ── FAQ accordion spring ────────────────────────────────────────────── */
-    .faq details .answer {
-      display: grid;
-      grid-template-rows: 0fr;
-      transition: grid-template-rows .45s cubic-bezier(.2, .7, .2, 1);
-    }
-
-    .faq details[open] .answer {
-      grid-template-rows: 1fr;
-    }
-
-    .faq details .answer>div {
-      overflow: hidden;
-    }
-
-    .faq summary .pm .icon {
-      transition: transform .3s cubic-bezier(.2, .7, .2, 1);
-    }
-
-    /* ── Flow connector pulse ────────────────────────────────────────────── */
-    @keyframes flow-pulse {
-      0% {
-        background: var(--ink);
-      }
-
-      50% {
-        background: var(--mint);
-      }
-
-      100% {
-        background: var(--ink);
+    @media (prefers-reduced-motion: no-preference) {
+      .mark {
+        animation: mark-draw 1s var(--ease-out) .75s both;
       }
     }
 
-    .flow.revealed li+li::before {
-      animation: flow-pulse 2s ease-in-out calc(var(--flow-i, 0) * 300ms) infinite;
-    }
-
-    .flow .eyebrow .dot {
-      transition: transform .5s cubic-bezier(.2, .7, .2, 1);
-    }
-
-    .flow.revealed .eyebrow .dot {
-      animation: ping 2.4s ease-out calc(var(--flow-i, 0) * 400ms + .5s) infinite;
-      position: relative;
-    }
-
-    /* ── Cloud grid stagger ──────────────────────────────────────────────── */
-    .cloud-grid li {
-      opacity: 0;
-      transform: translateY(12px);
-      transition: opacity .5s cubic-bezier(.2, .7, .2, 1), transform .5s cubic-bezier(.2, .7, .2, 1);
-      transition-delay: calc(var(--ci, 0) * 60ms);
-    }
-
-    .cloud-grid.revealed li {
-      opacity: 1;
-      transform: none;
-    }
-
-    /* ── Table row reveal ────────────────────────────────────────────────── */
-    .table-wrap tbody tr {
-      opacity: 0;
-      transform: translateX(-12px);
-      transition: opacity .5s cubic-bezier(.2, .7, .2, 1), transform .5s cubic-bezier(.2, .7, .2, 1);
-      transition-delay: calc(var(--ri, 0) * 80ms);
-    }
-
-    .table-wrap.revealed tbody tr {
-      opacity: 1;
-      transform: none;
-    }
-
-    /* ── Button hover micro-animation ────────────────────────────────────── */
-    .btn {
-      transition: background-color .15s ease, border-color .15s ease, transform .2s cubic-bezier(.2, .7, .2, 1);
-    }
-
-    .btn:hover {
-      transform: translateY(-1px);
-    }
-
-    .btn:active {
-      transform: translateY(1px);
-      transition-duration: .05s;
-    }
-
-    /* ── Live status ping (hero badge) ───────────────────────────────────── */
-    .hero .badge .dot {
-      position: relative;
-    }
-
-    .hero .badge .dot::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      border: 1px solid var(--mint);
-      animation: ping 2.4s ease-out 1.2s infinite;
-    }
-
-    /* ── Respect reduced motion ──────────────────────────────────────────── */
-    @media (prefers-reduced-motion: reduce) {
-      [data-reveal] {
-        opacity: 1;
-        transform: none;
-        filter: none;
-        transition: none;
-      }
-
-      .hero-frame {
-        transform: none !important;
-      }
-
-      .card {
-        transition: none;
-      }
-
-      .card:hover {
-        transform: none;
-        box-shadow: none;
-      }
-
-      .faq details .answer {
-        transition: none;
-      }
-
-      .flow.revealed li+li::before {
-        animation: none;
-      }
-
-      .flow.revealed .eyebrow .dot {
-        animation: none;
-      }
-
-      .cloud-grid li {
-        opacity: 1;
-        transform: none;
-        transition: none;
-      }
-
-      .table-wrap tbody tr {
-        opacity: 1;
-        transform: none;
-        transition: none;
-      }
-
-      .btn {
-        transition: background-color .15s ease, border-color .15s ease;
-      }
-
-      .btn:hover,
-      .btn:active {
-        transform: none;
-      }
-
-      .hero .badge .dot::after {
-        animation: none;
-      }
-
-      .stat .value {
-        transition: none;
+    @keyframes mark-draw {
+      from {
+        background-size: 0% .2em;
       }
     }
 
@@ -697,6 +620,7 @@
     .badge {
       display: inline-flex;
       align-items: center;
+      max-width: 100%;
       height: 32px;
       border: 1px solid var(--ink);
       border-radius: var(--radius-tags);
@@ -704,6 +628,7 @@
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: var(--tracking-badge);
+      white-space: nowrap;
       overflow: hidden;
     }
 
@@ -721,6 +646,8 @@
     }
 
     .badge .dot {
+      position: relative;
+      flex: none;
       width: 10px;
       height: 10px;
       border-radius: 50%;
@@ -730,6 +657,12 @@
 
     .badge .dot+.label {
       padding-left: 10px;
+    }
+
+    @media (max-width: 419px) {
+      .badge .hide-xs {
+        display: none;
+      }
     }
 
     /* Buttons */
@@ -754,7 +687,24 @@
       line-height: 1.25;
       text-decoration: none;
       color: var(--ink);
-      transition: background-color .15s ease, border-color .15s ease;
+      transition: background-color .15s ease, border-color .15s ease, transform .25s var(--ease);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+      transition-duration: .05s;
+    }
+
+    .btn .icon-trail {
+      transition: transform .3s var(--ease);
+    }
+
+    .btn:hover .icon-trail {
+      transform: translateX(3px);
     }
 
     .btn-primary {
@@ -772,10 +722,44 @@
       background: var(--hover-wash);
     }
 
+    .btn .logo {
+      width: 18px;
+      height: 18px;
+    }
+
     @media (max-width: 480px) {
       .actions .btn {
         flex: 1 1 100%;
       }
+    }
+
+    @media (max-width: 359px) {
+      .actions .btn {
+        padding: 16px;
+        font-size: 15px;
+      }
+    }
+
+    /* Supported platforms under the hero buttons */
+    .platforms {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 8px 20px;
+      margin-top: 20px;
+    }
+
+    .platforms span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .platforms .logo {
+      width: 14px;
+      height: 14px;
+      color: var(--ink);
     }
 
     /* Image frame */
@@ -783,67 +767,100 @@
       border: 1px solid var(--ink);
       border-radius: var(--radius-images);
       overflow: hidden;
+      background: var(--paper);
     }
 
-    .hero-frame {
+    .frame img {
+      width: 100%;
+    }
+
+    .hero-shot {
       margin: 48px auto 0;
-      max-width: 1040px;
+    }
+
+    .hero-shot .frame {
+      will-change: transform;
     }
 
     /* ── Works-with cloud ─────────────────────────────────────────────────── */
     .cloud {
-      padding-top: 0;
+      padding-top: 16px;
     }
 
     .cloud-grid {
       list-style: none;
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 24px 32px;
-      margin-top: 24px;
-      font-size: var(--text-body-sm);
-      font-weight: 500;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px 8px;
+      margin: 24px auto 0;
     }
 
-    @media (min-width: 560px) {
-      .cloud-grid {
-        grid-template-columns: repeat(4, 1fr);
-      }
-    }
-
-    @media (min-width: 1000px) {
+    @media (min-width: 900px) {
       .cloud-grid {
         grid-template-columns: repeat(8, 1fr);
+        gap: 24px 16px;
       }
     }
 
     .cloud-grid li {
-      white-space: nowrap;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 10px;
       font-size: var(--text-caption);
+      font-weight: 500;
+      line-height: 1.3;
+      color: var(--graphite);
+      transition: color .25s ease;
     }
 
-    .cloud-grid .cloud-icon {
-      width: 36px;
-      height: 36px;
+    .cloud-tile {
       display: grid;
       place-items: center;
+      width: 56px;
+      height: 56px;
       border: 1px solid var(--ink);
       border-radius: var(--radius-images);
-      transition: transform .25s cubic-bezier(.2,.7,.2,1), border-color .25s ease;
+      color: var(--ink);
+      transition: transform .4s var(--ease-out), box-shadow .25s ease;
     }
 
-    .cloud-grid li:hover .cloud-icon {
-      transform: translateY(-3px);
-      border-color: var(--sunshine);
+    .cloud-tile .logo {
+      width: 24px;
+      height: 24px;
     }
 
-    .cloud-grid .cloud-icon .icon {
-      width: 18px;
-      height: 18px;
+    .cloud-grid li:hover {
+      color: var(--ink);
+    }
+
+    .cloud-grid li:hover .cloud-tile {
+      transform: translateY(-4px) rotate(-3deg);
+      /* A heavier hairline instead of a shadow, per DESIGN.md. */
+      box-shadow: inset 0 0 0 1px var(--ink);
+    }
+
+    .cloud-grid li:hover .logo,
+    .chip:hover .logo,
+    .card:hover .logos .logo,
+    .flow li:hover .logos .logo {
+      color: var(--brand, currentColor);
+    }
+
+    @media (max-width: 400px) {
+      .cloud-tile {
+        width: 48px;
+        height: 48px;
+      }
+
+      .cloud-tile .logo {
+        width: 22px;
+        height: 22px;
+      }
+
+      .cloud-grid li {
+        font-size: 13px;
+      }
     }
 
     /* ── Stat strip (echoes the app's dashboard stats) ────────────────────── */
@@ -856,7 +873,6 @@
       border-radius: var(--radius-cards);
       overflow: hidden;
       margin: 48px auto 0;
-      max-width: 1040px;
       text-align: left;
     }
 
@@ -873,11 +889,12 @@
 
     @media (max-width: 480px) {
       .stat {
-        padding: 24px 16px 24px 24px;
+        padding: 20px 16px 20px 20px;
       }
 
       .stat .eyebrow {
-        letter-spacing: 0.2em;
+        letter-spacing: 0.16em;
+        font-size: 12px;
       }
     }
 
@@ -887,6 +904,7 @@
       line-height: 1.25;
       font-weight: 500;
       margin-top: 8px;
+      font-variant-numeric: tabular-nums;
     }
 
     .stat .note {
@@ -900,6 +918,7 @@
       max-width: 820px;
       margin: 0 auto;
       font-size: var(--text-subheading);
+      text-wrap: pretty;
     }
 
     .definition p+p {
@@ -908,15 +927,29 @@
       font-size: var(--text-body);
     }
 
+    @media (max-width: 480px) {
+      .definition {
+        font-size: var(--text-body);
+      }
+
+      .definition p+p {
+        font-size: 17px;
+      }
+    }
+
     /* ── Cards ────────────────────────────────────────────────────────────── */
     .grid {
       display: grid;
-      gap: 24px;
+      gap: 16px;
       margin-top: 48px;
       text-align: left;
     }
 
     @media (min-width: 720px) {
+      .grid {
+        gap: 24px;
+      }
+
       .grid-2 {
         grid-template-columns: repeat(2, 1fr);
         gap: 24px 32px;
@@ -934,10 +967,19 @@
     }
 
     .card {
+      display: flex;
+      flex-direction: column;
       border: 1px solid var(--ink);
       border-radius: var(--radius-cards);
       padding: var(--card-padding);
       background: var(--paper);
+      transition: transform .4s var(--ease-out), box-shadow .25s ease;
+    }
+
+    /* Lift plus a heavier hairline: DESIGN.md raises things by border weight, never a drop shadow. */
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: inset 0 0 0 1px var(--ink);
     }
 
     .card p {
@@ -947,6 +989,10 @@
     @media (max-width: 480px) {
       .card {
         padding: 24px;
+      }
+
+      h3 {
+        font-size: 22px;
       }
     }
 
@@ -958,6 +1004,7 @@
       display: grid;
       place-items: center;
       margin-bottom: 24px;
+      transition: background-color .25s ease, border-color .25s ease, color .25s ease, transform .4s var(--ease-out);
     }
 
     .tile .icon {
@@ -965,13 +1012,20 @@
       height: 22px;
     }
 
-    .steps {
-      list-style: none;
+    /* The hovered card's tile takes the highlighter fill: one yellow swatch at a time. */
+    .card:hover .tile,
+    .card:hover .step-num {
+      background: var(--sunshine);
+      border-color: var(--sunshine);
+      color: var(--on-sunshine);
     }
 
-    .steps .card {
-      display: flex;
-      flex-direction: column;
+    .card:hover .tile {
+      transform: rotate(-4deg);
+    }
+
+    .steps {
+      list-style: none;
     }
 
     .step-head {
@@ -990,41 +1044,66 @@
       border: 1px solid var(--ink);
       font-size: var(--text-caption);
       font-weight: 500;
+      transition: background-color .25s ease, border-color .25s ease, color .25s ease;
     }
 
     .step-head .icon {
       color: var(--graphite);
+      transition: color .25s ease, transform .4s var(--ease-out);
+    }
+
+    .card:hover .step-head .icon {
+      color: var(--ink);
+      transform: scale(1.12);
+    }
+
+    /* Row of provider marks at the foot of a card */
+    .logos {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 14px;
+      margin-top: auto;
+      padding-top: 24px;
+      color: var(--ink);
+    }
+
+    .logos .logo {
+      width: 20px;
+      height: 20px;
     }
 
     .chips {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 16px;
+      margin-top: auto;
+      padding-top: 16px;
     }
 
     .chip {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       border: 1px solid var(--ink);
       border-radius: var(--radius-tags);
-      padding: 4px 12px;
+      padding: 5px 12px;
       font-size: var(--text-caption);
       font-weight: 500;
+      line-height: 1.4;
       color: var(--ink);
-      transition: transform .2s cubic-bezier(.2,.7,.2,1), border-color .2s ease;
+      transition: transform .3s var(--ease-out), background-color .2s ease;
     }
 
     .chip:hover {
-      transform: translateY(-1px);
-      border-color: var(--sunshine);
+      transform: translateY(-2px);
+      background: var(--hover-wash);
     }
 
-    .chip .chip-icon {
+    .chip .logo,
+    .chip .icon {
       width: 14px;
       height: 14px;
-      flex: none;
     }
 
     .chip-dark {
@@ -1033,18 +1112,16 @@
     }
 
     .chip-dark:hover {
-      border-color: var(--ink);
+      background: var(--ink);
     }
 
     /* ── Data flow ────────────────────────────────────────────────────────── */
     .flow {
       list-style: none;
       display: grid;
-      gap: 16px;
+      gap: 32px;
       margin: 48px auto 0;
-      max-width: 1040px;
       text-align: left;
-      counter-reset: none;
     }
 
     @media (min-width: 900px) {
@@ -1056,35 +1133,54 @@
 
     .flow li {
       position: relative;
+      display: flex;
+      flex-direction: column;
       border: 1px solid var(--ink);
       border-radius: var(--radius-cards);
       padding: 24px;
+      transition: transform .4s var(--ease-out), box-shadow .25s ease;
     }
 
-    .flow .eyebrow {
+    .flow li:hover {
+      transform: translateY(-4px);
+      box-shadow: inset 0 0 0 1px var(--ink);
+    }
+
+    .flow-head {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 8px;
+      margin-bottom: 16px;
     }
 
-    .flow .flow-icon {
-      width: 32px;
-      height: 32px;
+    .flow-icon {
+      width: 40px;
+      height: 40px;
       border: 1px solid var(--ink);
       border-radius: var(--radius-images);
       display: grid;
       place-items: center;
-      margin-bottom: 8px;
     }
 
-    .flow .flow-icon .icon {
-      width: 16px;
-      height: 16px;
+    .flow-icon .icon,
+    .flow-icon .logo {
+      width: 18px;
+      height: 18px;
+    }
+
+    .flow .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      letter-spacing: .2em;
     }
 
     .flow .eyebrow .dot {
-      width: 10px;
-      height: 10px;
+      position: relative;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
       background: var(--mint);
     }
@@ -1093,7 +1189,6 @@
       display: block;
       font-size: var(--text-subheading);
       font-weight: 500;
-      margin-top: 8px;
       line-height: 1.35;
     }
 
@@ -1103,14 +1198,39 @@
       margin-top: 4px;
     }
 
-    .flow li+li::before {
+    .flow .logos {
+      padding-top: 16px;
+      gap: 12px;
+    }
+
+    .flow .logos .logo {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Connector between steps, with a mint packet travelling along it. */
+    .flow li+li::before,
+    .flow li+li::after {
       content: "";
       position: absolute;
+    }
+
+    .flow li+li::before {
       background: var(--ink);
       left: 50%;
-      top: -17px;
+      top: -33px;
       width: 1px;
-      height: 16px;
+      height: 32px;
+    }
+
+    .flow li+li::after {
+      left: calc(50% - 3px);
+      top: -33px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--mint);
+      opacity: 0;
     }
 
     @media (min-width: 900px) {
@@ -1120,10 +1240,93 @@
         width: 40px;
         height: 1px;
       }
+
+      .flow li+li::after {
+        left: -41px;
+        top: calc(50% - 3px);
+      }
     }
 
-    .flow-note {
-      margin-top: 24px;
+    @media (prefers-reduced-motion: no-preference) {
+      .flow.in li+li::after {
+        animation: packet-y 2.4s var(--ease) calc(var(--flow-i, 0) * 600ms) infinite;
+      }
+
+      .flow.in .eyebrow .dot::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 1px solid var(--mint);
+        animation: ping 2.4s ease-out infinite;
+      }
+
+      @media (min-width: 900px) {
+        .flow.in li+li::after {
+          animation-name: packet-x;
+        }
+      }
+    }
+
+    @keyframes packet-y {
+      0% {
+        transform: translateY(0);
+        opacity: 0;
+      }
+
+      15%,
+      55% {
+        opacity: 1;
+      }
+
+      70%,
+      100% {
+        transform: translateY(26px);
+        opacity: 0;
+      }
+    }
+
+    @keyframes packet-x {
+      0% {
+        transform: translateX(0);
+        opacity: 0;
+      }
+
+      15%,
+      55% {
+        opacity: 1;
+      }
+
+      70%,
+      100% {
+        transform: translateX(34px);
+        opacity: 0;
+      }
+    }
+
+    /* Status ping (hero badge, data-flow dot, CTA tile) */
+    @keyframes ping {
+      0% {
+        transform: scale(1);
+        opacity: .8;
+      }
+
+      80%,
+      100% {
+        transform: scale(2.6);
+        opacity: 0;
+      }
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .hero .badge .dot::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 1px solid var(--mint);
+        animation: ping 2.4s ease-out 1.2s infinite;
+      }
     }
 
     /* ── Screenshots ──────────────────────────────────────────────────────── */
@@ -1137,30 +1340,28 @@
       margin-top: 12px;
     }
 
-    .shot-feature {
-      max-width: 1040px;
-      margin: 48px auto 0;
+    .shots .frame img {
+      transition: transform .8s var(--ease-out);
     }
 
-    .shots .grid {
-      max-width: 1040px;
-      margin-left: auto;
-      margin-right: auto;
+    .shots figure:hover .frame img {
+      transform: scale(1.025);
+    }
+
+    .shot-feature {
+      margin: 48px auto 0;
     }
 
     /* ── Compare ──────────────────────────────────────────────────────────── */
     .table-wrap {
       border: 1px solid var(--ink);
       border-radius: var(--radius-cards);
-      overflow-x: auto;
+      overflow: hidden;
       margin: 48px auto 0;
-      max-width: 1040px;
-      -webkit-overflow-scrolling: touch;
     }
 
     table {
       width: 100%;
-      min-width: 600px;
       border-collapse: collapse;
       text-align: left;
       font-size: var(--text-body-sm);
@@ -1197,6 +1398,14 @@
       color: var(--ink);
     }
 
+    tbody tr {
+      transition: background-color .2s ease;
+    }
+
+    tbody tr:hover {
+      background: var(--hover-wash);
+    }
+
     .col-us {
       display: inline-flex;
       align-items: center;
@@ -1208,6 +1417,77 @@
       height: 10px;
       border-radius: 50%;
       background: var(--mint);
+    }
+
+    .cell {
+      display: inline-flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .cell .icon {
+      width: 16px;
+      height: 16px;
+      margin-top: 4px;
+    }
+
+    td.us .icon {
+      color: var(--ink);
+    }
+
+    td:not(.us) .icon {
+      color: var(--graphite);
+    }
+
+    /* Phones: each row becomes a small labelled card instead of a side-scrolling table. */
+    @media (max-width: 639px) {
+      .table-wrap thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+      }
+
+      .table-wrap table,
+      .table-wrap tbody,
+      .table-wrap tr,
+      .table-wrap th,
+      .table-wrap td {
+        display: block;
+        width: auto;
+      }
+
+      .table-wrap tbody tr {
+        padding: 20px;
+        border-bottom: 1px solid var(--hairline-soft);
+      }
+
+      .table-wrap tbody tr:last-child {
+        border-bottom: 0;
+      }
+
+      .table-wrap tbody th {
+        padding: 0 0 8px;
+        border: 0;
+        font-size: var(--text-body);
+      }
+
+      .table-wrap td {
+        padding: 6px 0 0;
+        border: 0;
+      }
+
+      .table-wrap td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: .16em;
+        color: var(--graphite);
+        margin-bottom: 2px;
+      }
     }
 
     /* ── FAQ ──────────────────────────────────────────────────────────────── */
@@ -1229,16 +1509,22 @@
       cursor: pointer;
       font-size: var(--text-subheading);
       font-weight: 500;
+      line-height: 1.4;
       list-style: none;
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 16px;
       padding: 24px 0;
+      transition: color .2s ease;
     }
 
     .faq summary::-webkit-details-marker {
       display: none;
+    }
+
+    .faq summary:focus-visible {
+      outline-offset: -2px;
     }
 
     .faq summary .pm {
@@ -1249,30 +1535,44 @@
       height: 32px;
       border: 1px solid var(--ink);
       border-radius: var(--radius-tags);
-      transition: background-color .2s ease, border-color .2s ease;
+      transition: background-color .25s ease, color .25s ease;
     }
 
-    .faq details[open] summary .pm {
-      background: var(--ink);
-      border-color: var(--ink);
-    }
-
-    .faq details[open] summary .pm .icon {
-      color: var(--paper);
+    .faq summary:hover .pm {
+      background: var(--hover-wash);
     }
 
     .faq summary .pm .icon {
       width: 16px;
       height: 16px;
+      transition: transform .45s var(--ease-out);
     }
 
-    .faq details[open] summary .pm .icon {
-      transform: rotate(45deg);
+    /* .is-open flips with the click, before the height animation ends. */
+    .faq details.is-open summary .pm {
+      background: var(--ink);
+      color: var(--paper);
     }
 
-    .faq details .answer p {
+    .faq details.is-open summary .pm .icon {
+      transform: rotate(135deg);
+    }
+
+    .faq .answer p {
       color: var(--graphite);
-      padding: 0 48px 0 0;
+      padding: 0 48px 24px 0;
+    }
+
+    @media (max-width: 480px) {
+      .faq summary {
+        font-size: var(--text-body);
+        padding: 20px 0;
+      }
+
+      .faq .answer p {
+        padding-right: 0;
+        font-size: 17px;
+      }
     }
 
     /* ── CTA ──────────────────────────────────────────────────────────────── */
@@ -1280,53 +1580,49 @@
       padding-bottom: 96px;
     }
 
-    .cta .tile {
+    .cta-mark {
+      position: relative;
+      width: 72px;
+      height: 72px;
       margin: 0 auto;
-      width: 64px;
-      height: 64px;
-      border-radius: 16px;
-      overflow: hidden;
     }
 
-    .cta .tile .icon {
-      width: 28px;
-      height: 28px;
-    }
-
-    .cta .app-icon {
+    .cta-mark svg {
+      position: relative;
+      display: block;
       width: 100%;
       height: 100%;
-      display: block;
     }
 
-    /* ── Scroll-down indicator ────────────────────────────────────────────── */
-    @keyframes scroll-hint {
-      0%, 100% { transform: translateY(0); opacity: .6; }
-      50% { transform: translateY(6px); opacity: 1; }
+    /* Two "recording" rings breathing out of the app icon */
+    @media (prefers-reduced-motion: no-preference) {
+
+      .cta-mark::before,
+      .cta-mark::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border: 1px solid var(--ink);
+        border-radius: 36%;
+        opacity: 0;
+        animation: ring 3.2s var(--ease) infinite;
+      }
+
+      .cta-mark::after {
+        animation-delay: 1.6s;
+      }
     }
 
-    .scroll-down {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      margin-top: 40px;
-      color: var(--graphite);
-      font-size: var(--text-caption);
-      font-weight: 500;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      opacity: 1;
-      transition: opacity .4s ease;
-    }
+    @keyframes ring {
+      0% {
+        transform: scale(1);
+        opacity: .5;
+      }
 
-    .scroll-down.faded {
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .scroll-down .icon {
-      animation: scroll-hint 2s ease-in-out infinite;
+      100% {
+        transform: scale(1.9);
+        opacity: 0;
+      }
     }
 
     /* ── Footer ───────────────────────────────────────────────────────────── */
@@ -1345,6 +1641,18 @@
       justify-content: space-between;
     }
 
+    .foot-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .foot-brand svg {
+      width: 28px;
+      height: 28px;
+      flex: none;
+    }
+
     footer nav {
       display: flex;
       flex-wrap: wrap;
@@ -1355,15 +1663,98 @@
       text-decoration: none;
     }
 
+    footer nav a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    footer nav .logo {
+      width: 14px;
+      height: 14px;
+    }
+
     footer a:hover {
       color: var(--ink);
       text-decoration: underline;
       text-underline-offset: 3px;
     }
-    /* ── Reduced motion: cancel scroll indicator bounce ────────────────── */
+
+    .foot-brand a {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* ── Scroll reveal ────────────────────────────────────────────────────── *
+     * Rise + fade (+ a short de-blur on text), staggered per batch by the script below.
+     * One-shot: once an element has settled, the script drops [data-reveal] so the
+     * element's own hover transitions take over. Without JS, or with reduced motion,
+     * nothing is hidden.
+     */
+    @media (prefers-reduced-motion: no-preference) {
+      .js [data-reveal] {
+        opacity: 0;
+        translate: 0 32px;
+        filter: blur(8px);
+        transition: opacity .8s var(--ease), translate .9s var(--ease-out), filter .8s var(--ease);
+      }
+
+      .js [data-reveal="sm"] {
+        translate: 0 16px;
+        filter: blur(4px);
+      }
+
+      .js [data-reveal="lg"] {
+        translate: 0 48px;
+        filter: blur(14px);
+      }
+
+      /* Large images and table rows: no blur (expensive on big layers), shorter travel. */
+      .js [data-reveal="img"] {
+        translate: 0 56px;
+        filter: none;
+        transition: opacity 1s var(--ease), translate 1.2s var(--ease-out);
+      }
+
+      .js [data-reveal="row"] {
+        translate: -16px 0;
+        filter: none;
+      }
+
+      .js [data-reveal="pop"] {
+        translate: none;
+        scale: .6;
+        filter: none;
+        transition: opacity .5s var(--ease), scale .8s cubic-bezier(.34, 1.56, .64, 1);
+      }
+
+      .js [data-reveal].revealed {
+        opacity: 1;
+        translate: none;
+        scale: none;
+        filter: none;
+      }
+    }
+
+    @media print {
+      .js [data-reveal] {
+        opacity: 1 !important;
+        translate: none !important;
+        filter: none !important;
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
-      .scroll-down .icon {
-        animation: none;
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
       }
     }
   </style>
@@ -1397,8 +1788,13 @@
       <path d="m22 22-5-10-5 10" />
       <path d="M14 18h6" />
     </symbol>
-    <symbol id="i-gemini" viewBox="0 0 65 65">
-      <path fill="currentColor" stroke="none" d="M32.447 0c.68 0 1.273.465 1.439 1.125a38.904 38.904 0 001.999 5.905c2.152 5 5.105 9.376 8.854 13.125 3.751 3.75 8.126 6.703 13.125 8.855a38.98 38.98 0 005.906 1.999c.66.166 1.124.758 1.124 1.438 0 .68-.464 1.273-1.125 1.439a38.902 38.902 0 00-5.905 1.999c-5 2.152-9.375 5.105-13.125 8.854-3.749 3.751-6.702 8.126-8.854 13.125a38.973 38.973 0 00-2 5.906 1.485 1.485 0 01-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a38.913 38.913 0 00-2-5.905c-2.151-5-5.103-9.375-8.854-13.125-3.75-3.749-8.125-6.702-13.125-8.854a38.973 38.973 0 00-5.905-2A1.485 1.485 0 010 32.448c0-.68.465-1.272 1.125-1.438a38.903 38.903 0 005.905-2c5-2.151 9.376-5.104 13.125-8.854 3.75-3.749 6.703-8.125 8.855-13.125a38.972 38.972 0 001.999-5.905A1.485 1.485 0 0132.447 0z" />
+    <symbol id="i-sparkles" viewBox="0 0 24 24">
+      <path
+        d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+      <path d="M20 3v4" />
+      <path d="M22 5h-4" />
+      <path d="M4 17v2" />
+      <path d="M5 18H3" />
     </symbol>
     <symbol id="i-radar" viewBox="0 0 24 24">
       <path d="M19.07 4.93A10 10 0 0 0 6.99 3.34" />
@@ -1452,87 +1848,60 @@
       <path d="M5 12h14" />
       <path d="m12 5 7 7-7 7" />
     </symbol>
-    <symbol id="i-chevron-down" viewBox="0 0 24 24">
-      <path d="m6 9 6 6 6-6" />
+    <symbol id="i-check" viewBox="0 0 24 24">
+      <path d="M20 6 9 17l-5-5" />
     </symbol>
-    <symbol id="i-database" viewBox="0 0 24 24">
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
-      <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3" />
+    <symbol id="i-minus" viewBox="0 0 24 24">
+      <path d="M5 12h14" />
+    </symbol>
+    <symbol id="i-hard-drive" viewBox="0 0 24 24">
+      <path d="M22 12H2" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+      <path d="M6 16h.01" />
+      <path d="M10 16h.01" />
     </symbol>
     <symbol id="i-waveform" viewBox="0 0 24 24">
       <path d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2" />
     </symbol>
-    <symbol id="i-upload-cloud" viewBox="0 0 24 24">
-      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
-      <path d="M12 12v9" />
-      <path d="m16 16-4-4-4 4" />
+    <symbol id="i-file-pdf" viewBox="0 0 24 24">
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M12 18v-6" />
+      <path d="m9 15 3 3 3-3" />
     </symbol>
-    <!-- Brand icons: Google Meet -->
-    <symbol id="i-meet" viewBox="0 0 24 24">
-      <rect x="2" y="5" width="12" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="m14 10 6-4v12l-6-4" fill="none" stroke="currentColor" stroke-width="2" />
-    </symbol>
-    <!-- Brand icons: Zoom -->
-    <symbol id="i-zoom" viewBox="0 0 24 24">
-      <rect x="2" y="6" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="m14 10 6-3v10l-6-3" fill="none" stroke="currentColor" stroke-width="2" />
-    </symbol>
-    <!-- Brand icons: Teams -->
-    <symbol id="i-teams" viewBox="0 0 24 24">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" />
-      <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" />
-    </symbol>
-    <!-- Brand icons: Slack -->
-    <symbol id="i-slack" viewBox="0 0 24 24">
-      <rect x="13" y="2" width="3" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M19 8.5V10h1.5A1.5 1.5 0 1 0 19 8.5" fill="none" stroke="currentColor" stroke-width="2" />
-      <rect x="8" y="14" width="3" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M5 15.5V14H3.5A1.5 1.5 0 1 0 5 15.5" fill="none" stroke="currentColor" stroke-width="2" />
-      <rect x="14" y="13" width="8" height="3" rx="1.5" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M15.5 19H14v1.5a1.5 1.5 0 1 0 1.5-1.5" fill="none" stroke="currentColor" stroke-width="2" />
-      <rect x="2" y="8" width="8" height="3" rx="1.5" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M8.5 5H10V3.5A1.5 1.5 0 1 0 8.5 5" fill="none" stroke="currentColor" stroke-width="2" />
-    </symbol>
-    <!-- Brand icons: Discord -->
-    <symbol id="i-discord" viewBox="0 0 24 24">
-      <path d="M8.12 12a1.12 1.12 0 1 0 0-2.24A1.12 1.12 0 0 0 8.12 12Zm7.76 0a1.12 1.12 0 1 0 0-2.24 1.12 1.12 0 0 0 0 2.24Z" fill="currentColor" stroke="none" />
-      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03Z" fill="none" stroke="currentColor" stroke-width="1.2" />
-    </symbol>
-    <!-- Brand icons: Webex (video icon variant) -->
-    <symbol id="i-webex" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
-      <polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" />
-    </symbol>
-    <!-- Brand icons: Notion -->
-    <symbol id="i-notion" viewBox="0 0 24 24">
-      <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H16l4 4v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5Z" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M9 14.5V9l6 8V11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-    </symbol>
-    <!-- Brand icons: Google Calendar -->
-    <symbol id="i-gcal" viewBox="0 0 24 24">
-      <rect width="18" height="18" x="3" y="4" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M16 2v4" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M8 2v4" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M3 10h18" fill="none" stroke="currentColor" stroke-width="2" />
-      <circle cx="12" cy="15" r="1" fill="currentColor" stroke="none" />
-    </symbol>
-    <!-- MeetMind app icon (mini) -->
+    <!-- MeetMind app icon (same drawing as assets/icons/icon.svg) -->
     <symbol id="i-meetmind" viewBox="0 0 128 128">
-      <rect x="2.5" y="2.5" width="123" height="123" rx="46" fill="#1a1813" stroke="#f8f5ed" stroke-width="5"/>
-      <g transform="translate(32 32) scale(2.6667)" fill="none" stroke="#f8f5ed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 19v3"/>
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-        <rect x="9" y="2" width="6" height="13" rx="3"/>
+      <rect x="2.5" y="2.5" width="123" height="123" rx="46" fill="#1a1813" stroke="#f8f5ed" stroke-width="5" />
+      <g transform="translate(32 32) scale(2.6667)" fill="none" stroke="#f8f5ed" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 19v3" />
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <rect x="9" y="2" width="6" height="13" rx="3" />
       </g>
     </symbol>
-    <!-- GitHub mark (Octicons, MIT) — a filled glyph, not a stroked Lucide icon -->
-    <symbol id="i-github" viewBox="0 0 16 16">
+    <!-- GitHub mark (Octicons, MIT) -->
+    <symbol id="l-github" viewBox="0 0 16 16">
       <path
         d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" />
     </symbol>
+    <!-- Brand marks: Simple Icons (CC0) and the app's own provider icons; one colour, tinted on hover -->
+    <symbol id="l-meet" viewBox="0 0 24 24"><path d="M5.53 2.13 0 7.75h5.53zm.398 0v5.62h7.608v3.65l5.47-4.45c-.014-1.22.031-2.25-.025-3.46-.148-1.09-1.287-1.47-2.236-1.36zM23.1 4.32c-.802.295-1.358.995-2.047 1.49-2.506 2.05-4.982 4.12-7.468 6.19 3.025 2.59 6.04 5.18 9.065 7.76 1.218.671 1.428-.814 1.328-1.64v-13a.828.828 0 0 0-.877-.825zM.038 8.15v7.7h5.53v-7.7zm13.577 8.1H6.008v5.62c3.864-.006 7.737.011 11.58-.009 1.02-.07 1.618-1.12 1.468-2.07v-2.51l-5.47-4.68v3.65zm-13.577 0c.02 1.44-.041 2.88.033 4.31.162.948 1.158 1.43 2.047 1.31h3.464v-5.62z"/></symbol>
+    <symbol id="l-zoom" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M5.5 0h13A5.5 5.5 0 0 1 24 5.5v13a5.5 5.5 0 0 1-5.5 5.5h-13A5.5 5.5 0 0 1 0 18.5v-13A5.5 5.5 0 0 1 5.5 0ZM6.4 8a1.9 1.9 0 0 0-1.9 1.9v4.2A1.9 1.9 0 0 0 6.4 16h6.8a1.9 1.9 0 0 0 1.9-1.9V9.9A1.9 1.9 0 0 0 13.2 8Zm9.6 2.9v2.2l2.9 2.1c.4.3.9 0 .9-.5V9.3c0-.5-.5-.8-.9-.5Z"/></symbol>
+    <symbol id="l-teams" viewBox="0 0 24 24"><path d="M20.625 8.127q-.55 0-1.025-.205-.475-.205-.832-.563-.358-.357-.563-.832Q18 6.053 18 5.502q0-.54.205-1.02t.563-.837q.357-.358.832-.563.474-.205 1.025-.205.54 0 1.02.205t.837.563q.358.357.563.837.205.48.205 1.02 0 .55-.205 1.025-.205.475-.563.832-.357.358-.837.563-.48.205-1.02.205zm0-3.75q-.469 0-.797.328-.328.328-.328.797 0 .469.328.797.328.328.797.328.469 0 .797-.328.328-.328.328-.797 0-.469-.328-.797-.328-.328-.797-.328zM24 10.002v5.578q0 .774-.293 1.46-.293.685-.803 1.194-.51.51-1.195.803-.686.293-1.459.293-.445 0-.908-.105-.463-.106-.85-.329-.293.95-.855 1.729-.563.78-1.319 1.336-.756.557-1.67.861-.914.305-1.898.305-1.148 0-2.162-.398-1.014-.399-1.805-1.102-.79-.703-1.312-1.664t-.674-2.086h-5.8q-.411 0-.704-.293T0 16.881V6.873q0-.41.293-.703t.703-.293h8.59q-.34-.715-.34-1.5 0-.727.275-1.365.276-.639.75-1.114.475-.474 1.114-.75.638-.275 1.365-.275t1.365.275q.639.276 1.114.75.474.475.75 1.114.275.638.275 1.365t-.275 1.365q-.276.639-.75 1.113-.475.475-1.114.75-.638.276-1.365.276-.188 0-.375-.024-.188-.023-.375-.058v1.078h10.875q.469 0 .797.328.328.328.328.797zM12.75 2.373q-.41 0-.78.158-.368.158-.638.434-.27.275-.428.639-.158.363-.158.773 0 .41.158.78.159.368.428.638.27.27.639.428.369.158.779.158.41 0 .773-.158.364-.159.64-.428.274-.27.433-.639.158-.369.158-.779 0-.41-.158-.773-.159-.364-.434-.64-.275-.275-.639-.433-.363-.158-.773-.158zM6.937 9.814h2.25V7.94H2.814v1.875h2.25v6h1.875zm10.313 7.313v-6.75H12v6.504q0 .41-.293.703t-.703.293H8.309q.152.809.556 1.5.405.691.985 1.19.58.497 1.318.779.738.281 1.582.281.926 0 1.746-.352.82-.351 1.436-.966.615-.616.966-1.43.352-.815.352-1.752zm5.25-1.547v-5.203h-3.75v6.855q.305.305.691.452.387.146.809.146.469 0 .879-.176.41-.175.715-.48.304-.305.48-.715t.176-.879Z"/></symbol>
+    <symbol id="l-slack" viewBox="0 0 24 24"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></symbol>
+    <symbol id="l-discord" viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></symbol>
+    <symbol id="l-webex" viewBox="0 0 24 24"><path d="M21.78 7.376c.512 1.181.032 2.644-1.11 3.106-2.157.888-3-1.295-3-1.295-.236-.55-.727-1.496-1.335-1.496-.204 0-.503 0-.94.844-.229.443-.434 1.185-.616 1.84l-.09.32c-.373-1.587-.821-3.454-1.536-4.816-.195-.38-.42-.74-.673-1.08a5.135 5.135 0 0 1 1.743-1.337 4.891 4.891 0 0 1 2.112-.463c1.045 0 2.765.338 4.227 2.227.167.206.317.424.448.654.278.441.52.904.726 1.383l.043.113zM.02 8.4C-.15 7.105.8 5.845 1.953 5.755c1.794-.157 2.36 1.385 2.455 1.89l.022.137c.07.44.29 1.838.48 2.744.078.4.244 1.013.353 1.416l.006.022.026.092c.11.4.232.799.362 1.193.185.548.399 1.085.641 1.61.47.955.93 1.45 1.367 1.45.203 0 .512 0 .96-.878.283-.59.512-1.208.684-1.845.373 1.598.811 3.128 1.495 4.456.205.406.444.794.715 1.16a5.124 5.124 0 0 1-1.742 1.338 4.88 4.88 0 0 1-2.112.461c-1.548 0-3.727-.698-5.339-4.005a22.407 22.407 0 0 1-1.078-2.824 26.848 26.848 0 0 1-.693-2.656 48.56 48.56 0 0 1-.215-1.114C.191 9.603.074 8.872.02 8.4zm22.047-2.645-.202-.022h-.052c.222.392.421.797.597 1.215l.053.113c.322.76.346 1.614.068 2.391a3.079 3.079 0 0 1-1.552 1.749 2.93 2.93 0 0 1-1.228.28 3.115 3.115 0 0 1-.854-.135c-.299 1.182-.768 2.634-1.195 3.511-.427.877-.93 1.451-1.378 1.451-.192 0-.501 0-.95-.877a10.746 10.746 0 0 1-.683-1.845 38.722 38.722 0 0 1-.396-1.575 12.67 12.67 0 0 1-.136-.598l-.002-.01c-.406-1.778-.865-3.645-1.655-5.142A8.263 8.263 0 0 0 11.52 4.8a5.136 5.136 0 0 0-1.748-1.34A4.892 4.892 0 0 0 7.654 3c-1.036 0-2.754.338-4.217 2.228.466.223.867.562 1.164.984.305.433.499.933.565 1.458.076.563.256 1.654.47 2.688l.001.007c.021.11.042.221.073.342.126-.34.25-.642.38-.955l.112-.271.128-.293c.235-.55.726-1.496 1.324-1.496.213 0 .513 0 .95.844.296.606.532 1.239.706 1.89.138.507.276 1.047.394 1.587.04.148.07.296.101.444l.006.028c.427 1.879.875 3.69 1.644 5.187.159.317.34.622.545.911.15.215.31.422.48.62 1.27 1.45 2.733 1.8 3.843 1.8 1.548 0 3.738-.698 5.35-4.006.822-1.7 1.515-4.208 1.772-5.48.256-1.27.449-2.419.534-3.115.04-.307.023-.618-.051-.918-.075-.299-.205-.579-.382-.825a2.247 2.247 0 0 0-.653-.607 2.143 2.143 0 0 0-.826-.296z"/></symbol>
+    <symbol id="l-notion" viewBox="0 0 24 24"><path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952L12.21 19s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.139c-.093-.514.28-.887.747-.933zM1.936 1.035l13.31-.98c1.634-.14 2.055-.047 3.082.7l4.249 2.986c.7.513.934.653.934 1.213v16.378c0 1.026-.373 1.634-1.68 1.726l-15.458.934c-.98.047-1.448-.093-1.962-.747l-3.129-4.06c-.56-.747-.793-1.306-.793-1.96V2.667c0-.839.374-1.54 1.447-1.632z"/></symbol>
+    <symbol id="l-gcal" viewBox="0 0 24 24"><path d="M18.316 5.684H24v12.632h-5.684V5.684zM5.684 24h12.632v-5.684H5.684V24zM18.316 5.684V0H1.895A1.894 1.894 0 0 0 0 1.895v16.421h5.684V5.684h12.632zm-7.207 6.25v-.065c.272-.144.5-.349.687-.617s.279-.595.279-.982c0-.379-.099-.72-.3-1.025a2.05 2.05 0 0 0-.832-.714 2.703 2.703 0 0 0-1.197-.257c-.6 0-1.094.156-1.481.467-.386.311-.65.671-.793 1.078l1.085.452c.086-.249.224-.461.413-.633.189-.172.445-.257.767-.257.33 0 .602.088.816.264a.86.86 0 0 1 .322.703c0 .33-.12.589-.36.778-.24.19-.535.284-.886.284h-.567v1.085h.633c.407 0 .748.109 1.02.327.272.218.407.499.407.843 0 .336-.129.614-.387.832s-.565.327-.924.327c-.351 0-.651-.103-.897-.311-.248-.208-.422-.502-.521-.881l-1.096.452c.178.616.505 1.082.977 1.401.472.319.984.478 1.538.477a2.84 2.84 0 0 0 1.293-.291c.382-.193.684-.458.902-.794.218-.336.327-.72.327-1.149 0-.429-.115-.797-.344-1.105a2.067 2.067 0 0 0-.881-.689zm2.093-1.931l.602.913L15 10.045v5.744h1.187V8.446h-.827l-2.158 1.557zM22.105 0h-3.289v5.184H24V1.895A1.894 1.894 0 0 0 22.105 0zm-3.289 23.5l4.684-4.684h-4.684V23.5zM0 22.105C0 23.152.848 24 1.895 24h3.289v-5.184H0v3.289z"/></symbol>
+    <symbol id="l-gcloud" viewBox="0 0 24 24"><path d="M12.19 2.38a9.344 9.344 0 0 0-9.234 6.893c.053-.02-.055.013 0 0-3.875 2.551-3.922 8.11-.247 10.941l.006-.007-.007.03a6.717 6.717 0 0 0 4.077 1.356h5.173l.03.03h5.192c6.687.053 9.376-8.605 3.835-12.35a9.365 9.365 0 0 0-2.821-4.552l-.043.043.006-.05A9.344 9.344 0 0 0 12.19 2.38zm-.358 4.146c1.244-.04 2.518.368 3.486 1.15a5.186 5.186 0 0 1 1.862 4.078v.518c3.53-.07 3.53 5.262 0 5.193h-5.193l-.008.009v-.04H6.785a2.59 2.59 0 0 1-1.067-.23h.001a2.597 2.597 0 1 1 3.437-3.437l3.013-3.012A6.747 6.747 0 0 0 8.11 8.24c.018-.01.04-.026.054-.023a5.186 5.186 0 0 1 3.67-1.69z"/></symbol>
+    <symbol id="l-gemini" viewBox="0 0 24 24"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></symbol>
+    <symbol id="l-claude" viewBox="0 0 24 24"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></symbol>
+    <symbol id="l-markdown" viewBox="0 0 24 24"><path d="M22.27 19.385H1.73A1.73 1.73 0 010 17.655V6.345a1.73 1.73 0 011.73-1.73h20.54A1.73 1.73 0 0124 6.345v11.308a1.73 1.73 0 01-1.73 1.731zM5.769 15.923v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847zM21.232 12h-2.309V8.077h-2.307V12h-2.308l3.461 4.039z"/></symbol>
+    <symbol id="l-assemblyai" viewBox="0 0 24 24"><path d="M10.595 1.5a3.695 3.695 0 00-3.444 2.355L0 22.26h5.432l5.629-14.486h.002a.96.96 0 011.782 0h.75V4.835h-1.393L13.498 1.5h-2.902z"/><path d="M7.151 3.855a3.695 3.695 0 013.26-2.35l-.002-.005H13.405c1.524 0 2.893.936 3.444 2.355L24 22.26h-5.525L11.54 4.413a2.528 2.528 0 00-4.609.006l.22-.564z"/></symbol>
+    <symbol id="l-groq" viewBox="-96 0 562 562"><path d="M165.98 340.71H0L272.4 0l-68.75 220.11H369.6L97.23 560.82Z"/></symbol>
+    <symbol id="l-sarvam" viewBox="0 0 253 250"><path fill-rule="evenodd" d="M252 109C252 108 251 107 251 106C247 100 243 94 237 89L237 89C237 88 236 87 236 87C232 84 228 80 224 77C224 77 224 77 224 77C223 77 223 77 223 76C223 76 222 76 222 76C222 76 222 76 222 76C222 76 222 76 222 75C222 75 222 75 222 75C222 70 222 65 221 60L221 60C221 59 221 58 220 58V58C219 50 216 43 213 36C213 35 212 34 212 33L211 32L210 32C209 32 208 31 207 31C204 30 200 29 197 28C193 27 190 27 186 26C185 26 185 26 184 26C178 26 173 26 167 26C167 26 167 26 166 26C166 26 166 26 166 26C163 22 159 19 155 15C154 15 154 14 153 14L153 14C147 9 140 5 133 2C132 1 132 1 131 0L130 0L129 0C128 1 127 1 126 1C119 4 112 7 106 12L105 12C105 12 105 13 104 13C100 16 95 20 91 24C86 23 81 23 76 23C75 23 74 23 73 23C65 23 58 24 50 26C49 27 48 27 47 27L46 28L46 29C45 29 45 30 44 31C40 38 38 45 36 52C35 52 35 53 35 54C34 59 33 65 32 71C28 74 24 77 19 80C19 81 18 81 18 82C12 87 7 93 2 99L2 99C2 100 1 101 1 101L0 102L0 103C0 104 1 105 1 106C2 114 4 121 8 128L8 128C8 129 8 129 9 130L9 131C11 136 14 140 17 144C16 149 14 155 13 160V160C13 161 13 161 13 162C12 170 12 177 12 185C12 186 12 187 13 188L13 189L14 190C14 191 15 191 16 192L16 192C22 197 28 201 35 204L35 204C36 204 36 204 36 204L37 205C42 207 48 209 53 210C55 215 57 220 60 225L60 225C61 226 61 227 61 227C65 233 70 239 76 245C76 245 77 246 78 247L78 248H80C81 248 82 248 83 248C86 247 90 247 93 247C97 246 100 246 104 245L105 244C106 244 107 244 107 244C113 242 118 240 123 238C123 238 123 238 123 238C123 238 123 238 123 238C128 241 133 243 138 245C138 245 139 245 139 245L140 245C147 248 155 249 162 250L164 250C164 250 165 250 165 250L166 250L167 249C168 249 169 248 170 247C175 243 180 238 184 232L185 231V231C185 230 186 229 186 229C188 226 189 224 191 221L191 220C192 218 193 217 194 215C194 215 194 215 194 214C194 214 194 214 194 214C194 214 194 214 194 214C194 214 194 214 194 214C194 214 195 214 195 214C195 214 196 214 196 214C201 213 206 211 210 210L211 209C212 209 212 209 212 209C219 206 226 202 232 198L233 197L235 196L235 194C236 194 236 194 236 193L236 192C237 184 237 177 237 169C237 169 237 168 237 167C236 164 236 161 235 159C235 156 234 154 234 152C234 152 234 152 234 152C234 151 234 151 234 151C233 151 233 151 233 150C234 150 234 150 234 150C234 149 234 149 234 149C234 149 234 149 235 149C237 145 240 142 242 138L243 137C243 136 243 135 244 135C247 128 250 121 252 114L252 112C253 112 253 111 253 111L253 110L252 109L252 109ZM214 81L215 81L215 81V81L215 82L215 84V84C214 89 213 94 212 100L212 101C211 102 211 103 211 104C210 106 209 108 209 110C203 105 197 101 191 97H191C190 97 190 97 190 96L189 96C189 96 189 96 189 96C189 96 189 96 189 96L187 95L187 94C188 93 188 92 188 91C188 84 188 77 187 70C190 71 192 71 194 72L195 72C196 73 197 73 198 73C203 75 207 77 212 79L214 80L214 80V81ZM189 135L184 140L188 149C190 155 192 161 193 168L193 168C193 169 193 169 193 169C192 169 192 170 192 170C185 172 179 173 173 174L172 174C172 174 171 174 171 174L163 175L161 182C160 182 160 183 160 184L160 184C158 190 155 196 152 201L152 201C151 202 151 202 151 203L150 202C143 200 138 197 132 193C132 193 132 192 131 192L131 192L124 187L118 191C117 192 117 192 116 192C111 196 105 198 99 200H99C98 201 98 201 97 201C97 201 97 201 97 200L96 200C93 194 91 188 89 182L89 181C89 181 89 181 89 180L87 172L81 172C80 171 79 171 78 171C78 171 78 171 77 171C74 171 71 170 68 169C65 168 62 167 59 166L58 166C58 166 57 166 57 165C57 165 57 164 57 164L57 163C59 157 61 151 63 145C63 145 64 145 64 144L64 144C64 143 65 142 65 141L67 136L63 132L62 131C62 131 61 130 61 130C59 127 57 125 55 122C53 119 52 117 50 114L50 114C50 113 49 113 49 112C49 112 49 112 49 112L49 112L51 111C55 107 60 104 66 102L67 101C68 101 68 100 69 100L75 97V90C75 90 75 90 75 90V89C75 89 75 88 75 88V88C75 81 76 75 77 69L77 67C77 67 77 67 77 67C78 67 79 67 80 67L81 67C87 67 92 68 98 69C99 70 100 70 100 70L108 72L112 65C112 65 113 65 113 65L113 64C117 59 122 55 127 51L128 50C128 50 128 50 128 50L128 50C129 50 129 51 130 51L130 51C135 55 139 60 143 65L143 66L143 66C143 66 143 67 144 67L148 73L155 72C155 72 156 72 156 71C156 71 157 71 157 71C164 70 171 69 177 70H178C178 70 178 70 178 70C178 70 178 71 179 72C179 78 180 84 179 91V91L179 91C179 91 179 92 179 93L178 100L185 104C185 104 185 104 185 104L187 105C192 107 197 111 202 115L203 116C203 116 203 117 204 117C203 117 203 118 203 118C198 126 192 133 191 133C190 134 190 135 189 135L189 135H189ZM67 88V88C67 88 67 89 67 90V90C67 90 67 90 67 90C67 90 67 90 67 90C67 90 67 90 67 90V92L65 92C65 93 64 93 63 93L62 94C56 97 51 100 46 104C46 102 45 100 45 98L44 98C44 97 44 96 44 95C43 90 42 84 42 79L42 76L45 75H45C50 72 55 70 61 69C62 69 63 68 64 68C65 68 67 68 68 67C67 74 66 81 67 88L67 88ZM183 35C184 35 184 35 185 35H185C189 35 192 36 195 36C198 37 201 38 205 39H205C205 39 205 39 205 39C205 39 205 40 205 40C208 46 211 53 212 59L212 60C212 60 212 61 212 62L213 64C213 66 213 68 213 70C209 68 205 66 200 65C199 65 198 64 197 64L197 64H197C193 63 190 62 186 62C186 59 185 56 183 53V53C183 52 183 51 182 50C180 44 177 39 174 35C177 34 180 34 183 35ZM164 36L164 36H164L165 38L166 38C169 43 172 48 174 53V53C175 54 175 55 175 56L175 56C176 58 177 59 177 61C170 61 163 61 155 63C155 63 154 63 154 63C154 63 153 63 153 63L152 64L151 62C150 62 150 61 150 60V60C146 55 141 50 136 45C138 44 140 43 142 42L143 42C144 41 145 41 146 41L146 40C151 39 156 37 161 36L164 36L164 36ZM109 20L109 20C110 20 110 19 110 19L111 19C117 15 123 12 129 9H129C129 9 129 9 129 9C129 9 130 9 130 9C136 12 142 16 148 20L148 20C148 21 149 21 149 22C152 24 154 26 156 28C152 29 147 31 143 33L143 33C142 33 141 34 140 34L138 35L138 35C135 36 132 37 130 39C127 37 124 36 122 34L122 34C121 34 120 33 119 33L118 33C113 30 107 28 101 26C104 24 107 22 109 20V20ZM94 36L95 34L98 34L98 34C104 36 110 38 115 40L115 41C116 41 116 41 117 41L118 42C119 43 120 43 122 44L121 44C116 49 111 54 106 59L106 60C106 60 106 60 105 60L104 62L103 62C102 62 101 61 100 61C94 60 88 59 81 58H81C82 56 83 54 84 52C84 51 85 50 85 49L85 49C88 44 90 40 94 36H94ZM43 56C44 55 44 55 44 54C46 47 48 41 52 35L52 35C52 35 52 35 52 35C59 33 66 32 73 32H74C74 32 75 32 76 32C79 32 82 32 86 32C83 36 80 40 78 45V45C77 46 76 47 76 48C74 51 73 55 72 58C72 58 72 58 72 58C71 58 71 58 71 58C68 59 65 59 62 60C61 60 60 60 59 61C53 62 47 64 42 67C42 63 43 59 44 56L43 56ZM17 127L16 126C16 126 16 125 16 125L15 124C13 118 10 111 9 105C9 105 9 104 9 104L10 103C14 97 18 92 23 88C24 87 24 87 25 87C28 84 30 82 33 80C34 86 34 91 35 96C36 97 36 99 36 100V100C37 103 38 106 39 110C39 110 39 110 39 110C39 110 39 110 39 110C39 110 39 110 39 111C39 111 39 111 39 111C37 113 35 115 33 118L32 119C31 120 31 120 31 121C27 125 24 130 22 136C20 133 18 130 17 127ZM41 197L40 196C40 196 39 196 39 196L39 196C33 193 27 189 21 185L21 185L21 184C20 177 20 170 21 163V163C21 163 22 162 22 161V161C22 158 23 154 24 151C28 155 32 159 37 163L38 164C38 164 39 165 39 165C42 167 45 169 47 170C48 170 48 171 48 171C48 171 48 171 48 171C48 174 48 178 48 181C48 182 48 183 48 185C49 190 50 195 51 201C48 200 44 198 41 197V197ZM55 142C53 148 51 154 49 161L49 161C47 160 46 159 44 158C44 158 44 157 43 157L42 156C38 153 34 149 30 145L28 143L29 140L29 140C32 135 35 130 38 126C38 125 38 125 39 125L40 123C41 122 42 120 43 119C44 122 46 124 48 127C50 130 52 133 55 135C55 136 56 137 56 137L57 138L57 138C57 139 56 140 56 141C56 141 56 142 56 142L55 142ZM61 203L60 200L60 200C58 195 57 189 57 184V184C57 183 57 182 57 181C57 179 57 177 57 175C60 176 63 177 65 177C69 178 72 179 76 180C76 180 77 180 77 180C78 180 79 180 80 180L80 182C80 182 80 182 80 182L80 182C80 183 81 183 81 184C83 191 85 197 89 203C87 204 85 204 83 204C82 204 81 204 80 204C79 204 78 204 77 204C72 204 68 204 64 203L61 203V203ZM105 235C104 236 104 236 103 236L102 236C98 237 95 238 92 238C89 239 86 239 82 239C82 239 82 239 82 239C82 239 82 239 81 239C77 234 72 228 69 223C68 222 68 222 68 221L67 221C66 218 64 215 63 212C69 213 75 213 81 213C82 213 83 213 84 213C87 212 91 212 94 211C96 214 98 217 101 220C102 220 102 221 103 222C107 226 111 229 115 232C111 233 108 234 105 235L105 235ZM127 226C126 227 125 228 124 228L122 226L122 226C117 223 113 220 109 216C109 215 108 214 107 214C106 212 104 210 103 208C109 206 115 203 121 200C121 199 122 199 123 199L124 198L125 199C125 199 126 199 126 199H126C126 199 127 200 127 200C133 204 140 207 146 210C145 211 144 213 143 214L141 215C141 216 140 216 140 216C136 220 131 223 127 226L127 226L127 226ZM183 216L183 217C182 219 180 222 179 224C178 225 178 225 178 226L177 227C173 232 169 237 164 241C164 241 164 241 163 241L163 241C156 241 149 239 143 237L142 237C141 237 141 237 141 237C138 236 135 234 132 233C137 230 142 227 146 223C146 222 147 222 147 221L148 220C151 218 153 216 155 213C158 214 162 215 165 215L167 215C168 215 168 215 169 215C174 216 179 216 184 216C184 216 184 216 183 216L183 216ZM194 183L194 184C194 185 194 186 194 187C193 193 192 198 190 203L189 206L189 206L189 207L188 207L186 207H186C180 207 175 207 170 207H169C169 207 169 207 168 207L167 206C164 206 162 206 159 205C163 199 166 193 168 186V186C168 186 169 185 169 184L169 183L171 183C171 183 171 183 171 183H171C172 182 173 182 173 182H173C180 182 188 180 194 178C194 178 194 178 194 178C194 180 194 181 194 183L194 183ZM196 146L194 142L195 141C196 141 196 140 197 140C198 138 205 131 210 123C210 123 210 123 210 123C212 124 213 126 214 127L215 128C215 129 216 130 216 131L217 132C220 136 222 141 224 146L224 147L225 148L225 148L225 148C225 148 225 148 225 148L225 149L224 149L224 149L223 150L223 151C219 154 214 158 210 161C209 162 208 162 207 163C205 164 203 165 201 166C200 159 198 152 196 146L196 146ZM228 190L227 191L227 191C221 195 215 198 209 201H209C209 201 208 201 208 201L207 202C204 203 202 203 199 204C200 199 202 194 202 189C202 187 203 186 203 185L203 184C203 181 203 178 203 175C206 174 209 172 212 170C213 170 214 169 215 168C219 165 223 162 227 159C227 159 227 160 227 160C227 163 228 165 228 168C228 168 228 169 228 170V170C229 177 228 183 227 190L228 190ZM244 111C242 118 239 125 236 131C236 131 236 132 235 132L235 133C233 136 232 138 231 140C229 135 226 131 224 127L224 126C223 125 222 125 222 124L222 124C220 121 218 118 215 115C217 112 218 109 219 106C219 105 220 104 220 103L220 102C221 97 222 92 223 87C225 89 228 91 230 93C230 94 231 94 231 95L232 96C237 100 240 105 244 110C244 111 244 111 244 111L244 111L244 111Z"/><path fill-rule="evenodd" d="M135 134C132 136 130 139 127 141C123 139 121 136 118 134C115 131 113 128 111 125C113 122 115 119 118 116C121 114 123 111 126 109C130 111 132 114 135 116C138 119 140 122 142 125C140 128 138 131 135 134Z"/></symbol>
+    <symbol id="l-windows" viewBox="0 0 24 24"><path d="M0 0h11.377v11.372H0Zm12.623 0H24v11.372H12.623ZM0 12.623h11.377V24H0Zm12.623 0H24V24H12.623"/></symbol>
+    <symbol id="l-apple" viewBox="0 0 24 24"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></symbol>
   </svg>
 
   <a class="skip" href="#main">Skip to content</a>
@@ -1545,13 +1914,19 @@
           <img class="only-dark" src="brand/meetmind-wordmark-dark.png" alt="MeetMind" width="115" height="36">
         </a>
         <nav class="top-nav" aria-label="Primary">
-          <a class="hide-sm" href="#how-h">How it works</a>
-          <a class="hide-sm" href="#features">Features</a>
-          <a class="hide-sm" href="#faq">FAQ</a>
-          <a class="nav-github" href="https://github.com/aslahtp/meetmind"><svg class="icon icon-brand"
+          <a class="link hide-sm" href="#how" data-spy="how">How it works</a>
+          <a class="link hide-sm" href="#features" data-spy="features">Features</a>
+          <a class="link hide-sm" href="#faq" data-spy="faq">FAQ</a>
+          <a class="link nav-github" href="https://github.com/aslahtp/meetmind"><svg class="logo"
               aria-hidden="true">
-              <use href="#i-github" />
-            </svg>GitHub</a>
+              <use href="#l-github" />
+            </svg><span class="label">GitHub</span></a>
+          <div class="nav-cta-slot">
+            <div><a class="btn btn-primary nav-cta" href="https://github.com/aslahtp/meetmind/releases/latest"
+                tabindex="-1"><svg class="icon" aria-hidden="true">
+                  <use href="#i-download" />
+                </svg>Download</a></div>
+          </div>
           <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch to dark theme" hidden>
             <svg class="icon only-light" aria-hidden="true">
               <use href="#i-moon" />
@@ -1567,38 +1942,42 @@
 
   <main id="main">
     <!-- Hero -->
-    <section class="hero center" style="padding-top: 32px;">
+    <section class="hero center" style="padding-top: 24px;">
       <div class="wrap">
-        <span class="badge" data-reveal="sm" style="--stagger: 0;"><span class="dot" aria-hidden="true"></span><span
-            class="label">Open source · Windows &amp; macOS</span></span>
-        <h1 class="display" data-reveal="lg" style="--stagger: 1;">AI meeting notes for Windows and Mac, without a meeting bot
-        </h1>
-        <p class="sub" data-reveal style="--stagger: 2;">MeetMind records Google Meet, Zoom or any call on your computer,
+        <span class="badge" data-reveal="sm"><span class="dot" aria-hidden="true"></span><span class="label">Open
+            source<span class="hide-xs"> · Windows &amp; macOS</span></span></span>
+        <h1 class="display" data-reveal="lg">AI meeting notes for Windows and Mac, <span class="mark">without a
+            meeting bot</span></h1>
+        <p class="sub" data-reveal>MeetMind records Google Meet, Zoom or any call on your computer,
           transcribes it with AssemblyAI, Google Speech-to-Text, Sarvam AI or Groq, and writes clear meeting minutes with
           Gemini, Groq or Claude — then syncs them to Notion.</p>
-        <div class="actions" data-reveal style="--stagger: 3;">
+        <div class="actions" id="hero-actions" data-reveal>
           <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"
               aria-hidden="true">
               <use href="#i-download" />
             </svg>Download for Windows or Mac</a>
-          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind"><svg class="icon icon-brand"
-              aria-hidden="true">
-              <use href="#i-github" />
+          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind"><svg class="logo" aria-hidden="true">
+              <use href="#l-github" />
             </svg>View source on GitHub</a>
         </div>
-        <p class="caption" data-reveal="sm" style="--stagger: 4; margin-top: 16px;">Version __VERSION__ · Windows 10
-          &amp; 11 · macOS 14.2+ (beta) · MIT license</p>
-        <div class="frame hero-frame" data-reveal style="--stagger: 5;">
-          <picture>
-            <source data-dark-source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard-dark.png">
-            <img src="screenshots/dashboard.png"
-              alt="MeetMind dashboard with meeting stats and a list of recent recorded meetings" width="1500"
-              height="1000" fetchpriority="high">
-          </picture>
-        </div>
-        <div class="scroll-down" id="scroll-down" data-reveal="sm" style="--stagger: 6;">
-          <svg class="icon" aria-hidden="true"><use href="#i-chevron-down" /></svg>
-          Scroll
+        <p class="caption platforms" data-reveal="sm">
+          <span><svg class="logo" aria-hidden="true">
+              <use href="#l-windows" />
+            </svg>Windows 10 &amp; 11</span>
+          <span><svg class="logo" aria-hidden="true">
+              <use href="#l-apple" />
+            </svg>macOS 14.2+ (beta)</span>
+          <span>v__VERSION__ · MIT license</span>
+        </p>
+        <div class="hero-shot" data-reveal="img">
+          <div class="frame" data-parallax>
+            <picture>
+              <source data-dark-source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard-dark.png">
+              <img src="screenshots/dashboard.png"
+                alt="MeetMind dashboard with meeting stats and a list of recent recorded meetings" width="1500"
+                height="1000" fetchpriority="high">
+            </picture>
+          </div>
         </div>
       </div>
     </section>
@@ -1606,49 +1985,65 @@
     <!-- Works with -->
     <section class="cloud center" aria-labelledby="works-with">
       <div class="wrap">
-        <p class="eyebrow" id="works-with" data-reveal="sm">Works with any app that plays sound</p>
-        <ul class="cloud-grid" data-cloud>
-          <li style="--ci:0"><span class="cloud-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use href="#i-meet" /></svg></span>Google Meet</li>
-          <li style="--ci:1"><span class="cloud-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use href="#i-zoom" /></svg></span>Zoom</li>
-          <li style="--ci:2"><span class="cloud-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use href="#i-teams" /></svg></span>Teams</li>
-          <li style="--ci:3"><span class="cloud-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use href="#i-slack" /></svg></span>Slack</li>
-          <li style="--ci:4"><span class="cloud-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use href="#i-discord" /></svg></span>Discord</li>
-          <li style="--ci:5"><span class="cloud-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use href="#i-webex" /></svg></span>Webex</li>
-          <li style="--ci:6"><span class="cloud-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use href="#i-notion" /></svg></span>Notion</li>
-          <li style="--ci:7"><span class="cloud-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use href="#i-gcal" /></svg></span>Calendar</li>
+        <p class="eyebrow" id="works-with" data-reveal="sm">Works with the apps you already use</p>
+        <ul class="cloud-grid">
+          <li data-reveal="sm"><span class="cloud-tile"><svg class="logo" style="--brand:#00897B" aria-hidden="true">
+                <use href="#l-meet" />
+              </svg></span>Google Meet</li>
+          <li data-reveal="sm"><span class="cloud-tile"><svg class="logo" style="--brand:#0B5CFF" aria-hidden="true">
+                <use href="#l-zoom" />
+              </svg></span>Zoom</li>
+          <li data-reveal="sm"><span class="cloud-tile"><svg class="logo" style="--brand:#6264A7" aria-hidden="true">
+                <use href="#l-teams" />
+              </svg></span>Teams</li>
+          <li data-reveal="sm"><span class="cloud-tile"><svg class="logo" style="--brand:#E01E5A" aria-hidden="true">
+                <use href="#l-slack" />
+              </svg></span>Slack</li>
+          <li data-reveal="sm"><span class="cloud-tile"><svg class="logo" style="--brand:#5865F2" aria-hidden="true">
+                <use href="#l-discord" />
+              </svg></span>Discord</li>
+          <li data-reveal="sm"><span class="cloud-tile"><svg class="logo" style="--brand:#07A3D8" aria-hidden="true">
+                <use href="#l-webex" />
+              </svg></span>Webex</li>
+          <li data-reveal="sm"><span class="cloud-tile"><svg class="logo" aria-hidden="true">
+                <use href="#l-notion" />
+              </svg></span>Notion</li>
+          <li data-reveal="sm"><span class="cloud-tile"><svg class="logo" style="--brand:#4285F4" aria-hidden="true">
+                <use href="#l-gcal" />
+              </svg></span>Google Calendar</li>
         </ul>
       </div>
     </section>
 
     <!-- 1 What it is -->
-    <section aria-labelledby="what">
+    <section id="about" aria-labelledby="what">
       <div class="wrap center">
         <span class="badge" data-reveal="sm"><span class="num">1</span><span class="label">What it is</span></span>
         <h2 class="display" id="what" data-reveal="lg">What is MeetMind?</h2>
         <div class="definition" data-reveal>
-          <p><strong style="font-weight: 500;">MeetMind is a free, open-source desktop app for Windows and macOS that turns online
-              meetings into written meeting notes.</strong> It records your computer's system audio and your microphone
-            together, transcribes the recording with the speech-to-text service you choose, and uses Google Gemini, Groq
-            or Anthropic Claude to write a speaker-labelled summary with decisions and action items.</p>
+          <p><strong style="font-weight: 500;">MeetMind is a free, open-source desktop app for Windows and macOS that turns
+              online meetings into written meeting notes.</strong> It records your computer's system audio and your
+            microphone together, transcribes the recording with the speech-to-text service you choose, and uses Google
+            Gemini, Groq or Anthropic Claude to write a speaker-labelled summary with decisions and action items.</p>
           <p>Because recording happens on your own computer, nothing joins the call as a participant, and it works with any
             app that plays sound: Google Meet, Zoom, Microsoft Teams, Slack, Discord or a file you already have. Notes
             stay in a local database and can be exported to PDF, copied as Markdown or synced to Notion.</p>
         </div>
-        <dl class="stats" data-reveal>
-          <div class="stat" data-stat>
+        <dl class="stats" data-reveal data-in>
+          <div class="stat">
             <dt class="eyebrow">Price</dt>
-            <dd><span class="value" data-count="0" data-prefix="$">$0</span><span class="note">MIT licensed, pay only
-                your API usage</span></dd>
+            <dd><span class="value">$0</span><span class="note">MIT licensed, pay only your API usage</span></dd>
           </div>
-          <div class="stat" data-stat>
+          <div class="stat">
             <dt class="eyebrow">Bots</dt>
             <dd><span class="value">None</span><span class="note">Nothing joins the call</span></dd>
           </div>
-          <div class="stat" data-stat>
+          <div class="stat">
             <dt class="eyebrow">STT engines</dt>
-            <dd><span class="value" data-count="4">4</span><span class="note">AssemblyAI, Google, Sarvam AI, Groq</span></dd>
+            <dd><span class="value" data-count="4">4</span><span class="note">AssemblyAI, Google, Sarvam AI, Groq</span>
+            </dd>
           </div>
-          <div class="stat" data-stat>
+          <div class="stat">
             <dt class="eyebrow">Your data</dt>
             <dd><span class="value">Local</span><span class="note">SQLite on your PC, no account</span></dd>
           </div>
@@ -1657,41 +2052,83 @@
     </section>
 
     <!-- 2 How it works -->
-    <section aria-labelledby="how-h">
+    <section id="how" aria-labelledby="how-h">
       <div class="wrap center">
         <span class="badge" data-reveal="sm"><span class="num">2</span><span class="label">How it works</span></span>
         <h2 class="display" id="how-h" data-reveal="lg">From call to minutes in four steps</h2>
         <p class="sub" data-reveal>Start a recording however suits you. When you stop, MeetMind does the rest.</p>
         <ol class="grid grid-4 steps">
-          <li class="card" data-reveal style="--stagger: 0;">
+          <li class="card" data-reveal>
             <div class="step-head"><span class="step-num">1</span><svg class="icon" aria-hidden="true">
                 <use href="#i-mic" />
               </svg></div>
             <h3>Record</h3>
             <p>Click the MeetMind button in Google Meet or Zoom, press Record in the app, or accept the reminder when a
               calendar meeting starts.</p>
+            <div class="logos" aria-hidden="true">
+              <svg class="logo" style="--brand:#00897B">
+                <use href="#l-meet" />
+              </svg><svg class="logo" style="--brand:#0B5CFF">
+                <use href="#l-zoom" />
+              </svg><svg class="logo" style="--brand:#6264A7">
+                <use href="#l-teams" />
+              </svg><svg class="logo" style="--brand:#4285F4">
+                <use href="#l-gcal" />
+              </svg>
+            </div>
           </li>
-          <li class="card" data-reveal style="--stagger: 1;">
+          <li class="card" data-reveal>
             <div class="step-head"><span class="step-num">2</span><svg class="icon" aria-hidden="true">
-                <use href="#i-file" />
+                <use href="#i-waveform" />
               </svg></div>
             <h3>Transcribe</h3>
-            <p>AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq returns a transcript (speaker-labelled, except Groq).</p>
+            <p>AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq returns a transcript (speaker-labelled, except
+              Groq).</p>
+            <div class="logos" aria-hidden="true">
+              <svg class="logo" style="--brand:#566DE8">
+                <use href="#l-assemblyai" />
+              </svg><svg class="logo" style="--brand:#4285F4">
+                <use href="#l-gcloud" />
+              </svg><svg class="logo">
+                <use href="#l-sarvam" />
+              </svg><svg class="logo" style="--brand:#F55036">
+                <use href="#l-groq" />
+              </svg>
+            </div>
           </li>
-          <li class="card" data-reveal style="--stagger: 2;">
+          <li class="card" data-reveal>
             <div class="step-head"><span class="step-num">3</span><svg class="icon" aria-hidden="true">
-                <use href="#i-gemini" />
+                <use href="#i-sparkles" />
               </svg></div>
             <h3>Summarize</h3>
-            <p>Gemini, Groq or Claude writes an executive summary, agenda, key decisions and an action items table with owners and
-              deadlines.</p>
+            <p>Gemini, Groq or Claude writes an executive summary, agenda, key decisions and an action items table with
+              owners and deadlines.</p>
+            <div class="logos" aria-hidden="true">
+              <svg class="logo" style="--brand:#8E75B2">
+                <use href="#l-gemini" />
+              </svg><svg class="logo" style="--brand:#F55036">
+                <use href="#l-groq" />
+              </svg><svg class="logo" style="--brand:#D97757">
+                <use href="#l-claude" />
+              </svg>
+            </div>
           </li>
-          <li class="card" data-reveal style="--stagger: 3;">
+          <li class="card" data-reveal>
             <div class="step-head"><span class="step-num">4</span><svg class="icon" aria-hidden="true">
                 <use href="#i-share" />
               </svg></div>
             <h3>Share</h3>
-            <p>Search every meeting's notes and transcript in the app, export a PDF, copy Markdown, or sync a formatted page to Notion.</p>
+            <p>Search every meeting's notes and transcript in the app, export a PDF, copy Markdown, or sync a formatted
+              page to Notion.</p>
+            <div class="logos" aria-hidden="true">
+              <svg class="logo">
+                <use href="#l-notion" />
+              </svg><svg class="logo">
+                <use href="#l-markdown" />
+              </svg><svg class="icon">
+                <use href="#i-file-pdf" />
+              </svg>
+            </div>
           </li>
         </ol>
       </div>
@@ -1703,94 +2140,192 @@
         <span class="badge" data-reveal="sm"><span class="num">3</span><span class="label">Features</span></span>
         <h2 class="display" id="features-h" data-reveal="lg">Everything a meeting note taker needs</h2>
         <div class="grid grid-2">
-          <div class="card" data-reveal style="--stagger: 0;">
+          <div class="card" data-reveal>
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-monitor" />
               </svg></div>
             <h3>System audio + microphone</h3>
             <p>Records both sides of any call: through WASAPI loopback on Windows and Core Audio on macOS, with FFmpeg
               bundled or installed from inside the app.</p>
+            <div class="chips">
+              <span class="chip"><svg class="logo" style="--brand:#0078D4" aria-hidden="true">
+                  <use href="#l-windows" />
+                </svg>Windows 10 &amp; 11</span>
+              <span class="chip"><svg class="logo" aria-hidden="true">
+                  <use href="#l-apple" />
+                </svg>macOS 14.2+</span>
+            </div>
           </div>
-          <div class="card" data-reveal style="--stagger: 1;">
+          <div class="card" data-reveal>
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-file" />
               </svg></div>
             <h3>Your choice of speech-to-text</h3>
-            <p>AssemblyAI, Google Cloud Speech-to-Text v1/v2, Sarvam AI or Groq Whisper, each with a model picker. Speaker diarization on all but Groq.</p>
-            <div class="chips"><span class="chip"><svg class="chip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.595 1.5a3.695 3.695 0 00-3.444 2.355L0 22.26h5.432l5.629-14.486h.002a.96.96 0 011.782 0h.75V4.835h-1.393L13.498 1.5h-2.902z" fill="#2545D3"/><path d="M7.151 3.855a3.695 3.695 0 013.26-2.35l-.002-.005H13.405c1.524 0 2.893.936 3.444 2.355L24 22.26h-5.525L11.54 4.413a2.528 2.528 0 00-4.609.006l.22-.564z" fill="#566DE8"/></svg>AssemblyAI</span><span class="chip"><svg class="chip-icon" viewBox="0 0 48 48" aria-hidden="true"><path fill="#1976d2" d="M38.193 18.359c-.771-2.753-2.319-5.177-4.397-7.03l-4.598 4.598c1.677 1.365 2.808 3.374 3.014 5.648v1.508c.026 0 .05-.008.076-.008 2.322 0 4.212 1.89 4.212 4.212S34.61 31.5 32.288 31.5c-.026 0-.05-.007-.076-.008V31.5h-6.666H24V38h8.212v-.004c.026 0 .05.004.076.004C38.195 38 43 33.194 43 27.288 43 23.563 41.086 20.279 38.193 18.359z"/><path fill="#ff3d00" d="M24 7.576c-8.133 0-14.75 6.617-14.75 14.75 0 .233.024.46.035.69h6.5c-.019-.228-.035-.457-.035-.69 0-4.549 3.701-8.25 8.25-8.25 1.969 0 3.778.696 5.198 1.851l4.598-4.598C31.188 9.003 27.761 7.576 24 7.576z"/><path fill="#4caf50" d="M15.712 31.5c-.001 0-.001 0-.002 0-.611 0-1.188-.137-1.712-.373l-4.71 4.71C11.081 37.188 13.301 38 15.71 38c.001 0 .001 0 .002 0H24v-6.5H15.712z"/><path fill="#ffc107" d="M11.5 27.29c0-2.32 1.89-4.21 4.21-4.21 1.703 0 3.178 1.023 3.841 2.494l4.717-4.717c-1.961-2.602-5.065-4.277-8.559-4.277C9.81 16.58 5 21.38 5 27.29c0 3.491 1.691 6.59 4.288 8.547l4.71-4.71C12.53 30.469 11.5 28.999 11.5 27.29z"/></svg>Google STT</span><span
-                class="chip">Sarvam AI</span><span class="chip"><svg class="chip-icon" viewBox="-74 -112 518 785" aria-hidden="true"><path d="M165.98 342.21L0 342.21 272.4 1.5 203.65 221.61 369.6 221.61 97.23 562.32 165.98 342.21Z" fill="#f43e01"/></svg>Groq</span></div>
+            <p>AssemblyAI, Google Cloud Speech-to-Text v1/v2, Sarvam AI or Groq Whisper, each with a model picker. Speaker
+              diarization on all but Groq.</p>
+            <div class="chips">
+              <span class="chip"><svg class="logo" style="--brand:#566DE8" aria-hidden="true">
+                  <use href="#l-assemblyai" />
+                </svg>AssemblyAI</span>
+              <span class="chip"><svg class="logo" style="--brand:#4285F4" aria-hidden="true">
+                  <use href="#l-gcloud" />
+                </svg>Google STT</span>
+              <span class="chip"><svg class="logo" aria-hidden="true">
+                  <use href="#l-sarvam" />
+                </svg>Sarvam AI</span>
+              <span class="chip"><svg class="logo" style="--brand:#F55036" aria-hidden="true">
+                  <use href="#l-groq" />
+                </svg>Groq</span>
+            </div>
           </div>
-          <div class="card" data-reveal style="--stagger: 2;">
+          <div class="card" data-reveal>
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-languages" />
               </svg></div>
             <h3>English–Malayalam code-switching</h3>
             <p>Accurate transcripts of mixed-language meetings with Sarvam AI's <code>saaras:v3</code> model.</p>
-            <div class="chips"><span class="chip">English</span><span class="chip">മലയാളം</span><span
+            <div class="chips"><span class="chip">English</span><span class="chip" lang="ml">മലയാളം</span><span
                 class="chip chip-dark">Mixed in one sentence</span></div>
           </div>
-          <div class="card" data-reveal style="--stagger: 3;">
+          <div class="card" data-reveal>
             <div class="tile" aria-hidden="true"><svg class="icon">
-                <use href="#i-gemini" />
+                <use href="#i-sparkles" />
               </svg></div>
             <h3>AI minutes with Gemini, Groq or Claude</h3>
-            <p>Executive-style Markdown or structured JSON notes, your choice of model, an editable prompt, and an automatic fallback to any other provider.
-            </p>
+            <p>Executive-style Markdown or structured JSON notes, your choice of model, an editable prompt, and an automatic
+              fallback to any other provider.</p>
+            <div class="chips">
+              <span class="chip"><svg class="logo" style="--brand:#8E75B2" aria-hidden="true">
+                  <use href="#l-gemini" />
+                </svg>Gemini</span>
+              <span class="chip"><svg class="logo" style="--brand:#F55036" aria-hidden="true">
+                  <use href="#l-groq" />
+                </svg>Groq</span>
+              <span class="chip"><svg class="logo" style="--brand:#D97757" aria-hidden="true">
+                  <use href="#l-claude" />
+                </svg>Claude</span>
+            </div>
           </div>
-          <div class="card" data-reveal style="--stagger: 4;">
+          <div class="card" data-reveal>
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-radar" />
               </svg></div>
             <h3>Automatic meeting detection</h3>
-            <p>On Windows, when Google Meet, Zoom or Teams picks up your mic, a floating prompt offers to record. No browser extension needed. Coming to macOS.</p>
+            <p>On Windows, when Google Meet, Zoom or Teams picks up your mic, a floating prompt offers to record. No browser
+              extension needed. Coming to macOS.</p>
+            <div class="chips">
+              <span class="chip"><svg class="logo" style="--brand:#00897B" aria-hidden="true">
+                  <use href="#l-meet" />
+                </svg>Google Meet</span>
+              <span class="chip"><svg class="logo" style="--brand:#0B5CFF" aria-hidden="true">
+                  <use href="#l-zoom" />
+                </svg>Zoom</span>
+              <span class="chip"><svg class="logo" style="--brand:#6264A7" aria-hidden="true">
+                  <use href="#l-teams" />
+                </svg>Teams</span>
+            </div>
           </div>
-          <div class="card" data-reveal style="--stagger: 5;">
+          <div class="card" data-reveal>
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-share" />
               </svg></div>
             <h3>Notion, PDF &amp; Markdown</h3>
             <p>Native Notion pages with tables and to-dos, dated PDF exports, and one-click Markdown copy.</p>
+            <div class="chips">
+              <span class="chip"><svg class="logo" aria-hidden="true">
+                  <use href="#l-notion" />
+                </svg>Notion</span>
+              <span class="chip"><svg class="icon" aria-hidden="true">
+                  <use href="#i-file-pdf" />
+                </svg>PDF</span>
+              <span class="chip"><svg class="logo" aria-hidden="true">
+                  <use href="#l-markdown" />
+                </svg>Markdown</span>
+            </div>
           </div>
-          <div class="card" data-reveal style="--stagger: 6;">
+          <div class="card" data-reveal>
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-calendar" />
               </svg></div>
             <h3>Google Calendar reminders</h3>
             <p>See upcoming meetings on the dashboard and get a prompt to start recording when one begins.</p>
+            <div class="chips">
+              <span class="chip"><svg class="logo" style="--brand:#4285F4" aria-hidden="true">
+                  <use href="#l-gcal" />
+                </svg>Google Calendar</span>
+            </div>
           </div>
-          <div class="card" data-reveal style="--stagger: 7;">
+          <div class="card" data-reveal>
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-lock" />
               </svg></div>
             <h3>Local-first and private</h3>
             <p>No account and no MeetMind server. Recordings, transcripts and notes stay in a local SQLite database.</p>
+            <div class="chips">
+              <span class="chip"><svg class="icon" aria-hidden="true">
+                  <use href="#i-hard-drive" />
+                </svg>Stored on your PC</span>
+              <span class="chip chip-dark">No account</span>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- 4 Privacy / data flow -->
-    <section aria-labelledby="data-h">
+    <section id="privacy" aria-labelledby="data-h">
       <div class="wrap center">
         <span class="badge" data-reveal="sm"><span class="num">4</span><span class="label">Your data</span></span>
         <h2 class="display" id="data-h" data-reveal="lg">Where your meeting goes</h2>
         <p class="sub" data-reveal>There is no MeetMind server in the middle. Each step talks directly to the provider
           you picked, using your own API keys.</p>
-        <ol class="flow" data-flow>
-          <li data-reveal style="--stagger: 0; --flow-i: 0;"><div class="flow-icon" aria-hidden="true"><svg class="icon"><use href="#i-database" /></svg></div><span class="eyebrow"><span class="dot"
-                aria-hidden="true"></span>Stays local</span><strong>Your PC</strong>
+        <ol class="flow" data-in>
+          <li data-reveal style="--flow-i: 0;">
+            <div class="flow-head"><span class="flow-icon" aria-hidden="true"><svg class="icon">
+                  <use href="#i-hard-drive" />
+                </svg></span><span class="eyebrow"><span class="dot" aria-hidden="true"></span>Stays local</span></div>
+            <strong>Your PC</strong>
             <p>Records audio and keeps recordings, transcripts and notes in SQLite.</p>
           </li>
-          <li data-reveal style="--stagger: 1; --flow-i: 1;"><div class="flow-icon" aria-hidden="true"><svg class="icon"><use href="#i-waveform" /></svg></div><span class="eyebrow">Audio</span><strong>Speech-to-text
-              you choose</strong>
+          <li data-reveal style="--flow-i: 0;">
+            <div class="flow-head"><span class="flow-icon" aria-hidden="true"><svg class="icon">
+                  <use href="#i-waveform" />
+                </svg></span><span class="eyebrow">Audio</span></div>
+            <strong>Speech-to-text you choose</strong>
             <p>AssemblyAI, Google Cloud STT, Sarvam AI or Groq.</p>
+            <div class="logos" aria-hidden="true">
+              <svg class="logo" style="--brand:#566DE8">
+                <use href="#l-assemblyai" />
+              </svg><svg class="logo" style="--brand:#4285F4">
+                <use href="#l-gcloud" />
+              </svg><svg class="logo">
+                <use href="#l-sarvam" />
+              </svg><svg class="logo" style="--brand:#F55036">
+                <use href="#l-groq" />
+              </svg>
+            </div>
           </li>
-          <li data-reveal style="--stagger: 2; --flow-i: 2;"><div class="flow-icon" aria-hidden="true"><svg class="icon"><use href="#i-gemini" /></svg></div><span class="eyebrow">Transcript</span><strong>Gemini,
-              Groq or Claude</strong>
+          <li data-reveal style="--flow-i: 1;">
+            <div class="flow-head"><span class="flow-icon" aria-hidden="true"><svg class="icon">
+                  <use href="#i-sparkles" />
+                </svg></span><span class="eyebrow">Transcript</span></div>
+            <strong>Gemini, Groq or Claude</strong>
             <p>Turns the transcript into minutes and action items.</p>
+            <div class="logos" aria-hidden="true">
+              <svg class="logo" style="--brand:#8E75B2">
+                <use href="#l-gemini" />
+              </svg><svg class="logo" style="--brand:#F55036">
+                <use href="#l-groq" />
+              </svg><svg class="logo" style="--brand:#D97757">
+                <use href="#l-claude" />
+              </svg>
+            </div>
           </li>
-          <li data-reveal style="--stagger: 3; --flow-i: 3;"><div class="flow-icon" aria-hidden="true"><svg class="icon"><use href="#i-upload-cloud" /></svg></div><span
-              class="eyebrow">Optional</span><strong>Notion</strong>
+          <li data-reveal style="--flow-i: 2;">
+            <div class="flow-head"><span class="flow-icon" aria-hidden="true"><svg class="logo">
+                  <use href="#l-notion" />
+                </svg></span><span class="eyebrow">Optional</span></div>
+            <strong>Notion</strong>
             <p>Only if you connect a token and a page.</p>
           </li>
         </ol>
@@ -1798,11 +2333,11 @@
     </section>
 
     <!-- 5 Screenshots -->
-    <section class="shots" aria-labelledby="shots">
+    <section id="screenshots" class="shots" aria-labelledby="shots">
       <div class="wrap center">
         <span class="badge" data-reveal="sm"><span class="num">5</span><span class="label">Screenshots</span></span>
         <h2 class="display" id="shots" data-reveal="lg">Meeting minutes you can actually use</h2>
-        <figure class="shot-feature" data-reveal>
+        <figure class="shot-feature" data-reveal="img">
           <div class="frame">
             <picture>
               <source data-dark-source media="(prefers-color-scheme: dark)"
@@ -1815,23 +2350,27 @@
           <figcaption>Executive-style minutes: header, summary and agenda.</figcaption>
         </figure>
         <div class="grid grid-2">
-          <figure data-reveal style="--stagger: 0;"><img class="frame" src="screenshots/markdown-action-items.png"
-              alt="Key decisions and an action items table with owners, deadlines and status" width="1500" height="1000"
-              loading="lazy">
+          <figure data-reveal="img">
+            <div class="frame"><img src="screenshots/markdown-action-items.png"
+                alt="Key decisions and an action items table with owners, deadlines and status" width="1500"
+                height="1000" loading="lazy"></div>
             <figcaption>Numbered decisions and an action items table.</figcaption>
           </figure>
-          <figure data-reveal style="--stagger: 1;"><img class="frame" src="screenshots/transcript.png"
-              alt="Searchable, speaker-labelled meeting transcript" width="1500" height="1000" loading="lazy">
+          <figure data-reveal="img">
+            <div class="frame"><img src="screenshots/transcript.png"
+                alt="Searchable, speaker-labelled meeting transcript" width="1500" height="1000" loading="lazy"></div>
             <figcaption>Speaker-labelled transcript you can search and filter.</figcaption>
           </figure>
-          <figure data-reveal style="--stagger: 2;"><img class="frame" src="screenshots/json-notes.png"
-              alt="Structured JSON notes with identified speakers and prioritised action items" width="1500"
-              height="1000" loading="lazy">
+          <figure data-reveal="img">
+            <div class="frame"><img src="screenshots/json-notes.png"
+                alt="Structured JSON notes with identified speakers and prioritised action items" width="1500"
+                height="1000" loading="lazy"></div>
             <figcaption>Structured notes with speakers and prioritised action items.</figcaption>
           </figure>
-          <figure data-reveal style="--stagger: 3;"><img class="frame" src="screenshots/output-format.png"
-              alt="Settings for choosing Markdown or JSON output and editing the notes system prompt" width="1500"
-              height="1000" loading="lazy">
+          <figure data-reveal="img">
+            <div class="frame"><img src="screenshots/output-format.png"
+                alt="Settings for choosing Markdown or JSON output and editing the notes system prompt" width="1500"
+                height="1000" loading="lazy"></div>
             <figcaption>Pick Markdown or JSON and edit the prompt the notes model uses.</figcaption>
           </figure>
         </div>
@@ -1839,13 +2378,13 @@
     </section>
 
     <!-- 6 Compare -->
-    <section aria-labelledby="compare">
+    <section id="compare-section" aria-labelledby="compare">
       <div class="wrap center">
         <span class="badge" data-reveal="sm"><span class="num">6</span><span class="label">Compare</span></span>
         <h2 class="display" id="compare" data-reveal="lg">MeetMind vs. hosted AI note takers</h2>
         <p class="sub" data-reveal>An open-source alternative to subscription tools such as Otter.ai and Fireflies.ai.
         </p>
-        <div class="table-wrap" data-table role="region" aria-labelledby="compare" tabindex="0">
+        <div class="table-wrap" data-reveal role="region" aria-labelledby="compare">
           <table>
             <thead>
               <tr>
@@ -1855,35 +2394,59 @@
               </tr>
             </thead>
             <tbody>
-              <tr style="--ri:0">
+              <tr data-reveal="row">
                 <th scope="row">Price</th>
-                <td class="us">Free app; pay only for your own API usage</td>
-                <td>Monthly subscription per seat</td>
+                <td class="us" data-label="MeetMind"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>Free app; pay only for your own API usage</span></td>
+                <td data-label="Hosted"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-minus" />
+                    </svg>Monthly subscription per seat</span></td>
               </tr>
-              <tr style="--ri:1">
+              <tr data-reveal="row">
                 <th scope="row">How it records</th>
-                <td class="us">Local system audio + mic, no bot</td>
-                <td>A bot joins the call as a participant</td>
+                <td class="us" data-label="MeetMind"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>Local system audio + mic, no bot</span></td>
+                <td data-label="Hosted"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-minus" />
+                    </svg>A bot joins the call as a participant</span></td>
               </tr>
-              <tr style="--ri:2">
+              <tr data-reveal="row">
                 <th scope="row">Where data lives</th>
-                <td class="us">Your PC (SQLite), optional Notion</td>
-                <td>The vendor's cloud</td>
+                <td class="us" data-label="MeetMind"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>Your PC (SQLite), optional Notion</span></td>
+                <td data-label="Hosted"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-minus" />
+                    </svg>The vendor's cloud</span></td>
               </tr>
-              <tr style="--ri:3">
+              <tr data-reveal="row">
                 <th scope="row">Transcription</th>
-                <td class="us">AssemblyAI, Google STT, Sarvam AI or Groq — your choice</td>
-                <td>Vendor's own engine</td>
+                <td class="us" data-label="MeetMind"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>AssemblyAI, Google STT, Sarvam AI or Groq — your choice</span></td>
+                <td data-label="Hosted"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-minus" />
+                    </svg>Vendor's own engine</span></td>
               </tr>
-              <tr style="--ri:4">
+              <tr data-reveal="row">
                 <th scope="row">Source code</th>
-                <td class="us">Open source (MIT)</td>
-                <td>Closed source</td>
+                <td class="us" data-label="MeetMind"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>Open source (MIT)</span></td>
+                <td data-label="Hosted"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-minus" />
+                    </svg>Closed source</span></td>
               </tr>
-              <tr style="--ri:5">
+              <tr data-reveal="row">
                 <th scope="row">Platform</th>
-                <td class="us">Windows 10/11, macOS 14.2+ (beta)</td>
-                <td>Web, mobile and desktop</td>
+                <td class="us" data-label="MeetMind"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>Windows 10/11, macOS 14.2+ (beta)</span></td>
+                <td data-label="Hosted"><span class="cell"><svg class="icon" aria-hidden="true">
+                      <use href="#i-minus" />
+                    </svg>Web, mobile and desktop</span></td>
               </tr>
             </tbody>
           </table>
@@ -1897,102 +2460,84 @@
         <span class="badge" data-reveal="sm"><span class="num">7</span><span class="label">FAQ</span></span>
         <h2 class="display" id="faq-h" data-reveal="lg">Frequently asked questions</h2>
         <div class="faq">
-          <details open data-reveal style="--stagger: 0;">
+          <details open data-reveal>
             <summary>Is MeetMind free?<span class="pm" aria-hidden="true"><svg class="icon">
                   <use href="#i-plus" />
                 </svg></span></summary>
             <div class="answer">
-              <div>
-                <p>Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you
-                  connect, and Gemini and Groq (free tiers) and AssemblyAI (signup credit) can be used at no cost for
-                  moderate use.</p>
-              </div>
+              <p>Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you
+                connect, and Gemini and Groq (free tiers) and AssemblyAI (signup credit) can be used at no cost for
+                moderate use.</p>
             </div>
           </details>
-          <details data-reveal style="--stagger: 1;">
+          <details data-reveal>
             <summary>Does a bot join my meeting?<span class="pm" aria-hidden="true"><svg class="icon">
                   <use href="#i-plus" />
                 </svg></span></summary>
             <div class="answer">
-              <div>
-                <p>No. MeetMind records the audio playing on your own computer plus your microphone, so no extra
-                  participant appears in Google Meet, Zoom or Teams.</p>
-              </div>
+              <p>No. MeetMind records the audio playing on your own computer plus your microphone, so no extra
+                participant appears in Google Meet, Zoom or Teams.</p>
             </div>
           </details>
-          <details data-reveal style="--stagger: 2;">
+          <details data-reveal>
             <summary>Which meeting apps does MeetMind work with?<span class="pm" aria-hidden="true"><svg class="icon">
                   <use href="#i-plus" />
                 </svg></span></summary>
             <div class="answer">
-              <div>
-                <p>Any app that plays audio on your computer, including Google Meet, Zoom, Microsoft Teams, Slack, Discord
-                  and Webex. On Windows, for Google Meet, Zoom and Teams, MeetMind detects the call and offers to start
-                  recording; the
-                  optional Chrome extension adds a record button inside Meet and Zoom tabs.
-                </p>
-              </div>
+              <p>Any app that plays audio on your computer, including Google Meet, Zoom, Microsoft Teams, Slack, Discord
+                and Webex. On Windows, for Google Meet, Zoom and Teams, MeetMind detects the call and offers to start
+                recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs.</p>
             </div>
           </details>
-          <details data-reveal style="--stagger: 3;">
+          <details data-reveal>
             <summary>Does MeetMind work on macOS or Linux?<span class="pm" aria-hidden="true"><svg class="icon">
                   <use href="#i-plus" />
                 </svg></span></summary>
             <div class="answer">
-              <div>
-                <p>macOS: yes, as a beta for macOS 14.2 and later on Apple silicon and Intel Macs. It records system
-                  audio with the Core Audio capture added in macOS 14.2; meeting detection isn't available on macOS yet.
-                  Linux isn't supported.</p>
-              </div>
+              <p>macOS: yes, as a beta for macOS 14.2 and later on Apple silicon and Intel Macs. It records system
+                audio with the Core Audio capture added in macOS 14.2; meeting detection isn't available on macOS yet.
+                Linux isn't supported.</p>
             </div>
           </details>
-          <details data-reveal style="--stagger: 4;">
+          <details data-reveal>
             <summary>Where is my meeting data stored?<span class="pm" aria-hidden="true"><svg class="icon">
                   <use href="#i-plus" />
                 </svg></span></summary>
             <div class="answer">
-              <div>
-                <p>Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or
-                  account: audio is sent only to the speech-to-text provider you choose, and the transcript only to
-                  the note-generation provider you choose (Gemini, Groq or Claude), using your own API keys.</p>
-              </div>
+              <p>Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or
+                account: audio is sent only to the speech-to-text provider you choose, and the transcript only to
+                the note-generation provider you choose (Gemini, Groq or Claude), using your own API keys.</p>
             </div>
           </details>
-          <details data-reveal style="--stagger: 5;">
+          <details data-reveal>
             <summary>Which languages does MeetMind support?<span class="pm" aria-hidden="true"><svg class="icon">
                   <use href="#i-plus" />
                 </svg></span></summary>
             <div class="answer">
-              <div>
-                <p>Language support depends on the speech-to-text engine you choose. For meetings that mix English and
-                  Malayalam, Sarvam AI's <code>saaras:v3</code> model handles code-switching within a sentence.</p>
-              </div>
+              <p>Language support depends on the speech-to-text engine you choose. For meetings that mix English and
+                Malayalam, Sarvam AI's <code>saaras:v3</code> model handles code-switching within a sentence.</p>
             </div>
           </details>
-          <details data-reveal style="--stagger: 6;">
+          <details data-reveal>
             <summary>How is MeetMind different from Otter.ai or Fireflies.ai?<span class="pm" aria-hidden="true"><svg
                   class="icon">
                   <use href="#i-plus" />
                 </svg></span></summary>
             <div class="answer">
-              <div>
-                <p>Hosted note takers such as Otter.ai and Fireflies.ai are subscription services that typically join
-                  calls as a bot and keep recordings on their servers. MeetMind is an open-source desktop app that
-                  records locally without a bot, lets you choose the transcription provider, stores notes on your
-                  machine, and costs nothing beyond your own API usage.</p>
-              </div>
+              <p>Hosted note takers such as Otter.ai and Fireflies.ai are subscription services that typically join
+                calls as a bot and keep recordings on their servers. MeetMind is an open-source desktop app that
+                records locally without a bot, lets you choose the transcription provider, stores notes on your
+                machine, and costs nothing beyond your own API usage.</p>
             </div>
           </details>
-          <details data-reveal style="--stagger: 7;">
+          <details data-reveal>
             <summary>Can MeetMind make notes from a recording I already have?<span class="pm" aria-hidden="true"><svg
                   class="icon">
                   <use href="#i-plus" />
                 </svg></span></summary>
             <div class="answer">
-              <div>
-                <p>Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript to generate
-                  notes without speech-to-text.</p>
-              </div>
+              <p>Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript to generate
+                notes without speech-to-text.</p>
             </div>
           </details>
         </div>
@@ -2002,19 +2547,19 @@
     <!-- CTA -->
     <section class="cta center" aria-labelledby="cta">
       <div class="wrap">
-        <div class="tile" aria-hidden="true" data-reveal="sm"><svg class="app-icon" viewBox="0 0 128 128">
+        <div class="cta-mark" aria-hidden="true" data-reveal="pop"><svg viewBox="0 0 128 128">
             <use href="#i-meetmind" />
           </svg></div>
-        <h2 class="display" id="cta" data-reveal="lg" style="--stagger: 1;">Ready for your next meeting?</h2>
-        <p class="sub" data-reveal style="--stagger: 2;">Install MeetMind, add a Gemini, Groq or Claude key and a speech-to-text key,
+        <h2 class="display" id="cta" data-reveal="lg">Ready for your next meeting?</h2>
+        <p class="sub" data-reveal>Install MeetMind, add a Gemini, Groq or Claude key and a speech-to-text key,
           and your next call becomes searchable minutes.</p>
-        <div class="actions" data-reveal style="--stagger: 3;">
+        <div class="actions" data-reveal>
           <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"
               aria-hidden="true">
               <use href="#i-download" />
             </svg>Download the latest release</a>
           <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind#-install">Read the setup guide<svg
-              class="icon" aria-hidden="true">
+              class="icon icon-trail" aria-hidden="true">
               <use href="#i-arrow" />
             </svg></a>
         </div>
@@ -2024,10 +2569,13 @@
 
   <footer>
     <div class="wrap">
-      <span>MeetMind · MIT license · Built by <a href="https://github.com/aslahtp"
-          style="text-decoration: underline; text-underline-offset: 3px;">Aslah</a></span>
+      <span class="foot-brand"><svg viewBox="0 0 128 128" aria-hidden="true">
+          <use href="#i-meetmind" />
+        </svg><span>MeetMind · MIT license · Built by <a href="https://github.com/aslahtp">Aslah</a></span></span>
       <nav aria-label="Footer">
-        <a href="https://github.com/aslahtp/meetmind">GitHub</a>
+        <a href="https://github.com/aslahtp/meetmind"><svg class="logo" aria-hidden="true">
+            <use href="#l-github" />
+          </svg>GitHub</a>
         <a href="https://github.com/aslahtp/meetmind/releases">Releases</a>
         <a href="https://github.com/aslahtp/meetmind/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/aslahtp/meetmind/issues">Issues</a>
@@ -2068,6 +2616,9 @@
         var next = current() === 'dark' ? 'light' : 'dark';
         root.setAttribute('data-theme', next);
         try { localStorage.setItem('meetmind-theme', next); } catch (e) { }
+        btn.classList.remove('spin');
+        void btn.offsetWidth;
+        btn.classList.add('spin');
         sync();
       });
       darkQuery.addEventListener('change', sync);
@@ -2078,185 +2629,157 @@
   </script>
 
   <script>
-    // ── Animation engine ──────────────────────────────────────────────────
-    // Inspired by the Textura/Marloa spring-based animation vocabulary.
-    // Translates <Inview>, <SpringTrigger>, StatCounter, and FAQ accordion
-    // springs into vanilla IntersectionObserver + requestAnimationFrame.
+    // Motion: header state, one-shot scroll reveals, hero parallax, stat counter, scroll-spy
+    // and an animated FAQ accordion. Everything degrades to a static page without JS or
+    // with prefers-reduced-motion.
     (function () {
-      var prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var hasIO = 'IntersectionObserver' in window;
+      var header = document.getElementById('site-header');
 
-      // ── 0. Sticky header ────────────────────────────────────────────────
-      var siteHeader = document.getElementById('site-header');
-      if (siteHeader) {
-        var headerScrolled = false;
-        window.addEventListener('scroll', function () {
-          var scrolled = window.scrollY > 40;
-          if (scrolled !== headerScrolled) {
-            headerScrolled = scrolled;
-            siteHeader.classList.toggle('scrolled', scrolled);
-          }
-        }, { passive: true });
+      // ── Header: hairline once scrolled; header Download once the hero's buttons are gone ──
+      var scrolled = false;
+      function onScroll() {
+        var s = window.scrollY > 8;
+        if (s !== scrolled) {
+          scrolled = s;
+          header.classList.toggle('scrolled', s);
+        }
+      }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+
+      var heroActions = document.getElementById('hero-actions');
+      var navCta = header.querySelector('.nav-cta');
+      if (hasIO && heroActions) {
+        new IntersectionObserver(function (entries) {
+          var e = entries[0];
+          // Only once the buttons have left through the top, not before they first appear.
+          var show = !e.isIntersecting && e.boundingClientRect.top < 0;
+          header.classList.toggle('show-cta', show);
+          navCta.tabIndex = show ? 0 : -1;
+        }, { rootMargin: '-64px 0px 0px 0px' }).observe(heroActions);
       }
 
-      // ── 0b. Scroll-down indicator fade ─────────────────────────────────
-      var scrollDown = document.getElementById('scroll-down');
-      if (scrollDown) {
-        var scrollFaded = false;
-        window.addEventListener('scroll', function () {
-          var shouldFade = window.scrollY > 120;
-          if (shouldFade !== scrollFaded) {
-            scrollFaded = shouldFade;
-            scrollDown.classList.toggle('faded', shouldFade);
-          }
-        }, { passive: true });
+      // ── Scroll reveal: entries that arrive together stagger in reading order ──
+      var revealEls = document.querySelectorAll('[data-reveal]');
+      function settle(el) {
+        el.addEventListener('transitionend', function done(ev) {
+          if (ev.target !== el || ev.propertyName !== 'opacity') return;
+          el.removeEventListener('transitionend', done);
+          el.removeAttribute('data-reveal');
+          el.classList.remove('revealed');
+          el.style.transitionDelay = '';
+        });
       }
-
-      // ── 1. Scroll reveal (cf. <Inview> / HEADING_MOTION / BODY_MOTION) ──
-      // Elements with [data-reveal] fade+rise+de-blur when entering viewport.
-      // mode="always" equivalent: re-triggers on every entry/exit so a missed
-      // reveal heals itself (same rationale as the Marloa starter's always mode).
-      if (!prefersReduced) {
-        var revealObserver = new IntersectionObserver(function (entries) {
-          entries.forEach(function (entry) {
-            if (entry.isIntersecting) {
-              entry.target.classList.add('revealed');
-            } else {
-              // Re-triggerable on re-entry (mode="always")
-              entry.target.classList.remove('revealed');
-            }
+      if (reduced || !hasIO) {
+        revealEls.forEach(function (el) { el.removeAttribute('data-reveal'); });
+      } else {
+        var revealIO = new IntersectionObserver(function (entries) {
+          var batch = entries.filter(function (e) { return e.isIntersecting; }).map(function (e) {
+            return { el: e.target, r: e.boundingClientRect };
           });
-        }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
-
-        document.querySelectorAll('[data-reveal]').forEach(function (el) {
-          revealObserver.observe(el);
-        });
-      } else {
-        // Reduced motion: show everything immediately
-        document.querySelectorAll('[data-reveal]').forEach(function (el) {
-          el.classList.add('revealed');
-        });
+          batch.sort(function (a, b) { return (a.r.top - b.r.top) || (a.r.left - b.r.left); });
+          batch.forEach(function (item, i) {
+            revealIO.unobserve(item.el);
+            item.el.style.transitionDelay = Math.min(i, 7) * 70 + 'ms';
+            settle(item.el);
+            item.el.classList.add('revealed');
+          });
+        }, { threshold: 0, rootMargin: '0px 0px -6% 0px' });
+        revealEls.forEach(function (el) { revealIO.observe(el); });
       }
 
-      // ── 2. Cloud grid stagger (cf. works-with section) ──────────────────
-      if (!prefersReduced) {
-        document.querySelectorAll('[data-cloud]').forEach(function (grid) {
-          new IntersectionObserver(function (entries) {
-            entries.forEach(function (e) {
-              e.target.classList.toggle('revealed', e.isIntersecting);
-            });
-          }, { threshold: 0.2 }).observe(grid);
-        });
-      } else {
-        document.querySelectorAll('[data-cloud]').forEach(function (g) {
-          g.classList.add('revealed');
-        });
-      }
+      // ── [data-in]: one-shot "in view" flag (data-flow packets, stat counter) ──
+      document.querySelectorAll('[data-in]').forEach(function (el) {
+        if (!hasIO) { el.classList.add('in'); return; }
+        var io = new IntersectionObserver(function (entries) {
+          if (!entries[0].isIntersecting) return;
+          io.disconnect();
+          el.classList.add('in');
+          if (!reduced) el.querySelectorAll('[data-count]').forEach(countUp);
+        }, { threshold: 0.3 });
+        io.observe(el);
+      });
 
-      // ── 3. Table row reveal ─────────────────────────────────────────────
-      if (!prefersReduced) {
-        document.querySelectorAll('[data-table]').forEach(function (wrap) {
-          new IntersectionObserver(function (entries) {
-            entries.forEach(function (e) {
-              e.target.classList.toggle('revealed', e.isIntersecting);
-            });
-          }, { threshold: 0.15 }).observe(wrap);
-        });
-      } else {
-        document.querySelectorAll('[data-table]').forEach(function (w) {
-          w.classList.add('revealed');
-        });
-      }
-
-      // ── 4. Flow connector pulse (cf. data-flow section) ─────────────────
-      if (!prefersReduced) {
-        document.querySelectorAll('[data-flow]').forEach(function (flow) {
-          new IntersectionObserver(function (entries) {
-            entries.forEach(function (e) {
-              e.target.classList.toggle('revealed', e.isIntersecting);
-            });
-          }, { threshold: 0.2 }).observe(flow);
-        });
-      } else {
-        document.querySelectorAll('[data-flow]').forEach(function (f) {
-          f.classList.add('revealed');
-        });
-      }
-
-      // ── 5. Hero parallax (cf. <SpringTrigger mode="scrub">) ─────────────
-      // Drifts the hero screenshot with scroll, like the AboutBanner parallax.
-      if (!prefersReduced) {
-        var heroFrame = document.querySelector('.hero-frame');
-        if (heroFrame) {
-          var ticking = false;
-          window.addEventListener('scroll', function () {
-            if (!ticking) {
-              ticking = true;
-              requestAnimationFrame(function () {
-                var rect = heroFrame.getBoundingClientRect();
-                var viewH = window.innerHeight;
-                // Only animate while the frame is on screen
-                if (rect.bottom > 0 && rect.top < viewH) {
-                  // Map scroll to a gentle parallax drift (max ±30px)
-                  var progress = (rect.top + rect.height / 2) / viewH;
-                  heroFrame.style.setProperty('--parallax-y', ((0.5 - progress) * 30).toFixed(1));
-                }
-                ticking = false;
-              });
-            }
-          }, { passive: true });
+      function countUp(el) {
+        var target = parseInt(el.getAttribute('data-count'), 10);
+        if (isNaN(target)) return;
+        var start = null;
+        var duration = 1100;
+        el.textContent = '0';
+        function frame(now) {
+          if (start === null) start = now;
+          var t = Math.min((now - start) / duration, 1);
+          // Ease-out-expo: fast start, soft landing.
+          var eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+          el.textContent = String(Math.round(eased * target));
+          if (t < 1) requestAnimationFrame(frame);
         }
+        requestAnimationFrame(frame);
       }
 
-      // ── 6. Stat counter spring (cf. StatCounter tension 22, friction 26) ─
-      // Numbers count up with a spring-like deceleration curve when visible.
-      if (!prefersReduced) {
-        var countEls = document.querySelectorAll('[data-count]');
-        if (countEls.length) {
-          var statObserver = new IntersectionObserver(function (entries) {
-            entries.forEach(function (entry) {
-              var el = entry.target;
-              var target = parseInt(el.getAttribute('data-count'), 10);
-              if (isNaN(target)) return;
-              var prefix = el.getAttribute('data-prefix') || '';
-              if (entry.isIntersecting) {
-                // Spring-like count animation using requestAnimationFrame
-                var startTime = null;
-                var duration = 1200; // ms — soft landing
-                function springEase(t) {
-                  // Approximation of a damped spring: overshoots slightly then settles
-                  return 1 - Math.pow(2, -8 * t) * Math.cos(t * Math.PI * 1.8);
-                }
-                function animate(now) {
-                  if (!startTime) startTime = now;
-                  var elapsed = now - startTime;
-                  var t = Math.min(elapsed / duration, 1);
-                  var eased = springEase(t);
-                  var current = Math.round(eased * target);
-                  el.textContent = prefix + current;
-                  if (t < 1) requestAnimationFrame(animate);
-                }
-                requestAnimationFrame(animate);
-              } else {
-                // Reset on leave so it re-counts on re-entry
-                el.textContent = prefix + '0';
-              }
-            });
-          }, { threshold: 0.5 });
-
-          countEls.forEach(function (el) { statObserver.observe(el); });
-        }
+      // ── Hero parallax: the screenshot drifts slightly slower than the page ──
+      var shot = document.querySelector('[data-parallax]');
+      var wide = window.matchMedia('(min-width: 720px)');
+      if (shot && !reduced) {
+        var ticking = false;
+        var update = function () {
+          ticking = false;
+          if (!wide.matches) { shot.style.transform = ''; return; }
+          var rect = shot.getBoundingClientRect();
+          var vh = window.innerHeight;
+          if (rect.bottom < 0 || rect.top > vh) return;
+          var progress = (rect.top + rect.height / 2 - vh / 2) / vh;
+          shot.style.transform = 'translate3d(0,' + (progress * -36).toFixed(1) + 'px,0)';
+        };
+        window.addEventListener('scroll', function () {
+          if (!ticking) { ticking = true; requestAnimationFrame(update); }
+        }, { passive: true });
+        wide.addEventListener('change', update);
+        update();
       }
 
-      // ── 7. FAQ exclusive accordion ──────────────────────────────────────
-      // Only one FAQ item open at a time (like the Marloa faq-list.tsx).
-      var faqDetails = document.querySelectorAll('.faq details');
-      faqDetails.forEach(function (detail) {
-        detail.addEventListener('toggle', function () {
-          if (detail.open) {
-            faqDetails.forEach(function (other) {
-              if (other !== detail && other.open) other.open = false;
-            });
-          }
+      // ── Scroll-spy: underline the nav link of the section being read ──
+      var spyLinks = document.querySelectorAll('[data-spy]');
+      if (hasIO && spyLinks.length) {
+        var spyIO = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            var link = document.querySelector('[data-spy="' + e.target.id + '"]');
+            if (link) link.classList.toggle('active', e.isIntersecting);
+          });
+        }, { rootMargin: '-45% 0px -50% 0px' });
+        spyLinks.forEach(function (link) {
+          var section = document.getElementById(link.getAttribute('data-spy'));
+          if (section) spyIO.observe(section);
+        });
+      }
+
+      // ── FAQ: one answer open at a time, opening and closing with a height animation ──
+      var items = Array.prototype.slice.call(document.querySelectorAll('.faq details'));
+      function setOpen(d, open) {
+        if (d._anim) d._anim.cancel();
+        d.classList.toggle('is-open', open);
+        if (reduced || !d.animate) { d.open = open; return; }
+        var summary = d.querySelector('summary');
+        var from = d.offsetHeight;
+        if (open) d.open = true;
+        var to = open ? d.offsetHeight : summary.offsetHeight + (d === items[items.length - 1] ? 2 : 1);
+        d.style.overflow = 'hidden';
+        d._anim = d.animate({ height: [from + 'px', to + 'px'] }, { duration: 420, easing: 'cubic-bezier(.16,1,.3,1)' });
+        d._anim.onfinish = d._anim.oncancel = function () {
+          d._anim = null;
+          d.style.overflow = '';
+          if (!open) d.open = false;
+        };
+      }
+      items.forEach(function (d) {
+        d.classList.toggle('is-open', d.open);
+        d.querySelector('summary').addEventListener('click', function (ev) {
+          ev.preventDefault();
+          var open = !d.classList.contains('is-open');
+          if (open) items.forEach(function (o) { if (o !== d && o.classList.contains('is-open')) setOpen(o, false); });
+          setOpen(d, open);
         });
       });
     })();
