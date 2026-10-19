@@ -91,6 +91,18 @@ function httpsPut(url, body, extraHeaders = {}) {
   });
 }
 
+/** Build the Error for a non-2xx response, carrying `.status` and `.retryAfterMs`. */
+function httpError(res, text, label = 'API') {
+  let data;
+  try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+  const detail = data?.error?.message || data?.message || text.slice(0, 300) || res.statusText;
+  const err = new Error(`${label} error (${res.status}): ${detail}`);
+  err.status = res.status;
+  const retryAfter = Number(res.headers?.get?.('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) err.retryAfterMs = retryAfter * 1000;
+  return err;
+}
+
 /**
  * fetch() wrapper for OpenAI-compatible JSON/multipart APIs. Throws an Error
  * carrying `.status` and `.retryAfterMs` on non-2xx so callers can map/retry.
@@ -98,17 +110,8 @@ function httpsPut(url, body, extraHeaders = {}) {
 async function fetchJson(url, init = {}, { label = 'API', fetchImpl = globalThis.fetch } = {}) {
   const res = await fetchImpl(url, init);
   const text = await res.text();
-  let data;
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-  if (!res.ok) {
-    const detail = data?.error?.message || data?.message || text.slice(0, 300) || res.statusText;
-    const err = new Error(`${label} error (${res.status}): ${detail}`);
-    err.status = res.status;
-    const retryAfter = Number(res.headers?.get?.('retry-after'));
-    if (Number.isFinite(retryAfter) && retryAfter > 0) err.retryAfterMs = retryAfter * 1000;
-    throw err;
-  }
-  return data;
+  if (!res.ok) throw httpError(res, text, label);
+  try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; }
 }
 
-module.exports = { sleep, httpsPost, httpsGet, httpsPut, fetchJson };
+module.exports = { sleep, httpsPost, httpsGet, httpsPut, httpError, fetchJson };

@@ -33,5 +33,6 @@ LLM only: `generate({ systemPrompt, userPrompt, model, config, json })` returns 
 ## Rules
 
 - Provider modules must not import `electron` or `electron-store` at load time (require heavy SDKs lazily inside functions) so they can be unit-tested. Use `providers/shared/log.js` instead of `utils/logger`.
-- Use `providers/shared/http.js` (`fetchJson`) so errors carry `.status` and `.retryAfterMs`.
+- Use `providers/shared/http.js` (`fetchJson`, or `httpError` for a streamed response's non-2xx status) so errors carry `.status` and `.retryAfterMs`.
+- An LLM must throw, not return, when its output is incomplete (cut off at the token limit, refused), so `services/notes.js` can try the fallback.
 - Never log API keys.
