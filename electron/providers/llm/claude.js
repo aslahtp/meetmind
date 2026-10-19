@@ -1,7 +1,11 @@
-const { fetchJson } = require('../shared/http');
+const { fetchJson, httpError } = require('../shared/http');
 
 const CLAUDE_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
+// Claude 5.x models always think, and thinking shares this budget with the notes:
+// 8K truncated an hour-long meeting on every model. Streaming keeps a large cap
+// clear of fetch's 5-minute response-header timeout.
+const MAX_OUTPUT_TOKENS = 64000;
 
 // Claude 5.x and later models have deprecated the `temperature` parameter.
 // Only include it for models that still accept it (3.x and earlier).
@@ -38,7 +42,73 @@ function friendlyError(err) {
     wrapped.status = 413;
     return wrapped;
   }
+  if (err.status === 529) {
+    const wrapped = new Error(
+      'Anthropic is temporarily overloaded (529). Wait and retry, or configure a fallback provider. ' +
+      `(${err.message})`
+    );
+    wrapped.status = 529;
+    return wrapped;
+  }
   return err;
+}
+
+/** Yield each JSON event of a server-sent-events body. */
+async function* readEvents(body) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const frames = buffer.split(/\r?\n\r?\n/);
+    buffer = done ? '' : frames.pop();
+    for (const frame of frames) {
+      const data = frame
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n');
+      if (data) yield JSON.parse(data);
+    }
+    if (done) return;
+  }
+}
+
+/**
+ * Stream a Messages request and return { text, stopReason, stopDetails }.
+ * Only `text` blocks are collected; Claude 5.x `thinking` blocks are skipped.
+ */
+async function streamMessage(apiKey, body, fetchImpl) {
+  const res = await fetchImpl(`${CLAUDE_BASE}/messages`, {
+    method: 'POST',
+    headers: headers(apiKey),
+    body: JSON.stringify({ ...body, stream: true }),
+  });
+  if (!res.ok) throw httpError(res, await res.text(), 'Anthropic');
+
+  const textBlocks = new Set();
+  let text = '';
+  let stopReason = null;
+  let stopDetails = null;
+  for await (const event of readEvents(res.body)) {
+    if (event.type === 'content_block_start' && event.content_block?.type === 'text') {
+      textBlocks.add(event.index);
+      text += event.content_block.text || '';
+    } else if (event.type === 'content_block_delta' && textBlocks.has(event.index)) {
+      text += event.delta?.text || '';
+    } else if (event.type === 'message_delta') {
+      stopReason = event.delta?.stop_reason ?? stopReason;
+      stopDetails = event.delta?.stop_details ?? stopDetails;
+    } else if (event.type === 'error') {
+      // Errors after the 200 arrive in the stream; map them like HTTP errors.
+      const err = new Error(`Anthropic error (stream): ${event.error?.message || event.error?.type || 'unknown'}`);
+      if (event.error?.type === 'overloaded_error') err.status = 529;
+      if (event.error?.type === 'rate_limit_error') err.status = 429;
+      throw err;
+    }
+  }
+  return { text, stopReason, stopDetails };
 }
 
 async function generate({ systemPrompt, userPrompt, model, config }, deps = {}) {
@@ -47,21 +117,31 @@ async function generate({ systemPrompt, userPrompt, model, config }, deps = {}) 
 
   const body = {
     model,
-    max_tokens: 8192,
+    max_tokens: MAX_OUTPUT_TOKENS,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
     ...(supportsTemperature(model) ? { temperature: 0.3 } : {}),
   };
 
   try {
-    const data = await fetchJson(
-      `${CLAUDE_BASE}/messages`,
-      { method: 'POST', headers: headers(apiKey), body: JSON.stringify(body) },
-      { label: 'Anthropic', fetchImpl: deps.fetchImpl || globalThis.fetch }
+    const { text, stopReason, stopDetails } = await streamMessage(
+      apiKey,
+      body,
+      deps.fetchImpl || globalThis.fetch
     );
-    const text = data?.content?.[0]?.text;
-    if (!text) throw new Error('No response from Anthropic API');
-    return String(text).trim();
+    // Throw rather than return partial notes, so the fallback provider gets a turn.
+    if (stopReason === 'max_tokens') {
+      throw new Error(
+        `Anthropic stopped at the ${MAX_OUTPUT_TOKENS}-token output limit before finishing the notes. ` +
+        'Try a lower-effort model such as Haiku, or configure a fallback provider.'
+      );
+    }
+    if (stopReason === 'refusal') {
+      const reason = stopDetails?.explanation || stopDetails?.category || 'no reason given';
+      throw new Error(`Anthropic declined to write notes for this transcript (${reason}).`);
+    }
+    if (!text.trim()) throw new Error('No response from Anthropic API');
+    return text.trim();
   } catch (err) {
     throw friendlyError(err);
   }
@@ -114,7 +194,7 @@ module.exports = {
     { text: 'Paste the key into the Anthropic API key field' },
   ],
   models: [
-    { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', badge: 'Default', description: 'Balanced performance for production — best all-round choice for meeting notes with a 200K context window.' },
+    { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', badge: 'Default', description: 'Balanced performance for production — best all-round choice for meeting notes with a 1M context window.' },
     { id: 'claude-fable-5-1', name: 'Claude Fable 5.1', badge: 'Flagship', description: "Anthropic's most capable model; best for demanding reasoning and complex or lengthy meetings." },
     { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', badge: 'Pro', description: 'Expert-level model optimised for agentic coding and knowledge work; high quality at lower cost than Fable.' },
     { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', badge: 'Fast', description: 'Fastest and most cost-efficient Claude model; best for short meetings or high-volume use.' },

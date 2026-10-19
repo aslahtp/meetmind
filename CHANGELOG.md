@@ -11,6 +11,13 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Fixed
 
 - **Claude provider**: Stop sending deprecated `temperature` parameter to Claude 5.x models, which caused every primary-LLM call to fail with a 400 and fall back to the configured fallback.
+- **Claude provider**: Read the answer past any `thinking` blocks Claude 5.x returns first, which made Opus 5.5 (and Sonnet 5.5 intermittently) fail with "No response from Anthropic API".
+- **Claude provider**: Long meetings no longer produce truncated notes: requests are streamed with a 64K output limit (thinking used up the old 8K limit on every model for a ~50-minute meeting), and a cut-off or refused reply now triggers the fallback provider instead of being saved.
+- **Claude provider**: Clear error messages for Anthropic overload (529) and for errors sent mid-response.
+
+### Changed
+
+- **Claude provider**: Sonnet 5.5's model description now states its 1M-token context window instead of 200K.
 
 ## [4.9.0] - 2026-10-18
 

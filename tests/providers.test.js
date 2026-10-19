@@ -24,6 +24,45 @@ function fakeResponse(status, body, headers = {}) {
   };
 }
 
+/** A 200 server-sent-events response, split across chunks to exercise buffering. */
+function fakeStream(events) {
+  const sse = events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+  const bytes = new TextEncoder().encode(sse);
+  const mid = Math.floor(bytes.length / 2);
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, mid));
+        controller.enqueue(bytes.slice(mid));
+        controller.close();
+      },
+    }),
+  };
+}
+
+/** Stream events for a Claude reply made of the given content blocks. */
+function claudeEvents(blocks, stopReason = 'end_turn', stopDetails = null) {
+  return [
+    { type: 'message_start', message: { content: [] } },
+    ...blocks.flatMap((b, index) => b.type === 'text'
+      ? [
+        { type: 'content_block_start', index, content_block: { type: 'text', text: '' } },
+        { type: 'content_block_delta', index, delta: { type: 'text_delta', text: b.text } },
+        { type: 'content_block_stop', index },
+      ]
+      : [
+        { type: 'content_block_start', index, content_block: { type: 'thinking', thinking: '' } },
+        { type: 'content_block_delta', index, delta: { type: 'thinking_delta', thinking: 'hmm' } },
+        { type: 'content_block_stop', index },
+      ]),
+    { type: 'message_delta', delta: { stop_reason: stopReason, stop_details: stopDetails } },
+    { type: 'message_stop' },
+  ];
+}
+
 describe('provider registry contract', () => {
   for (const [kind, registry] of [['stt', sttRegistry], ['llm', llmRegistry]]) {
     describe(kind, () => {
@@ -149,9 +188,9 @@ describe('Groq LLM', () => {
 });
 
 describe('Claude LLM', () => {
-  it('calls /v1/messages and returns trimmed text', async () => {
+  it('streams /v1/messages and returns trimmed text', async () => {
     const fetchImpl = vi.fn(async () =>
-      fakeResponse(200, { content: [{ type: 'text', text: '  # Notes\n\nBody  ' }] })
+      fakeStream(claudeEvents([{ type: 'text', text: '  # Notes\n\nBody  ' }]))
     );
     const result = await claudeLlm.generate(
       { systemPrompt: 's', userPrompt: 'u', model: 'claude-sonnet-5-5', config: { claudeApiKey: 'sk-ant-x' } },
@@ -161,14 +200,15 @@ describe('Claude LLM', () => {
     const [url, init] = fetchImpl.mock.calls[0];
     expect(url).toContain('/v1/messages');
     expect(init.headers['x-api-key']).toBe('sk-ant-x');
-    expect(JSON.parse(init.body).system).toBe('s');
-    expect(JSON.parse(init.body).temperature).toBeUndefined();
+    const body = JSON.parse(init.body);
+    expect(body.system).toBe('s');
+    expect(body.stream).toBe(true);
+    expect(body.max_tokens).toBeGreaterThan(8192);
+    expect(body.temperature).toBeUndefined();
   });
 
   it('omits temperature for Claude 5.x and includes it for legacy Claude 3.x', async () => {
-    const fetchImpl = vi.fn(async () =>
-      fakeResponse(200, { content: [{ type: 'text', text: 'ok' }] })
-    );
+    const fetchImpl = vi.fn(async () => fakeStream(claudeEvents([{ type: 'text', text: 'ok' }])));
     await claudeLlm.generate(
       { systemPrompt: 's', userPrompt: 'u', model: 'claude-3-5-sonnet-20241022', config: { claudeApiKey: 'sk-ant-x' } },
       { fetchImpl }
@@ -182,6 +222,37 @@ describe('Claude LLM', () => {
     );
     const body5 = JSON.parse(fetchImpl.mock.calls[1][1].body);
     expect(body5.temperature).toBeUndefined();
+  });
+
+  const generateWith = (fetchImpl) =>
+    claudeLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'claude-opus-5-5', config: { claudeApiKey: 'k' } }, { fetchImpl });
+
+  it('skips thinking blocks and returns the text that follows', async () => {
+    const fetchImpl = async () =>
+      fakeStream(claudeEvents([{ type: 'thinking' }, { type: 'text', text: '# Notes' }]));
+    await expect(generateWith(fetchImpl)).resolves.toBe('# Notes');
+  });
+
+  it('throws when the response has no text block', async () => {
+    const fetchImpl = async () => fakeStream(claudeEvents([{ type: 'thinking' }]));
+    await expect(generateWith(fetchImpl)).rejects.toThrow(/No response/);
+  });
+
+  it('throws instead of returning notes cut off at the output limit', async () => {
+    const fetchImpl = async () => fakeStream(claudeEvents([{ type: 'text', text: '# Notes\n\n- half' }], 'max_tokens'));
+    await expect(generateWith(fetchImpl)).rejects.toThrow(/output limit/);
+  });
+
+  it('reports a refusal with its reason', async () => {
+    const fetchImpl = async () =>
+      fakeStream(claudeEvents([], 'refusal', { type: 'refusal', category: 'cyber', explanation: null }));
+    await expect(generateWith(fetchImpl)).rejects.toThrow(/declined.*cyber/);
+  });
+
+  it('maps an overloaded error sent mid-stream', async () => {
+    const fetchImpl = async () =>
+      fakeStream([{ type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } }]);
+    await expect(generateWith(fetchImpl)).rejects.toThrow(/overloaded \(529\)/);
   });
 
   it('maps rate-limit errors to an actionable message', async () => {
