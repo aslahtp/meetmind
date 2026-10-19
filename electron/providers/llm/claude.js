@@ -3,6 +3,14 @@ const { fetchJson } = require('../shared/http');
 const CLAUDE_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
 
+// Claude 5.x and later models have deprecated the `temperature` parameter.
+// Only include it for models that still accept it (3.x and earlier).
+function supportsTemperature(model) {
+  const match = /^claude-(?:instant-|sonnet-|opus-|haiku-|fable-|)(\d+)/.exec(model);
+  if (!match) return false; // unknown model — omit to be safe
+  return parseInt(match[1], 10) <= 3;
+}
+
 function headers(apiKey) {
   return {
     'x-api-key': apiKey.trim(),
@@ -42,7 +50,7 @@ async function generate({ systemPrompt, userPrompt, model, config }, deps = {}) 
     max_tokens: 8192,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
-    temperature: 0.3,
+    ...(supportsTemperature(model) ? { temperature: 0.3 } : {}),
   };
 
   try {

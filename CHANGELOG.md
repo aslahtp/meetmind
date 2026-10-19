@@ -6,6 +6,12 @@ updated: 2026-10-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.9.1] - 2026-10-19
+
+### Fixed
+
+- **Claude provider**: Stop sending deprecated `temperature` parameter to Claude 5.x models, which caused every primary-LLM call to fail with a 400 and fall back to the configured fallback.
+
 ## [4.9.0] - 2026-10-18
 
 ### Changed

@@ -162,6 +162,26 @@ describe('Claude LLM', () => {
     expect(url).toContain('/v1/messages');
     expect(init.headers['x-api-key']).toBe('sk-ant-x');
     expect(JSON.parse(init.body).system).toBe('s');
+    expect(JSON.parse(init.body).temperature).toBeUndefined();
+  });
+
+  it('omits temperature for Claude 5.x and includes it for legacy Claude 3.x', async () => {
+    const fetchImpl = vi.fn(async () =>
+      fakeResponse(200, { content: [{ type: 'text', text: 'ok' }] })
+    );
+    await claudeLlm.generate(
+      { systemPrompt: 's', userPrompt: 'u', model: 'claude-3-5-sonnet-20241022', config: { claudeApiKey: 'sk-ant-x' } },
+      { fetchImpl }
+    );
+    const bodyLegacy = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(bodyLegacy.temperature).toBe(0.3);
+
+    await claudeLlm.generate(
+      { systemPrompt: 's', userPrompt: 'u', model: 'claude-opus-5-5', config: { claudeApiKey: 'sk-ant-x' } },
+      { fetchImpl }
+    );
+    const body5 = JSON.parse(fetchImpl.mock.calls[1][1].body);
+    expect(body5.temperature).toBeUndefined();
   });
 
   it('maps rate-limit errors to an actionable message', async () => {
