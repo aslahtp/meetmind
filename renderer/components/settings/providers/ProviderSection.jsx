@@ -221,6 +221,7 @@ export default function ProviderSection({ kind, form, onChange }) {
           provider={provider}
           value={model}
           onChange={setModel}
+          toggle={kind === 'llm'}
         />
         {provider.capabilities?.diarization === false && (
           <p className="hint">This engine does not identify speakers, so every line is labelled "Speaker 1".</p>

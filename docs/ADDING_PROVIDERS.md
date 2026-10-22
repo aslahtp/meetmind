@@ -21,7 +21,7 @@ Shared fields (both kinds):
 | `guide[]` | "How to get a key" steps: `{ text, url?, hint? }` |
 | `models[]`, `defaultModel` | Curated `{ id, name, badge, description }` list and the default ID |
 | `latestModels[]` | Optional auto-updating aliases (same shape as `models[]`, for example `gemini-flash-latest`). When set, Settings shows a Latest / Pinned / Custom toggle, and they are always accepted as a saved model |
-| `allowCustomModel` | Show a free-text model ID field |
+| `allowCustomModel` | Show a free-text model ID field. For an LLM it sits behind a Pinned / Custom toggle (Latest / Pinned / Custom with `latestModels`) |
 | `capabilities` | Optional, for example `{ diarization: false }` shows a hint in the UI |
 | `test({ config, model })` | Throws if the credentials or model do not work |
 

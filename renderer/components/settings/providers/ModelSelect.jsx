@@ -41,11 +41,13 @@ function ModelCards({ label, models, value, onChange }) {
  * a free-text field for any other model ID. A saved ID outside the curated list
  * shows up in the text field with no card selected.
  *
- * Providers with `latestModels` (auto-updating aliases such as `gemini-flash-latest`)
- * get a Latest / Pinned / Custom toggle instead, showing one picker at a time.
+ * With `toggle` (or `latestModels`, auto-updating aliases such as `gemini-flash-latest`)
+ * it shows a Latest / Pinned / Custom toggle instead, one picker at a time; Latest only
+ * appears when the provider has `latestModels`.
  */
-export default function ModelSelect({ idPrefix, label, provider, value, onChange }) {
+export default function ModelSelect({ idPrefix, label, provider, value, onChange, toggle = false }) {
   const hasLatest = provider.latestModels?.length > 0;
+  const useToggle = hasLatest || (toggle && provider.allowCustomModel);
   const [mode, setMode] = useState(() => modelMode(provider, value));
   const savedMode = modelMode(provider, value);
 
@@ -59,8 +61,8 @@ export default function ModelSelect({ idPrefix, label, provider, value, onChange
   const customField = provider.allowCustomModel && (
     <TextField
       id={`${idPrefix}-custom-model`}
-      label={hasLatest ? 'Model ID' : 'Custom model ID (optional)'}
-      hint={hasLatest
+      label={useToggle ? 'Model ID' : 'Custom model ID (optional)'}
+      hint={useToggle
         ? `Clear the field to go back to ${provider.defaultModel}.`
         : 'Use a model that isn\'t listed above. Clear the field or pick a card to go back to the curated list.'}
       value={custom}
@@ -69,7 +71,7 @@ export default function ModelSelect({ idPrefix, label, provider, value, onChange
     />
   );
 
-  if (!hasLatest) {
+  if (!useToggle) {
     return (
       <div className="space-y-16">
         <ModelCards label={label} models={provider.models} value={value} onChange={onChange} />
@@ -79,7 +81,7 @@ export default function ModelSelect({ idPrefix, label, provider, value, onChange
   }
 
   const modes = [
-    { value: 'latest', label: 'Latest' },
+    ...(hasLatest ? [{ value: 'latest', label: 'Latest' }] : []),
     { value: 'pinned', label: 'Pinned' },
     ...(provider.allowCustomModel ? [{ value: 'custom', label: 'Custom' }] : []),
   ];
