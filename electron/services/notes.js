@@ -7,6 +7,7 @@ const {
   buildUserPrompt,
   parseNotesResponse,
   buildNotesPreview,
+  estimateNotesProgress,
 } = require('./notes-normalize');
 const { applyMeetingTitle } = require('./meeting-title');
 
@@ -39,9 +40,10 @@ function resolveTargets(config) {
 
 /**
  * Collect one attempt's streamed text and call `onPreview` with the notes so
- * far, at most every PREVIEW_INTERVAL_MS. `stop()` cancels a pending update.
+ * far and an estimated `progress` (0 to <1), at most every PREVIEW_INTERVAL_MS.
+ * `stop()` cancels a pending update.
  */
-function createPreviewStream({ onPreview, attempt, provider, model, markdown, meetingTitle }) {
+function createPreviewStream({ onPreview, attempt, provider, model, markdown, meetingTitle, transcriptChars }) {
   let text = '';
   let timer = null;
   let last = 0;
@@ -49,7 +51,14 @@ function createPreviewStream({ onPreview, attempt, provider, model, markdown, me
     timer = null;
     last = Date.now();
     const notes = buildNotesPreview(text, markdown);
-    if (notes) onPreview({ attempt, provider, model, notes: applyMeetingTitle(notes, meetingTitle) });
+    if (!notes) return;
+    onPreview({
+      attempt,
+      provider,
+      model,
+      notes: applyMeetingTitle(notes, meetingTitle),
+      progress: estimateNotesProgress(text.length, transcriptChars),
+    });
   };
   return {
     onText(delta) {
@@ -68,8 +77,9 @@ function createPreviewStream({ onPreview, attempt, provider, model, markdown, me
  * Generate notes for a transcript with the configured LLM, retrying once with
  * the fallback provider/model if the primary fails. `meetingTitle` (already
  * checked by sourceMeetingTitle) is a prompt hint and wins over the LLM's title.
- * `onPreview({ attempt, provider, model, notes })`, if given, receives the
- * notes streamed so far; `notes: null` starts each attempt with a clean preview.
+ * `onPreview({ attempt, provider, model, notes, progress })`, if given, receives
+ * the notes streamed so far and an estimate of how much is written; `notes: null`
+ * starts each attempt with a clean preview.
  *
  * Returns { notes, provider, model, fallback } where `fallback` is
  * { primary: {provider, model}, error } when the fallback produced the notes.
@@ -100,7 +110,10 @@ async function generateNotes(transcript, config, { meetingTitle = '', onPreview 
 
     onPreview?.({ attempt: i, provider: provider.id, model, notes: null });
     const preview = onPreview
-      ? createPreviewStream({ onPreview, attempt: i, provider: provider.id, model, markdown, meetingTitle })
+      ? createPreviewStream({
+        onPreview, attempt: i, provider: provider.id, model, markdown, meetingTitle,
+        transcriptChars: transcriptText.length,
+      })
       : null;
     try {
       const text = await provider.generate({

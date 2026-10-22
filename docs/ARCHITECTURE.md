@@ -367,7 +367,9 @@ repo-hygiene job actively rejects any `.exe`/`.dll`/`.msi`/`.dylib`, or anything
 
 `runProcessingPipeline()` in `main.js` drives three stages in sequence. Progress is pushed to
 the renderer via `processing:progress` and, via the WebSocket bridge, to the extension's overlay
-(`PROCESSING_PROGRESS` / `PROCESSING_COMPLETE`) at each stage boundary. Each stage can be
+(`PROCESSING_PROGRESS` / `PROCESSING_COMPLETE`) at each stage boundary: transcription fills
+0–60%, notes 60–85% and Notion 85–100%. Within the notes stage the bar keeps moving as the
+model writes (see 5.2). Each stage can be
 independently retried through `processing:retry` if it fails (e.g. a transient network error on
 Stage 1 does not force re-transcription to be repeated once Stage 2 later fails).
 
@@ -456,11 +458,17 @@ callback (Claude and Groq read server-sent events with `providers/shared/sse.js`
 from the text so far at most every 100 ms (`buildNotesPreview`: incomplete JSON is completed by
 `partial-json` and run through `normalizeNotes`; Markdown is passed through) and
 `generateAndStampNotes` sends it to the renderer as `notes:preview`
-(`{ sessionId, attempt, provider, model, notes }`, a full snapshot each time, `notes: null` when an
+(`{ sessionId, attempt, provider, model, notes, progress }`, a full snapshot each time, `notes: null` when an
 attempt starts so a fallback begins with a clean preview). The meeting page shows it in place of
 any old notes, rendering the same cards or Markdown as the final notes; Markdown goes through
 `remend` first, which closes half-written bold, code and links. Previews are never saved: the
 DB is only written once the final text parses, and on failure the old notes are shown again.
+
+`progress` is `estimateNotesProgress()` (`notes-normalize.js`): the notes are expected to run to
+about 12% of the transcript plus 1,200 characters (between 1,500 and 12,000), progress is linear
+to 90% at that length and then creeps towards 100% without reaching it. `main.js` maps it onto
+60–84% of the bar and sends `processing:progress` (`generating`) whenever the whole percentage
+goes up, never down, so a fallback that starts over doesn't move the bar backwards.
 
 The session's `meeting_title` column holds the meeting's own title: the detected tab or window
 title, the extension's tab title, a calendar event's title, a pasted transcript's title, or a

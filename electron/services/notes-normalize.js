@@ -203,6 +203,20 @@ function withoutEmptyEntries(list) {
 }
 
 /**
+ * Estimated share (0 to <1) of the notes written once the LLM has streamed
+ * `outputChars`. Notes run to roughly 12% of the transcript plus a fixed
+ * header, within 1,500 to 12,000 characters. Progress is linear up to 90% at
+ * that estimate, then creeps towards 100% without reaching it, so a longer
+ * answer than expected never stalls or overshoots.
+ */
+function estimateNotesProgress(outputChars, transcriptChars) {
+  const expected = Math.min(12000, Math.max(1500, 1200 + transcriptChars * 0.12));
+  if (outputChars <= 0) return 0;
+  if (outputChars <= expected) return 0.9 * (outputChars / expected);
+  return 0.9 + 0.1 * (1 - Math.exp(-(outputChars - expected) / expected));
+}
+
+/**
  * Turn the text an LLM has streamed so far into a notes object for the live
  * preview, or null when there's nothing to show yet. Partial JSON is completed
  * by partial-json and normalized like the final notes.
@@ -241,4 +255,5 @@ module.exports = {
   buildUserPrompt,
   parseNotesResponse,
   buildNotesPreview,
+  estimateNotesProgress,
 };

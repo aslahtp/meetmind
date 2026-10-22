@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { buildNotesPreview } = require('../electron/services/notes-normalize.js');
+const { buildNotesPreview, estimateNotesProgress } = require('../electron/services/notes-normalize.js');
 const { llmRegistry } = require('../electron/providers/index.js');
 const { generateNotes } = require('../electron/services/notes.js');
 
@@ -60,6 +60,30 @@ describe('buildNotesPreview (JSON)', () => {
   });
 });
 
+describe('estimateNotesProgress', () => {
+  it('starts at zero and reaches 90% at the expected length', () => {
+    expect(estimateNotesProgress(0, 25000)).toBe(0);
+    // 25,000 transcript chars -> 1,200 + 3,000 = 4,200 expected
+    expect(estimateNotesProgress(2100, 25000)).toBeCloseTo(0.45);
+    expect(estimateNotesProgress(4200, 25000)).toBeCloseTo(0.9);
+  });
+
+  it('keeps rising past the estimate without reaching 100%', () => {
+    let prev = 0;
+    for (let chars = 100; chars <= 200000; chars *= 1.5) {
+      const p = estimateNotesProgress(chars, 25000);
+      expect(p).toBeGreaterThan(prev);
+      expect(p).toBeLessThan(1);
+      prev = p;
+    }
+  });
+
+  it('expects at least 1,500 and at most 12,000 characters', () => {
+    expect(estimateNotesProgress(1500, 0)).toBeCloseTo(0.9);
+    expect(estimateNotesProgress(12000, 1e7)).toBeCloseTo(0.9);
+  });
+});
+
 describe('generateNotes onPreview', () => {
   const transcript = [{ speaker: 'Speaker 1', text: 'hello', startTime: 0 }];
   const config = {
@@ -87,6 +111,10 @@ describe('generateNotes onPreview', () => {
     await generateNotes(transcript, config, { onPreview: (p) => previews.push(p) });
     expect(previews.map((p) => p.notes?._rawMarkdown ?? null)).toEqual([null, '# Ti', '# Title\n\nBody']);
     expect(previews[0]).toMatchObject({ attempt: 0, provider: 'groq', model: 'llama-3.3-70b-versatile' });
+    // Each snapshot carries a growing progress estimate.
+    expect(previews[1].progress).toBeGreaterThan(0);
+    expect(previews[2].progress).toBeGreaterThan(previews[1].progress);
+    expect(previews[2].progress).toBeLessThan(1);
   });
 
   it('applies the meeting title to the preview', async () => {
