@@ -17,7 +17,7 @@ const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, conve
 const { getSessionWaveform, deleteSessionWaveform } = require('./audio/waveform');
 const { transcribe } = require('./services/transcription');
 const { generateNotes } = require('./services/notes');
-const { sourceMeetingTitle } = require('./services/meeting-title');
+const { cleanTitle, sourceMeetingTitle, applyMeetingTitle } = require('./services/meeting-title');
 const { DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/prompts');
 const { registries, describeProviders } = require('./providers');
 const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./services/notion');
@@ -831,9 +831,12 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     abortIfCancelled();
 
     // Stage 2: LLM notes (60–85%)
-    const notes = await generateAndStampNotes(sessionId, transcript, config, sttInfo, session?.meeting_title);
+    // Read fresh: the meeting may have been renamed while it was being transcribed.
+    const notes = await generateAndStampNotes(sessionId, transcript, config, sttInfo, db.getSession(sessionId)?.meeting_title);
 
     abortIfCancelled();
+    // ...or while the notes were being written.
+    applyMeetingTitle(notes, db.getSession(sessionId)?.meeting_title);
 
     db.updateSession(sessionId, {
       notes: JSON.stringify(notes),
@@ -1227,6 +1230,27 @@ function registerIpcHandlers() {
     } catch (err) {
       logger.error('Failed to save edited notes', { sessionId: id, error: err.message });
       return { success: false, error: err.message || 'Failed to save notes.' };
+    }
+  });
+
+  // Renames a meeting from its page. The new name becomes the meeting's own title, so notes
+  // regenerated later keep it instead of taking the LLM's.
+  ipcMain.handle('session:rename', (_e, id, rawTitle) => {
+    const session = db.getSession(id);
+    if (!session) return { success: false, error: 'Meeting not found.' };
+    const title = cleanTitle(rawTitle);
+    if (!title) return { success: false, error: 'The title can’t be empty.' };
+    try {
+      const updates = { title, meeting_title: title };
+      if (session.notes && typeof session.notes === 'object') {
+        updates.notes = JSON.stringify(applyMeetingTitle(session.notes, title));
+      }
+      db.updateSession(id, updates);
+      logger.info('Meeting renamed', { sessionId: id });
+      return { success: true, session: db.getSession(id) };
+    } catch (err) {
+      logger.error('Failed to rename meeting', { sessionId: id, error: err.message });
+      return { success: false, error: err.message || 'Failed to rename the meeting.' };
     }
   });
 

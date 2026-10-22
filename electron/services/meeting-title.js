@@ -14,17 +14,21 @@ const GENERIC_TITLES = new Set([
 const MEET_CODE = /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i;
 const MAX_LENGTH = 200;
 
-/** The meeting's own title, or '' when it is missing or generic. */
-function sourceMeetingTitle(raw) {
-  const title = String(raw || '')
+/** One line, no invisible marks, at most MAX_LENGTH characters (code points, so emoji aren't split). */
+function cleanTitle(raw) {
+  const oneLine = String(raw || '')
     .replace(/[\u200b\u200e\u200f]/g, '')
     .replace(/\s+/g, ' ')
-    // Raw tab titles from the extension: "Meet - Weekly sync", "Weekly sync | Microsoft Teams".
-    .replace(/^(?:Google )?Meet\s+[-–—]\s+/i, '')
-    .replace(/\s*\|\s*Microsoft Teams$/i, '')
-    .trim()
-    .slice(0, MAX_LENGTH)
     .trim();
+  return Array.from(oneLine).slice(0, MAX_LENGTH).join('').trim();
+}
+
+/** The meeting's own title, or '' when it is missing or generic. */
+function sourceMeetingTitle(raw) {
+  const title = cleanTitle(String(raw || '')
+    // Raw tab titles from the extension: "Meet - Weekly sync", "Weekly sync | Microsoft Teams".
+    .replace(/^\s*(?:Google )?Meet\s+[-–—]\s+/i, '')
+    .replace(/\s*\|\s*Microsoft Teams\s*$/i, ''));
   if (!title || GENERIC_TITLES.has(title.toLowerCase()) || MEET_CODE.test(title)) return '';
   return title;
 }
@@ -43,4 +47,4 @@ function applyMeetingTitle(notes, meetingTitle) {
   return notes;
 }
 
-module.exports = { sourceMeetingTitle, applyMeetingTitle };
+module.exports = { cleanTitle, sourceMeetingTitle, applyMeetingTitle };

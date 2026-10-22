@@ -153,7 +153,7 @@ grouped by feature:
 | `logs` | `logs:get`, `logs:clear`, `logs:openFolder` | Backing store for the Logs viewer |
 | `config` | `config:get`, `config:set`, `config:set-multiple` | Settings read/write |
 | `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:import-file` | Recording control and device enumeration (FFmpeg devices are Windows-only; macOS returns an error) |
-| `sessions` | `sessions:list`, `session:get/delete/update-notes/open-recording/create-from-transcript` | Session CRUD |
+| `sessions` | `sessions:list`, `session:get/delete/update-notes/rename/open-recording/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title` |
 | `dialog` | `dialog:choose-folder` | Native folder picker |
 | `pdf` | `pdf:export`, `pdf:reveal`, `pdf:default-dir` | PDF export |
 | `notion` | `notion:upload`, `notion:test` | Notion sync and connection test |
@@ -450,8 +450,9 @@ read). The controller checks that the recording is not silent and then calls the
 `normalizeNotes`, JSON fallback). Providers only return raw text.
 
 The session's `meeting_title` column holds the meeting's own title: the detected tab or window
-title, the extension's tab title, a calendar event's title, or a pasted transcript's title,
-filtered by `sourceMeetingTitle()` (`services/meeting-title.js`), which drops placeholders,
+title, the extension's tab title, a calendar event's title, a pasted transcript's title, or a
+name the user gave it on the meeting page (`session:rename`; the pipeline re-reads it, so a
+rename during processing sticks). Source titles are filtered by `sourceMeetingTitle()` (`services/meeting-title.js`), which drops placeholders,
 app names (`Google Meet`, `Zoom Meeting`, `Microsoft Teams`…) and ad-hoc Meet codes
 (`abc-defg-hij`). When it is set, the user prompt names it as the title and context, and
 `applyMeetingTitle()` makes it the notes title (and the Markdown `#` heading) whatever the model

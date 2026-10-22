@@ -446,6 +446,30 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
 
   const handleDiscardEdits = () => setDraft(savedMarkdown);
 
+  // Renames the meeting (and its notes). Resolves true once saved, so the title field can close.
+  const handleRename = async (nextTitle) => {
+    try {
+      const result = await window.meetmind.sessions.rename(session.id, nextTitle);
+      if (!result?.success) {
+        addToast(result?.error || 'Couldn’t rename the meeting.', 'error');
+        return false;
+      }
+      await onRefresh?.();
+      if (notionUrl) {
+        addToast('Title saved. The Notion page still has the previous title.', 'success', {
+          label: 'Update Notion',
+          onClick: () => handleSyncNotionRef.current?.(),
+        });
+      }
+      return true;
+    } catch (err) {
+      addToast(`Couldn’t rename the meeting: ${err.message}`, 'error');
+      return false;
+    }
+  };
+  // The draft repeats the title as its first heading, so a rename mid-edit would be undone by saving it.
+  const renameDisabledReason = dirty ? 'Save or discard your edits first' : null;
+
   useEffect(() => {
     if (!saved) return undefined;
     const t = setTimeout(() => setSaved(false), 2500);
@@ -547,6 +571,8 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
             title={title}
             durationLabel={durationLabel}
             processingError={processingError}
+            onRename={handleRename}
+            renameDisabledReason={renameDisabledReason}
             aside={showModeToggle && <SegmentedControl {...modeToggle} revealIcon />}
           />
           {activeTab === 'summary' && (

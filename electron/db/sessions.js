@@ -92,7 +92,7 @@ function createSession(session) {
 
 function updateSession(id, updates) {
   const d = ensureDb();
-  const allowed = ['title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status', 'last_error'];
+  const allowed = ['title', 'meeting_title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status', 'last_error'];
   const keys = Object.keys(updates).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;
 
