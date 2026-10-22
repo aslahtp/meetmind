@@ -1,5 +1,5 @@
 
-# Pirsch Analytics — Style Reference
+# MeetMind — Style Reference
 
 > sunlit paper notebook with highlighter swatches
 
@@ -7,7 +7,7 @@
 
 Source measurements are normalized; roles and recommendations are interpreted. Font summary lists are independent, not paired by position. HTML examples are reconstructions, not source components.
 
-Pirsch uses a warm paper-notebook language: a soft cream canvas (#f8f5ed) replaces the usual SaaS white, and the only chromatic punctuation is a sunshine yellow (#ffda6e) that reads as a highlighter, not a brand stamp. Almost the entire interface is achromatic — ink-black text and 1px hairline borders do the structural work that shadows and fills do elsewhere. Typography is a single family (DM Sans) running from a whisper at 14px to a commanding 64px display, with generous 8px-grid breathing room and unusually rounded 24px corners that make cards feel like sticky notes. Green (#6ece9d) appears sparingly as a status/availability signal (happy-customer badge, theme-toggle dot) and never competes with yellow. The overall feel is editorial and tactile — closer to a printed report than a dashboard.
+MeetMind uses a warm paper-notebook language: a soft cream canvas (#f8f5ed) replaces the usual SaaS white, and the only chromatic punctuation is a sunshine yellow (#ffda6e) that reads as a highlighter, not a brand stamp. Almost the entire interface is achromatic — ink-black text and 1px hairline borders do the structural work that shadows and fills do elsewhere. Typography is a single family (DM Sans) running from a whisper at 14px to a commanding 64px display, with generous 8px-grid breathing room and unusually rounded 24px corners that make cards feel like sticky notes. Green (#6ece9d) appears sparingly as a status/availability signal (happy-customer badge, theme-toggle dot) and never competes with yellow. The overall feel is editorial and tactile — closer to a printed report than a dashboard.
 
 ## Tokens — Colors
 
@@ -145,7 +145,7 @@ Transparent, no border, centered monochrome wordmark or mark in #000000. 8-colum
 
 **Role:** Brand mark display
 
-48px (or similar) square with 12px radius, cream fill, 1px #000000 border, centered monochrome icon. Used for the Pirsch logo lockup in the CTA block.
+48px (or similar) square with 12px radius, cream fill, 1px #000000 border, centered monochrome icon. Used for the MeetMind logo lockup in the CTA block.
 
 ### CTA Block
 
@@ -195,7 +195,7 @@ The system has effectively zero shadow elevation. Cards, images, and tiles are d
 
 ## Imagery
 
-Imagery is restrained and functional: monochrome product screenshots (dashboard tiles, filter chips, data tables) framed by 1px ink borders at 12px radius, never full-bleed. Customer logos appear as raw monochrome wordmarks on the cream canvas, no card wrappers or color treatments. The Pirsch brand mark is a single black glyph on cream. No photography, no illustrations, no decorative graphics — the only color in the visual system comes from the two accent swatches, and they appear as flat fills, never as gradients or tinted images.
+Imagery is restrained and functional: monochrome product screenshots (dashboard tiles, filter chips, data tables) framed by 1px ink borders at 12px radius, never full-bleed. Customer logos appear as raw monochrome wordmarks on the cream canvas, no card wrappers or color treatments. The MeetMind brand mark is a single black glyph on cream. No photography, no illustrations, no decorative graphics — the only color in the visual system comes from the two accent swatches, and they appear as flat fills, never as gradients or tinted images.
 
 ## Layout
 
