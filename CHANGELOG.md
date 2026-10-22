@@ -16,6 +16,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Changed
 
 - **Settings**: Claude and Groq's custom model ID moves behind the same toggle (Pinned / Custom), so the model cards and the ID field no longer show at once.
+- **Docs and Settings**: Language support is described as English with Indic languages and multilingual meetings in general, rather than naming a single language.
 
 ## [4.10.0] - 2026-10-22
 

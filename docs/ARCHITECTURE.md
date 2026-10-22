@@ -430,7 +430,7 @@ read). The controller checks that the recording is not silent and then calls the
 - **Sarvam AI** (`https://api.sarvam.ai`): job-based flow (`sarvamPost`/`sarvamGet` helpers)
   against `/speech-to-text/job/v1/...`: create job (model `saaras:v3`) -> upload file -> start
   job -> poll status -> download result. `saaras:v3` is used specifically because meetings
-  commonly mix English and Malayalam, and this model supports that code-switching
+  commonly mix English and Indic languages, and this model supports that code-switching
   automatically, without a language being pinned in advance. This is the only engine
   built for that use case; Google STT and AssemblyAI are configured with a single
   `language` setting (default `ml-IN`).
@@ -441,7 +441,7 @@ read). The controller checks that the recording is not silent and then calls the
   WAV is split into 10 minute chunks (2 s overlap, merged with the shared `mergeTranscriptSegments`)
   and 429 responses are retried honoring `retry-after`. It has no diarization, so every segment
   is labelled `Speaker 1` (`capabilities.diarization: false`), and it is weaker than Sarvam on
-  English/Malayalam code-switching. The same `groqApiKey` is used by the Groq LLM provider.
+  English/Indic code-switching. The same `groqApiKey` is used by the Groq LLM provider.
 
 ### 5.2 Stage 2: Notes generation (`electron/services/notes.js` + `electron/providers/llm/*`)
 
@@ -702,7 +702,7 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 | Anthropic Claude API | Notes generation (Sonnet, Fable, Opus, Haiku) | API key | `electron/providers/llm/claude.js` (REST via `fetch`) |
 | Groq | Notes generation (Llama, GPT-OSS) and Whisper transcription | API key (one key for both) | `electron/providers/llm/groq.js`, `electron/providers/stt/groq.js` (REST via `fetch`) |
 | AssemblyAI | Transcription (alternative engine) | API key | `electron/providers/stt/assemblyai.js` (`assemblyai` SDK + REST) |
-| Sarvam AI | Transcription, `saaras:v3` model for English/Malayalam code-switching | API key | `electron/providers/stt/sarvam.js` (REST) |
+| Sarvam AI | Transcription, `saaras:v3` model for English/Indic code-switching | API key | `electron/providers/stt/sarvam.js` (REST) |
 | Notion API | Optional notes sync (Stage 3) | Internal integration token | `electron/services/notion.js` (`@notionhq/client`) |
 | Google Calendar API | Optional upcoming-meeting reminders | OAuth2 (user-supplied client ID/secret) | `electron/services/google-calendar.js` (`googleapis`) |
 | GitHub Releases | Auto-update distribution | none (public releases) | `electron-updater`, configured in `electron-builder.yml` |

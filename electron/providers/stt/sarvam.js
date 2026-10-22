@@ -230,14 +230,14 @@ module.exports = {
   icon: 'sarvam',
   pricing: 'Pay-as-you-go, INR-based billing (~₹0.50/min)',
   description:
-    'Built specifically for Indian languages with excellent Malayalam-English code-switching and accent handling. Requires Sarvam API key.',
+    'Built specifically for Indian languages with excellent English-Indic code-switching and accent handling. Requires Sarvam API key.',
   credentials: [
     {
       configKey: 'sarvamApiKey',
       label: 'Sarvam AI API key',
       type: 'password',
       placeholder: 'sarvam_api_key_...',
-      hint: 'High accuracy transcription for Indian languages, including Malayalam with seamless code-switching.',
+      hint: 'High accuracy transcription for Indian languages, with seamless code-switching between English and Indic languages.',
       link: { href: 'https://dashboard.sarvam.ai', label: 'Sarvam dashboard' },
       required: true,
     },

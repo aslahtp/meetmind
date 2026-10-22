@@ -98,7 +98,7 @@ module.exports = {
       configKey: 'assemblyAiPrompt',
       label: 'Transcription guidance / key terms (optional)',
       type: 'text',
-      placeholder: 'e.g. Malayalam, Kubernetes, MeetMind, API tokens…',
+      placeholder: 'e.g. Kubernetes, MeetMind, API tokens, speaker names…',
       hint: 'Custom domain terms, names, or languages that improve recognition accuracy.',
     },
   ],

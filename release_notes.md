@@ -25,7 +25,7 @@
 4. In the **Transcription** tab, choose your speech-to-text service:
    - For **AssemblyAI** (Recommended):
      - Paste your AssemblyAI API key.
-     - (Optional) Add a short prompt to fine-tune behavior for English/Malayalam meetings.
+     - (Optional) Add a short prompt to fine-tune behavior for meetings that mix English and Indic languages.
    - For **Google STT**: Enter your Google Cloud API key and Project ID.
    - For **Sarvam AI STT**: Paste your Sarvam AI API key
 5. In the **Notes** tab, paste your Gemini API key, then click **Save changes** and run a quick test recording.

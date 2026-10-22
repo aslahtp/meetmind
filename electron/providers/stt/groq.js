@@ -121,7 +121,7 @@ module.exports = {
   icon: 'groq',
   pricing: 'Free tier available, then from $0.04/hour of audio',
   description:
-    'Very fast Whisper transcription on Groq hardware. No speaker diarization, and weaker than Sarvam for English/Malayalam code-switching.',
+    'Very fast Whisper transcription on Groq hardware. No speaker diarization, and weaker than Sarvam for English/Indic code-switching.',
   credentials: [
     {
       configKey: 'groqApiKey',
