@@ -6,6 +6,16 @@ updated: 2026-10-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.12.0] - 2026-10-23
+
+### Added
+
+- **AssemblyAI**: Universal-3.5 Pro, now the default AssemblyAI model. It detects the language itself and code-switches across 18 languages; audio in other languages falls back to Universal-2.
+
+### Removed
+
+- **AssemblyAI**: Universal-3 Pro; anyone using it moves to Universal-3.5 Pro automatically.
+
 ## [4.11.0] - 2026-10-22
 
 ### Added

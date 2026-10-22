@@ -83,7 +83,7 @@ jobs:
       always-run: true
 
   build:
-    name: Build installer
+    name: Build Windows app
     needs: [check-version, checks]
     if: needs.check-version.outputs.release_needed == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest

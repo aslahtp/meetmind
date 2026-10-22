@@ -216,6 +216,36 @@ describe('SSE reader', () => {
   });
 });
 
+describe('AssemblyAI STT', () => {
+  const assemblyai = require('../electron/providers/stt/assemblyai.js');
+  const options = (model, prompt) => assemblyai._requestOptions({ wavPath: 'a.wav', model, prompt });
+
+  it('defaults to Universal-3.5 Pro, including for a saved Universal-3 Pro', () => {
+    expect(assemblyai.defaultModel).toBe('universal-3-5-pro');
+    expect(sttRegistry.resolveModel(assemblyai, '')).toBe('universal-3-5-pro');
+    expect(sttRegistry.resolveModel(assemblyai, 'universal-3-pro')).toBe('universal-3-5-pro');
+    expect(sttRegistry.resolveModel(assemblyai, 'universal-2')).toBe('universal-2');
+  });
+
+  it('lets Universal-3.5 Pro detect the language, with Universal-2 for the rest', () => {
+    const o = options('universal-3-5-pro');
+    expect(o.speech_models).toEqual(['universal-3-5-pro', 'universal-2']);
+    expect(o.language_detection).toBe(true);
+    expect(o.language_codes).toBeUndefined(); // can't be combined with language_detection
+    expect(o.speaker_labels).toBe(true);
+  });
+
+  it('keeps Universal-2 on its fixed language list', () => {
+    expect(options('universal-2')).toMatchObject({ speech_models: ['universal-2'], language_codes: ['en', 'ml'] });
+    expect(options('universal-2').language_detection).toBeUndefined();
+  });
+
+  it('passes a trimmed prompt only when one is set', () => {
+    expect(options('universal-3-5-pro', '  Kubernetes, MeetMind ').prompt).toBe('Kubernetes, MeetMind');
+    expect(options('universal-3-5-pro', '   ').prompt).toBeUndefined();
+  });
+});
+
 describe('Groq LLM', () => {
   const base = { systemPrompt: 's', userPrompt: 'u', model: 'llama-3.3-70b-versatile', config: { groqApiKey: 'k' } };
 
