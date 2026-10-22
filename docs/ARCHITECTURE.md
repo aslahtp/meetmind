@@ -444,10 +444,18 @@ read). The controller checks that the recording is not silent and then calls the
 
 ### 5.2 Stage 2: Notes generation (`electron/services/notes.js` + `electron/providers/llm/*`)
 
-`generateNotes(transcript, config)` resolves the primary target from `llmProvider` and
-`llmModels[<provider>]`, builds the prompt for the output mode, calls `provider.generate()` and
-parses the result (`services/notes-normalize.js`: fence stripping, `normalizeNotes`, JSON
-fallback). Providers only return raw text.
+`generateNotes(transcript, config, { meetingTitle })` resolves the primary target from
+`llmProvider` and `llmModels[<provider>]`, builds the prompt for the output mode, calls
+`provider.generate()` and parses the result (`services/notes-normalize.js`: fence stripping,
+`normalizeNotes`, JSON fallback). Providers only return raw text.
+
+The session's `meeting_title` column holds the meeting's own title: the detected tab or window
+title, the extension's tab title, a calendar event's title, or a pasted transcript's title,
+filtered by `sourceMeetingTitle()` (`services/meeting-title.js`), which drops placeholders,
+app names (`Google Meet`, `Zoom Meeting`, `Microsoft Teams`…) and ad-hoc Meet codes
+(`abc-defg-hij`). When it is set, the user prompt names it as the title and context, and
+`applyMeetingTitle()` makes it the notes title (and the Markdown `#` heading) whatever the model
+wrote. Without one, the session takes the LLM's title.
 
 - **Gemini** (`llm/gemini.js`, `@google/generative-ai`): `gemini-3.8-flash` (default),
   `gemini-3.7-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`. Retired model IDs saved
@@ -510,7 +518,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   transcript        TEXT,   -- JSON-serialized array
   notes             TEXT,   -- JSON-serialized object, or Markdown string in `markdown` mode
   notion_page_url   TEXT,
-  status            TEXT NOT NULL DEFAULT 'recording'
+  status            TEXT NOT NULL DEFAULT 'recording',
+  last_error        TEXT,   -- added in 4.0.0 via ALTER TABLE: why the last processing run failed
+  meeting_title     TEXT    -- added in 4.10.0 via ALTER TABLE: the meeting's own title (see 5.2)
 )
 ```
 
@@ -922,6 +932,7 @@ Current coverage is pure logic only:
 | `tests/meetingFilters.test.js` | Meetings filters and sorting (`renderer/lib/meetingFilters.js`) |
 | `tests/meetingSearch.test.js` | Meeting search: stemming, concept map, typos, prefixes, phrases, ranking and snippets (`renderer/lib/meetingSearch.js`) |
 | `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, meeting window titles, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
+| `tests/meetingTitle.test.js` | Which source titles name the meeting, and how one replaces the LLM's title and prompts it (`electron/services/meeting-title.js`, `buildUserPrompt`) |
 | `tests/ffmpeg-path.test.js` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.js`) and the per-OS silent-recording hints (`electron/audio/audio-hints.js`) |
 | `tests/macSupport.test.js` | macOS capture strategies (`electron/audio/mac-capture.js`), "Test system audio" verdicts (`renderer/lib/audioTest.js`), and the shape of the pinned macOS FFmpeg downloads (`electron/audio/ffmpeg-sources.js`) |
 | `tests/macPermissions.test.jsx` | Server-renders the macOS Permissions card (`renderer/components/settings/MacPermissions.jsx`), which can't be seen in the Windows dev app |
