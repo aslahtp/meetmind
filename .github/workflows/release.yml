@@ -72,9 +72,15 @@ jobs:
     name: Checks
     needs: check-version
     if: needs.check-version.outputs.release_needed == 'true' || github.event_name == 'workflow_dispatch'
+    # ci.yml's already-tested job reads PRs and workflow runs; a called workflow can't ask for
+    # more than this, or this whole workflow fails to start. It never skips for this caller.
     permissions:
       contents: read
+      actions: read # ci.yml: list workflow runs (already-tested)
+      pull-requests: read # ci.yml: find a commit's PR (already-tested)
     uses: $/.github/workflows/ci.yml
+    with:
+      always-run: true
 
   build:
     name: Build installer

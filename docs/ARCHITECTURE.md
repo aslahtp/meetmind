@@ -911,8 +911,9 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   push to `main`, an `already-tested` job finds the merged PR through the API and skips every job
   except the dependency audit (new advisories need no file change) when the merged commit's file
   tree is identical to the PR's last commit and CI passed on that commit; anything else (the PR was
-  behind `main`, no PR found, an API error) runs everything, and release gates, PRs and manual runs
-  never skip. It runs no repository code and only has `actions`/`pull-requests`/`contents` read
+  behind `main`, no PR found, an API error) runs everything, and release gates (`release.yml` passes
+  `always-run: true`, and grants the read scopes this job needs, since a called workflow can't
+  exceed its caller's permissions), PRs and manual runs never skip. It runs no repository code and only has `actions`/`pull-requests`/`contents` read
   access. Reusing the PR's result adds no trust beyond what merging on its required checks
   already did: a PR can only fake a pass by changing `ci.yml`, which then reaches `main` with the
   identical tree it was tested with, after maintainer review (CODEOWNERS).
