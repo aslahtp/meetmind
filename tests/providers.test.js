@@ -294,6 +294,19 @@ describe('generateNotes fallback', () => {
     }
   });
 
+  it('prompts with the meeting title and keeps it over the LLM title', async () => {
+    const groq = llmRegistry.get('groq');
+    const spy = vi.spyOn(groq, 'generate').mockResolvedValue('# Invented\n\nBody');
+    try {
+      const res = await generateNotes(transcript, baseConfig, { meetingTitle: 'Weekly Sync' });
+      expect(spy.mock.calls[0][0].userPrompt).toContain('"Weekly Sync"');
+      expect(res.notes.title).toBe('Weekly Sync');
+      expect(res.notes._rawMarkdown).toBe('# Weekly Sync\n\nBody');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('does not use a fallback when the primary succeeds', async () => {
     const groq = llmRegistry.get('groq');
     const spy = vi.spyOn(groq, 'generate').mockResolvedValue('# Ok');

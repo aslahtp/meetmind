@@ -54,6 +54,8 @@ async function initialize() {
   // Added in 4.0.0: why the last processing run failed (no migration system, so add if missing).
   const cols = db.exec('PRAGMA table_info(sessions)')[0]?.values.map((r) => r[1]) || [];
   if (!cols.includes('last_error')) db.run('ALTER TABLE sessions ADD COLUMN last_error TEXT');
+  // Added in 4.10.0: the meeting's own title (detected tab, calendar, pasted title), kept over the LLM's.
+  if (!cols.includes('meeting_title')) db.run('ALTER TABLE sessions ADD COLUMN meeting_title TEXT');
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
   persist();
@@ -72,12 +74,13 @@ function ensureDb() {
 function createSession(session) {
   const d = ensureDb();
   d.run(
-    `INSERT INTO sessions (id, title, meeting_url, started_at, audio_path, status)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO sessions (id, title, meeting_title, meeting_url, started_at, audio_path, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       session.id,
-      session.title       || 'Untitled Meeting',
-      session.meeting_url || null,
+      session.title         || 'Untitled Meeting',
+      session.meeting_title || null,
+      session.meeting_url   || null,
       session.started_at  || new Date().toISOString(),
       session.audio_path  || null,
       session.status      || 'recording',
@@ -89,7 +92,7 @@ function createSession(session) {
 
 function updateSession(id, updates) {
   const d = ensureDb();
-  const allowed = ['title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status', 'last_error'];
+  const allowed = ['title', 'meeting_title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status', 'last_error'];
   const keys = Object.keys(updates).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;
 

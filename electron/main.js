@@ -17,6 +17,7 @@ const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, conve
 const { getSessionWaveform, deleteSessionWaveform } = require('./audio/waveform');
 const { transcribe } = require('./services/transcription');
 const { generateNotes } = require('./services/notes');
+const { cleanTitle, sourceMeetingTitle, applyMeetingTitle } = require('./services/meeting-title');
 const { DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/prompts');
 const { registries, describeProviders } = require('./providers');
 const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./services/notion');
@@ -101,8 +102,8 @@ process.on('unhandledRejection', (reason) => {
 
 // Runs the notes stage: generate with the configured LLM (and fallback), stamp provenance
 // into the notes blob for the renderer, and announce a fallback if one was used.
-async function generateAndStampNotes(sessionId, transcript, config, sttInfo) {
-  const result = await generateNotes(transcript, config);
+async function generateAndStampNotes(sessionId, transcript, config, sttInfo, meetingTitle) {
+  const result = await generateNotes(transcript, config, { meetingTitle: meetingTitle || '' });
   const notes = result.notes;
 
   notes._llmProvider = result.provider;
@@ -589,6 +590,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
   db.createSession({
     id: currentSessionId,
     title: meetingTitle || 'Untitled Meeting',
+    meeting_title: sourceMeetingTitle(meetingTitle),
     meeting_url: meetingUrl || '',
     started_at: new Date().toISOString(),
     status: 'recording',
@@ -829,9 +831,12 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
     abortIfCancelled();
 
     // Stage 2: LLM notes (60–85%)
-    const notes = await generateAndStampNotes(sessionId, transcript, config, sttInfo);
+    // Read fresh: the meeting may have been renamed while it was being transcribed.
+    const notes = await generateAndStampNotes(sessionId, transcript, config, sttInfo, db.getSession(sessionId)?.meeting_title);
 
     abortIfCancelled();
+    // ...or while the notes were being written.
+    applyMeetingTitle(notes, db.getSession(sessionId)?.meeting_title);
 
     db.updateSession(sessionId, {
       notes: JSON.stringify(notes),
@@ -1228,6 +1233,27 @@ function registerIpcHandlers() {
     }
   });
 
+  // Renames a meeting from its page. The new name becomes the meeting's own title, so notes
+  // regenerated later keep it instead of taking the LLM's.
+  ipcMain.handle('session:rename', (_e, id, rawTitle) => {
+    const session = db.getSession(id);
+    if (!session) return { success: false, error: 'Meeting not found.' };
+    const title = cleanTitle(rawTitle);
+    if (!title) return { success: false, error: 'The title can’t be empty.' };
+    try {
+      const updates = { title, meeting_title: title };
+      if (session.notes && typeof session.notes === 'object') {
+        updates.notes = JSON.stringify(applyMeetingTitle(session.notes, title));
+      }
+      db.updateSession(id, updates);
+      logger.info('Meeting renamed', { sessionId: id });
+      return { success: true, session: db.getSession(id) };
+    } catch (err) {
+      logger.error('Failed to rename meeting', { sessionId: id, error: err.message });
+      return { success: false, error: err.message || 'Failed to rename the meeting.' };
+    }
+  });
+
   ipcMain.handle('session:open-recording', async (_e, sessionId) => {
     const audioPath = resolveSessionAudioPath(sessionId);
     if (!audioPath) {
@@ -1441,10 +1467,12 @@ function registerIpcHandlers() {
       offset_seconds: i * 5,
     }));
 
+    const meetingTitle = sourceMeetingTitle(title);
     db.createSession({
-      id:         sessionId,
-      title:      title || 'Pasted Transcript',
-      started_at: now,
+      id:            sessionId,
+      title:         title || 'Pasted Transcript',
+      meeting_title: meetingTitle,
+      started_at:    now,
       status:     'generating',
     });
 
@@ -1462,7 +1490,7 @@ function registerIpcHandlers() {
 
         sendProgress('generating', 60);
 
-        const notes = await generateAndStampNotes(sessionId, transcript, config, { provider: 'none', model: '' }); // no STT for pasted transcripts
+        const notes = await generateAndStampNotes(sessionId, transcript, config, { provider: 'none', model: '' }, meetingTitle); // no STT for pasted transcripts
 
         db.updateSession(sessionId, {
           notes:  JSON.stringify(notes),

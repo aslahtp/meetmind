@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronDown,
@@ -10,6 +10,7 @@ import {
   CloudUpload,
   Loader2,
   AlertTriangle,
+  Pencil,
 } from 'lucide-react';
 import { IconButton, SegmentedControl, Menu, MenuItem } from '../ui/index.jsx';
 import NotionIcon from '../NotionIcon.jsx';
@@ -266,10 +267,152 @@ export function NoteToolbar({
   );
 }
 
+const TITLE_MAX_LENGTH = 200; // matches cleanTitle() in electron/services/meeting-title.js
+const TITLE_COUNT_FROM = 40;  // characters left when the counter appears
+
+// The meeting title, renamed in place: the pencil (or a double-click) turns it into a field
+// set in the same type and width, so a title that wraps keeps its lines and the text doesn't
+// move. Enter or leaving the field saves, Escape cancels. `onRename` resolves true once
+// saved; on failure the field stays open.
+function EditableTitle({ title, onRename, disabledReason }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(title);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+  // Blur also fires after Enter or Escape; these keep it from saving twice or after a cancel.
+  const busyRef = useRef(false);
+  const cancelledRef = useRef(false);
+  const canRename = !!onRename && !disabledReason;
+
+  // Near the limit the field shows how much is left, so a long name isn't cut off unnoticed.
+  const showCount = value.length >= TITLE_MAX_LENGTH - TITLE_COUNT_FROM;
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  // The field grows to fit its wrapped lines instead of scrolling, and refits when the window
+  // width changes. Collapsing it to measure would clamp the page's scroll position; keep it.
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!editing || !el) return undefined;
+    const fit = () => {
+      const scroller = el.closest('.overflow-y-auto');
+      const top = scroller?.scrollTop;
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight + 2}px`; // + the 1px top and bottom borders
+      if (scroller) scroller.scrollTop = top;
+    };
+    fit();
+    let width = el.offsetWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.offsetWidth === width) return; // our own height change
+      width = el.offsetWidth;
+      fit();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [editing, value, showCount, saving]);
+
+  const start = () => {
+    if (!canRename) return;
+    cancelledRef.current = false;
+    setValue(title);
+    setEditing(true);
+  };
+
+  const cancel = () => {
+    cancelledRef.current = true;
+    setEditing(false);
+  };
+
+  const commit = async () => {
+    if (busyRef.current || cancelledRef.current) return;
+    const next = value.replace(/\s+/g, ' ').trim();
+    if (!next || next === title) {
+      setEditing(false);
+      return;
+    }
+    busyRef.current = true;
+    setSaving(true);
+    const ok = await onRename(next);
+    busyRef.current = false;
+    setSaving(false);
+    if (ok) setEditing(false);
+    else inputRef.current?.focus();
+  };
+
+  if (editing) {
+    // The field reaches 17px (padding + border) past the title on both sides, so its text
+    // box is exactly the title's width and wraps at the same words. The counter and the
+    // saving spinner sit in an extra strip at the bottom, so they never narrow the text.
+    const footer = saving || showCount;
+    return (
+      <div className="relative min-w-0 flex-1">
+        <textarea
+          ref={inputRef}
+          value={value}
+          rows={1}
+          // A title is one line: pasted line breaks become spaces.
+          onChange={(e) => setValue(e.target.value.replace(/[\r\n]+/g, ' '))}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              cancel();
+            }
+          }}
+          readOnly={saving}
+          maxLength={TITLE_MAX_LENGTH}
+          aria-label="Meeting title"
+          spellCheck
+          aria-describedby={showCount ? 'meeting-title-count' : undefined}
+          className={`input block w-[calc(100%+34px)] -mx-[17px] -my-[9px] py-8 text-heading font-medium resize-none overflow-hidden ${
+            footer ? 'pb-32' : ''
+          }`}
+        />
+        {footer && (
+          <span className="absolute right-0 bottom-0 flex items-center text-caption text-graphite tabular-nums pointer-events-none">
+            {saving ? (
+              <Loader2 size={16} strokeWidth={2} className="spinner" aria-label="Saving title" />
+            ) : (
+              <span id="meeting-title-count">{value.length}/{TITLE_MAX_LENGTH}</span>
+            )}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // The pencil sits inline after the last word, so it stays next to a title that wraps.
+  return (
+    <div className="group min-w-0 flex-1 break-words">
+      <h1 className="inline text-heading font-medium text-ink" onDoubleClick={start}>
+        {title}
+      </h1>
+      {onRename && (
+        <IconButton
+          label={disabledReason || 'Rename meeting'}
+          onClick={start}
+          disabled={!canRename}
+          className="ml-8 align-[2px] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+        >
+          <Pencil size={16} strokeWidth={1.75} />
+        </IconButton>
+      )}
+    </div>
+  );
+}
+
 // Title, meta line and chips at the top of the scrolling body, so they scroll
-// away with the notes instead of permanently taking up the viewport.
+// away with the notes instead of permanently taking up the viewport. The ref is
+// on the title row (not the heading) because renaming swaps the heading for a field.
 export const NoteTitleBlock = forwardRef(function NoteTitleBlock(
-  { session, notes, title, durationLabel, processingError, aside },
+  { session, notes, title, durationLabel, processingError, aside, onRename, renameDisabledReason },
   ref,
 ) {
   const meta = metaText(session, notes, durationLabel);
@@ -278,8 +421,8 @@ export const NoteTitleBlock = forwardRef(function NoteTitleBlock(
 
   return (
     <div className="pt-32 pb-8">
-      <div className="flex items-start justify-between gap-16">
-        <h1 ref={ref} className="min-w-0 text-heading font-medium text-ink break-words">{title}</h1>
+      <div ref={ref} className="flex items-start justify-between gap-32">
+        <EditableTitle title={title} onRename={onRename} disabledReason={renameDisabledReason} />
         {aside && <div className="flex-shrink-0 mt-4">{aside}</div>}
       </div>
       {(meta || chips.length > 0) && (

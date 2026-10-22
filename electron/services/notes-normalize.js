@@ -151,10 +151,13 @@ function isMarkdownPrompt(prompt) {
   return !prompt.includes('"$schema"') && !prompt.includes('json\n{');
 }
 
-function buildUserPrompt(transcriptText, markdown) {
+function buildUserPrompt(transcriptText, markdown, meetingTitle = '') {
+  const context = meetingTitle
+    ? `The meeting is titled ${JSON.stringify(meetingTitle)} in the calendar or meeting app. Use exactly that as the notes title, and use it as context for the discussion.\n\n`
+    : '';
   return markdown
-    ? `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate the meeting notes as instructed.`
-    : `Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate structured meeting notes in JSON format as specified.`;
+    ? `${context}Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate the meeting notes as instructed.`
+    : `${context}Here is the meeting transcript:\n\n${transcriptText}\n\nGenerate structured meeting notes in JSON format as specified.`;
 }
 
 /** Turn raw model text into the notes object the app stores. */

@@ -7,6 +7,7 @@ const {
   buildUserPrompt,
   parseNotesResponse,
 } = require('./notes-normalize');
+const { applyMeetingTitle } = require('./meeting-title');
 
 /** A custom prompt wins; otherwise the default for the configured output mode. */
 function resolveSystemPrompt(config) {
@@ -34,17 +35,18 @@ function resolveTargets(config) {
 
 /**
  * Generate notes for a transcript with the configured LLM, retrying once with
- * the fallback provider/model if the primary fails.
+ * the fallback provider/model if the primary fails. `meetingTitle` (already
+ * checked by sourceMeetingTitle) is a prompt hint and wins over the LLM's title.
  *
  * Returns { notes, provider, model, fallback } where `fallback` is
  * { primary: {provider, model}, error } when the fallback produced the notes.
  */
-async function generateNotes(transcript, config) {
+async function generateNotes(transcript, config, { meetingTitle = '' } = {}) {
   const targets = resolveTargets(config);
   const systemPrompt = resolveSystemPrompt(config);
   const markdown = isMarkdownPrompt(systemPrompt);
   const transcriptText = transcriptToText(transcript);
-  const userPrompt = buildUserPrompt(transcriptText, markdown);
+  const userPrompt = buildUserPrompt(transcriptText, markdown, meetingTitle);
 
   let primaryError = null;
   for (let i = 0; i < targets.length; i++) {
@@ -65,7 +67,7 @@ async function generateNotes(transcript, config) {
 
     try {
       const text = await provider.generate({ systemPrompt, userPrompt, model, config, json: !markdown });
-      const notes = parseNotesResponse(text, markdown);
+      const notes = applyMeetingTitle(parseNotesResponse(text, markdown), meetingTitle);
       logger.info('Meeting notes generated', {
         provider: provider.id,
         model,

@@ -6,6 +6,17 @@ updated: 2026-10-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.10.0] - 2026-10-22
+
+### Added
+
+- **Meeting page**: Rename a meeting in place: hover the title and click the pencil (or double-click the title), then press Enter to save or Escape to cancel. Titles can be up to 200 characters, with a counter near the limit. The new name also becomes the notes title and survives regenerating the notes.
+
+### Changed
+
+- **Notes**: A meeting keeps its real title (the Google Meet, Zoom or Teams name from meeting detection or the extension, a calendar event, or a pasted transcript's title) instead of having it replaced by the LLM's; ad-hoc Meet codes and generic names like "Zoom Meeting" still get an LLM-written title.
+- **Notes**: The meeting's title is sent to the LLM with the transcript as context.
+
 ## [4.9.1] - 2026-10-19
 
 ### Fixed
