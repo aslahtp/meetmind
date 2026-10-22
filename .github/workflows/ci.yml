@@ -19,6 +19,11 @@ on:
     branches:
       - main
   workflow_call:
+    inputs:
+      # Callers (release.yml) always get a full run; already-tested never skips for them.
+      always-run:
+        type: boolean
+        default: true
   workflow_dispatch:
 
 permissions:
@@ -45,6 +50,9 @@ jobs:
   # PR can't fake it without changing ci.yml itself, which then lands on main with the identical
   # tree it was tested with, after maintainer review (CODEOWNERS covers workflows). The job runs
   # no repository code and only reads through the API.
+  #
+  # A called workflow can't ask for more than its caller grants, or the caller fails to start:
+  # release.yml's `checks` job must keep granting the read scopes below.
   already-tested:
     name: Reuse PR result
     runs-on: ubuntu-latest
@@ -65,11 +73,18 @@ jobs:
           REF: ${{ github.ref }}
           SHA: ${{ github.sha }}
           WORKFLOW_REF: ${{ github.workflow_ref }}
+          ALWAYS_RUN: ${{ inputs.always-run }}
         run: |
           # Anything but the skip=true written at the very end runs every job.
           note() { echo "$1"; echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
 
-          # Only this workflow's own push to main; release.yml calls it with the same event and ref.
+          # Only this workflow's own push to main. release.yml calls it with the same event and
+          # ref, so two independent checks keep releases on a full run: the always-run input
+          # (true for every workflow_call) and the workflow ref (the caller's file when called).
+          if [ "$ALWAYS_RUN" = "true" ]; then
+            note "Called by another workflow (release); running full CI."
+            exit 0
+          fi
           if [ "$EVENT" != "push" ] || [ "$REF" != "refs/heads/main" ] \
             || [[ "$WORKFLOW_REF" != "$REPO/.github/workflows/ci.yml@"* ]]; then
             exit 0
