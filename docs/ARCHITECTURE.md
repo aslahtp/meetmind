@@ -170,7 +170,7 @@ grouped by feature:
 Event subscriptions go through a single `on(channel, callback)` / `off(...)` pair with an
 explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
 `recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
-`processing:error`, `processing:cancelled`, `ws:extension-connected`, `ws:recording-requested`,
+`processing:error`, `processing:cancelled`, `notes:preview`, `ws:extension-connected`, `ws:recording-requested`,
 `sessions:durations-updated`, `updater:status`, `calendar:meeting-starting`,
 `llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.
 Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
@@ -232,7 +232,8 @@ based on the `theme` setting) driven by CSS custom properties in `renderer/style
 `lucide-react` plus a handful of hand-authored brand icon components
 (`GeminiIcon`, `ClaudeIcon`, `AssemblyAiIcon`, `SarvamIcon`, `GroqIcon`, `NotionIcon`, `GoogleCloudIcon`,
 `GoogleCalendarIcon`). Notes/transcript Markdown rendering uses `react-markdown` +
-`remark-gfm`, shared between the in-app notes view and the PDF export document.
+`remark-gfm`, shared between the in-app notes view and the PDF export document; the live
+preview of notes still being written runs the Markdown through `remend` first.
 
 ### 3.4 Meeting detection and overlay (`electron/detection/`, `electron/overlay/`)
 
@@ -366,7 +367,9 @@ repo-hygiene job actively rejects any `.exe`/`.dll`/`.msi`/`.dylib`, or anything
 
 `runProcessingPipeline()` in `main.js` drives three stages in sequence. Progress is pushed to
 the renderer via `processing:progress` and, via the WebSocket bridge, to the extension's overlay
-(`PROCESSING_PROGRESS` / `PROCESSING_COMPLETE`) at each stage boundary. Each stage can be
+(`PROCESSING_PROGRESS` / `PROCESSING_COMPLETE`) at each stage boundary: transcription fills
+0–60%, notes 60–85% and Notion 85–100%. Within the notes stage the bar keeps moving as the
+model writes (see 5.2). Each stage can be
 independently retried through `processing:retry` if it fails (e.g. a transient network error on
 Stage 1 does not force re-transcription to be repeated once Stage 2 later fails).
 
@@ -429,7 +432,7 @@ read). The controller checks that the recording is not silent and then calls the
 - **Sarvam AI** (`https://api.sarvam.ai`): job-based flow (`sarvamPost`/`sarvamGet` helpers)
   against `/speech-to-text/job/v1/...`: create job (model `saaras:v3`) -> upload file -> start
   job -> poll status -> download result. `saaras:v3` is used specifically because meetings
-  commonly mix English and Malayalam, and this model supports that code-switching
+  commonly mix English and Indic languages, and this model supports that code-switching
   automatically, without a language being pinned in advance. This is the only engine
   built for that use case; Google STT and AssemblyAI are configured with a single
   `language` setting (default `ml-IN`).
@@ -440,14 +443,32 @@ read). The controller checks that the recording is not silent and then calls the
   WAV is split into 10 minute chunks (2 s overlap, merged with the shared `mergeTranscriptSegments`)
   and 429 responses are retried honoring `retry-after`. It has no diarization, so every segment
   is labelled `Speaker 1` (`capabilities.diarization: false`), and it is weaker than Sarvam on
-  English/Malayalam code-switching. The same `groqApiKey` is used by the Groq LLM provider.
+  English/Indic code-switching. The same `groqApiKey` is used by the Groq LLM provider.
 
 ### 5.2 Stage 2: Notes generation (`electron/services/notes.js` + `electron/providers/llm/*`)
 
-`generateNotes(transcript, config, { meetingTitle })` resolves the primary target from
+`generateNotes(transcript, config, { meetingTitle, onPreview })` resolves the primary target from
 `llmProvider` and `llmModels[<provider>]`, builds the prompt for the output mode, calls
 `provider.generate()` and parses the result (`services/notes-normalize.js`: fence stripping,
 `normalizeNotes`, JSON fallback). Providers only return raw text.
+
+All three providers stream their answer, passing each text delta to `generate()`'s `onText`
+callback (Claude and Groq read server-sent events with `providers/shared/sse.js`, Gemini uses
+`generateContentStream`). While the notes are being written, `generateNotes` rebuilds a preview
+from the text so far at most every 100 ms (`buildNotesPreview`: incomplete JSON is completed by
+`partial-json` and run through `normalizeNotes`; Markdown is passed through) and
+`generateAndStampNotes` sends it to the renderer as `notes:preview`
+(`{ sessionId, attempt, provider, model, notes, progress }`, a full snapshot each time, `notes: null` when an
+attempt starts so a fallback begins with a clean preview). The meeting page shows it in place of
+any old notes, rendering the same cards or Markdown as the final notes; Markdown goes through
+`remend` first, which closes half-written bold, code and links. Previews are never saved: the
+DB is only written once the final text parses, and on failure the old notes are shown again.
+
+`progress` is `estimateNotesProgress()` (`notes-normalize.js`): the notes are expected to run to
+about 12% of the transcript plus 1,200 characters (between 1,500 and 12,000), progress is linear
+to 90% at that length and then creeps towards 100% without reaching it. `main.js` maps it onto
+60–84% of the bar and sends `processing:progress` (`generating`) whenever the whole percentage
+goes up, never down, so a fallback that starts over doesn't move the bar backwards.
 
 The session's `meeting_title` column holds the meeting's own title: the detected tab or window
 title, the extension's tab title, a calendar event's title, a pasted transcript's title, or a
@@ -459,11 +480,13 @@ app names (`Google Meet`, `Zoom Meeting`, `Microsoft Teams`…) and ad-hoc Meet 
 wrote. Without one, the session takes the LLM's title.
 
 - **Gemini** (`llm/gemini.js`, `@google/generative-ai`): `gemini-3.8-flash` (default),
-  `gemini-3.7-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`. Retired model IDs saved
+  `gemini-3.7-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`, plus Google's auto-updating
+  `latestModels` (`gemini-flash-latest`, `gemini-flash-lite-latest`, `gemini-pro-latest`), which
+  Settings offers under a Latest / Pinned / Custom toggle. Retired model IDs saved
   by older versions are remapped through the provider's `_deprecatedModels` table.
 - **Groq** (`llm/groq.js`, OpenAI-compatible `chat/completions`): `llama-3.3-70b-versatile`
   (default), `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `llama-3.1-8b-instant`. JSON mode sends
-  `response_format: {type: "json_object"}`. Free-tier tokens-per-minute limits can reject long
+  `response_format: {type: "json_object"}`, and asks again without streaming if a model refuses to stream in JSON mode. Free-tier tokens-per-minute limits can reject long
   transcripts (HTTP 413/429); the error says so and the fallback below covers it.
 - **Claude** (`llm/claude.js`, Anthropic Messages API `POST /v1/messages` via `fetch`, no SDK):
   `claude-sonnet-5-5` (default), `claude-fable-5-1`, `claude-opus-5-5`, `claude-haiku-5-5`.
@@ -687,7 +710,7 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 | Anthropic Claude API | Notes generation (Sonnet, Fable, Opus, Haiku) | API key | `electron/providers/llm/claude.js` (REST via `fetch`) |
 | Groq | Notes generation (Llama, GPT-OSS) and Whisper transcription | API key (one key for both) | `electron/providers/llm/groq.js`, `electron/providers/stt/groq.js` (REST via `fetch`) |
 | AssemblyAI | Transcription (alternative engine) | API key | `electron/providers/stt/assemblyai.js` (`assemblyai` SDK + REST) |
-| Sarvam AI | Transcription, `saaras:v3` model for English/Malayalam code-switching | API key | `electron/providers/stt/sarvam.js` (REST) |
+| Sarvam AI | Transcription, `saaras:v3` model for English/Indic code-switching | API key | `electron/providers/stt/sarvam.js` (REST) |
 | Notion API | Optional notes sync (Stage 3) | Internal integration token | `electron/services/notion.js` (`@notionhq/client`) |
 | Google Calendar API | Optional upcoming-meeting reminders | OAuth2 (user-supplied client ID/secret) | `electron/services/google-calendar.js` (`googleapis`) |
 | GitHub Releases | Auto-update distribution | none (public releases) | `electron-updater`, configured in `electron-builder.yml` |
@@ -722,6 +745,8 @@ From `package.json` (pnpm, Node 22.12+, Windows or macOS).
 | `lucide-react` | ^1.48.0 | Renderer icon set |
 | `react-markdown` | ^10.1.0 | Notes/transcript Markdown rendering (in-app and PDF) |
 | `remark-gfm` | ^4.0.1 | GitHub-flavored Markdown extensions (tables, task lists) for `react-markdown` |
+| `remend` | ^1.4.0 | Closes unterminated Markdown (bold, code, links) in the live notes preview |
+| `partial-json` | ^0.1.7 | Parses the incomplete JSON an LLM has streamed so far, for the live notes preview |
 | `sql.js` | ^1.14.2 | SQLite compiled to WASM, backs the sessions database |
 | `uuid` | ^10.0.0 | Session ID generation |
 | `ws` | ^8.21.3 | WebSocket server for the desktop <-> extension bridge |
@@ -881,7 +906,16 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   npm/yarn lockfile, committed `.exe`/`.dll`/`.msi`/`.dylib` or anything in `assets/ffmpeg/` but
   its README, a real `.env` file, or any file over 10 MB), a gitleaks secret scan (checksum-verified download) over the full git
   history, `pnpm audit --prod --audit-level high`, and a zizmor audit of the workflows
-  themselves. No job has secrets, so all of it is safe on fork PRs.
+  themselves. No job has secrets, so all of it is safe on fork PRs. A new commit on a PR cancels
+  that PR's run still in progress (`concurrency`, as in `pr-checks.yml` and `codeql.yml`). On a
+  push to `main`, an `already-tested` job finds the merged PR through the API and skips every job
+  except the dependency audit (new advisories need no file change) when the merged commit's file
+  tree is identical to the PR's last commit and CI passed on that commit; anything else (the PR was
+  behind `main`, no PR found, an API error) runs everything, and release gates, PRs and manual runs
+  never skip. It runs no repository code and only has `actions`/`pull-requests`/`contents` read
+  access. Reusing the PR's result adds no trust beyond what merging on its required checks
+  already did: a PR can only fake a pass by changing `ci.yml`, which then reaches `main` with the
+  identical tree it was tested with, after maintainer review (CODEOWNERS).
 - **`release.yml`**: triggers on a push to `main` that touches `package.json` (i.e. a version
   bump). Calls `ci.yml` as a gate first. The `build` job then builds the Windows installer with a
   read-only token and no dependency cache, bundling the pinned, checksum-verified FFmpeg
@@ -933,6 +967,7 @@ Current coverage is pure logic only:
 | `tests/meetingFilters.test.js` | Meetings filters and sorting (`renderer/lib/meetingFilters.js`) |
 | `tests/meetingSearch.test.js` | Meeting search: stemming, concept map, typos, prefixes, phrases, ranking and snippets (`renderer/lib/meetingSearch.js`) |
 | `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, meeting window titles, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
+| `tests/notesPreview.test.js` | Live notes preview: partial Markdown and JSON (`buildNotesPreview` in `electron/services/notes-normalize.js`) and the throttled `onPreview` snapshots of `generateNotes`, including a fallback |
 | `tests/meetingTitle.test.js` | Which source titles name the meeting, and how one replaces the LLM's title and prompts it (`electron/services/meeting-title.js`, `buildUserPrompt`) |
 | `tests/ffmpeg-path.test.js` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.js`) and the per-OS silent-recording hints (`electron/audio/audio-hints.js`) |
 | `tests/macSupport.test.js` | macOS capture strategies (`electron/audio/mac-capture.js`), "Test system audio" verdicts (`renderer/lib/audioTest.js`), and the shape of the pinned macOS FFmpeg downloads (`electron/audio/ffmpeg-sources.js`) |

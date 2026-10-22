@@ -475,7 +475,7 @@ module.exports = {
   icon: 'google-cloud',
   pricing: 'Free tier available (60 mins/mo), then ~$0.016/min',
   description:
-    'High accuracy with speaker diarization. Supports English and Malayalam (ml-IN) with code-switching. Best overall for multilingual meetings.',
+    'High accuracy with speaker diarization and code-switching between languages. Best overall for multilingual meetings.',
   credentials: [
     {
       configKey: 'googleApiKey',

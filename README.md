@@ -83,8 +83,8 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 
 - **System audio + microphone recording**: records both sides of any call on Windows and macOS, with FFmpeg bundled or installed from inside the app.
 - **Choice of speech-to-text**: AssemblyAI, Google Cloud Speech-to-Text (v1 and v2), Sarvam AI or Groq Whisper, with a model picker for each. All except Groq label speakers (diarization).
-- **English–Malayalam code-switching**: accurate transcripts of mixed-language meetings with Sarvam AI's `saaras:v3` model.
-- **Choice of note-generation model**: Google Gemini, Groq (Llama 3.3, GPT-OSS) or Anthropic Claude (Sonnet 5.5, Fable 5.1, Opus 5.5, Haiku 5.5), with a model picker and optional custom model ID. Executive-style Markdown or structured JSON notes, an editable system prompt, and an automatic fallback that can be any provider and model (for example Groq first, Gemini as backup).
+- **English–Indic code-switching**: accurate transcripts of mixed-language meetings with Sarvam AI's `saaras:v3` model.
+- **Choice of note-generation model**: Google Gemini, Groq (Llama 3.3, GPT-OSS) or Anthropic Claude (Sonnet 5.5, Fable 5.1, Opus 5.5, Haiku 5.5), with a model picker and optional custom model ID (for Gemini, also Google's auto-updating Flash, Flash Lite and Pro "latest" models). Executive-style Markdown or structured JSON notes, a live preview of the notes as the model writes them, an editable system prompt, and an automatic fallback that can be any provider and model (for example Groq first, Gemini as backup).
 - **Easy to extend**: every speech-to-text and LLM engine is a small self-describing module, so adding a provider needs one file and one registry line (see [docs/ADDING_PROVIDERS.md](docs/ADDING_PROVIDERS.md)).
 - **Automatic meeting detection** (Windows; macOS coming later): when Google Meet, Zoom or Microsoft Teams starts using your microphone, a floating overlay offers to record, then shows the timer, a "Meeting ended?" prompt and processing status. No browser extension needed.
 - **Optional Google Meet and Zoom extension**: a floating overlay inside the Chrome tab with one-click recording and live processing status.
@@ -123,7 +123,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 2. Open MeetMind → **Settings → Transcription** and pick a speech-to-text engine:
    - **AssemblyAI** (recommended): paste your AssemblyAI API key.
    - **Google Cloud Speech-to-Text**: enter your Google Cloud API key and project ID (see [GCS setup](docs/GCS-SETUP.md) for long recordings).
-   - **Sarvam AI**: paste your Sarvam AI API key (best for English–Malayalam meetings).
+   - **Sarvam AI**: paste your Sarvam AI API key (best for meetings that mix English with Indic languages).
    - **Groq Whisper**: paste your Groq API key ([get one in the Groq console](https://console.groq.com/keys)). Fast and cheap, but no speaker labels.
 
    Each engine has a model picker below its key.
@@ -264,7 +264,7 @@ Recordings, transcripts and notes are stored locally on your computer. There is 
 
 ### Which languages are supported?
 
-Language support depends on the speech-to-text engine you choose. For meetings that mix English and Malayalam, use Sarvam AI's `saaras:v3` model, which handles code-switching within a sentence. Groq's Whisper models support many languages including Malayalam but are weaker on mixed-language speech.
+Language support depends on the speech-to-text engine you choose. For meetings that mix English and Indic languages, use Sarvam AI's `saaras:v3` model, which handles code-switching within a sentence. Groq's Whisper models support many languages including Indic languages but are weaker on mixed-language speech.
 
 ### How is MeetMind different from Otter.ai or Fireflies.ai?
 

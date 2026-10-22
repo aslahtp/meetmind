@@ -5,7 +5,7 @@ import { SettingsGroup, KeyGuide, TestAction, RadioCardGroup, ExternalLink } fro
 import { useApp } from '../../../lib/app-context.js';
 import { isProviderConfigured, findProvider, selectedProvider } from '../../../lib/providers.js';
 import { providerIcon } from './providerIcons.js';
-import ModelSelect from './ModelSelect.jsx';
+import ModelSelect, { modelMode } from './ModelSelect.jsx';
 
 // Per-kind wording and the config keys that hold the choice. Everything else comes from the
 // provider descriptors, so a new provider needs no change here.
@@ -88,10 +88,23 @@ function FallbackPicker({ providers, form, onChange }) {
               onChange={(e) => onChange('llmFallback', { provider: fbProvider.id, model: e.target.value })}
               className="input"
             >
-              {fbProvider.models.map((m) => (
+              {fbProvider.latestModels?.length > 0 ? (
+                <>
+                  <optgroup label="Pinned">
+                    {fbProvider.models.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name} — {m.badge}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Latest (auto-updating)">
+                    {fbProvider.latestModels.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </optgroup>
+                </>
+              ) : fbProvider.models.map((m) => (
                 <option key={m.id} value={m.id}>{m.name} — {m.badge}</option>
               ))}
-              {fb.model && !fbProvider.models.some((m) => m.id === fb.model) && (
+              {fb.model && modelMode(fbProvider, fb.model) === 'custom' && (
                 <option value={fb.model}>{fb.model} (custom)</option>
               )}
             </select>
@@ -202,11 +215,13 @@ export default function ProviderSection({ kind, form, onChange }) {
         icon={<BrainCircuit size={20} strokeWidth={1.75} className="text-ink" />}
       >
         <ModelSelect
+          key={provider.id}
           idPrefix={`${kind}-${provider.id}`}
           label={`${provider.name} model`}
           provider={provider}
           value={model}
           onChange={setModel}
+          toggle={kind === 'llm'}
         />
         {provider.capabilities?.diarization === false && (
           <p className="hint">This engine does not identify speakers, so every line is labelled "Speaker 1".</p>

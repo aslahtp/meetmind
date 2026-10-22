@@ -11,6 +11,8 @@ const wav = require('../electron/providers/shared/wav.js');
 const groqStt = require('../electron/providers/stt/groq.js');
 const groqLlm = require('../electron/providers/llm/groq.js');
 const claudeLlm = require('../electron/providers/llm/claude.js');
+const geminiLlm = require('../electron/providers/llm/gemini.js');
+const { readEvents } = require('../electron/providers/shared/sse.js');
 const { generateNotes } = require('../electron/services/notes.js');
 const { migrateLegacyModels } = require('../electron/utils/configMigration.js');
 
@@ -24,9 +26,13 @@ function fakeResponse(status, body, headers = {}) {
   };
 }
 
-/** A 200 server-sent-events response, split across chunks to exercise buffering. */
-function fakeStream(events) {
-  const sse = events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+/**
+ * A 200 server-sent-events response, split across chunks to exercise buffering.
+ * `done` ends it with the OpenAI-style `data: [DONE]` sentinel.
+ */
+function fakeStream(events, { done = false } = {}) {
+  const sse = events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('')
+    + (done ? 'data: [DONE]\n\n' : '');
   const bytes = new TextEncoder().encode(sse);
   const mid = Math.floor(bytes.length / 2);
   return {
@@ -75,6 +81,14 @@ describe('provider registry contract', () => {
           for (const f of p.credentials) expect(f.configKey).toBeTruthy();
         }
       });
+
+      it('keeps latest-model aliases unique and separate from the pinned models', () => {
+        for (const p of registry.list()) {
+          const latest = (p.latestModels || []).map((m) => m.id);
+          expect(new Set(latest).size).toBe(latest.length);
+          for (const id of latest) expect(p.models.some((m) => m.id === id)).toBe(false);
+        }
+      });
     });
   }
 
@@ -115,6 +129,22 @@ describe('provider registry contract', () => {
     const open = llmRegistry.get('groq');
     expect(llmRegistry.resolveModel(open, 'my/custom-model')).toBe('my/custom-model');
     expect(llmRegistry.resolveModel(open, '')).toBe(open.defaultModel);
+  });
+
+  it('offers Gemini\'s auto-updating latest aliases', () => {
+    expect(llmRegistry.get('gemini').latestModels.map((m) => m.id)).toEqual([
+      'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-latest',
+    ]);
+  });
+
+  it('accepts a latest alias even when custom IDs are not allowed', () => {
+    const reg = createRegistry('llm', ['generate', 'test']);
+    const p = reg.register({
+      id: 'x', name: 'X', credentials: [], models: [{ id: 'm1' }], latestModels: [{ id: 'x-latest' }],
+      defaultModel: 'm1', generate() {}, test() {},
+    });
+    expect(reg.resolveModel(p, 'x-latest')).toBe('x-latest');
+    expect(reg.resolveModel(p, 'other')).toBe('m1');
   });
 });
 
@@ -167,10 +197,52 @@ describe('Groq STT', () => {
   });
 });
 
+/** OpenAI-compatible chat-completion chunks streaming the given text pieces. */
+function groqChunks(pieces) {
+  return [
+    { choices: [{ index: 0, delta: { role: 'assistant', content: '' } }] },
+    ...pieces.map((content) => ({ choices: [{ index: 0, delta: { content } }] })),
+    { choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] },
+  ];
+}
+
+describe('SSE reader', () => {
+  it('yields JSON events across chunk boundaries and stops at [DONE]', async () => {
+    const events = [];
+    for await (const e of readEvents(fakeStream([{ type: 'a', n: 1 }, { type: 'b', n: 2 }], { done: true }).body)) {
+      events.push(e);
+    }
+    expect(events).toEqual([{ type: 'a', n: 1 }, { type: 'b', n: 2 }]);
+  });
+});
+
 describe('Groq LLM', () => {
+  const base = { systemPrompt: 's', userPrompt: 'u', model: 'llama-3.3-70b-versatile', config: { groqApiKey: 'k' } };
+
+  it('streams deltas to onText and returns the trimmed text', async () => {
+    const fetchImpl = vi.fn(async () => fakeStream(groqChunks([' # No', 'tes\n\nBody ']), { done: true }));
+    const deltas = [];
+    const text = await groqLlm.generate({ ...base, onText: (d) => deltas.push(d) }, { fetchImpl });
+    expect(text).toBe('# Notes\n\nBody');
+    expect(deltas).toEqual([' # No', 'tes\n\nBody ']);
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).stream).toBe(true);
+  });
+
+  it('asks again without streaming when a model refuses to stream JSON', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(fakeResponse(400, { error: { message: 'response_format does not support streaming' } }))
+      .mockResolvedValueOnce(fakeResponse(200, { choices: [{ message: { content: '{"a":1}' } }] }));
+    expect(await groqLlm.generate({ ...base, json: true }, { fetchImpl })).toBe('{"a":1}');
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body).stream).toBeUndefined();
+  });
+
+  it('throws an error sent mid-stream', async () => {
+    const fetchImpl = async () => fakeStream([{ error: { message: 'boom', type: 'internal_server_error' } }]);
+    await expect(groqLlm.generate(base, { fetchImpl })).rejects.toThrow(/Groq error \(stream\): boom/);
+  });
+
   it('sends json_object only in JSON mode', async () => {
-    const fetchImpl = vi.fn(async () => fakeResponse(200, { choices: [{ message: { content: ' {"a":1} ' } }] }));
-    const base = { systemPrompt: 's', userPrompt: 'u', model: 'llama-3.3-70b-versatile', config: { groqApiKey: 'k' } };
+    const fetchImpl = vi.fn(async () => fakeStream(groqChunks([' {"a":1} ']), { done: true }));
 
     expect(await groqLlm.generate({ ...base, json: true }, { fetchImpl })).toBe('{"a":1}');
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body).response_format).toEqual({ type: 'json_object' });
@@ -184,6 +256,46 @@ describe('Groq LLM', () => {
     await expect(
       groqLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: { groqApiKey: 'k' } }, { fetchImpl })
     ).rejects.toThrow(/tokens-per-minute/);
+  });
+});
+
+describe('Gemini LLM', () => {
+  /** Stand-in for @google/generative-ai streaming the given text pieces. */
+  function fakeSdk(pieces, calls) {
+    return {
+      GoogleGenerativeAI: class {
+        constructor(apiKey) { calls.apiKey = apiKey; }
+        getGenerativeModel(opts) {
+          calls.opts = opts;
+          return {
+            async generateContentStream(prompt) {
+              calls.prompt = prompt;
+              return {
+                stream: (async function* () {
+                  for (const p of pieces) yield { text: () => p };
+                })(),
+              };
+            },
+          };
+        }
+      },
+    };
+  }
+
+  it('streams deltas to onText and returns the trimmed text', async () => {
+    const calls = {};
+    const deltas = [];
+    const text = await geminiLlm.generate(
+      { systemPrompt: 's', userPrompt: 'u', model: 'gemini-3.8-flash', config: { geminiApiKey: 'g' }, onText: (d) => deltas.push(d) },
+      { sdk: fakeSdk(['# Notes', '', '\n\nBody '], calls) }
+    );
+    expect(text).toBe('# Notes\n\nBody');
+    expect(deltas).toEqual(['# Notes', '\n\nBody ']);
+    expect(calls).toMatchObject({ apiKey: 'g', prompt: 'u', opts: { model: 'gemini-3.8-flash', systemInstruction: 's' } });
+  });
+
+  it('requires an API key', async () => {
+    await expect(geminiLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: {} })).rejects.toThrow(/API key/);
   });
 });
 
@@ -226,6 +338,17 @@ describe('Claude LLM', () => {
 
   const generateWith = (fetchImpl) =>
     claudeLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'claude-opus-5-5', config: { claudeApiKey: 'k' } }, { fetchImpl });
+
+  it('passes text deltas, not thinking, to onText', async () => {
+    const fetchImpl = async () =>
+      fakeStream(claudeEvents([{ type: 'thinking' }, { type: 'text', text: '# Notes' }]));
+    const deltas = [];
+    await claudeLlm.generate(
+      { systemPrompt: 's', userPrompt: 'u', model: 'claude-opus-5-5', config: { claudeApiKey: 'k' }, onText: (d) => deltas.push(d) },
+      { fetchImpl }
+    );
+    expect(deltas).toEqual(['# Notes']);
+  });
 
   it('skips thinking blocks and returns the text that follows', async () => {
     const fetchImpl = async () =>

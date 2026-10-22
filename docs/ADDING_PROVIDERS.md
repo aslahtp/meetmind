@@ -20,7 +20,8 @@ Shared fields (both kinds):
 | `credentials[]` | `{ configKey, label, type: 'password' \| 'text', placeholder, hint, link, required }`. Every `configKey` is stored in the config automatically. A key shared by two providers (for example `groqApiKey`) is declared in both. Extra options (a prompt, a project ID) are just non-required entries |
 | `guide[]` | "How to get a key" steps: `{ text, url?, hint? }` |
 | `models[]`, `defaultModel` | Curated `{ id, name, badge, description }` list and the default ID |
-| `allowCustomModel` | Show a free-text model ID field |
+| `latestModels[]` | Optional auto-updating aliases (same shape as `models[]`, for example `gemini-flash-latest`). When set, Settings shows a Latest / Pinned / Custom toggle, and they are always accepted as a saved model |
+| `allowCustomModel` | Show a free-text model ID field. For an LLM it sits behind a Pinned / Custom toggle (Latest / Pinned / Custom with `latestModels`) |
 | `capabilities` | Optional, for example `{ diarization: false }` shows a hint in the UI |
 | `test({ config, model })` | Throws if the credentials or model do not work |
 
@@ -28,11 +29,11 @@ Keys starting with `_` (for example `_deprecatedModels`) and functions stay in t
 
 STT only: `transcribe({ wavPath, model, config, onProgress })` returns `[{ speaker, text, startTime, endTime }]`. The silence check and progress scaling are handled by `services/transcription.js`. For services with an upload limit, use `providers/shared/wav.js` (`planChunks`, `extractWavChunkBuffer`, `mergeTranscriptSegments`).
 
-LLM only: `generate({ systemPrompt, userPrompt, model, config, json })` returns the raw model text. Fence stripping, JSON parsing, normalization and the fallback to another provider are handled by `services/notes.js`. `json` is true in structured-notes mode.
+LLM only: `generate({ systemPrompt, userPrompt, model, config, json, onText })` returns the raw model text. Fence stripping, JSON parsing, normalization and the fallback to another provider are handled by `services/notes.js`. `json` is true in structured-notes mode. Stream the answer if the API can and call `onText(delta)` with each piece of text as it arrives; the meeting page uses it for a live preview. `onText` may be undefined, and a provider that can't stream just ignores it and still returns the full text.
 
 ## Rules
 
 - Provider modules must not import `electron` or `electron-store` at load time (require heavy SDKs lazily inside functions) so they can be unit-tested. Use `providers/shared/log.js` instead of `utils/logger`.
-- Use `providers/shared/http.js` (`fetchJson`, or `httpError` for a streamed response's non-2xx status) so errors carry `.status` and `.retryAfterMs`.
+- Use `providers/shared/http.js` (`fetchJson`, or `httpError` for a streamed response's non-2xx status) so errors carry `.status` and `.retryAfterMs`. Read a server-sent-events stream with `readEvents` from `providers/shared/sse.js`.
 - An LLM must throw, not return, when its output is incomplete (cut off at the token limit, refused), so `services/notes.js` can try the fallback.
 - Never log API keys.

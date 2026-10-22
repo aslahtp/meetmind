@@ -1,4 +1,5 @@
 // Pure note-shaping helpers shared by every LLM provider (no Electron/SDK imports).
+const { parse: parsePartialJson } = require('partial-json');
 
 function transcriptToText(transcript) {
   if (!Array.isArray(transcript) || transcript.length === 0) {
@@ -194,6 +195,58 @@ function parseNotesResponse(text, markdown) {
   }
 }
 
+/** Drop the `{}` placeholders a cut-off JSON array ends with, so no empty card flashes. */
+function withoutEmptyEntries(list) {
+  return Array.isArray(list)
+    ? list.filter((x) => x != null && !(typeof x === 'object' && Object.keys(x).length === 0))
+    : list;
+}
+
+/**
+ * Estimated share (0 to <1) of the notes written once the LLM has streamed
+ * `outputChars`. Notes run to roughly 12% of the transcript plus a fixed
+ * header, within 1,500 to 12,000 characters. Progress is linear up to 90% at
+ * that estimate, then creeps towards 100% without reaching it, so a longer
+ * answer than expected never stalls or overshoots.
+ */
+function estimateNotesProgress(outputChars, transcriptChars) {
+  const expected = Math.min(12000, Math.max(1500, 1200 + transcriptChars * 0.12));
+  if (outputChars <= 0) return 0;
+  if (outputChars <= expected) return 0.9 * (outputChars / expected);
+  return 0.9 + 0.1 * (1 - Math.exp(-(outputChars - expected) / expected));
+}
+
+/**
+ * Turn the text an LLM has streamed so far into a notes object for the live
+ * preview, or null when there's nothing to show yet. Partial JSON is completed
+ * by partial-json and normalized like the final notes.
+ */
+function buildNotesPreview(text, markdown) {
+  const raw = String(text || '').trim();
+  const fenced = raw.startsWith('```');
+  if (fenced && !raw.includes('\n')) return null; // only the opening fence so far
+  // Also drop a closing fence that is still arriving.
+  const body = (fenced ? stripCodeFence(raw).replace(/\n`{1,3}$/, '') : raw).trim();
+  if (!body) return null;
+
+  if (markdown) {
+    const titleMatch = body.match(/^#\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : 'Meeting Notes';
+    return { _rawMarkdown: body, title, meeting_title: title };
+  }
+
+  try {
+    const partial = parsePartialJson(body);
+    if (!partial || typeof partial !== 'object' || Array.isArray(partial)) return null;
+    for (const key of ['participants', 'attendees', 'sections', 'topics', 'key_points', 'action_items', 'notable_mentions']) {
+      partial[key] = withoutEmptyEntries(partial[key]);
+    }
+    return normalizeNotes(partial);
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   transcriptToText,
   normalizeNotes,
@@ -201,4 +254,6 @@ module.exports = {
   isMarkdownPrompt,
   buildUserPrompt,
   parseNotesResponse,
+  buildNotesPreview,
+  estimateNotesProgress,
 };

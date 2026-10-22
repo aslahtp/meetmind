@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remend from 'remend';
 
 function openExternal(e, url) {
   if (url?.startsWith('http')) {
@@ -165,9 +166,12 @@ export function stripDuplicateTitle(markdown, title) {
   return markdown.slice(match[0].length);
 }
 
-export function MarkdownNoteView({ markdown, omitTitle }) {
+// `streaming` marks a live preview: remend closes the syntax the LLM hasn't
+// finished yet (bold, code, links) so it never shows as raw characters.
+export function MarkdownNoteView({ markdown, omitTitle, streaming = false }) {
   if (!markdown) return null;
   markdown = stripDuplicateTitle(markdown, omitTitle);
+  if (streaming) markdown = remend(markdown, { linkMode: 'text-only' });
   return (
     <article className="prose max-w-none fade-in">
       <ReactMarkdown

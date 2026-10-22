@@ -100,10 +100,35 @@ process.on('unhandledRejection', (reason) => {
   });
 });
 
-// Runs the notes stage: generate with the configured LLM (and fallback), stamp provenance
-// into the notes blob for the renderer, and announce a fallback if one was used.
-async function generateAndStampNotes(sessionId, transcript, config, sttInfo, meetingTitle) {
-  const result = await generateNotes(transcript, config, { meetingTitle: meetingTitle || '' });
+// The notes stage owns 60–84% of the progress bar; 85% is reached when the notes are saved.
+const NOTES_PROGRESS_START = 60;
+const NOTES_PROGRESS_END = 84;
+
+// Map the estimated share of the notes written onto the notes stage's band. Only moves
+// forward, so a fallback starting over doesn't send the bar backwards.
+function notesProgressReporter(sendProgress) {
+  let last = NOTES_PROGRESS_START;
+  return (fraction) => {
+    const span = NOTES_PROGRESS_END - NOTES_PROGRESS_START + 1;
+    const pct = Math.min(NOTES_PROGRESS_END, NOTES_PROGRESS_START + Math.floor(fraction * span));
+    if (pct <= last) return;
+    last = pct;
+    sendProgress('generating', pct);
+  };
+}
+
+// Runs the notes stage: generate with the configured LLM (and fallback), streaming a live
+// preview to the renderer and advancing the progress bar as the notes arrive, stamp
+// provenance into the notes blob for the renderer, and announce a fallback if one was used.
+async function generateAndStampNotes(sessionId, transcript, config, sttInfo, meetingTitle, sendProgress) {
+  const reportProgress = sendProgress ? notesProgressReporter(sendProgress) : null;
+  const result = await generateNotes(transcript, config, {
+    meetingTitle: meetingTitle || '',
+    onPreview: (preview) => {
+      sendToRenderer('notes:preview', { sessionId, ...preview });
+      if (preview.progress != null) reportProgress?.(preview.progress);
+    },
+  });
   const notes = result.notes;
 
   notes._llmProvider = result.provider;
@@ -826,13 +851,13 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
       db.updateSession(sessionId, { status: 'generating' });
     }
 
-    sendProgress('generating', 60);
+    sendProgress('generating', NOTES_PROGRESS_START);
 
     abortIfCancelled();
 
     // Stage 2: LLM notes (60–85%)
     // Read fresh: the meeting may have been renamed while it was being transcribed.
-    const notes = await generateAndStampNotes(sessionId, transcript, config, sttInfo, db.getSession(sessionId)?.meeting_title);
+    const notes = await generateAndStampNotes(sessionId, transcript, config, sttInfo, db.getSession(sessionId)?.meeting_title, sendProgress);
 
     abortIfCancelled();
     // ...or while the notes were being written.
@@ -1488,9 +1513,9 @@ function registerIpcHandlers() {
         // Save transcript immediately so the session is browsable right away
         db.updateSession(sessionId, { transcript: JSON.stringify(transcript) });
 
-        sendProgress('generating', 60);
+        sendProgress('generating', NOTES_PROGRESS_START);
 
-        const notes = await generateAndStampNotes(sessionId, transcript, config, { provider: 'none', model: '' }, meetingTitle); // no STT for pasted transcripts
+        const notes = await generateAndStampNotes(sessionId, transcript, config, { provider: 'none', model: '' }, meetingTitle, sendProgress); // no STT for pasted transcripts
 
         db.updateSession(sessionId, {
           notes:  JSON.stringify(notes),

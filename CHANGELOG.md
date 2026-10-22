@@ -6,6 +6,19 @@ updated: 2026-10-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.11.0] - 2026-10-22
+
+### Added
+
+- **Notes**: Live preview of the notes while they're written. Gemini, Groq and Claude now stream their answer, and the meeting page fills in the same cards (JSON) or formatted Markdown as the final notes, replacing any old notes until the new ones are saved.
+- **Notes**: The progress bar keeps moving while the notes are written (60% to 84%), estimated from how much the model has written against the transcript's length, instead of sitting at 60%.
+- **Gemini**: A Latest / Pinned / Custom toggle in Settings › Notes. Latest offers Google's auto-updating `gemini-flash-latest`, `gemini-flash-lite-latest` and `gemini-pro-latest`, which always use the newest model in their family; they're also in the fallback model list.
+
+### Changed
+
+- **Settings**: Claude and Groq's custom model ID moves behind the same toggle (Pinned / Custom), so the model cards and the ID field no longer show at once.
+- **Docs and Settings**: Language support is described as English with Indic languages and multilingual meetings in general, rather than naming a single language.
+
 ## [4.10.0] - 2026-10-22
 
 ### Added

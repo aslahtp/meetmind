@@ -7,6 +7,9 @@ name: CI
 # Public repo: fork PRs run this with a read-only token and no secrets (`pull_request`, never
 # `pull_request_target`), so untrusted PR code can't write to the repo. Keep it that way.
 # Actions are pinned to full commit SHAs (tags can be moved); Dependabot keeps them current.
+#
+# A new commit on a PR cancels the PR's run still in progress (concurrency below). A push to main
+# with the same files as a PR commit that already passed skips the jobs (see already-tested).
 
 on:
   pull_request:
@@ -31,8 +34,76 @@ env:
   GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
 
 jobs:
+  # A push to main that a PR just merged has usually been tested already: the PR's CI ran the
+  # same workflow on the same files. If the merged commit's file tree is identical to the PR's
+  # final commit and CI passed on that commit, the jobs below are skipped; any difference (the
+  # PR was behind main, the PR can't be found, an API error) runs everything. Release runs
+  # (workflow_call from release.yml), PRs and manual runs never skip. The dependency audit always
+  # runs, since new advisories appear without any file changing.
+  #
+  # Trust: this reuses a result the merge already relied on (required checks on the PR). A fork
+  # PR can't fake it without changing ci.yml itself, which then lands on main with the identical
+  # tree it was tested with, after maintainer review (CODEOWNERS covers workflows). The job runs
+  # no repository code and only reads through the API.
+  already-tested:
+    name: Reuse PR result
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # read the merged and PR commits' trees
+      actions: read # find the PR's CI runs
+      pull-requests: read # find the PR a commit came from
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Look for a passing PR run on identical files
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          # Anything but the skip=true written at the very end runs every job.
+          note() { echo "$1"; echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+
+          # Only this workflow's own push to main; release.yml calls it with the same event and ref.
+          if [ "$EVENT" != "push" ] || [ "$REF" != "refs/heads/main" ] \
+            || [[ "$WORKFLOW_REF" != "$REPO/.github/workflows/ci.yml@"* ]]; then
+            exit 0
+          fi
+
+          pr=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+            --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0].number // empty' || true)
+          if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
+            note "No merged PR found for $SHA; running full CI."
+            exit 0
+          fi
+
+          head=$(gh api "repos/$REPO/pulls/$pr" --jq '.head.sha' || true)
+          main_tree=$(gh api "repos/$REPO/git/commits/$SHA" --jq '.tree.sha' || true)
+          head_tree=$(gh api "repos/$REPO/git/commits/$head" --jq '.tree.sha' || true)
+          if ! [[ "$head" =~ ^[0-9a-f]{40}$ && "$main_tree" =~ ^[0-9a-f]{40}$ ]] || [ "$main_tree" != "$head_tree" ]; then
+            note "Merged files differ from PR #$pr's last commit (it was behind main, or the lookup failed); running full CI."
+            exit 0
+          fi
+
+          run=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$head&status=success&per_page=1" \
+            --jq '.workflow_runs[0].html_url // empty' || true)
+          if [ -z "$run" ]; then
+            note "No successful CI run on PR #$pr's last commit; running full CI."
+            exit 0
+          fi
+
+          note "Skipping CI: main has the same files as PR #$pr's last commit, which passed in $run"
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+
   lint-test-build:
     name: Lint, test & build
+    needs: already-tested
+    if: needs.already-tested.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -58,9 +129,12 @@ jobs:
 
   # Whether a PR touches anything that can change the packaged apps. Docs-only PRs skip the
   # Windows and macOS builds below (a skipped job still satisfies a required status check).
-  # Pushes and release runs (workflow_call) always build.
+  # Pushes and release runs (workflow_call) always build, unless already-tested skips this job,
+  # which skips the two builds with it.
   changes:
     name: Detect changes
+    needs: already-tested
+    if: needs.already-tested.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -200,6 +274,8 @@ jobs:
 
   repo-hygiene:
     name: Repo hygiene
+    needs: already-tested
+    if: needs.already-tested.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -239,6 +315,8 @@ jobs:
 
   secret-scan:
     name: Secret scan
+    needs: already-tested
+    if: needs.already-tested.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -259,6 +337,7 @@ jobs:
         run: |
           "$RUNNER_TEMP/gitleaks" git . --redact --no-banner --verbose --exit-code 1
 
+  # Not gated on already-tested: new advisories appear without any file changing.
   dependency-audit:
     name: Dependency audit
     runs-on: ubuntu-latest
@@ -282,6 +361,8 @@ jobs:
   # dangerous triggers, over-broad permissions and unpinned actions, e.g. in a contributor's PR.
   workflow-security:
     name: Workflow security (zizmor)
+    needs: already-tested
+    if: needs.already-tested.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

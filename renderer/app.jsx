@@ -131,6 +131,7 @@ export default function App() {
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [recordingStartedAt, setRecordingStartedAt] = useState(null);
   const [processing, setProcessing] = useState(null);      // { sessionId, stage, percent } | null
+  const [notesPreview, setNotesPreview] = useState(null);  // { sessionId, attempt, provider, model, notes } | null
   const [updaterState, setUpdaterState] = useState(null);
   const [showUpdateBanner, setShowUpdateBanner] = useState(true);
   const [toasts, setToasts] = useState([]);
@@ -169,6 +170,7 @@ export default function App() {
 
   const trackProcessing = useCallback((sessionId) => {
     processingSessionRef.current = sessionId;
+    setNotesPreview((prev) => (prev?.sessionId === sessionId ? prev : null));
     // A progress event can arrive before the caller learns the session id
     // (e.g. pasted transcripts start at "generating") — keep any stage we have.
     setProcessing((prev) => ({
@@ -453,6 +455,15 @@ export default function App() {
       setProcessing({ sessionId: processingSessionRef.current, stage, percent });
     });
 
+    // Notes streamed so far while the LLM writes them (see generateNotes' onPreview).
+    const unsubPreview = window.meetmind.on('notes:preview', (preview) => {
+      setNotesPreview(preview);
+    });
+    // Cleared only once the finished session is loaded, so old notes don't flash back in between.
+    const clearPreview = (sessionId) => {
+      setNotesPreview((prev) => (!sessionId || prev?.sessionId === sessionId ? null : prev));
+    };
+
     const unsubComplete = window.meetmind.on('processing:complete', async ({ sessionId }) => {
       setProcessing(null);
       processingSessionRef.current = null;
@@ -461,6 +472,7 @@ export default function App() {
         const session = await window.meetmind.sessions.get(sessionId);
         if (session) showFinishedSession(session);
       }
+      clearPreview(sessionId);
     });
 
     const unsubError = window.meetmind.on('processing:error', async ({ sessionId, error }) => {
@@ -471,11 +483,13 @@ export default function App() {
         const session = await window.meetmind.sessions.get(sessionId);
         if (session) showFinishedSession({ ...session, _processingError: error });
       }
+      clearPreview(sessionId);
     });
 
     // Pipeline was cancelled because the session was deleted mid-flight.
-    const unsubCancelled = window.meetmind.on('processing:cancelled', () => {
+    const unsubCancelled = window.meetmind.on('processing:cancelled', ({ sessionId } = {}) => {
       setProcessing(null);
+      clearPreview(sessionId);
       processingSessionRef.current = null;
       refreshSessions();
     });
@@ -513,6 +527,7 @@ export default function App() {
       unsubRecordingStarted?.();
       unsubRecordingStopped?.();
       unsubProgress?.();
+      unsubPreview?.();
       unsubComplete?.();
       unsubError?.();
       unsubCancelled?.();
@@ -619,7 +634,7 @@ export default function App() {
     theme, setTheme,
     isRecording, recordingSessionId, recordingStartedAt,
     startRecording, stopRecording,
-    processing, trackProcessing,
+    processing, trackProcessing, notesPreview,
     openSession, openSessionById,
     addToast,
     confirm,

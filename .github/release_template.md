@@ -32,7 +32,7 @@ gh attestation verify MeetMind-x.y.z-arm64.dmg --repo aslahtp/meetmind
 4. Choose your **Transcription Service**:
    - For **AssemblyAI** (Recommended):
      - Paste your AssemblyAI API key.
-     - (Optional) Add a short prompt to fine-tune behavior for English/Malayalam meetings.
+     - (Optional) Add a short prompt to fine-tune behavior for meetings that mix English and Indic languages.
    - For **Google STT**: Enter your Google Cloud API key and Project ID.
    - For **Sarvam AI STT**: Paste your Sarvam AI API key
    - For **Groq Whisper**: Paste your Groq API key (no speaker labels)
