@@ -110,7 +110,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 | Speaker-labelled transcript you can search and filter by speaker | Choose Markdown minutes or structured JSON notes, and edit the system prompt |
 | **Dark theme** | **JSON notes** |
 | <img src="docs/screenshots/markdown-notes-dark.png" alt="Markdown meeting minutes in the dark theme" width="400"> | <img src="docs/screenshots/json-notes.png" alt="Structured JSON notes with identified speakers and prioritised action items" width="400"> |
-| Full dark theme built from the same design tokens | The structured alternative: identified speakers and prioritised action items |
+| Full dark theme Support | The structured alternative: identified speakers and prioritised action items |
 
 
 ---
