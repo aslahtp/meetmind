@@ -906,7 +906,16 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   npm/yarn lockfile, committed `.exe`/`.dll`/`.msi`/`.dylib` or anything in `assets/ffmpeg/` but
   its README, a real `.env` file, or any file over 10 MB), a gitleaks secret scan (checksum-verified download) over the full git
   history, `pnpm audit --prod --audit-level high`, and a zizmor audit of the workflows
-  themselves. No job has secrets, so all of it is safe on fork PRs.
+  themselves. No job has secrets, so all of it is safe on fork PRs. A new commit on a PR cancels
+  that PR's run still in progress (`concurrency`, as in `pr-checks.yml` and `codeql.yml`). On a
+  push to `main`, an `already-tested` job finds the merged PR through the API and skips every job
+  except the dependency audit (new advisories need no file change) when the merged commit's file
+  tree is identical to the PR's last commit and CI passed on that commit; anything else (the PR was
+  behind `main`, no PR found, an API error) runs everything, and release gates, PRs and manual runs
+  never skip. It runs no repository code and only has `actions`/`pull-requests`/`contents` read
+  access. Reusing the PR's result adds no trust beyond what merging on its required checks
+  already did: a PR can only fake a pass by changing `ci.yml`, which then reaches `main` with the
+  identical tree it was tested with, after maintainer review (CODEOWNERS).
 - **`release.yml`**: triggers on a push to `main` that touches `package.json` (i.e. a version
   bump). Calls `ci.yml` as a gate first. The `build` job then builds the Windows installer with a
   read-only token and no dependency cache, bundling the pinned, checksum-verified FFmpeg
