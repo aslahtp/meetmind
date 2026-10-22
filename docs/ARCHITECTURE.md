@@ -427,15 +427,18 @@ read). The controller checks that the recording is not silent and then calls the
 
 - **AssemblyAI** (`https://api.assemblyai.com/v2`): REST upload + polling, via the `assemblyai`
   npm SDK for the connection test (`GET /v2/account`) and REST calls for the actual transcription
-  job, with built in speaker diarization.
+  job, with built in speaker diarization. Models: `universal-3-5-pro` (default; sent with
+  `language_detection` and Universal-2 as the fallback for languages outside its 18, which code-
+  switch natively) and `universal-2` (with a fixed `language_codes` list). It replaced
+  `universal-3-pro`, which a saved config resolves to the default.
 
 - **Sarvam AI** (`https://api.sarvam.ai`): job-based flow (`sarvamPost`/`sarvamGet` helpers)
   against `/speech-to-text/job/v1/...`: create job (model `saaras:v3`) -> upload file -> start
   job -> poll status -> download result. `saaras:v3` is used specifically because meetings
   commonly mix English and Indic languages, and this model supports that code-switching
   automatically, without a language being pinned in advance. This is the only engine
-  built for that use case; Google STT and AssemblyAI are configured with a single
-  `language` setting (default `ml-IN`).
+  built for that use case; Google STT is configured with a single `language` setting (default
+  `ml-IN`), and AssemblyAI's default Universal-3.5 Pro detects the language itself.
 
 - **Groq** (`https://api.groq.com/openai/v1/audio/transcriptions`): Whisper models
   `whisper-large-v3-turbo` (default) and `whisper-large-v3`, called with multipart `fetch`

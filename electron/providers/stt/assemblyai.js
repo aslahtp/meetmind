@@ -2,6 +2,25 @@ const fs = require('fs');
 const { httpsGet } = require('../shared/http');
 const { getWavDurationSeconds } = require('../shared/wav');
 
+/**
+ * Request options for a transcription. Universal-3.5 Pro detects the language itself, code-switching
+ * across its 18 languages, and AssemblyAI hands audio in any other language to Universal-2 (the
+ * second entry). `language_detection` can't be combined with `language_codes`, so only
+ * Universal-2 keeps the fixed language list.
+ */
+function requestOptions({ wavPath, model, prompt }) {
+  const options = { audio: wavPath, speaker_labels: true };
+  if (model === 'universal-2') {
+    options.speech_models = ['universal-2'];
+    options.language_codes = ['en', 'ml'];
+  } else {
+    options.speech_models = ['universal-3-5-pro', 'universal-2'];
+    options.language_detection = true;
+  }
+  if (typeof prompt === 'string' && prompt.trim()) options.prompt = prompt.trim();
+  return options;
+}
+
 async function transcribeWithAssemblyAI(wavFilePath, apiKey, prompt, model, onProgress) {
   if (!apiKey || !apiKey.trim()) {
     throw new Error('AssemblyAI API key is required for transcription');
@@ -15,19 +34,7 @@ async function transcribeWithAssemblyAI(wavFilePath, apiKey, prompt, model, onPr
 
   onProgress?.(0);
 
-  const options = {
-    audio: wavFilePath,
-    language_codes: ['en', 'ml'],
-    speaker_labels: true,
-    // Prefer highest-accuracy multilingual models and fall back automatically.
-    speech_models: model === 'universal-2' ? ['universal-2'] : ['universal-3-pro', 'universal-2'],
-  };
-
-  if (prompt && typeof prompt === 'string' && prompt.trim()) {
-    options.prompt = prompt.trim();
-  }
-
-  const transcript = await client.transcripts.transcribe(options);
+  const transcript = await client.transcripts.transcribe(requestOptions({ wavPath: wavFilePath, model, prompt }));
 
   onProgress?.(1);
 
@@ -80,11 +87,11 @@ async function testAssemblyAI(apiKey) {
 module.exports = {
   id: 'assemblyai',
   name: 'AssemblyAI',
-  badge: 'Universal-3 Pro',
+  badge: 'Universal-3.5 Pro',
   icon: 'assemblyai',
   pricing: 'Free tier available (100 hrs), then $0.37/hr',
   description:
-    'Production-ready transcription with built-in speaker diarization. Good for English meetings.',
+    'Production-ready transcription with built-in speaker diarization and code switching between languages.',
   credentials: [
     {
       configKey: 'assemblyAiApiKey',
@@ -108,13 +115,15 @@ module.exports = {
     { text: 'Paste it into the AssemblyAI API key field' },
   ],
   models: [
-    { id: 'universal-3-pro', name: 'Universal-3 Pro', badge: 'Default', description: 'Highest accuracy; falls back to Universal-2 automatically.' },
+    { id: 'universal-3-5-pro', name: 'Universal-3.5 Pro', badge: 'Default', description: 'Highest accuracy, with code switching across 18 languages; other languages fall back to Universal-2 automatically.' },
     { id: 'universal-2', name: 'Universal-2', badge: 'Stable', description: 'Previous-generation multilingual model.' },
   ],
-  defaultModel: 'universal-3-pro',
+  // Not in the list, so a saved 'universal-3-pro' (the previous default) resolves to this one.
+  defaultModel: 'universal-3-5-pro',
   allowCustomModel: false,
   capabilities: { diarization: true, languages: ['en', 'ml'] },
   transcribe: ({ wavPath, model, config, onProgress }) =>
     transcribeWithAssemblyAI(wavPath, config.assemblyAiApiKey, config.assemblyAiPrompt, model, onProgress),
   test: ({ config }) => testAssemblyAI(config.assemblyAiApiKey),
+  _requestOptions: requestOptions,
 };
