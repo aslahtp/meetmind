@@ -1,14 +1,20 @@
-async function generate({ systemPrompt, userPrompt, model, config }) {
+async function generate({ systemPrompt, userPrompt, model, config, onText }, deps = {}) {
   const apiKey = config.geminiApiKey;
   if (!apiKey) throw new Error('Gemini API key is required');
 
-  const { GoogleGenerativeAI } = require('@google/generative-ai');
+  const { GoogleGenerativeAI } = deps.sdk || require('@google/generative-ai');
   const genModel = new GoogleGenerativeAI(apiKey).getGenerativeModel({
     model,
     systemInstruction: systemPrompt,
   });
-  const result = await genModel.generateContent(userPrompt);
-  return result.response.text().trim();
+  const result = await genModel.generateContentStream(userPrompt);
+  let text = '';
+  for await (const chunk of result.stream) {
+    const delta = chunk.text();
+    text += delta;
+    if (delta) onText?.(delta);
+  }
+  return text.trim();
 }
 
 async function test({ config, model }) {

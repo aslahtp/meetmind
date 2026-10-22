@@ -170,7 +170,7 @@ grouped by feature:
 Event subscriptions go through a single `on(channel, callback)` / `off(...)` pair with an
 explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
 `recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
-`processing:error`, `processing:cancelled`, `ws:extension-connected`, `ws:recording-requested`,
+`processing:error`, `processing:cancelled`, `notes:preview`, `ws:extension-connected`, `ws:recording-requested`,
 `sessions:durations-updated`, `updater:status`, `calendar:meeting-starting`,
 `llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.
 Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
@@ -232,7 +232,8 @@ based on the `theme` setting) driven by CSS custom properties in `renderer/style
 `lucide-react` plus a handful of hand-authored brand icon components
 (`GeminiIcon`, `ClaudeIcon`, `AssemblyAiIcon`, `SarvamIcon`, `GroqIcon`, `NotionIcon`, `GoogleCloudIcon`,
 `GoogleCalendarIcon`). Notes/transcript Markdown rendering uses `react-markdown` +
-`remark-gfm`, shared between the in-app notes view and the PDF export document.
+`remark-gfm`, shared between the in-app notes view and the PDF export document; the live
+preview of notes still being written runs the Markdown through `remend` first.
 
 ### 3.4 Meeting detection and overlay (`electron/detection/`, `electron/overlay/`)
 
@@ -444,10 +445,22 @@ read). The controller checks that the recording is not silent and then calls the
 
 ### 5.2 Stage 2: Notes generation (`electron/services/notes.js` + `electron/providers/llm/*`)
 
-`generateNotes(transcript, config, { meetingTitle })` resolves the primary target from
+`generateNotes(transcript, config, { meetingTitle, onPreview })` resolves the primary target from
 `llmProvider` and `llmModels[<provider>]`, builds the prompt for the output mode, calls
 `provider.generate()` and parses the result (`services/notes-normalize.js`: fence stripping,
 `normalizeNotes`, JSON fallback). Providers only return raw text.
+
+All three providers stream their answer, passing each text delta to `generate()`'s `onText`
+callback (Claude and Groq read server-sent events with `providers/shared/sse.js`, Gemini uses
+`generateContentStream`). While the notes are being written, `generateNotes` rebuilds a preview
+from the text so far at most every 100 ms (`buildNotesPreview`: incomplete JSON is completed by
+`partial-json` and run through `normalizeNotes`; Markdown is passed through) and
+`generateAndStampNotes` sends it to the renderer as `notes:preview`
+(`{ sessionId, attempt, provider, model, notes }`, a full snapshot each time, `notes: null` when an
+attempt starts so a fallback begins with a clean preview). The meeting page shows it in place of
+any old notes, rendering the same cards or Markdown as the final notes; Markdown goes through
+`remend` first, which closes half-written bold, code and links. Previews are never saved: the
+DB is only written once the final text parses, and on failure the old notes are shown again.
 
 The session's `meeting_title` column holds the meeting's own title: the detected tab or window
 title, the extension's tab title, a calendar event's title, a pasted transcript's title, or a
@@ -463,7 +476,7 @@ wrote. Without one, the session takes the LLM's title.
   by older versions are remapped through the provider's `_deprecatedModels` table.
 - **Groq** (`llm/groq.js`, OpenAI-compatible `chat/completions`): `llama-3.3-70b-versatile`
   (default), `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `llama-3.1-8b-instant`. JSON mode sends
-  `response_format: {type: "json_object"}`. Free-tier tokens-per-minute limits can reject long
+  `response_format: {type: "json_object"}`, and asks again without streaming if a model refuses to stream in JSON mode. Free-tier tokens-per-minute limits can reject long
   transcripts (HTTP 413/429); the error says so and the fallback below covers it.
 - **Claude** (`llm/claude.js`, Anthropic Messages API `POST /v1/messages` via `fetch`, no SDK):
   `claude-sonnet-5-5` (default), `claude-fable-5-1`, `claude-opus-5-5`, `claude-haiku-5-5`.
@@ -722,6 +735,8 @@ From `package.json` (pnpm, Node 22.12+, Windows or macOS).
 | `lucide-react` | ^1.48.0 | Renderer icon set |
 | `react-markdown` | ^10.1.0 | Notes/transcript Markdown rendering (in-app and PDF) |
 | `remark-gfm` | ^4.0.1 | GitHub-flavored Markdown extensions (tables, task lists) for `react-markdown` |
+| `remend` | ^1.4.0 | Closes unterminated Markdown (bold, code, links) in the live notes preview |
+| `partial-json` | ^0.1.7 | Parses the incomplete JSON an LLM has streamed so far, for the live notes preview |
 | `sql.js` | ^1.14.2 | SQLite compiled to WASM, backs the sessions database |
 | `uuid` | ^10.0.0 | Session ID generation |
 | `ws` | ^8.21.3 | WebSocket server for the desktop <-> extension bridge |
@@ -933,6 +948,7 @@ Current coverage is pure logic only:
 | `tests/meetingFilters.test.js` | Meetings filters and sorting (`renderer/lib/meetingFilters.js`) |
 | `tests/meetingSearch.test.js` | Meeting search: stemming, concept map, typos, prefixes, phrases, ranking and snippets (`renderer/lib/meetingSearch.js`) |
 | `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, meeting window titles, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
+| `tests/notesPreview.test.js` | Live notes preview: partial Markdown and JSON (`buildNotesPreview` in `electron/services/notes-normalize.js`) and the throttled `onPreview` snapshots of `generateNotes`, including a fallback |
 | `tests/meetingTitle.test.js` | Which source titles name the meeting, and how one replaces the LLM's title and prompts it (`electron/services/meeting-title.js`, `buildUserPrompt`) |
 | `tests/ffmpeg-path.test.js` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.js`) and the per-OS silent-recording hints (`electron/audio/audio-hints.js`) |
 | `tests/macSupport.test.js` | macOS capture strategies (`electron/audio/mac-capture.js`), "Test system audio" verdicts (`renderer/lib/audioTest.js`), and the shape of the pinned macOS FFmpeg downloads (`electron/audio/ffmpeg-sources.js`) |

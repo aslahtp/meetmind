@@ -100,10 +100,14 @@ process.on('unhandledRejection', (reason) => {
   });
 });
 
-// Runs the notes stage: generate with the configured LLM (and fallback), stamp provenance
-// into the notes blob for the renderer, and announce a fallback if one was used.
+// Runs the notes stage: generate with the configured LLM (and fallback), streaming a live
+// preview to the renderer, stamp provenance into the notes blob for the renderer, and
+// announce a fallback if one was used.
 async function generateAndStampNotes(sessionId, transcript, config, sttInfo, meetingTitle) {
-  const result = await generateNotes(transcript, config, { meetingTitle: meetingTitle || '' });
+  const result = await generateNotes(transcript, config, {
+    meetingTitle: meetingTitle || '',
+    onPreview: (preview) => sendToRenderer('notes:preview', { sessionId, ...preview }),
+  });
   const notes = result.notes;
 
   notes._llmProvider = result.provider;

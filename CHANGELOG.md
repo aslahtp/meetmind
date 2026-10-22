@@ -6,6 +6,12 @@ updated: 2026-10-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.11.0] - 2026-10-22
+
+### Added
+
+- **Notes**: Live preview of the notes while they're written. Gemini, Groq and Claude now stream their answer, and the meeting page fills in the same cards (JSON) or formatted Markdown as the final notes, replacing any old notes until the new ones are saved.
+
 ## [4.10.0] - 2026-10-22
 
 ### Added

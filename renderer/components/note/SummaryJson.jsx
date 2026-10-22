@@ -29,7 +29,7 @@ function PriorityTag({ priority }) {
   return <span className="eyebrow">{label}</span>;
 }
 
-function ActionItemsList({ items, n }) {
+function ActionItemsList({ items, n, streaming }) {
   // Ticks start from the saved `done` flag (`- [x]` in the Markdown); clicks here are local.
   const [checked, setChecked] = useState(() => ({}));
   const isChecked = (idx) => checked[idx] ?? !!items[idx]?.done;
@@ -46,7 +46,12 @@ function ActionItemsList({ items, n }) {
         Action items
       </SectionHeading>
 
-      {items.length === 0 ? (
+      {items.length === 0 && streaming ? (
+        // Hold the section's place while the model is still writing the notes.
+        <div className="card-compact text-center">
+          <p className="text-body-sm text-graphite">Action items will appear here as they're written.</p>
+        </div>
+      ) : items.length === 0 ? (
         <div className="card-compact text-center">
           <ListChecks size={24} strokeWidth={1.75} className="mx-auto mb-8 text-graphite" />
           <p className="text-body-sm text-graphite">No action items were identified in this meeting.</p>
@@ -56,7 +61,7 @@ function ActionItemsList({ items, n }) {
           {items.map((item, idx) => {
             const isDone = isChecked(idx);
             return (
-              <li key={idx} className="px-24 py-16">
+              <li key={idx} className={`px-24 py-16 ${streaming ? 'fade-in' : ''}`}>
                 <CheckBox
                   checked={isDone}
                   onChange={(value) => setChecked((prev) => ({ ...prev, [idx]: value }))}
@@ -151,10 +156,10 @@ function StatusUpdateCard({ statusUpdate }) {
   );
 }
 
-function TopicCard({ topic, idx }) {
+function TopicCard({ topic, idx, streaming }) {
   const body = topicBody(topic);
   return (
-    <article className="card space-y-24">
+    <article className={`card space-y-24 ${streaming ? 'fade-in' : ''}`}>
       <header>
         <p className="eyebrow tabular">Topic {String(idx + 1).padStart(2, '0')}</p>
         <h3 className="text-heading-sm font-medium text-ink mt-8">{topic.heading || 'Topic'}</h3>
@@ -201,7 +206,8 @@ function TopicCard({ topic, idx }) {
 }
 
 // Structured (JSON-mode) notes. Each section is indexed with a numbered step badge.
-export default function SummaryJson({ notes }) {
+// `streaming` marks a live preview of notes the LLM is still writing.
+export default function SummaryJson({ notes, streaming = false }) {
   const actionItems = notes.action_items || [];
   const topics = getTopics(notes);
   const participants = notes.participants || [];
@@ -225,7 +231,7 @@ export default function SummaryJson({ notes }) {
         </section>
       )}
 
-      <ActionItemsList items={actionItems} n={next()} />
+      <ActionItemsList items={actionItems} n={next()} streaming={streaming} />
 
       {topics.length > 0 && (
         <section>
@@ -237,7 +243,7 @@ export default function SummaryJson({ notes }) {
           </SectionHeading>
           <div className="space-y-24">
             {topics.map((topic, idx) => (
-              <TopicCard key={idx} topic={topic} idx={idx} />
+              <TopicCard key={idx} topic={topic} idx={idx} streaming={streaming} />
             ))}
           </div>
         </section>

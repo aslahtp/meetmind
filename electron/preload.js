@@ -205,6 +205,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'processing:complete',
       'processing:error',
       'processing:cancelled',
+      'notes:preview',
       'ws:extension-connected',
       'ws:recording-requested',
       'sessions:durations-updated',

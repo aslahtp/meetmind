@@ -1,6 +1,6 @@
 {
   "name": "meetmind",
-  "version": "4.10.0",
+  "version": "4.11.0",
   "description": "Open-source AI meeting notes app for Windows and macOS: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT, Sarvam AI or Groq, summarize with Gemini, Groq or Claude, and sync to Notion.",
   "keywords": [
     "ai-meeting-notes",
@@ -68,8 +68,10 @@
     "googleapis": "^176.0.0",
     "koffi": "^3.3.3",
     "lucide-react": "^1.55.0",
+    "partial-json": "^0.1.7",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "remend": "^1.4.0",
     "sql.js": "^1.14.2",
     "uuid": "^14.0.0",
     "ws": "^8.22.0"

@@ -11,6 +11,8 @@ const wav = require('../electron/providers/shared/wav.js');
 const groqStt = require('../electron/providers/stt/groq.js');
 const groqLlm = require('../electron/providers/llm/groq.js');
 const claudeLlm = require('../electron/providers/llm/claude.js');
+const geminiLlm = require('../electron/providers/llm/gemini.js');
+const { readEvents } = require('../electron/providers/shared/sse.js');
 const { generateNotes } = require('../electron/services/notes.js');
 const { migrateLegacyModels } = require('../electron/utils/configMigration.js');
 
@@ -24,9 +26,13 @@ function fakeResponse(status, body, headers = {}) {
   };
 }
 
-/** A 200 server-sent-events response, split across chunks to exercise buffering. */
-function fakeStream(events) {
-  const sse = events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+/**
+ * A 200 server-sent-events response, split across chunks to exercise buffering.
+ * `done` ends it with the OpenAI-style `data: [DONE]` sentinel.
+ */
+function fakeStream(events, { done = false } = {}) {
+  const sse = events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('')
+    + (done ? 'data: [DONE]\n\n' : '');
   const bytes = new TextEncoder().encode(sse);
   const mid = Math.floor(bytes.length / 2);
   return {
@@ -167,10 +173,52 @@ describe('Groq STT', () => {
   });
 });
 
+/** OpenAI-compatible chat-completion chunks streaming the given text pieces. */
+function groqChunks(pieces) {
+  return [
+    { choices: [{ index: 0, delta: { role: 'assistant', content: '' } }] },
+    ...pieces.map((content) => ({ choices: [{ index: 0, delta: { content } }] })),
+    { choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] },
+  ];
+}
+
+describe('SSE reader', () => {
+  it('yields JSON events across chunk boundaries and stops at [DONE]', async () => {
+    const events = [];
+    for await (const e of readEvents(fakeStream([{ type: 'a', n: 1 }, { type: 'b', n: 2 }], { done: true }).body)) {
+      events.push(e);
+    }
+    expect(events).toEqual([{ type: 'a', n: 1 }, { type: 'b', n: 2 }]);
+  });
+});
+
 describe('Groq LLM', () => {
+  const base = { systemPrompt: 's', userPrompt: 'u', model: 'llama-3.3-70b-versatile', config: { groqApiKey: 'k' } };
+
+  it('streams deltas to onText and returns the trimmed text', async () => {
+    const fetchImpl = vi.fn(async () => fakeStream(groqChunks([' # No', 'tes\n\nBody ']), { done: true }));
+    const deltas = [];
+    const text = await groqLlm.generate({ ...base, onText: (d) => deltas.push(d) }, { fetchImpl });
+    expect(text).toBe('# Notes\n\nBody');
+    expect(deltas).toEqual([' # No', 'tes\n\nBody ']);
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).stream).toBe(true);
+  });
+
+  it('asks again without streaming when a model refuses to stream JSON', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(fakeResponse(400, { error: { message: 'response_format does not support streaming' } }))
+      .mockResolvedValueOnce(fakeResponse(200, { choices: [{ message: { content: '{"a":1}' } }] }));
+    expect(await groqLlm.generate({ ...base, json: true }, { fetchImpl })).toBe('{"a":1}');
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body).stream).toBeUndefined();
+  });
+
+  it('throws an error sent mid-stream', async () => {
+    const fetchImpl = async () => fakeStream([{ error: { message: 'boom', type: 'internal_server_error' } }]);
+    await expect(groqLlm.generate(base, { fetchImpl })).rejects.toThrow(/Groq error \(stream\): boom/);
+  });
+
   it('sends json_object only in JSON mode', async () => {
-    const fetchImpl = vi.fn(async () => fakeResponse(200, { choices: [{ message: { content: ' {"a":1} ' } }] }));
-    const base = { systemPrompt: 's', userPrompt: 'u', model: 'llama-3.3-70b-versatile', config: { groqApiKey: 'k' } };
+    const fetchImpl = vi.fn(async () => fakeStream(groqChunks([' {"a":1} ']), { done: true }));
 
     expect(await groqLlm.generate({ ...base, json: true }, { fetchImpl })).toBe('{"a":1}');
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body).response_format).toEqual({ type: 'json_object' });
@@ -184,6 +232,46 @@ describe('Groq LLM', () => {
     await expect(
       groqLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: { groqApiKey: 'k' } }, { fetchImpl })
     ).rejects.toThrow(/tokens-per-minute/);
+  });
+});
+
+describe('Gemini LLM', () => {
+  /** Stand-in for @google/generative-ai streaming the given text pieces. */
+  function fakeSdk(pieces, calls) {
+    return {
+      GoogleGenerativeAI: class {
+        constructor(apiKey) { calls.apiKey = apiKey; }
+        getGenerativeModel(opts) {
+          calls.opts = opts;
+          return {
+            async generateContentStream(prompt) {
+              calls.prompt = prompt;
+              return {
+                stream: (async function* () {
+                  for (const p of pieces) yield { text: () => p };
+                })(),
+              };
+            },
+          };
+        }
+      },
+    };
+  }
+
+  it('streams deltas to onText and returns the trimmed text', async () => {
+    const calls = {};
+    const deltas = [];
+    const text = await geminiLlm.generate(
+      { systemPrompt: 's', userPrompt: 'u', model: 'gemini-3.8-flash', config: { geminiApiKey: 'g' }, onText: (d) => deltas.push(d) },
+      { sdk: fakeSdk(['# Notes', '', '\n\nBody '], calls) }
+    );
+    expect(text).toBe('# Notes\n\nBody');
+    expect(deltas).toEqual(['# Notes', '\n\nBody ']);
+    expect(calls).toMatchObject({ apiKey: 'g', prompt: 'u', opts: { model: 'gemini-3.8-flash', systemInstruction: 's' } });
+  });
+
+  it('requires an API key', async () => {
+    await expect(geminiLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: {} })).rejects.toThrow(/API key/);
   });
 });
 
@@ -226,6 +314,17 @@ describe('Claude LLM', () => {
 
   const generateWith = (fetchImpl) =>
     claudeLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'claude-opus-5-5', config: { claudeApiKey: 'k' } }, { fetchImpl });
+
+  it('passes text deltas, not thinking, to onText', async () => {
+    const fetchImpl = async () =>
+      fakeStream(claudeEvents([{ type: 'thinking' }, { type: 'text', text: '# Notes' }]));
+    const deltas = [];
+    await claudeLlm.generate(
+      { systemPrompt: 's', userPrompt: 'u', model: 'claude-opus-5-5', config: { claudeApiKey: 'k' }, onText: (d) => deltas.push(d) },
+      { fetchImpl }
+    );
+    expect(deltas).toEqual(['# Notes']);
+  });
 
   it('skips thinking blocks and returns the text that follows', async () => {
     const fetchImpl = async () =>

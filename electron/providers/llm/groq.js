@@ -1,4 +1,5 @@
-const { fetchJson } = require('../shared/http');
+const { fetchJson, httpError } = require('../shared/http');
+const { readEvents } = require('../shared/sse');
 
 const GROQ_BASE = 'https://api.groq.com/openai/v1';
 
@@ -19,9 +20,33 @@ function friendlyError(err) {
   return err;
 }
 
-async function generate({ systemPrompt, userPrompt, model, config, json }, deps = {}) {
+/** Stream a chat completion, passing each content delta to `onText`, and return the full text. */
+async function streamCompletion(apiKey, body, fetchImpl, onText) {
+  const res = await fetchImpl(`${GROQ_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: headers(apiKey),
+    body: JSON.stringify({ ...body, stream: true }),
+  });
+  if (!res.ok) throw httpError(res, await res.text(), 'Groq');
+
+  let text = '';
+  for await (const event of readEvents(res.body)) {
+    if (event.error) {
+      const err = new Error(`Groq error (stream): ${event.error.message || event.error.type || 'unknown'}`);
+      if (Number.isInteger(event.error.status)) err.status = event.error.status;
+      throw err;
+    }
+    const delta = event.choices?.[0]?.delta?.content || '';
+    text += delta;
+    if (delta) onText?.(delta);
+  }
+  return text;
+}
+
+async function generate({ systemPrompt, userPrompt, model, config, json, onText }, deps = {}) {
   const apiKey = config.groqApiKey;
   if (!apiKey || !apiKey.trim()) throw new Error('Groq API key is required');
+  const fetchImpl = deps.fetchImpl || globalThis.fetch;
 
   const body = {
     model,
@@ -35,12 +60,19 @@ async function generate({ systemPrompt, userPrompt, model, config, json }, deps 
   if (json) body.response_format = { type: 'json_object' };
 
   try {
-    const data = await fetchJson(
-      `${GROQ_BASE}/chat/completions`,
-      { method: 'POST', headers: headers(apiKey), body: JSON.stringify(body) },
-      { label: 'Groq', fetchImpl: deps.fetchImpl || globalThis.fetch }
-    );
-    const text = data?.choices?.[0]?.message?.content;
+    let text;
+    try {
+      text = await streamCompletion(apiKey, body, fetchImpl, onText);
+    } catch (err) {
+      // Some models refuse to stream in JSON mode; ask again without streaming.
+      if (!(json && err.status === 400 && /stream/i.test(err.message))) throw err;
+      const data = await fetchJson(
+        `${GROQ_BASE}/chat/completions`,
+        { method: 'POST', headers: headers(apiKey), body: JSON.stringify(body) },
+        { label: 'Groq', fetchImpl }
+      );
+      text = data?.choices?.[0]?.message?.content || '';
+    }
     if (!text) throw new Error('No response from Groq API');
     return String(text).trim();
   } catch (err) {

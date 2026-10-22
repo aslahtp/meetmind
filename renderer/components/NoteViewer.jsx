@@ -15,7 +15,7 @@ import { isProcessing, PIPELINE_STAGES, STAGE_LABELS, stageIndex } from '../lib/
 
 // ── Processing state ─────────────────────────────────────────────────────────
 
-function ProcessingCard({ stage, percent, includeNotion, onRestart }) {
+function ProcessingCard({ stage, percent, includeNotion, onRestart, previewing, retryingWith }) {
   const stages = includeNotion ? PIPELINE_STAGES : PIPELINE_STAGES.filter((s) => s.key !== 'uploading');
   const current = Math.max(0, stageIndex(stage));
   const pct = percent != null ? Math.round(percent) : null;
@@ -30,9 +30,21 @@ function ProcessingCard({ stage, percent, includeNotion, onRestart }) {
         <Loader2 size={20} strokeWidth={1.75} className="spinner text-graphite" aria-hidden="true" />
         {STAGE_LABELS[stage] || 'Processing'}…
       </h2>
-      <p className="text-body-sm text-graphite mt-8">
-        You can keep using MeetMind. This page updates when the notes are ready.
-      </p>
+      {previewing ? (
+        <p className="flex items-center gap-8 text-body-sm text-graphite mt-8">
+          <span className="dot dot-mint dot-live" aria-hidden="true" />
+          Live preview. The notes below are still being written.
+        </p>
+      ) : (
+        <p className="text-body-sm text-graphite mt-8">
+          You can keep using MeetMind. This page updates when the notes are ready.
+        </p>
+      )}
+      {retryingWith && (
+        <p className="text-caption text-graphite mt-8">
+          The first model failed, so {retryingWith} is writing the notes instead.
+        </p>
+      )}
       <ol className="flex flex-wrap gap-8 mt-24">
         {stages.map((s, i) => (
           <li key={s.key} className={i > current ? 'opacity-40' : ''}>
@@ -59,12 +71,12 @@ function ProcessingCard({ stage, percent, includeNotion, onRestart }) {
 
 // ── Summary tab ──────────────────────────────────────────────────────────────
 
-function SummaryTab({ notes, title, noSpeech, transcriptionFailed, failureMessage, isError, busy, onGenerate, onRetry }) {
+function SummaryTab({ notes, title, noSpeech, transcriptionFailed, failureMessage, isError, busy, streaming, onGenerate, onRetry }) {
   const NotesIcon = useNotesProviderIcon();
   if (notes) {
     return notes._rawMarkdown
-      ? <MarkdownNoteView markdown={notes._rawMarkdown} omitTitle={title} />
-      : <SummaryJson notes={notes} />;
+      ? <MarkdownNoteView markdown={notes._rawMarkdown} omitTitle={title} streaming={streaming} />
+      : <SummaryJson notes={notes} streaming={streaming} />;
   }
   if (busy) return null;
 
@@ -165,7 +177,7 @@ function MarkdownEditor({ value, onChange, structured }) {
 // ── Main NoteViewer ──────────────────────────────────────────────────────────
 
 export default function NoteViewer({ session, onBack, onRefresh }) {
-  const { processing, trackProcessing, addToast, confirm, config, setNavGuard } = useApp();
+  const { processing, trackProcessing, notesPreview, providers, addToast, confirm, config, setNavGuard } = useApp();
   const NotesIcon = useNotesProviderIcon();
   const [activeTab, setActiveTab] = useState('summary');
   const [uploading, setUploading] = useState(false);
@@ -250,6 +262,11 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
   const liveProcessing = processing?.sessionId === session.id ? processing : null;
   const busy = !!liveProcessing || isProcessing(session.status) || starting;
   const stage = liveProcessing?.stage || (isProcessing(session.status) ? session.status : 'transcribing');
+  // Notes the LLM has streamed so far; while generating they replace any old notes on screen.
+  const preview = busy && notesPreview?.sessionId === session.id ? notesPreview : null;
+  const retryingWith = preview?.attempt > 0
+    ? providers?.llm?.find((p) => p.id === preview.provider)?.name || preview.provider
+    : null;
   const includeNotion = stage === 'uploading'
     || !!(config?.notionToken?.trim?.() && config?.notionDatabaseId?.trim?.());
 
@@ -582,14 +599,17 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
                   stage={stage}
                   percent={liveProcessing?.percent}
                   includeNotion={includeNotion}
-                  onRestart={!liveProcessing && !starting ? handleRetry : undefined}
+                  onRestart={!liveProcessing && !starting && !preview ? handleRetry : undefined}
+                  previewing={!!preview?.notes}
+                  retryingWith={retryingWith}
                 />
               )}
               {showEditor ? (
                 <MarkdownEditor value={draft} onChange={setDraft} structured={!savedNotes._rawMarkdown} />
               ) : (
                 <SummaryTab
-                  notes={notes}
+                  notes={preview ? preview.notes : notes}
+                  streaming={!!preview}
                   title={title}
                   noSpeech={noSpeech}
                   transcriptionFailed={transcriptionFailed}

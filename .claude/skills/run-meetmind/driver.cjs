@@ -321,6 +321,7 @@ async function tour(h) {
 //   ss <name>        theme <light|dark|system>   size <w> <h>   scroll <dy>
 //   focus <css>      type <text>      key <Key>        wait <ms>   eval <js expression>   errors   quit
 //   owait [ms]       oss <name>       oclick <name>    oeval <js>   (the floating meeting overlay window)
+//   send <channel> <json>   (push a main-to-renderer IPC event, e.g. notes:preview, to the main window)
 async function repl(h) {
   const rl = readline.createInterface({ input: process.stdin, terminal: false });
   for await (const raw of rl) {
@@ -349,6 +350,14 @@ async function repl(h) {
       else if (cmd === 'oss') await h.overlaySs(arg || `overlay-${Date.now()}`);
       else if (cmd === 'oclick') { await h.overlayPage().getByRole('button', { name: arg }).first().click({ timeout: 10000 }); await h.page.waitForTimeout(300); }
       else if (cmd === 'oeval') console.log('=>', JSON.stringify(await h.overlayPage().evaluate(arg)));
+      else if (cmd === 'send') {
+        const [channel, ...json] = rest;
+        await h.app.evaluate(({ BrowserWindow }, [ch, payload]) => {
+          const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().includes('overlay.html'));
+          win.webContents.send(ch, payload);
+        }, [channel, JSON.parse(json.join(' '))]);
+        await h.page.waitForTimeout(150);
+      }
       else if (cmd === 'errors') console.log('errors:', JSON.stringify(h.errors));
       else console.log('unknown command:', cmd);
       if (!['eval', 'oeval', 'errors', 'ss', 'oss'].includes(cmd)) console.log('ok', line);

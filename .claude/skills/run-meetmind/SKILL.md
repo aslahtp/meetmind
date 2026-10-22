@@ -60,6 +60,7 @@ Screenshots are written to `.claude/skills/run-meetmind/shots/<name>.png` (gitig
 | `scroll <dy>` | Wheel-scroll the main content |
 | `wait <ms>` / `eval <js>` / `errors` / `quit` | Wait / evaluate in the renderer / print console errors / exit |
 | `owait [ms]` / `oss <name>` / `oclick <name>` / `oeval <js>` | Meeting overlay window: wait until it is visible, screenshot it, click one of its buttons, evaluate in it |
+| `send <channel> <json>` | Push a main-to-renderer IPC event to the main window, e.g. `send notes:preview {"sessionId":"demo-3","attempt":0,"notes":{"_rawMarkdown":"# Hi"}}` to fake streamed notes |
 
 ## Run (human path)
 

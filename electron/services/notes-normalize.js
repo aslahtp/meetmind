@@ -1,4 +1,5 @@
 // Pure note-shaping helpers shared by every LLM provider (no Electron/SDK imports).
+const { parse: parsePartialJson } = require('partial-json');
 
 function transcriptToText(transcript) {
   if (!Array.isArray(transcript) || transcript.length === 0) {
@@ -194,6 +195,44 @@ function parseNotesResponse(text, markdown) {
   }
 }
 
+/** Drop the `{}` placeholders a cut-off JSON array ends with, so no empty card flashes. */
+function withoutEmptyEntries(list) {
+  return Array.isArray(list)
+    ? list.filter((x) => x != null && !(typeof x === 'object' && Object.keys(x).length === 0))
+    : list;
+}
+
+/**
+ * Turn the text an LLM has streamed so far into a notes object for the live
+ * preview, or null when there's nothing to show yet. Partial JSON is completed
+ * by partial-json and normalized like the final notes.
+ */
+function buildNotesPreview(text, markdown) {
+  const raw = String(text || '').trim();
+  const fenced = raw.startsWith('```');
+  if (fenced && !raw.includes('\n')) return null; // only the opening fence so far
+  // Also drop a closing fence that is still arriving.
+  const body = (fenced ? stripCodeFence(raw).replace(/\n`{1,3}$/, '') : raw).trim();
+  if (!body) return null;
+
+  if (markdown) {
+    const titleMatch = body.match(/^#\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : 'Meeting Notes';
+    return { _rawMarkdown: body, title, meeting_title: title };
+  }
+
+  try {
+    const partial = parsePartialJson(body);
+    if (!partial || typeof partial !== 'object' || Array.isArray(partial)) return null;
+    for (const key of ['participants', 'attendees', 'sections', 'topics', 'key_points', 'action_items', 'notable_mentions']) {
+      partial[key] = withoutEmptyEntries(partial[key]);
+    }
+    return normalizeNotes(partial);
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   transcriptToText,
   normalizeNotes,
@@ -201,4 +240,5 @@ module.exports = {
   isMarkdownPrompt,
   buildUserPrompt,
   parseNotesResponse,
+  buildNotesPreview,
 };

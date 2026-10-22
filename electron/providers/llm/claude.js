@@ -1,4 +1,5 @@
 const { fetchJson, httpError } = require('../shared/http');
+const { readEvents } = require('../shared/sse');
 
 const CLAUDE_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -53,33 +54,12 @@ function friendlyError(err) {
   return err;
 }
 
-/** Yield each JSON event of a server-sent-events body. */
-async function* readEvents(body) {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  for (;;) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    const frames = buffer.split(/\r?\n\r?\n/);
-    buffer = done ? '' : frames.pop();
-    for (const frame of frames) {
-      const data = frame
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trimStart())
-        .join('\n');
-      if (data) yield JSON.parse(data);
-    }
-    if (done) return;
-  }
-}
-
 /**
  * Stream a Messages request and return { text, stopReason, stopDetails }.
- * Only `text` blocks are collected; Claude 5.x `thinking` blocks are skipped.
+ * Only `text` blocks are collected (and passed to `onText` as they arrive);
+ * Claude 5.x `thinking` blocks are skipped.
  */
-async function streamMessage(apiKey, body, fetchImpl) {
+async function streamMessage(apiKey, body, fetchImpl, onText) {
   const res = await fetchImpl(`${CLAUDE_BASE}/messages`, {
     method: 'POST',
     headers: headers(apiKey),
@@ -94,9 +74,13 @@ async function streamMessage(apiKey, body, fetchImpl) {
   for await (const event of readEvents(res.body)) {
     if (event.type === 'content_block_start' && event.content_block?.type === 'text') {
       textBlocks.add(event.index);
-      text += event.content_block.text || '';
+      const delta = event.content_block.text || '';
+      text += delta;
+      if (delta) onText?.(delta);
     } else if (event.type === 'content_block_delta' && textBlocks.has(event.index)) {
-      text += event.delta?.text || '';
+      const delta = event.delta?.text || '';
+      text += delta;
+      if (delta) onText?.(delta);
     } else if (event.type === 'message_delta') {
       stopReason = event.delta?.stop_reason ?? stopReason;
       stopDetails = event.delta?.stop_details ?? stopDetails;
@@ -111,7 +95,7 @@ async function streamMessage(apiKey, body, fetchImpl) {
   return { text, stopReason, stopDetails };
 }
 
-async function generate({ systemPrompt, userPrompt, model, config }, deps = {}) {
+async function generate({ systemPrompt, userPrompt, model, config, onText }, deps = {}) {
   const apiKey = config.claudeApiKey;
   if (!apiKey || !apiKey.trim()) throw new Error('Anthropic API key is required');
 
@@ -127,7 +111,8 @@ async function generate({ systemPrompt, userPrompt, model, config }, deps = {}) 
     const { text, stopReason, stopDetails } = await streamMessage(
       apiKey,
       body,
-      deps.fetchImpl || globalThis.fetch
+      deps.fetchImpl || globalThis.fetch,
+      onText
     );
     // Throw rather than return partial notes, so the fallback provider gets a turn.
     if (stopReason === 'max_tokens') {
