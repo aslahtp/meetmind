@@ -472,7 +472,9 @@ app names (`Google Meet`, `Zoom Meeting`, `Microsoft Teams`…) and ad-hoc Meet 
 wrote. Without one, the session takes the LLM's title.
 
 - **Gemini** (`llm/gemini.js`, `@google/generative-ai`): `gemini-3.8-flash` (default),
-  `gemini-3.7-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`. Retired model IDs saved
+  `gemini-3.7-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`, plus Google's auto-updating
+  `latestModels` (`gemini-flash-latest`, `gemini-flash-lite-latest`, `gemini-pro-latest`), which
+  Settings offers under a Latest / Pinned / Custom toggle. Retired model IDs saved
   by older versions are remapped through the provider's `_deprecatedModels` table.
 - **Groq** (`llm/groq.js`, OpenAI-compatible `chat/completions`): `llama-3.3-70b-versatile`
   (default), `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `llama-3.1-8b-instant`. JSON mode sends

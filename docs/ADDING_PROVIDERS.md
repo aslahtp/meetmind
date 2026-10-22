@@ -20,6 +20,7 @@ Shared fields (both kinds):
 | `credentials[]` | `{ configKey, label, type: 'password' \| 'text', placeholder, hint, link, required }`. Every `configKey` is stored in the config automatically. A key shared by two providers (for example `groqApiKey`) is declared in both. Extra options (a prompt, a project ID) are just non-required entries |
 | `guide[]` | "How to get a key" steps: `{ text, url?, hint? }` |
 | `models[]`, `defaultModel` | Curated `{ id, name, badge, description }` list and the default ID |
+| `latestModels[]` | Optional auto-updating aliases (same shape as `models[]`, for example `gemini-flash-latest`). When set, Settings shows a Latest / Pinned / Custom toggle, and they are always accepted as a saved model |
 | `allowCustomModel` | Show a free-text model ID field |
 | `capabilities` | Optional, for example `{ diarization: false }` shows a hint in the UI |
 | `test({ config, model })` | Throws if the credentials or model do not work |

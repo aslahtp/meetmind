@@ -81,6 +81,14 @@ describe('provider registry contract', () => {
           for (const f of p.credentials) expect(f.configKey).toBeTruthy();
         }
       });
+
+      it('keeps latest-model aliases unique and separate from the pinned models', () => {
+        for (const p of registry.list()) {
+          const latest = (p.latestModels || []).map((m) => m.id);
+          expect(new Set(latest).size).toBe(latest.length);
+          for (const id of latest) expect(p.models.some((m) => m.id === id)).toBe(false);
+        }
+      });
     });
   }
 
@@ -121,6 +129,22 @@ describe('provider registry contract', () => {
     const open = llmRegistry.get('groq');
     expect(llmRegistry.resolveModel(open, 'my/custom-model')).toBe('my/custom-model');
     expect(llmRegistry.resolveModel(open, '')).toBe(open.defaultModel);
+  });
+
+  it('offers Gemini\'s auto-updating latest aliases', () => {
+    expect(llmRegistry.get('gemini').latestModels.map((m) => m.id)).toEqual([
+      'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-latest',
+    ]);
+  });
+
+  it('accepts a latest alias even when custom IDs are not allowed', () => {
+    const reg = createRegistry('llm', ['generate', 'test']);
+    const p = reg.register({
+      id: 'x', name: 'X', credentials: [], models: [{ id: 'm1' }], latestModels: [{ id: 'x-latest' }],
+      defaultModel: 'm1', generate() {}, test() {},
+    });
+    expect(reg.resolveModel(p, 'x-latest')).toBe('x-latest');
+    expect(reg.resolveModel(p, 'other')).toBe('m1');
   });
 });
 

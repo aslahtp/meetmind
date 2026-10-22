@@ -55,6 +55,12 @@ module.exports = {
     { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite', badge: 'Lite', description: 'Lightweight and ultra-fast. Best for short meetings or low-latency note generation.' },
     { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview', badge: 'Pro', description: 'Highest capability model for complex, lengthy, or multi-speaker technical discussions.' },
   ],
+  // Google's auto-updating aliases: each always points at the newest release of its family.
+  latestModels: [
+    { id: 'gemini-flash-latest', name: 'Gemini Flash Latest', badge: 'Flash', description: 'Always the newest Flash model. Google swaps it on each release, so notes can change without a MeetMind update.' },
+    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite Latest', badge: 'Lite', description: 'Always the newest Flash Lite model. Fastest and cheapest, for short meetings.' },
+    { id: 'gemini-pro-latest', name: 'Gemini Pro Latest', badge: 'Pro', description: 'Always the newest Pro model. Most capable, for long or technical meetings.' },
+  ],
   defaultModel: 'gemini-3.8-flash',
   allowCustomModel: true,
   // Retired model IDs saved in older configs, mapped to their replacements.

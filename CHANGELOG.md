@@ -11,6 +11,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Added
 
 - **Notes**: Live preview of the notes while they're written. Gemini, Groq and Claude now stream their answer, and the meeting page fills in the same cards (JSON) or formatted Markdown as the final notes, replacing any old notes until the new ones are saved.
+- **Gemini**: A Latest / Pinned / Custom toggle in Settings › Notes. Latest offers Google's auto-updating `gemini-flash-latest`, `gemini-flash-lite-latest` and `gemini-pro-latest`, which always use the newest model in their family; they're also in the fallback model list.
 
 ## [4.10.0] - 2026-10-22
 

@@ -62,7 +62,8 @@ function createRegistry(kind, requiredFns) {
     const model = typeof saved === 'string' ? saved.trim() : '';
     if (!model) return provider.defaultModel;
     if (provider.allowCustomModel) return model;
-    return provider.models.some((m) => m.id === model) ? model : provider.defaultModel;
+    const known = [...provider.models, ...(provider.latestModels || [])];
+    return known.some((m) => m.id === model) ? model : provider.defaultModel;
   }
 
   /** True when every required credential of the provider is filled in `config`. */
