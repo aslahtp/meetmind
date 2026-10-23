@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { SlidersHorizontal, AudioLines, NotebookPen, Blocks, Cpu } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import { providerConfigKeys } from '../lib/providers.js';
+import { sameValue, changedFields } from '../lib/settingsForm.js';
 import { PageHeader, SaveBar, SegmentedControl } from './ui/index.jsx';
 import GeneralSection from './settings/GeneralSection.jsx';
 import TranscriptionSection from './settings/TranscriptionSection.jsx';
@@ -101,13 +102,6 @@ function formFromConfig(cfg, providers) {
   };
 }
 
-// Form values can be objects (per-provider models, fallback), so compare structurally.
-function sameValue(a, b) {
-  if (a === b) return true;
-  if (a && b && typeof a === 'object' && typeof b === 'object') return JSON.stringify(a) === JSON.stringify(b);
-  return false;
-}
-
 export default function Settings({ onSave }) {
   const { confirm, addToast, setNavGuard, keysNotSet, providers } = useApp();
   const [tab, setTab] = useState(() => (keysNotSet ? 'transcription' : readStoredTab() || 'general'));
@@ -135,7 +129,7 @@ export default function Settings({ onSave }) {
         if (window.meetmind.config.autoLaunchStatus) {
           try {
             const status = await window.meetmind.config.autoLaunchStatus();
-            if (!status.isDev) {
+            if (!status.isDev && !status.error) {
               cfg.autoLaunch = status.openAtLogin;
             }
           } catch { /* fall back to stored config */ }
@@ -198,7 +192,7 @@ export default function Settings({ onSave }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave(form);
+      await onSave(changedFields(form, initialForm));
       setInitialForm({ ...form });
       setSaved(true);
     } catch (err) {

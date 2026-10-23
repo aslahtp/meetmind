@@ -47,6 +47,25 @@ function exeFromConsentKey(name) {
   return parts[parts.length - 1].toLowerCase();
 }
 
+// One list of apps holding the mic from both sources: active WASAPI capture sessions (exe names)
+// first, then any consent-registry ids they didn't report. Sessions lead so the same app keeps the
+// same id, and so the same meeting key, from tick to tick.
+function mergeMicUsers(sessions = [], registry = []) {
+  const out = [];
+  for (const id of [...sessions, ...registry]) {
+    const key = String(id || '').toLowerCase();
+    if (key && !out.includes(key)) out.push(key);
+  }
+  return out;
+}
+
+// Browsers the audio sessions show on the mic but the consent registry doesn't: a sign Windows has
+// stopped updating the registry, which browser detection used to depend on.
+function browsersMissingFromRegistry(sessions = [], registry = []) {
+  const reg = registry.map((id) => String(id).toLowerCase());
+  return sessions.map((id) => String(id).toLowerCase()).filter((id) => BROWSERS[id] && !reg.includes(id));
+}
+
 function cleanMeetingTitle(title) {
   let t = String(title || '').replace(/[\u200b\u200e\u200f]/g, '');
   t = t.replace(TITLE_SUFFIX, '').replace(MORE_PAGES, '');
@@ -121,7 +140,7 @@ function findCandidate(state, micExes, windows, now) {
   return null;
 }
 
-// One poll. `micExes` are consent-registry ids currently holding the mic (see exeFromConsentKey),
+// One poll. `micExes` are the apps currently holding the mic (see mergeMicUsers),
 // `windows` are visible top-level windows as { exe, title, bounds }. Returns the next state and
 // the events to act on: { type: 'meeting-detected' | 'meeting-ended', meeting }.
 function reduceTick(prev, { micExes = [], windows = [], now = Date.now(), selfExe = '' }) {
@@ -188,6 +207,8 @@ module.exports = {
   TITLE_MEMORY_MS,
   END_GRACE_MS,
   exeFromConsentKey,
+  mergeMicUsers,
+  browsersMissingFromRegistry,
   cleanMeetingTitle,
   matchMeetingWindow,
   createDetectorState,

@@ -5,7 +5,7 @@ if (process.argv.includes('--smoke')) {
   return;
 }
 
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme, Notification, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Readable } = require('stream');
@@ -29,47 +29,17 @@ const meetingDetector = require('./detection/meeting-detector');
 const { showOverlay, hideOverlay, overlayClosed, destroyOverlay, resizeOverlay, moveOverlay, setOverlayTheme } = require('./overlay/overlay-window');
 const { getPermissionStatus, requestPermission, openPermissionSettings } = require('./services/permissions');
 const { normalizeMacCaptureStrategy } = require('./audio/mac-capture');
+const { createAutoLaunch, HIDDEN_ARG } = require('./services/auto-launch');
 
 const isDev = process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
 
-// ── Auto-launch helpers ──────────────────────────────────────────────────────
-// On Windows + NSIS, Electron writes to HKCU\…\Run. The registry key name is
-// derived from `name` (defaults to `app.name`, which is "Electron" in dev and
-// "meetmind" in production). Passing an explicit `name` keeps the key stable
-// across dev / prod.  We also skip the call entirely in dev mode so `pnpm run
-// dev` never writes a broken startup entry pointing at the dev electron binary.
-
-const AUTO_LAUNCH_NAME = 'MeetMind';
-
-function applyAutoLaunch(enabled) {
-  if (isDev) {
-    logger.info('Skipping setLoginItemSettings in dev mode', { enabled });
-    return;
-  }
-  try {
-    app.setLoginItemSettings({
-      openAtLogin: enabled,
-      name: AUTO_LAUNCH_NAME,
-    });
-    logger.info('Auto-launch updated', { enabled });
-  } catch (err) {
-    logger.error('Failed to update auto-launch', err);
-  }
-}
-
-function getAutoLaunchStatus() {
-  if (isDev) {
-    return { openAtLogin: false, isDev: true };
-  }
-  try {
-    const settings = app.getLoginItemSettings({ name: AUTO_LAUNCH_NAME });
-    return { openAtLogin: settings.openAtLogin };
-  } catch (err) {
-    logger.error('Failed to read auto-launch status', err);
-    return { openAtLogin: false, error: err.message };
-  }
-}
+// Launch at login (services/auto-launch.js). A login launch on Windows passes --hidden, so the app
+// starts in the tray and only meeting detection and the overlay show up. Only the packaged app
+// registers: an unpackaged run (pnpm run dev, the run-meetmind driver) would point the entry at
+// the bare dev electron binary.
+const autoLaunch = createAutoLaunch({ app, isDev: !app.isPackaged, logger });
+const launchedHidden = process.platform === 'win32' && process.argv.includes(HIDDEN_ARG);
 
 // Uploads a session's notes to Notion. If the session already has a page (re-sync or
 // regenerated notes), the new page is created first and the old one is then moved to Notion's
@@ -241,7 +211,8 @@ function resolveStartupBackgroundColor(themeSetting) {
   return resolveEffectiveTheme(themeSetting) === 'light' ? '#f8f5ed' : '#1a1813';  // matches --color-paper
 }
 
-function createMainWindow() {
+// `reveal: false` creates the window without showing it (a login launch); the tray opens it later.
+function createMainWindow({ reveal = true } = {}) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
     revealMainWindow();
@@ -286,8 +257,10 @@ function createMainWindow() {
   mainWindow.on('page-title-updated', (e) => e.preventDefault());
 
   // Show quickly — don't wait forever for full renderer paint.
-  mainWindow.once('ready-to-show', revealMainWindow);
-  setTimeout(revealMainWindow, 400);
+  if (reveal) {
+    mainWindow.once('ready-to-show', revealMainWindow);
+    setTimeout(revealMainWindow, 400);
+  }
 
   mainWindow.on('close', (event) => {
     if (!app.isQuitting) {
@@ -1042,12 +1015,12 @@ function registerIpcHandlers() {
 
   ipcMain.handle('config:get', () => getConfig());
 
-  ipcMain.handle('config:autoLaunchStatus', () => getAutoLaunchStatus());
+  ipcMain.handle('config:autoLaunchStatus', () => autoLaunch.getStatus());
 
   ipcMain.handle('config:set', (_e, key, value) => {
     setConfig(key, value);
     if (key === 'autoLaunch') {
-      applyAutoLaunch(value);
+      autoLaunch.set(value);
     }
     if (key === 'meetingDetection') applyMeetingDetection(value !== false);
     if (key === 'theme') setOverlayTheme(resolveEffectiveTheme(value));
@@ -1058,7 +1031,7 @@ function registerIpcHandlers() {
   ipcMain.handle('config:set-multiple', (_e, updates) => {
     setMultipleConfig(updates);
     if ('autoLaunch' in updates) {
-      applyAutoLaunch(updates.autoLaunch);
+      autoLaunch.set(updates.autoLaunch);
     }
     if ('meetingDetection' in updates) applyMeetingDetection(updates.meetingDetection !== false);
     if ('theme' in updates) setOverlayTheme(resolveEffectiveTheme(updates.theme));
@@ -1866,7 +1839,8 @@ app.whenReady().then(async () => {
   createAppMenu();
   // Packaged mac apps get their Dock icon from the bundle's .icns; in dev it's Electron's.
   if (isMac && !app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../assets/icons/icon.png'));
-  createMainWindow();
+  if (launchedHidden) logger.info('Started at login; staying in the tray');
+  createMainWindow({ reveal: !launchedHidden });
   createTray();
 
   initializeAutoUpdater({
@@ -1915,12 +1889,16 @@ app.whenReady().then(async () => {
       }
     });
 
-  applyAutoLaunch(config.autoLaunch);
+  // Windows may have had launch at login disabled from Task Manager; store what it really is.
+  const autoLaunchEnabled = autoLaunch.sync(config.autoLaunch);
+  if (autoLaunchEnabled !== config.autoLaunch) setConfig('autoLaunch', autoLaunchEnabled);
 
   // Start calendar event poller if connected
   startCalendarPoller(config);
 
   if (config.meetingDetection !== false) applyMeetingDetection(true);
+  // After sleep, poll at once so a call joined right after waking is caught without waiting.
+  powerMonitor.on('resume', () => meetingDetector.handleResume());
   nativeTheme.on('updated', () => setOverlayTheme(resolveEffectiveTheme(getConfig().theme || 'light')));
 
   app.on('activate', () => {

@@ -1,10 +1,25 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-12
+updated: 2026-10-23
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.13.0] - 2026-10-23
+
+### Changed
+
+- **Startup**: On Windows, launching at login now starts MeetMind in the tray, ready to detect meetings, instead of opening the window.
+- **Meeting detection**: Windows now tells which apps are using the microphone from its audio sessions as well as the privacy registry, and the log records which source works plus a heartbeat every 10 minutes.
+
+### Fixed
+
+- **Startup**: "Launch on startup" no longer turns itself off. Settings always read it as off, so the next save of any setting removed MeetMind from Windows' startup apps. If it's off now, turn it on once more.
+- **Startup**: Disabling MeetMind in Task Manager or Settings › Apps › Startup now sticks; the app no longer re-enables itself on every launch.
+- **Settings**: Saving sends only the settings you changed, so a save can't overwrite another setting with a stale value.
+- **Meeting detection**: Google Meet and other browser calls are detected again on Windows installs that stopped updating the microphone privacy registry.
+- **Meeting detection**: After the PC wakes from sleep, detection checks right away instead of on its next poll.
 
 ## [4.12.0] - 2026-10-23
 

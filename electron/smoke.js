@@ -6,7 +6,7 @@
 // Checks: config + database open; ffmpeg/ffprobe are found and run; ffmpeg encodes a 1 s Opus
 // WebM (what the renderer records) and convertWebmToWav turns it into 16 kHz WAV; ffprobe reads
 // its duration; koffi loads; the permissions API answers; the meeting-detection backend loads
-// and returns lists.
+// and returns lists, including the WASAPI audio sessions it reads the mic users from.
 
 const { app } = require('electron');
 const fs = require('fs');
@@ -90,10 +90,20 @@ app.whenReady().then(async () => {
     const backend = process.platform === 'win32' ? require('./detection/win32') : null;
     if (!backend) return { available: false, reason: `no backend for ${process.platform} yet` };
     if (!backend.isAvailable()) throw new Error(backend.getLoadError()?.message || 'backend unavailable');
-    const mic = backend.listMicInUseApps();
+    // Runs the WASAPI COM calls for real: a bad binding crashes here. An audio API error is only
+    // reported, since CI runners may have no audio service and the app falls back to the registry.
+    const mic = backend.readMicUsers();
     const windows = backend.listVisibleWindows();
-    if (!Array.isArray(mic) || !Array.isArray(windows)) throw new Error('backend returned non-arrays');
-    return { available: true, micApps: mic.length, windows: windows.length };
+    if (!Array.isArray(mic.sessions) || !Array.isArray(mic.registry) || !Array.isArray(windows)) {
+      throw new Error('backend returned non-arrays');
+    }
+    return {
+      available: true,
+      audioSessions: mic.sessionsError ? `unavailable: ${mic.sessionsError}` : 'ok',
+      sessionMicApps: mic.sessions.length,
+      registryMicApps: mic.registry.length,
+      windows: windows.length,
+    };
   });
 
   const ok = checks.every((c) => c.ok);
