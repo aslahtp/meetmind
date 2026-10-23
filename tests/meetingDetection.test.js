@@ -7,6 +7,8 @@ const {
   TITLE_MEMORY_MS,
   END_GRACE_MS,
   exeFromConsentKey,
+  mergeMicUsers,
+  browsersMissingFromRegistry,
   cleanMeetingTitle,
   matchMeetingWindow,
   createDetectorState,
@@ -38,6 +40,36 @@ describe('exeFromConsentKey', () => {
 
   it('lowercases packaged family names as-is', () => {
     expect(exeFromConsentKey('MSTeams_8wekyb3d8bbwe')).toBe('msteams_8wekyb3d8bbwe');
+  });
+});
+
+describe('mergeMicUsers', () => {
+  it('lists audio-session apps first, then registry-only ones, without duplicates', () => {
+    expect(mergeMicUsers(['Chrome.exe', 'zoom.exe'], ['chrome.exe', 'msteams_8wekyb3d8bbwe']))
+      .toEqual(['chrome.exe', 'zoom.exe', 'msteams_8wekyb3d8bbwe']);
+  });
+
+  it('works with either source empty', () => {
+    expect(mergeMicUsers([], ['chrome.exe'])).toEqual(['chrome.exe']);
+    expect(mergeMicUsers(['chrome.exe'], [])).toEqual(['chrome.exe']);
+    expect(mergeMicUsers()).toEqual([]);
+  });
+
+  it('lets a Meet call be detected when only the audio sessions see the browser', () => {
+    const micExes = mergeMicUsers(['chrome.exe'], []);   // the registry has stopped updating
+    const { events } = run(Array(DEBOUNCE_TICKS).fill({ micExes, windows: [MEET_WINDOW] }));
+    expect(events).toHaveLength(1);
+    expect(events[0].meeting.key).toBe('meet|chrome.exe');
+  });
+});
+
+describe('browsersMissingFromRegistry', () => {
+  it('lists browsers on the mic that the registry does not report', () => {
+    expect(browsersMissingFromRegistry(['chrome.exe', 'zoom.exe', 'ffmpeg.exe'], [])).toEqual(['chrome.exe']);
+  });
+
+  it('is empty when the registry agrees', () => {
+    expect(browsersMissingFromRegistry(['chrome.exe'], ['chrome.exe'])).toEqual([]);
   });
 });
 

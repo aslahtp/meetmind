@@ -110,7 +110,9 @@ export default function GeneralSection({ form, onChange }) {
         <RowList>
           <SettingRow
             label="Launch on startup"
-            description="Start MeetMind automatically when you log in."
+            description={isMac
+              ? 'Start MeetMind automatically when you log in.'
+              : 'Start MeetMind in the tray when you log in, ready to detect meetings.'}
             htmlFor="pref-auto-launch"
           >
             <Switch

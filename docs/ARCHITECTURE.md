@@ -106,6 +106,16 @@ Owns:
   `app:navigate`, Hide/Quit, Edit and Window menus), and `app.requestSingleInstanceLock()` to
   prevent duplicate windows/tray icons on relaunch (focuses the existing window on
   `second-instance` instead). Closing the window only hides it on both platforms.
+- Launch at login (`autoLaunch`, `electron/services/auto-launch.js`). On Windows the
+  `HKCU\…\CurrentVersion\Run` entry is named `MeetMind` and passes `--hidden`, so a login launch
+  creates the window without showing it and the app starts in the tray, with meeting detection
+  running. Electron's `getLoginItemSettings().openAtLogin` only looks for a value named after the
+  AppUserModelId, never a custom name, so the state is read from `launchItems` (the entries that
+  start this exe, with whether Task Manager has disabled them). At startup, once the entry
+  exists Windows is the source of truth: a disabled entry stays disabled and the stored setting
+  follows it; with no entry the stored setting decides. Leftover entries for this exe under other
+  names are removed. Only the packaged app writes an entry (an unpackaged run would point it at the
+  bare dev electron binary). macOS keeps plain `openAtLogin`.
 - Registration of the `meetmind://` custom protocol as the app's default protocol client, but
   **only when packaged** (`app.isPackaged`). Registering it from `pnpm run dev` would steal the
   handler and point "Open App" links at the raw `electron.exe`, breaking the flow after a real
@@ -244,10 +254,19 @@ the switch. `detection/meeting-detector.js` polls every 1.5 s, using two Win32 r
 through `koffi` FFI in `detection/win32.js` (loaded lazily, so a load failure only disables
 detection):
 
-- **Who holds the mic**: the privacy-indicator consent registry
-  `HKCU\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone`
-  (`NonPackaged\<path with # for \>` for win32 apps, package family names for packaged apps). An
-  app is using the mic right now when its `LastUsedTimeStop` is `0`. MeetMind's own exe is ignored.
+- **Who holds the mic**, from two sources merged by `mergeMicUsers()`:
+  - the apps with an active WASAPI capture session on any active microphone
+    (`IMMDeviceEnumerator` → each capture endpoint's `IAudioSessionManager2` → sessions in the
+    active state → `IAudioSessionControl2::GetProcessId` → exe), called through each COM object's
+    vtable with `koffi.call`. This is the documented audio API and the primary source.
+  - the privacy-indicator consent registry
+    `HKCU\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone`
+    (`NonPackaged\<path with # for \>` for win32 apps, package family names for packaged apps),
+    where an app is on the mic when its `LastUsedTimeStop` is `0`. Some Windows installs stop
+    updating these values, so on its own it misses calls; it still adds packaged apps the
+    sessions don't name.
+
+  MeetMind's own exe is ignored.
 - **Window titles**: `EnumWindows` + `GetWindowTextW`, with the owning exe resolved via
   `QueryFullProcessImageNameW`.
 
@@ -259,6 +278,13 @@ The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) d
 - The Zoom and Teams desktop apps holding the mic count on their own.
 - Two consecutive positive polls emit `meeting-detected`; 15 s with no positive poll emits
   `meeting-ended`. "Not now" suppresses a meeting until it ends.
+
+Detection runs in the main process, so it keeps working while the window is minimised or hidden
+in the tray. The detector logs which mic source works when it starts, a warning if the audio
+sessions become unreadable (and when they recover), a note the first time the sessions show a
+browser on the mic that the registry doesn't, and a heartbeat every 10 minutes (ticks, failed
+ticks, the longest gap between ticks, the apps seen on the mic). After sleep (`powerMonitor`
+`resume`) it polls at once rather than waiting for the next tick.
 
 `main.js` turns those events into overlay states, each a single compact row: `prompt` (Record / ×),
 `recording` (timer + Stop), `ended` ("Meeting ended?": it asks, never stops on its own),
@@ -810,8 +836,9 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   authentication token exchanged, so any locally running process capable of spoofing that
   origin header (in practice, only the extension's own runtime does this reliably) is trusted;
   this is an accepted tradeoff for a purely local, single-user bridge.
-- **Meeting detection** (Windows) reads only local state (the mic consent registry and visible window
-  titles); nothing it reads leaves the machine or is stored beyond the detected meeting's title.
+- **Meeting detection** (Windows) reads only local state (the apps recording from a microphone,
+  through the audio-session API and the mic consent registry, and visible window titles);
+  nothing it reads leaves the machine or is stored beyond the detected meeting's title.
 - **macOS code signing**: builds are ad-hoc signed only (`identity: "-"`, no hardened runtime,
   not notarized), so Gatekeeper asks the user to approve the app once (Privacy & Security →
   Open Anyway), privacy permissions don't survive updates, and the app never replaces itself
@@ -887,7 +914,8 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
 - **Smoke test**: a packaged app started with `--smoke` (`electron/smoke.js`) uses a throwaway
   profile, opens no window, checks config + DB, finds and runs ffmpeg/ffprobe, encodes a 1 s Opus
   WebM and converts it with `convertWebmToWav`, loads koffi, queries the permissions API and the
-  meeting-detection backend, prints `MEETMIND_SMOKE {json}` and exits non-zero on any failure.
+  meeting-detection backend (including the WASAPI audio sessions, whose status it reports without
+  failing, since a CI runner may have no audio service), prints `MEETMIND_SMOKE {json}` and exits non-zero on any failure.
   `scripts/check-smoke.js` reads that output in CI, fails the step unless every check passed,
   and writes a table of the checks to the job summary.
 
@@ -970,7 +998,9 @@ Current coverage is pure logic only:
 | `tests/pdf-export.test.js` | PDF file naming (`electron/services/pdf-export.js`) |
 | `tests/meetingFilters.test.js` | Meetings filters and sorting (`renderer/lib/meetingFilters.js`) |
 | `tests/meetingSearch.test.js` | Meeting search: stemming, concept map, typos, prefixes, phrases, ranking and snippets (`renderer/lib/meetingSearch.js`) |
-| `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, meeting window titles, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
+| `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, merging the two mic sources, meeting window titles, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
+| `tests/autoLaunch.test.js` | Launch at login on Windows and macOS: reading the state from `launchItems`, `--hidden`, respecting an entry disabled in Task Manager, removing leftover entries, dev mode (`electron/services/auto-launch.js`) |
+| `tests/settingsForm.test.js` | Settings dirty checks and saving only the changed fields (`renderer/lib/settingsForm.js`) |
 | `tests/notesPreview.test.js` | Live notes preview: partial Markdown and JSON (`buildNotesPreview` in `electron/services/notes-normalize.js`) and the throttled `onPreview` snapshots of `generateNotes`, including a fallback |
 | `tests/meetingTitle.test.js` | Which source titles name the meeting, and how one replaces the LLM's title and prompts it (`electron/services/meeting-title.js`, `buildUserPrompt`) |
 | `tests/ffmpeg-path.test.js` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.js`) and the per-OS silent-recording hints (`electron/audio/audio-hints.js`) |
