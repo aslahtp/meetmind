@@ -6,6 +6,12 @@ updated: 2026-10-23
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.13.1] - 2026-10-26
+
+### Fixed
+
+- **Window**: Restoring the window after a long minimize no longer shows a blank screen. The app now detects a crashed or frozen renderer process and automatically reloads the UI.
+
 ## [4.13.0] - 2026-10-23
 
 ### Changed

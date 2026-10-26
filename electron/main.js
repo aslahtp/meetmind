@@ -188,6 +188,12 @@ function revealMainWindow() {
 
 function focusMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
+    // If the renderer process crashed while the window was hidden/minimized, the window is
+    // still alive but its webContents is gone or crashed — reload it before showing.
+    if (mainWindow.webContents && !mainWindow.webContents.isDestroyed() && mainWindow.webContents.isCrashed()) {
+      logger.warn('Renderer was crashed when focusing; reloading');
+      mainWindow.webContents.reload();
+    }
     if (mainWindow.isMinimized()) mainWindow.restore();
     revealMainWindow();
     mainWindow.focus();
@@ -290,6 +296,41 @@ function createMainWindow({ reveal = true } = {}) {
       shell.openExternal(url).catch(() => {});
     }
     return { action: 'deny' };
+  });
+
+  // ── Renderer crash / freeze recovery ───────────────────────────────────────
+  // When the window sits minimized or hidden for a long time the Chromium renderer can crash
+  // (GPU process gone, OOM, OS resource reclamation). Without these handlers the user sees a
+  // blank white window on restore.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    logger.error('Renderer process gone; reloading', { reason: details.reason, exitCode: details.exitCode });
+    if (!app.isQuitting && mainWindow && !mainWindow.isDestroyed()) {
+      // Small delay so Electron finishes cleaning up the dead renderer.
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
+      }, 500);
+    }
+  });
+
+  let unresponsiveTimer = null;
+  mainWindow.on('unresponsive', () => {
+    logger.warn('Renderer became unresponsive; will reload if it doesn\u2019t recover');
+    // Give it a few seconds — a heavy GC or disk flush can stall briefly.
+    if (unresponsiveTimer) clearTimeout(unresponsiveTimer);
+    unresponsiveTimer = setTimeout(() => {
+      unresponsiveTimer = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        logger.warn('Renderer still unresponsive after 8 s; reloading');
+        mainWindow.webContents.reload();
+      }
+    }, 8000);
+  });
+  mainWindow.on('responsive', () => {
+    if (unresponsiveTimer) {
+      clearTimeout(unresponsiveTimer);
+      unresponsiveTimer = null;
+      logger.info('Renderer became responsive again; reload cancelled');
+    }
   });
 
   if (isDev) {
