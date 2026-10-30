@@ -15,8 +15,9 @@ const LOOPBACK_PORT_END = 39890;
 
 let oAuth2Client = null;
 let eventPollTimer = null;
-let cachedEvents = [];
-let lastFetchTime = 0;
+// hoursAhead → { events, at }. Keyed so the poller's next-hour fetch doesn't replace the
+// Dashboard's 36-hour list, and an empty calendar is cached like any other answer.
+const eventCache = new Map();
 let activeAuthServer = null;
 let lastPollerError = null;
 // Refresh token Google rejected (revoked/expired) and when. Calls with that token fail fast
@@ -156,8 +157,7 @@ async function startAuthFlow(config) {
           oAuth2Client._clientId = clientId;
           rejectedRefreshToken = null;
           rejectedAt = 0;
-          cachedEvents = [];
-          lastFetchTime = 0;
+          eventCache.clear();
 
           resolve({
             refreshToken: tokens.refresh_token,
@@ -208,8 +208,7 @@ function disconnectCalendar() {
     activeAuthServer = null;
   }
   oAuth2Client = null;
-  cachedEvents = [];
-  lastFetchTime = 0;
+  eventCache.clear();
   lastPollerError = null;
   rejectedRefreshToken = null;
   rejectedAt = 0;
@@ -237,10 +236,8 @@ async function fetchUpcomingEvents(config, hoursAhead = 36) {
   if (isTokenRejected(config)) throw new Error(AUTH_EXPIRED_MESSAGE);
 
   // Return cache if fresh enough
-  const now = Date.now();
-  if (cachedEvents.length > 0 && (now - lastFetchTime) < CACHE_TTL_MS) {
-    return cachedEvents;
-  }
+  const cached = eventCache.get(hoursAhead);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.events;
 
   if (inflightFetches.has(hoursAhead)) return inflightFetches.get(hoursAhead);
   const request = requestEvents(config, hoursAhead).finally(() => inflightFetches.delete(hoursAhead));
@@ -275,8 +272,7 @@ async function requestEvents(config, hoursAhead) {
     });
 
     const events = (res.data.items || []).map(normalizeEvent).filter(Boolean);
-    cachedEvents = events;
-    lastFetchTime = Date.now();
+    eventCache.set(hoursAhead, { events, at: Date.now() });
     if (rejectedRefreshToken) {
       rejectedRefreshToken = null;
       rejectedAt = 0;

@@ -1282,6 +1282,8 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('sessions:list', () => db.listSessions());
+  // Cheap check before sessions:list, which copies every transcript to the renderer.
+  ipcMain.handle('sessions:revision', () => db.getRevision());
 
   ipcMain.handle('session:get', (_e, id) => db.getSession(id));
 

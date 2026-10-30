@@ -98,6 +98,7 @@ contextBridge.exposeInMainWorld('meetmind', {
   // Sessions
   sessions: {
     list: () => ipcRenderer.invoke('sessions:list'),
+    revision: () => ipcRenderer.invoke('sessions:revision'),
     get: (id) => ipcRenderer.invoke('session:get', id),
     delete: (id) => ipcRenderer.invoke('session:delete', id),
     updateNotes: (id, notes) => ipcRenderer.invoke('session:update-notes', id, notes),

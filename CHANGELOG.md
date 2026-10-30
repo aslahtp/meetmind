@@ -17,6 +17,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 - **Meeting detection**: The "Meeting detected" pop-up could stop appearing, often after the PC woke from sleep, until MeetMind was restarted. MeetMind now opens a fresh pop-up for each meeting, checks that it actually appears, and replaces it if it doesn't.
 - **Meeting detection**: With monitors at different display scaling, the pop-up now opens on the monitor showing the meeting.
+- **Performance**: Switching to Dashboard or Meetings no longer lags. They re-read your meetings only when something changed, Meetings draws the first cards before the rest of a long list, and Upcoming meetings shows its last result at once instead of loading again.
 
 ## [4.13.1] - 2026-10-26
 

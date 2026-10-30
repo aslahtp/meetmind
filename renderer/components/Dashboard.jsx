@@ -176,7 +176,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   const recentSessions = sessions.slice(0, recentLimit);
 
   useEffect(() => {
-    refreshSessions();
+    refreshSessions({ ifChanged: true });
   }, [refreshSessions]);
 
   // Listen for calendar meeting-starting events

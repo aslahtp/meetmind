@@ -361,10 +361,20 @@ export default function App() {
     });
   }, [addToast]); // addToast is stable, so the listeners are registered once
 
-  const refreshSessions = useCallback(async () => {
+  // The database revision the current `sessions` list was read at (see sessions:revision).
+  const sessionsRevisionRef = useRef(null);
+
+  // Re-reads every session, with full transcripts (several MB for a few hundred meetings). With
+  // { ifChanged: true }, as the Dashboard and Meetings pages do each time they open, it first
+  // asks main whether anything was written since the last read and stops there if not, so
+  // switching tabs doesn't copy and re-render the whole list for nothing.
+  const refreshSessions = useCallback(async ({ ifChanged = false } = {}) => {
     if (!window.meetmind) return;
     try {
+      const revision = await window.meetmind.sessions.revision?.();
+      if (ifChanged && revision != null && revision === sessionsRevisionRef.current) return;
       const list = await window.meetmind.sessions.list();
+      sessionsRevisionRef.current = revision ?? null;
       setSessions(list);
       setSessionsError(null);
     } catch (err) {

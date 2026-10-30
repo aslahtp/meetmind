@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState, startTransition } from 'react';
 import { Trash2, Loader2, ListChecks, Video, RotateCcw } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import NotionIcon from './NotionIcon.jsx';
@@ -143,11 +143,24 @@ export function SessionListSkeleton({ count = 3 }) {
   );
 }
 
+// Cards rendered straight away when a list mounts; the rest follow in a transition, so opening
+// Meetings with a few hundred meetings paints at once instead of after every card is built.
+const FIRST_CARDS = 20;
+
+function useProgressiveCount(total) {
+  const [count, setCount] = useState(FIRST_CARDS);
+  useEffect(() => {
+    if (count < total) startTransition(() => setCount(total));
+  }, [count, total]);
+  return count;
+}
+
 // Session list shared by Dashboard and Meetings: wires delete + retry actions.
 // `matches` (Meetings search) maps session id → searchSessions() result.
 export function SessionList({ sessions, onOpenSession, matches }) {
   const { trackProcessing } = useApp();
   const { deletingIds, handleDelete, handleRetry } = useSessionActions();
+  const shown = useProgressiveCount(sessions.length);
 
   const onRetry = (session) => {
     trackProcessing(session.id);
@@ -156,7 +169,7 @@ export function SessionList({ sessions, onOpenSession, matches }) {
 
   return (
     <div className="flex flex-col gap-16">
-      {sessions.map((session) => (
+      {sessions.slice(0, shown).map((session) => (
         <SessionCard
           key={session.id}
           session={session}
