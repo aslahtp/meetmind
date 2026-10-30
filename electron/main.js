@@ -22,7 +22,8 @@ const { DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/
 const { registries, describeProviders } = require('./providers');
 const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./services/notion');
 const { exportPdf, buildPdfFileName, resolveExportDir } = require('./services/pdf-export');
-const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState } = require('./services/updater');
+const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState, applyUpdateSettings, takeHiddenRelaunch } = require('./services/updater');
+const { isIdleForUpdate } = require('./services/update-policy');
 const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEvents, startEventPoller, stopEventPoller } = require('./services/google-calendar');
 const db = require('./db/sessions');
 const meetingDetector = require('./detection/meeting-detector');
@@ -485,6 +486,8 @@ function createTray() {
   });
 }
 
+let lastTrayUpdaterStatus = null;
+
 function updateTrayMenu() {
   if (!tray) return;
   const updaterState = getUpdaterState();
@@ -803,7 +806,18 @@ function hasReusableTranscript(session) {
   }
 }
 
+let activePipelines = 0;   // processing runs in flight; an automatic update install waits for them
+
 async function runProcessingPipeline(sessionId, audioPath, options = {}) {
+  activePipelines += 1;
+  try {
+    return await processSession(sessionId, audioPath, options);
+  } finally {
+    activePipelines -= 1;
+  }
+}
+
+async function processSession(sessionId, audioPath, options = {}) {
   const sendProgress = (stage, percent) => {
     sendToRenderer('processing:progress', { stage, percent });
     broadcastStatus({ type: 'PROCESSING_PROGRESS', stage, percent, sessionId });
@@ -1125,6 +1139,7 @@ function registerIpcHandlers() {
     if (key === 'meetingDetection') applyMeetingDetection(value !== false);
     if (key === 'theme') setOverlayTheme(resolveEffectiveTheme(value));
     if (key === 'macCaptureStrategy') installDisplayMediaHandler();
+    if (key === 'autoCheckUpdates' || key === 'autoInstallUpdates') applyUpdateSettings();
     return true;
   });
 
@@ -1136,6 +1151,7 @@ function registerIpcHandlers() {
     if ('meetingDetection' in updates) applyMeetingDetection(updates.meetingDetection !== false);
     if ('theme' in updates) setOverlayTheme(resolveEffectiveTheme(updates.theme));
     if ('macCaptureStrategy' in updates) installDisplayMediaHandler();
+    if ('autoCheckUpdates' in updates || 'autoInstallUpdates' in updates) applyUpdateSettings();
     return true;
   });
 
@@ -1937,15 +1953,28 @@ app.whenReady().then(async () => {
   createAppMenu();
   // Packaged mac apps get their Dock icon from the bundle's .icns; in dev it's Electron's.
   if (isMac && !app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../assets/icons/icon.png'));
+  // A restart into an automatically installed update comes back where it was: in the tray.
+  const relaunchedAfterUpdate = takeHiddenRelaunch();
   if (launchedHidden) logger.info('Started at login; staying in the tray');
-  createMainWindow({ reveal: !launchedHidden });
+  else if (relaunchedAfterUpdate) logger.info('Restarted after an automatic update; staying in the tray');
+  createMainWindow({ reveal: !launchedHidden && !relaunchedAfterUpdate });
   createTray();
 
   initializeAutoUpdater({
     sendToRenderer,
-    onUpdateDownloaded: () => {
+    // Download progress changes many times a second; the tray menu only cares about the status.
+    onStatusChange: ({ status }) => {
+      if (status === lastTrayUpdaterStatus) return;
+      lastTrayUpdaterStatus = status;
       updateTrayMenu();
     },
+    isIdle: () => isIdleForUpdate({
+      isRecording,
+      activePipelines,
+      activeMeeting: meetingDetector.activeMeeting(),
+      overlayMode: overlayState.mode,
+      windowVisible: !!(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()),
+    }),
   });
 
   // Keep meetmind:// pointed at this installed exe (not a leftover dev registration).

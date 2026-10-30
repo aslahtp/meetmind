@@ -615,7 +615,7 @@ registries), service and model selection (`sttService`, `sttModels`, `llmProvide
 `language`, custom `geminiSystemPrompt`), UI preferences (`theme`, `autoLaunch`,
 `hideLogsInSidebar`, `pinNotesViewToggle`, `dashboardRecentLimit`), meeting detection
 (`meetingDetection`, default `true`), update behavior
-(`autoCheckUpdates`), PDF export (`pdfExportDir`, `pdfIncludeTranscript`), and the WebSocket
+(`autoCheckUpdates`, default `true`; `autoInstallUpdates`, default `false`), PDF export (`pdfExportDir`, `pdfIncludeTranscript`), and the WebSocket
 port (`websocketPort`, default `39842`).
 
 Several settings keys have deliberate aliases kept in sync on write (`setConfig`), for backward
@@ -712,13 +712,34 @@ bad; reconnecting with a fresh token, or disconnecting, clears that state immedi
 ## 9. Auto update (`electron/services/updater.js`)
 
 Uses `electron-updater` against the `github` publish provider configured in
-`electron-builder.yml` (owner `aslahtp`, repo `meetmind`, release type `release`). Background
-checks run every `BACKGROUND_CHECK_INTERVAL_MS = 4 hours` while `autoCheckUpdates` is enabled,
-and pause after `MAX_CONSECUTIVE_FAILURES = 3` consecutive failures in a row (so a persistent
-network problem does not retry forever in the background); state
-(`idle`/`checking`/`available`/`not-available`/`downloading`/`downloaded`/`error`, download
-progress, last check time, error message, and failure count) is exposed to the renderer via
-`updater:get-status` and pushed live over the `updater:status` event.
+`electron-builder.yml` (owner `aslahtp`, repo `meetmind`, release type `release`). While
+`autoCheckUpdates` is on (default), a background check runs 6 s after startup and then every
+`CHECK_INTERVAL_MS = 4 hours`. A failed check (typically no network yet, at login or just after
+waking) is retried after 2, 10, 30 and then every 60 minutes (`RETRY_DELAYS_MS`) and never
+stops for good; waking from sleep also checks again after 30 s if the last good check is over an
+hour old. The timing and the rules below live in the pure, unit-tested
+`electron/services/update-policy.js`.
+
+With `autoInstallUpdates` also on (default off; Settings › General › "Download and install
+updates automatically"), an update found downloads by itself through `downloadUpdate()` (which
+refuses a version that isn't newer; electron-updater verifies the SHA-512 from `latest.yml`), a
+failed download is retried on the same backoff, and the update installs when the app quits
+(`autoInstallOnAppQuit`) or once MeetMind is idle: the main window hidden in the tray, no
+recording, no processing run in flight, no detected meeting or overlay (`isIdleForUpdate`),
+checked every minute and true twice in a row. That install runs the NSIS installer silently and
+relaunches; a store flag (`updateRelaunchHiddenAt`, honoured for 10 minutes) makes that
+relaunch start in the tray. With it off, downloading and installing wait for the user. Setting
+changes apply at once (`applyUpdateSettings()` from `config:set`).
+
+State (`idle`/`checking`/`available`/`not-available`/`downloading`/`downloaded`/`error`, with
+`errorPhase` `check` or `download`, download progress, last check time, error message, failure
+count, `autoInstall` and the release page URL) is exposed via `updater:get-status` and pushed
+live over the `updater:status` event. The renderer shows it in the top bar
+(`renderer/components/UpdateIndicator.jsx`): a pill that appears while an update is available,
+downloading (filling with progress), ready, or failed to download (not for a failed check), and
+opens a panel with the version, progress and actions (Download, Restart now, Later, Retry,
+What's new). Settings › System › Application updates has the full controls, and the tray menu
+offers Download / Restart to Update.
 
 macOS builds are ad-hoc signed (no Apple Developer ID yet), and Squirrel.Mac won't install an
 update into an app without a stable signature. So on macOS `CAN_SELF_UPDATE` is false (exposed

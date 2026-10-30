@@ -1,13 +1,25 @@
+// Checks GitHub Releases for updates (electron-updater). Background checks run at startup and
+// every 4 hours while `autoCheckUpdates` is on, retrying a failed check within minutes instead of
+// waiting hours, and again after the PC wakes. With `autoInstallUpdates` also on, an update found
+// downloads by itself (checksum-verified by electron-updater) and installs when the app quits, or
+// sooner once MeetMind has sat idle in the tray (see update-policy.js), relaunching into the tray.
+// Otherwise downloading and installing wait for the user (Settings, the top-bar pill, the tray).
+
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
-const { app, shell } = require('electron');
+const { app, shell, powerMonitor } = require('electron');
 const logger = require('../utils/logger');
 const { getConfig, store } = require('../utils/config');
 const { binaryName, getFfmpegPath, getFfprobePath } = require('../audio/ffmpeg-path');
+const { CHECK_INTERVAL_MS, nextCheckDelay, autoInstallEnabled, shouldRelaunchHidden } = require('./update-policy');
 
-const MAX_CONSECUTIVE_FAILURES = 3; // background checks pause after this many failures in a row
-const BACKGROUND_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const FIRST_CHECK_DELAY_MS = 6000;        // let startup settle first
+const RESUME_CHECK_DELAY_MS = 30 * 1000;  // give the network a moment after waking
+const RESUME_RECHECK_AFTER_MS = 60 * 60 * 1000;
+const IDLE_POLL_MS = 60 * 1000;
+const IDLE_POLLS_BEFORE_INSTALL = 2;      // idle on two polls in a row (1-2 minutes) before restarting
 const RELEASES_URL = 'https://github.com/aslahtp/meetmind/releases';
+const HIDDEN_RELAUNCH_KEY = 'updateRelaunchHiddenAt';
 
 // macOS builds are ad-hoc signed, and Squirrel.Mac refuses to install an update into an app
 // without a stable signature. Until there is a Developer ID, the Mac app only checks
@@ -19,17 +31,31 @@ let currentStatus = 'idle'; // 'idle' | 'checking' | 'available' | 'not-availabl
 let updateInfo = null;
 let downloadProgress = { percent: 0, bytesPerSecond: 0, transferred: 0, total: 0 };
 let lastCheckTime = null;
+let lastSuccessTime = 0;
 let errorMessage = null;
+let errorPhase = null;      // 'check' | 'download': what the last error interrupted
 let consecutiveFailures = 0;
-let backgroundChecksSuspended = false;
+let downloadInFlight = false;
 let postUpdateCheck = null; // null | { version, ok, missing: string[], checkedAt }
 let sendToRendererCallback = null;
-let onUpdateDownloadedCallback = null;
-let checkInterval = null;
+let onStatusChangeCallback = null;
+let isIdleCallback = () => false;
+let checkTimer = null;
+let idleTimer = null;
+let idlePolls = 0;
+
+function autoInstall() {
+  return autoInstallEnabled(getConfig(), CAN_SELF_UPDATE);
+}
 
 function broadcastState() {
   if (typeof sendToRendererCallback === 'function') {
     sendToRendererCallback('updater:status', getUpdaterState());
+  }
+  try {
+    onStatusChangeCallback?.(getUpdaterState());
+  } catch (err) {
+    logger.warn('Error in updater status callback', { error: err.message });
   }
 }
 
@@ -41,11 +67,13 @@ function getUpdaterState() {
     downloadProgress,
     lastCheckTime,
     errorMessage,
+    errorPhase,
     consecutiveFailures,
-    backgroundChecksSuspended,
     postUpdateCheck,
     isPackaged: app.isPackaged,
     canSelfUpdate: CAN_SELF_UPDATE,
+    autoInstall: autoInstall(),
+    releaseUrl: updateInfo?.version ? `${RELEASES_URL}/tag/v${updateInfo.version}` : RELEASES_URL,
   };
 }
 
@@ -101,22 +129,24 @@ function runPostUpdateCheck() {
 }
 
 function setupAutoUpdaterEvents() {
-  // Never auto-download or auto-install: every step needs an explicit user action so a bad
-  // release can't silently apply itself in the background.
+  // Downloads start from downloadUpdate() (by the user, or automatically when autoInstall() is
+  // on), never from electron-updater itself, so the version guard there always runs.
+  // Installing on quit follows the setting (applyUpdateSettings).
   autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.autoInstallOnAppQuit = autoInstall();
   autoUpdater.allowPrerelease = false;
 
   autoUpdater.on('checking-for-update', () => {
     currentStatus = 'checking';
     errorMessage = null;
+    errorPhase = null;
     logger.info('AutoUpdater: checking for updates...');
     broadcastState();
   });
 
   autoUpdater.on('update-available', (info) => {
     consecutiveFailures = 0;
-    backgroundChecksSuspended = false;
+    lastSuccessTime = Date.now();
     currentStatus = 'available';
     updateInfo = {
       version: info.version,
@@ -125,11 +155,15 @@ function setupAutoUpdaterEvents() {
     };
     logger.info('AutoUpdater: update available', { version: info.version });
     broadcastState();
+    if (autoInstall()) {
+      logger.info('AutoUpdater: downloading automatically', { version: info.version });
+      downloadUpdate();
+    }
   });
 
   autoUpdater.on('update-not-available', (info) => {
     consecutiveFailures = 0;
-    backgroundChecksSuspended = false;
+    lastSuccessTime = Date.now();
     currentStatus = 'not-available';
     updateInfo = {
       version: info.version,
@@ -150,6 +184,8 @@ function setupAutoUpdaterEvents() {
   });
 
   autoUpdater.on('update-downloaded', (info) => {
+    downloadInFlight = false;
+    consecutiveFailures = 0;
     currentStatus = 'downloaded';
     updateInfo = {
       version: info.version,
@@ -158,22 +194,14 @@ function setupAutoUpdaterEvents() {
     };
     logger.info('AutoUpdater: update downloaded and ready to install', { version: info.version });
     broadcastState();
-    if (typeof onUpdateDownloadedCallback === 'function') {
-      try {
-        onUpdateDownloadedCallback(updateInfo);
-      } catch (err) {
-        logger.warn('Error in onUpdateDownloaded callback', { error: err.message });
-      }
-    }
+    armIdleInstall();
   });
 
   autoUpdater.on('error', (err) => {
     currentStatus = 'error';
+    errorPhase = downloadInFlight ? 'download' : 'check';
+    downloadInFlight = false;
     consecutiveFailures += 1;
-    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-      backgroundChecksSuspended = true;
-      logger.warn(`AutoUpdater: ${consecutiveFailures} consecutive failures — pausing background checks until a manual retry`);
-    }
 
     const raw = err?.message || 'Error checking for updates';
     // Provide a friendly error message — strip raw download URLs to avoid noise
@@ -191,48 +219,115 @@ function setupAutoUpdaterEvents() {
       friendlyMessage = raw.substring(0, 120).replace(/https?:\/\/\S+/g, '').trim() + '…';
     }
     errorMessage = friendlyMessage;
-    logger.warn('AutoUpdater error', { error: raw, consecutiveFailures });
+    logger.warn('AutoUpdater error', { error: raw, phase: errorPhase, consecutiveFailures });
     broadcastState();
+    // A failed automatic download is retried through the next check, on the same backoff.
+    if (errorPhase === 'download' && autoInstall()) {
+      scheduleBackgroundCheck(nextCheckDelay({ ok: false, failures: consecutiveFailures }));
+    }
   });
 }
 
-function initializeAutoUpdater({ sendToRenderer, onUpdateDownloaded }) {
+// ── Background checks ────────────────────────────────────────────────────────
+
+function scheduleBackgroundCheck(delayMs) {
+  clearTimeout(checkTimer);
+  checkTimer = null;
+  if (!app.isPackaged || getConfig().autoCheckUpdates === false) return;
+  checkTimer = setTimeout(runBackgroundCheck, delayMs);
+  checkTimer.unref?.();
+}
+
+async function runBackgroundCheck() {
+  checkTimer = null;
+  // Nothing to look for while an update is downloading or waiting to install.
+  if (currentStatus === 'downloading' || currentStatus === 'downloaded' || downloadInFlight) {
+    scheduleBackgroundCheck(CHECK_INTERVAL_MS);
+    return;
+  }
+  const result = await checkForUpdates(false).catch((err) => ({ success: false, error: err.message }));
+  if (checkTimer) return;   // a settings change or a failed download already rescheduled
+  const ok = !!result?.success;
+  const delay = nextCheckDelay({ ok, failures: consecutiveFailures });
+  if (!ok) logger.info('AutoUpdater: will retry the update check', { inMinutes: Math.round(delay / 60000) });
+  scheduleBackgroundCheck(delay);
+}
+
+// ── Installing when idle ─────────────────────────────────────────────────────
+
+// While an update waits and automatic installs are on, polls whether the app is idle and, after
+// two idle polls in a row, restarts into the update.
+function armIdleInstall() {
+  clearInterval(idleTimer);
+  idleTimer = null;
+  idlePolls = 0;
+  if (currentStatus !== 'downloaded' || !autoInstall()) return;
+  idleTimer = setInterval(() => {
+    if (currentStatus !== 'downloaded' || !autoInstall()) {
+      armIdleInstall();
+      return;
+    }
+    let idle = false;
+    try {
+      idle = !!isIdleCallback();
+    } catch (err) {
+      logger.warn('AutoUpdater: idle check failed', { error: err.message });
+    }
+    idlePolls = idle ? idlePolls + 1 : 0;
+    if (idlePolls >= IDLE_POLLS_BEFORE_INSTALL) {
+      clearInterval(idleTimer);
+      idleTimer = null;
+      logger.info('AutoUpdater: MeetMind is idle; installing the update', { version: updateInfo?.version });
+      quitAndInstall({ automatic: true });
+    }
+  }, IDLE_POLL_MS);
+  idleTimer.unref?.();
+}
+
+// Applies a change to `autoCheckUpdates` / `autoInstallUpdates` without a restart.
+function applyUpdateSettings() {
+  autoUpdater.autoInstallOnAppQuit = autoInstall();
+  if (getConfig().autoCheckUpdates === false) {
+    clearTimeout(checkTimer);
+    checkTimer = null;
+  } else if (!checkTimer) {
+    const sinceSuccess = Date.now() - lastSuccessTime;
+    scheduleBackgroundCheck(sinceSuccess >= CHECK_INTERVAL_MS ? FIRST_CHECK_DELAY_MS : CHECK_INTERVAL_MS - sinceSuccess);
+  }
+  if (autoInstall() && currentStatus === 'available') downloadUpdate();
+  armIdleInstall();
+  broadcastState();
+}
+
+// True (once) when this launch follows an automatic update install, which should start in the tray.
+function takeHiddenRelaunch() {
+  const requestedAt = store.get(HIDDEN_RELAUNCH_KEY);
+  if (requestedAt === undefined) return false;
+  store.delete(HIDDEN_RELAUNCH_KEY);
+  return shouldRelaunchHidden(Number(requestedAt));
+}
+
+// `onStatusChange(state)` runs on every state change; `isIdle()` says whether the app may restart
+// into a downloaded update now (see isIdleForUpdate in update-policy.js).
+function initializeAutoUpdater({ sendToRenderer, onStatusChange, isIdle }) {
   sendToRendererCallback = sendToRenderer;
-  onUpdateDownloadedCallback = onUpdateDownloaded;
+  onStatusChangeCallback = onStatusChange;
+  if (typeof isIdle === 'function') isIdleCallback = isIdle;
 
   setupAutoUpdaterEvents();
   runPostUpdateCheck();
 
-  // In production builds, schedule background updates
-  if (app.isPackaged) {
-    const config = getConfig();
-    if (config.autoCheckUpdates !== false) {
-      // Delay first check by 6 seconds to prioritize app startup UI
-      setTimeout(() => {
-        checkForUpdates(false).catch((err) => {
-          logger.warn('Initial background update check failed', { error: err.message });
-        });
-      }, 6000);
-
-      // Check periodically every 4 hours while running in background/tray
-      if (checkInterval) clearInterval(checkInterval);
-      checkInterval = setInterval(() => {
-        const currentConfig = getConfig();
-        if (
-          currentConfig.autoCheckUpdates !== false &&
-          !backgroundChecksSuspended &&
-          currentStatus !== 'downloading' &&
-          currentStatus !== 'downloaded'
-        ) {
-          checkForUpdates(false).catch((err) => {
-            logger.warn('Periodic background update check failed', { error: err.message });
-          });
-        }
-      }, BACKGROUND_CHECK_INTERVAL_MS);
-    }
-  } else {
+  if (!app.isPackaged) {
     logger.info('AutoUpdater: dev mode detected, background auto-update checks disabled');
+    return;
   }
+  scheduleBackgroundCheck(FIRST_CHECK_DELAY_MS);
+  // Waking from sleep: check again soon if the last good check is old (or there wasn't one).
+  powerMonitor.on('resume', () => {
+    if (currentStatus === 'downloading' || currentStatus === 'downloaded') return;
+    if (Date.now() - lastSuccessTime < RESUME_RECHECK_AFTER_MS) return;
+    scheduleBackgroundCheck(RESUME_CHECK_DELAY_MS);
+  });
 }
 
 async function checkForUpdates(manual = false) {
@@ -256,12 +351,8 @@ async function checkForUpdates(manual = false) {
     return { success: false, reason: 'Auto check disabled' };
   }
 
-  // A manual check always resumes background checks — it's an explicit signal the user is
-  // paying attention, so a fresh failure will re-suspend if it happens again.
-  if (manual) {
-    consecutiveFailures = 0;
-    backgroundChecksSuspended = false;
-  }
+  // A manual check starts the retry backoff afresh.
+  if (manual) consecutiveFailures = 0;
 
   try {
     currentStatus = 'checking';
@@ -280,15 +371,17 @@ async function checkForUpdates(manual = false) {
 }
 
 /**
- * Explicitly starts downloading the update the last check found. Requires an 'available'
- * update in hand — never called automatically, so nothing downloads without this being invoked
- * by a direct user action (button click). Where the app can't update itself (unsigned macOS
- * builds), opens the release page instead.
+ * Starts downloading the update the last check found: from a user action, or automatically when
+ * autoInstall() is on. Also retries a download that failed. Refuses a version that isn't newer
+ * than the installed one. Where the app can't update itself (unsigned macOS builds), opens the
+ * release page instead.
  */
 async function downloadUpdate() {
-  if (currentStatus !== 'available' || !updateInfo?.version) {
+  const retrying = currentStatus === 'error' && errorPhase === 'download';
+  if ((currentStatus !== 'available' && !retrying) || !updateInfo?.version) {
     return { success: false, error: 'No update available to download' };
   }
+  if (downloadInFlight) return { success: true, alreadyDownloading: true };
   if (compareVersions(updateInfo.version, app.getVersion()) <= 0) {
     logger.warn('AutoUpdater: refused to download — reported version is not newer than current', {
       updateVersion: updateInfo.version,
@@ -303,6 +396,12 @@ async function downloadUpdate() {
   }
 
   try {
+    downloadInFlight = true;
+    currentStatus = 'downloading';
+    errorMessage = null;
+    errorPhase = null;
+    downloadProgress = { percent: 0, bytesPerSecond: 0, transferred: 0, total: 0 };
+    broadcastState();
     await autoUpdater.downloadUpdate();
     return { success: true };
   } catch (err) {
@@ -311,15 +410,15 @@ async function downloadUpdate() {
   }
 }
 
-function quitAndInstall() {
-  if (currentStatus === 'downloaded') {
-    logger.info('AutoUpdater: restarting and installing update...');
-    // set isQuitting flag if necessary
-    app.isQuitting = true;
-    autoUpdater.quitAndInstall(false, true);
-    return { success: true };
-  }
-  return { success: false, error: 'No update downloaded yet' };
+// Restarts into the downloaded update. An automatic install (idle) runs the installer silently
+// and relaunches into the tray; one the user asked for shows the installer and opens the window.
+function quitAndInstall({ automatic = false } = {}) {
+  if (currentStatus !== 'downloaded') return { success: false, error: 'No update downloaded yet' };
+  logger.info('AutoUpdater: restarting and installing update...', { version: updateInfo?.version, automatic });
+  if (automatic) store.set(HIDDEN_RELAUNCH_KEY, Date.now());
+  app.isQuitting = true;
+  autoUpdater.quitAndInstall(automatic, true);
+  return { success: true };
 }
 
 module.exports = {
@@ -328,4 +427,6 @@ module.exports = {
   downloadUpdate,
   quitAndInstall,
   getUpdaterState,
+  applyUpdateSettings,
+  takeHiddenRelaunch,
 };

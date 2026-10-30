@@ -95,6 +95,11 @@ const schema = {
     type: 'boolean',
     default: true,
   },
+  // Download updates by themselves and install them when the app is idle or quits.
+  autoInstallUpdates: {
+    type: 'boolean',
+    default: false,
+  },
   hideLogsInSidebar: {
     type: 'boolean',
     default: false,
@@ -230,6 +235,7 @@ function getConfig() {
     minSpeakers:               store.get('minSpeakers') || 1,
     maxSpeakers:               store.get('maxSpeakers') || 6,
     autoCheckUpdates:          store.get('autoCheckUpdates') !== false,
+    autoInstallUpdates:        store.get('autoInstallUpdates') === true,
     hideLogsInSidebar:         store.get('hideLogsInSidebar') || false,
     pinNotesViewToggle:        store.get('pinNotesViewToggle') !== false,
     showAudioWaveform:         store.get('showAudioWaveform') !== false,

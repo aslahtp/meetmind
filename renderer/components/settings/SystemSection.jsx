@@ -386,7 +386,11 @@ export default function SystemSection({ active }) {
         )}
 
         {updaterStatus?.status === 'downloaded' && (
-          <StatusLine tone="ok">v{updaterStatus.updateInfo?.version} downloaded and verified — restart to install.</StatusLine>
+          <StatusLine tone="ok">
+            v{updaterStatus.updateInfo?.version} downloaded and verified. {updaterStatus.autoInstall
+              ? 'It installs when MeetMind is idle in the tray or quits, or restart now.'
+              : 'Restart to install.'}
+          </StatusLine>
         )}
 
         {updaterStatus?.status === 'not-available' && (
@@ -397,11 +401,6 @@ export default function SystemSection({ active }) {
           <StatusLine tone="error">{updaterStatus.errorMessage}</StatusLine>
         )}
 
-        {updaterStatus?.backgroundChecksSuspended && (
-          <StatusLine tone="warning">
-            Automatic update checks paused after repeated failures — use "Check for updates" to retry.
-          </StatusLine>
-        )}
       </SettingsGroup>
     </div>
   );

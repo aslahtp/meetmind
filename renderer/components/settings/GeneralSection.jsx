@@ -123,16 +123,35 @@ export default function GeneralSection({ form, onChange }) {
             />
           </SettingRow>
           <SettingRow
-            label="Automatic updates"
-            description="Check for and download app updates automatically."
+            label="Check for updates automatically"
+            description="Looks for a new version when MeetMind starts and every few hours, and shows it in the top bar."
             htmlFor="pref-auto-updates"
           >
             <Switch
               id="pref-auto-updates"
-              label="Automatic updates"
+              label="Check for updates automatically"
               checked={form.autoCheckUpdates !== false}
               onChange={(v) => onChange('autoCheckUpdates', v)}
             />
+          </SettingRow>
+          <SettingRow
+            label="Download and install updates automatically"
+            description={isMac
+              ? 'Not available on macOS yet: new versions download from GitHub.'
+              : form.autoCheckUpdates === false
+                ? 'Turn on automatic checks to use this.'
+                : 'Downloads new versions in the background and installs them when MeetMind is idle in the tray or quits. Never during a recording.'}
+            htmlFor={isMac ? undefined : 'pref-auto-install'}
+          >
+            {!isMac && (
+              <Switch
+                id="pref-auto-install"
+                label="Download and install updates automatically"
+                checked={form.autoCheckUpdates !== false && form.autoInstallUpdates === true}
+                disabled={form.autoCheckUpdates === false}
+                onChange={(v) => onChange('autoInstallUpdates', v)}
+              />
+            )}
           </SettingRow>
         </RowList>
       </SettingsGroup>
