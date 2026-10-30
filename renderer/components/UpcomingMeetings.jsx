@@ -145,12 +145,16 @@ function SkeletonEvent() {
   );
 }
 
+// The last answer, kept across mounts: going back to the Dashboard shows it at once and refreshes
+// in the background, instead of flashing skeleton rows and shifting the page when it lands.
+let lastResult = null;   // { connected, events, error }
+
 export default function UpcomingMeetings({ onNavigateToSettings, onStartRecording, isRecording, className = '' }) {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [events, setEvents] = useState(() => lastResult?.events || []);
+  const [loading, setLoading] = useState(!lastResult);
+  const [error, setError] = useState(() => lastResult?.error || null);
   const [collapsed, setCollapsed] = useState(readCollapsed);
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(() => !!lastResult?.connected);
   const [refreshing, setRefreshing] = useState(false);
   const now = useNow(60_000);
 
@@ -163,24 +167,27 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
 
     if (showRefreshState) setRefreshing(true);
 
+    const remember = (next) => {
+      lastResult = { ...lastResult, ...next };
+      if ('connected' in next) setConnected(next.connected);
+      if ('events' in next) setEvents(next.events);
+      if ('error' in next) setError(next.error);
+    };
     try {
       const status = await window.meetmind.calendar.getStatus();
-      setConnected(status.connected);
-
       if (!status.connected) {
-        setEvents([]);
+        remember({ connected: false, events: [], error: null });
         return;
       }
 
       const result = await window.meetmind.calendar.getEvents();
       if (result.success) {
-        setEvents(result.events || []);
-        setError(null);
+        remember({ connected: true, events: result.events || [], error: null });
       } else {
-        setError(result.error);
+        remember({ connected: true, error: result.error });
       }
     } catch (err) {
-      setError(err.message);
+      remember({ error: err.message });
     } finally {
       setLoading(false);
       setRefreshing(false);

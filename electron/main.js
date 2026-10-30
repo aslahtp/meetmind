@@ -22,11 +22,12 @@ const { DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/
 const { registries, describeProviders } = require('./providers');
 const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./services/notion');
 const { exportPdf, buildPdfFileName, resolveExportDir } = require('./services/pdf-export');
-const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState } = require('./services/updater');
+const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState, applyUpdateSettings, takeHiddenRelaunch } = require('./services/updater');
+const { isIdleForUpdate } = require('./services/update-policy');
 const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEvents, startEventPoller, stopEventPoller } = require('./services/google-calendar');
 const db = require('./db/sessions');
 const meetingDetector = require('./detection/meeting-detector');
-const { showOverlay, hideOverlay, overlayClosed, destroyOverlay, resizeOverlay, moveOverlay, setOverlayTheme } = require('./overlay/overlay-window');
+const { showOverlay, hideOverlay, destroyOverlay, recheckOverlay, setOverlayTheme, registerOverlayIpc } = require('./overlay/overlay-window');
 const { getPermissionStatus, requestPermission, openPermissionSettings } = require('./services/permissions');
 const { normalizeMacCaptureStrategy } = require('./audio/mac-capture');
 const { createAutoLaunch, HIDDEN_ARG } = require('./services/auto-launch');
@@ -485,6 +486,8 @@ function createTray() {
   });
 }
 
+let lastTrayUpdaterStatus = null;
+
 function updateTrayMenu() {
   if (!tray) return;
   const updaterState = getUpdaterState();
@@ -803,7 +806,18 @@ function hasReusableTranscript(session) {
   }
 }
 
+let activePipelines = 0;   // processing runs in flight; an automatic update install waits for them
+
 async function runProcessingPipeline(sessionId, audioPath, options = {}) {
+  activePipelines += 1;
+  try {
+    return await processSession(sessionId, audioPath, options);
+  } finally {
+    activePipelines -= 1;
+  }
+}
+
+async function processSession(sessionId, audioPath, options = {}) {
   const sendProgress = (stage, percent) => {
     sendToRenderer('processing:progress', { stage, percent });
     broadcastStatus({ type: 'PROCESSING_PROGRESS', stage, percent, sessionId });
@@ -923,14 +937,18 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
 
 let overlayState = { mode: 'hidden' };   // prompt | recording | ended | processing | complete | error | hidden
 let overlayHideTimer = null;
+const PROMPT_TIMEOUT_MS = 2 * 60 * 1000;   // an unanswered "Meeting detected" prompt counts as "Not now"
+let meetingToast = null;   // the fallback notification for a prompt the overlay couldn't show
 
 function isMeetingDetectionEnabled() {
   return getConfig().meetingDetection !== false;
 }
 
-function setOverlay(next, { autoHideMs } = {}) {
+// `onAutoHide` replaces the default hide when `autoHideMs` runs out.
+function setOverlay(next, { autoHideMs, onAutoHide } = {}) {
   clearTimeout(overlayHideTimer);
   overlayState = next;
+  if (meetingToast && (next.mode !== 'prompt' || next.meeting?.key !== meetingToast.meetingKey)) closeMeetingToast();
   if (next.mode === 'hidden' || !isMeetingDetectionEnabled()) {
     hideOverlay();
     return;
@@ -940,7 +958,7 @@ function setOverlay(next, { autoHideMs } = {}) {
     bounds: next.meeting?.bounds || null,
   });
   if (autoHideMs) {
-    overlayHideTimer = setTimeout(() => setOverlay({ ...overlayState, mode: 'hidden' }), autoHideMs);
+    overlayHideTimer = setTimeout(onAutoHide || (() => setOverlay({ ...overlayState, mode: 'hidden' })), autoHideMs);
   }
 }
 
@@ -995,7 +1013,19 @@ function handleMeetingDetected(meeting) {
     if (!overlayState.meeting) setOverlay({ ...overlayState, meeting });
     return;
   }
-  setOverlay({ mode: 'prompt', meeting });
+  setOverlay({ mode: 'prompt', meeting }, {
+    autoHideMs: PROMPT_TIMEOUT_MS,
+    onAutoHide: () => {
+      logger.info('Meeting prompt unanswered for 2 minutes; closed as "Not now"', { key: meeting.key });
+      dismissPrompt();
+    },
+  });
+}
+
+// "Not now" (or an unanswered prompt): close it, and don't prompt for this meeting until it ends.
+function dismissPrompt() {
+  if (overlayState.mode === 'prompt' && overlayState.meeting?.key) meetingDetector.dismiss(overlayState.meeting.key);
+  setOverlay({ ...overlayState, mode: 'hidden' });
 }
 
 // Never stops on its own: while recording, ask; while only prompting, withdraw the prompt.
@@ -1004,6 +1034,49 @@ function handleMeetingEnded(meeting) {
     setOverlay({ ...overlayState, mode: 'ended' });
   } else if (overlayState.mode === 'prompt' && overlayState.meeting?.key === meeting.key) {
     setOverlay({ mode: 'hidden' });
+  }
+}
+
+function closeMeetingToast() {
+  const toast = meetingToast;
+  meetingToast = null;
+  toast?.close();
+}
+
+// The overlay couldn't be shown even after a retry: offer the recording as a system notification
+// instead, so a detected meeting is never silently missed. Clicking it does what Record does.
+function showMeetingToast(meeting) {
+  closeMeetingToast();
+  if (!Notification.isSupported()) {
+    logger.warn('Meeting overlay failed and notifications are unsupported; no prompt shown', { key: meeting.key });
+    return;
+  }
+  const toast = new Notification({
+    title: 'Meeting detected',
+    body: `${meeting.title || meeting.platformLabel || 'A meeting'} · Click to start recording`,
+    icon: nativeImage.createFromPath(path.join(__dirname, '../assets/icons/icon.png')),
+  });
+  toast.meetingKey = meeting.key;
+  toast.on('click', () => {
+    if (meetingToast === toast) meetingToast = null;
+    if (isRecording || overlayState.mode !== 'prompt' || overlayState.meeting?.key !== meeting.key) {
+      logger.info('Meeting notification clicked after the prompt ended; ignored', { key: meeting.key });
+      return;
+    }
+    logger.info('Recording started from the meeting notification', { key: meeting.key });
+    handleStartRecording(null, '', meeting.title || '');
+  });
+  toast.on('failed', (_e, error) => logger.warn('Meeting notification failed', { error }));
+  meetingToast = toast;
+  toast.show();
+  logger.info('Meeting overlay unavailable; showed a notification instead', { key: meeting.key });
+}
+
+function handleOverlayFailure(state, reason) {
+  if (state.mode === 'prompt' && state.meeting && isMeetingDetectionEnabled()) {
+    showMeetingToast(state.meeting);
+  } else {
+    logger.warn('Meeting overlay unavailable', { mode: state.mode, reason });
   }
 }
 
@@ -1066,6 +1139,7 @@ function registerIpcHandlers() {
     if (key === 'meetingDetection') applyMeetingDetection(value !== false);
     if (key === 'theme') setOverlayTheme(resolveEffectiveTheme(value));
     if (key === 'macCaptureStrategy') installDisplayMediaHandler();
+    if (key === 'autoCheckUpdates' || key === 'autoInstallUpdates') applyUpdateSettings();
     return true;
   });
 
@@ -1077,6 +1151,7 @@ function registerIpcHandlers() {
     if ('meetingDetection' in updates) applyMeetingDetection(updates.meetingDetection !== false);
     if ('theme' in updates) setOverlayTheme(resolveEffectiveTheme(updates.theme));
     if ('macCaptureStrategy' in updates) installDisplayMediaHandler();
+    if ('autoCheckUpdates' in updates || 'autoInstallUpdates' in updates) applyUpdateSettings();
     return true;
   });
 
@@ -1106,7 +1181,8 @@ function registerIpcHandlers() {
   ipcMain.handle('recording:stop', () => handleStopRecording());
 
   // ── Meeting overlay ───────────────────────────────────────────────────────
-  ipcMain.handle('overlay:get-state', () => overlayState);
+  // overlay:ready / shown / closed / resize / move belong to the window itself (overlay-window.js).
+  registerOverlayIpc({ onFailure: handleOverlayFailure });
 
   ipcMain.handle('overlay:start', () => {
     if (overlayState.mode !== 'prompt') return { success: false, error: 'Nothing to record' };
@@ -1116,8 +1192,7 @@ function registerIpcHandlers() {
   ipcMain.handle('overlay:stop', () => handleStopRecording());
 
   ipcMain.handle('overlay:dismiss', () => {
-    if (overlayState.mode === 'prompt' && overlayState.meeting?.key) meetingDetector.dismiss(overlayState.meeting.key);
-    setOverlay({ ...overlayState, mode: 'hidden' });
+    dismissPrompt();
     return true;
   });
 
@@ -1132,10 +1207,6 @@ function registerIpcHandlers() {
     setOverlay({ ...overlayState, mode: 'hidden' });
     return true;
   });
-
-  ipcMain.on('overlay:resize', (_e, height) => resizeOverlay(height));
-  ipcMain.on('overlay:move', (_e, deltaX) => moveOverlay(deltaX));
-  ipcMain.on('overlay:closed', () => overlayClosed());
 
   // Incremental audio chunk from renderer capture — append to disk
   ipcMain.on('capture:chunk', (_e, buffer) => {
@@ -1227,6 +1298,8 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('sessions:list', () => db.listSessions());
+  // Cheap check before sessions:list, which copies every transcript to the renderer.
+  ipcMain.handle('sessions:revision', () => db.getRevision());
 
   ipcMain.handle('session:get', (_e, id) => db.getSession(id));
 
@@ -1880,15 +1953,28 @@ app.whenReady().then(async () => {
   createAppMenu();
   // Packaged mac apps get their Dock icon from the bundle's .icns; in dev it's Electron's.
   if (isMac && !app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../assets/icons/icon.png'));
+  // A restart into an automatically installed update comes back where it was: in the tray.
+  const relaunchedAfterUpdate = takeHiddenRelaunch();
   if (launchedHidden) logger.info('Started at login; staying in the tray');
-  createMainWindow({ reveal: !launchedHidden });
+  else if (relaunchedAfterUpdate) logger.info('Restarted after an automatic update; staying in the tray');
+  createMainWindow({ reveal: !launchedHidden && !relaunchedAfterUpdate });
   createTray();
 
   initializeAutoUpdater({
     sendToRenderer,
-    onUpdateDownloaded: () => {
+    // Download progress changes many times a second; the tray menu only cares about the status.
+    onStatusChange: ({ status }) => {
+      if (status === lastTrayUpdaterStatus) return;
+      lastTrayUpdaterStatus = status;
       updateTrayMenu();
     },
+    isIdle: () => isIdleForUpdate({
+      isRecording,
+      activePipelines,
+      activeMeeting: meetingDetector.activeMeeting(),
+      overlayMode: overlayState.mode,
+      windowVisible: !!(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()),
+    }),
   });
 
   // Keep meetmind:// pointed at this installed exe (not a leftover dev registration).
@@ -1939,12 +2025,22 @@ app.whenReady().then(async () => {
 
   if (config.meetingDetection !== false) applyMeetingDetection(true);
   // After sleep, poll at once so a call joined right after waking is caught without waiting.
-  powerMonitor.on('resume', () => meetingDetector.handleResume());
+  powerMonitor.on('resume', () => {
+    meetingDetector.handleResume();
+    recheckOverlay();
+  });
   nativeTheme.on('updated', () => setOverlayTheme(resolveEffectiveTheme(getConfig().theme || 'light')));
 
   app.on('activate', () => {
     focusMainWindow();
   });
+});
+
+// Log helper processes that die (a GPU process crash can leave windows unpainted), so a missing
+// window or overlay can be traced in the log. Renderer crashes are logged per window.
+app.on('child-process-gone', (_event, details) => {
+  if (details.reason === 'clean-exit') return;
+  logger.warn('Child process gone', { type: details.type, reason: details.reason, exitCode: details.exitCode, name: details.name });
 });
 
 app.on('window-all-closed', () => {

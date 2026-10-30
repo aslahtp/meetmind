@@ -11,8 +11,16 @@ function getDbPath() {
   return path.join(userData, 'meetmind.db');
 }
 
+// Bumped on every write, so the renderer can skip re-reading every session when nothing changed.
+let revision = 0;
+
+function getRevision() {
+  return revision;
+}
+
 function persist() {
   if (!db) return;
+  revision += 1;
   try {
     const data = db.export();
     const buf = Buffer.from(data);
@@ -203,5 +211,6 @@ module.exports = {
   getSessionCount,
   getRecentSessions,
   markStaleRecordingSessionsAsError,
+  getRevision,
   computeDuration,
 };

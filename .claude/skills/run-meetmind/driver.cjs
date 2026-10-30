@@ -261,7 +261,7 @@ async function launch() {
     },
     // Wheel events only scroll if the pointer is over the scroll container, not the top bar.
     async scroll(dy) { await page.mouse.move(550, 500); await page.mouse.wheel(0, dy); await page.waitForTimeout(300); },
-    // The floating meeting overlay is a second window (renderer/overlay.html), created on first use.
+    // The floating meeting overlay is a second window (renderer/overlay.html), created each time it shows.
     overlayPage() { return app.windows().find((p) => p.url().includes('overlay.html')); },
     async overlayWait(timeoutMs = 20000) {
       const until = Date.now() + timeoutMs;

@@ -94,7 +94,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 - **Import existing audio or transcripts**: process WAV, MP3, M4A, MP4, WebM and other files, or paste a transcript to skip speech-to-text.
 - **Local-first storage**: recordings, transcripts and notes stay in a local SQLite database; retries reuse the saved transcript instead of paying for transcription twice.
 - **Search across every meeting**: titles, notes and transcripts, ranked by relevance, with related words, typo tolerance and the matching passage highlighted; filter a transcript by speaker.
-- **Light and dark themes**, keyboard-accessible UI, and in-app updates from GitHub Releases.
+- **Light and dark themes**, keyboard-accessible UI, and in-app updates from GitHub Releases, shown in the top bar and optionally downloaded and installed automatically while MeetMind sits idle in the tray.
 
 ---
 
@@ -153,7 +153,7 @@ gh attestation verify MeetMind-x.y.z-arm64.dmg --repo aslahtp/meetmind
 
 ### Meeting detection
 
-On Windows, MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay unfolds at the top centre of the screen with a **Record** button. Turn it off in **Settings → General → Meeting detection**. Meeting detection isn't available on macOS yet.
+On Windows, MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay unfolds at the top centre of the screen with a **Record** button (if the overlay can't be shown, a Windows notification offers to record instead). If you don't answer within 2 minutes, the prompt closes and won't come back for that meeting. Turn it off in **Settings → General → Meeting detection**. Meeting detection isn't available on macOS yet.
 
 ### Chrome extension (optional)
 

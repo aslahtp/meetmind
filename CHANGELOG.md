@@ -1,10 +1,30 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-23
+updated: 2026-10-30
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.14.0] - 2026-10-30
+
+### Added
+
+- **Meeting detection**: If the meeting pop-up can't be shown, MeetMind shows a Windows notification instead; clicking it starts recording.
+- **Meeting detection**: A "Meeting detected" prompt left unanswered for 2 minutes closes on its own and counts as "Not now", so it won't reappear for that meeting.
+- **Updates**: New setting "Download and install updates automatically" (Settings › General, off by default). Updates then download in the background and install when MeetMind is idle in the tray or quits, never during a recording, and MeetMind comes back in the tray.
+- **Updates**: The top bar shows a pill while an update is available, downloading or ready; click it for the version, progress, Restart now and What's new.
+
+### Changed
+
+- **Updates**: The "Update ready" card in the corner is replaced by the top-bar pill, and "Automatic updates" in Settings is now "Check for updates automatically", which is what it did.
+
+### Fixed
+
+- **Meeting detection**: The "Meeting detected" pop-up could stop appearing, often after the PC woke from sleep, until MeetMind was restarted. MeetMind now opens a fresh pop-up for each meeting, checks that it actually appears, and replaces it if it doesn't.
+- **Meeting detection**: With monitors at different display scaling, the pop-up now opens on the monitor showing the meeting.
+- **Updates**: Background update checks no longer stop after a few network errors (for example right after waking from sleep). A failed check is retried within minutes, and waking from sleep checks again.
+- **Performance**: Switching to Dashboard or Meetings no longer lags. They re-read your meetings only when something changed, Meetings draws the first cards before the rest of a long list, and Upcoming meetings shows its last result at once instead of loading again.
 
 ## [4.13.1] - 2026-10-26
 

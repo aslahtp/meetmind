@@ -4,7 +4,6 @@ import {
   X,
   Minus,
   Square,
-  ArrowUpCircle,
   LayoutDashboard,
   CalendarDays,
   Settings as SettingsIcon,
@@ -16,6 +15,7 @@ import Meetings from './components/Meetings.jsx';
 import NoteViewer from './components/NoteViewer.jsx';
 import Settings from './components/Settings.jsx';
 import ProcessingIndicator from './components/ProcessingIndicator.jsx';
+import UpdateIndicator from './components/UpdateIndicator.jsx';
 import { AppContext, useApp } from './lib/app-context.js';
 import { getSetupState } from './lib/providers.js';
 import { markScrollRestore, cancelScrollRestore } from './lib/scrollMemory.js';
@@ -23,7 +23,7 @@ import LogsViewer from './components/LogsViewer.jsx';
 import RecordingBar from './components/RecordingBar.jsx';
 import { audioMeter } from './lib/audioMeter.js';
 import { isMac, isWindows } from './lib/os.js';
-import { IconButton, StatusDot, useConfirmDialog } from './components/ui/index.jsx';
+import { StatusDot, useConfirmDialog } from './components/ui/index.jsx';
 
 // ── Toast System ──────────────────────────────────────────────────────────────
 
@@ -133,7 +133,6 @@ export default function App() {
   const [processing, setProcessing] = useState(null);      // { sessionId, stage, percent } | null
   const [notesPreview, setNotesPreview] = useState(null);  // { sessionId, attempt, provider, model, notes } | null
   const [updaterState, setUpdaterState] = useState(null);
-  const [showUpdateBanner, setShowUpdateBanner] = useState(true);
   const [toasts, setToasts] = useState([]);
 
   const navGuardRef = useRef(null);
@@ -361,10 +360,20 @@ export default function App() {
     });
   }, [addToast]); // addToast is stable, so the listeners are registered once
 
-  const refreshSessions = useCallback(async () => {
+  // The database revision the current `sessions` list was read at (see sessions:revision).
+  const sessionsRevisionRef = useRef(null);
+
+  // Re-reads every session, with full transcripts (several MB for a few hundred meetings). With
+  // { ifChanged: true }, as the Dashboard and Meetings pages do each time they open, it first
+  // asks main whether anything was written since the last read and stops there if not, so
+  // switching tabs doesn't copy and re-render the whole list for nothing.
+  const refreshSessions = useCallback(async ({ ifChanged = false } = {}) => {
     if (!window.meetmind) return;
     try {
+      const revision = await window.meetmind.sessions.revision?.();
+      if (ifChanged && revision != null && revision === sessionsRevisionRef.current) return;
       const list = await window.meetmind.sessions.list();
+      sessionsRevisionRef.current = revision ?? null;
       setSessions(list);
       setSessionsError(null);
     } catch (err) {
@@ -506,7 +515,6 @@ export default function App() {
 
     const unsubUpdater = window.meetmind.on('updater:status', (status) => {
       setUpdaterState(status);
-      if (status?.status === 'downloaded') setShowUpdateBanner(true);
     });
 
     const unsubFallback = window.meetmind.on('llm:fallback-used', ({ primaryModel, fallbackModel }) => {
@@ -517,10 +525,7 @@ export default function App() {
     });
 
     window.meetmind.updater?.getStatus().then((status) => {
-      if (status) {
-        setUpdaterState(status);
-        if (status.status === 'downloaded') setShowUpdateBanner(true);
-      }
+      if (status) setUpdaterState(status);
     });
 
     return () => {
@@ -635,6 +640,7 @@ export default function App() {
     isRecording, recordingSessionId, recordingStartedAt,
     startRecording, stopRecording,
     processing, trackProcessing, notesPreview,
+    updaterState,
     openSession, openSessionById,
     addToast,
     confirm,
@@ -687,13 +693,6 @@ export default function App() {
         </main>
       </div>
 
-      {updaterState?.status === 'downloaded' && showUpdateBanner && !isRecording && (
-        <UpdateBanner
-          version={updaterState.updateInfo?.version}
-          onInstall={() => window.meetmind.updater?.install()}
-          onClose={() => setShowUpdateBanner(false)}
-        />
-      )}
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       {confirmElement}
@@ -713,7 +712,7 @@ const NAV_ITEMS = [
 function TopBar() {
   const {
     view, setView, isRecording, startRecording, config, keysNotSet,
-    processing, openSessionById,
+    processing, openSessionById, updaterState,
   } = useApp();
 
   const items = NAV_ITEMS.filter((item) => item.view !== 'logs' || !config?.hideLogsInSidebar);
@@ -768,10 +767,12 @@ function TopBar() {
 
       <div ref={spacerRef} className="flex-1" />
 
-      {/* Status + actions: the live processing pill (animates in and out), then Record, the app's
+      {/* Status + actions: the app-update pill and the live processing pill (both animate in and
+          out; the update one opens a panel), then Record, the app's
           primary action (yellow; ink while the Dashboard's setup card holds the yellow instead).
           Spacing is per-item margins, not `gap`, so the collapsed pill slot leaves no extra space. */}
       <div className="titlebar-no-drag flex items-center">
+        <UpdateIndicator state={updaterState} />
         <ProcessingIndicator processing={processing} onOpen={openSessionById} spacerRef={spacerRef} />
 
         {!isRecording && (
@@ -800,34 +801,6 @@ function WindowControls() {
       <button type="button" onClick={() => window.meetmind?.window?.close()} className={`${base} hover:text-paper hover:bg-signal`} aria-label="Close window">
         <X size={14} strokeWidth={1.75} />
       </button>
-    </div>
-  );
-}
-
-// ── Update Notification Banner ───────────────────────────────────────────────
-
-function UpdateBanner({ version, onInstall, onClose }) {
-  return (
-    <div className="fixed bottom-24 left-24 z-[80] w-[360px] max-w-[calc(100vw-48px)] floating rounded-card p-24 fade-in" role="status">
-      <div className="flex items-start justify-between gap-16">
-        <div className="min-w-0">
-          <p className="eyebrow">Update ready</p>
-          <h3 className="text-subheading font-medium text-ink mt-8">MeetMind {version ? `v${version}` : ''} is ready</h3>
-          <p className="text-caption text-graphite mt-4">Restart to finish installing the update.</p>
-        </div>
-        <IconButton label="Dismiss update notice" onClick={onClose}>
-          <X size={16} strokeWidth={1.75} />
-        </IconButton>
-      </div>
-      <div className="flex items-center gap-8 mt-24">
-        <button type="button" onClick={onInstall} className="btn-sunshine btn-sm">
-          <ArrowUpCircle size={16} strokeWidth={1.75} />
-          Restart &amp; update
-        </button>
-        <button type="button" onClick={onClose} className="btn-quiet btn-sm">
-          Later
-        </button>
-      </div>
     </div>
   );
 }

@@ -233,7 +233,7 @@ export default function Meetings({ onOpenSession }) {
   const searchRef = useRef(null);
 
   useEffect(() => {
-    refreshSessions();
+    refreshSessions({ ifChanged: true });
   }, [refreshSessions]);
 
   // The Dashboard's search button asks for the field to be focused on arrival. The field only

@@ -8,7 +8,7 @@ import { STAGE_LABELS } from '../../lib/status.js';
 // The floating meeting overlay: one compact row (brand tile, two-line status, one action, close).
 // Main owns all state and pushes it on overlay:state; this component only renders it, animates it
 // in and out (styles/overlay.css), and sends the user's choice back. Modes: prompt, recording,
-// ended, processing, complete, error. Any other mode collapses the bar, then tells main to hide
+// ended, processing, complete, error. Any other mode collapses the bar, then tells main to close
 // the window.
 
 const api = window.meetmindOverlay;
@@ -133,13 +133,13 @@ export default function MeetingOverlay() {
 
   useEffect(() => {
     if (!api) return undefined;
-    api.getState().then(apply).catch(() => {});
+    api.ready().then(apply).catch(() => {});
     const offState = api.onState(apply);
     const offTheme = api.onTheme(applyTheme);
     return () => { offState(); offTheme(); };
   }, [apply]);
 
-  // The last closing animation has finished: unmount, and let main hide the window.
+  // The last closing animation has finished: unmount, and let main close the window.
   const onAnimationEnd = (e) => {
     if (e.target !== cardRef.current || e.animationName !== 'overlayBarLift') return;
     if (phaseRef.current !== 'closing') return;
@@ -152,11 +152,15 @@ export default function MeetingOverlay() {
   const mode = state?.mode;
   useEffect(() => { setBusy(false); setError(''); }, [mode]);
 
-  // The window is sized to the card; report the card's height whenever it changes.
+  // The window is sized to the card; report the card's height whenever it changes. The first
+  // report also acknowledges the state to main, which replaces a window that never does.
   useEffect(() => {
     const el = cardRef.current;
     if (!el || !api) return undefined;
-    const observer = new ResizeObserver(() => api.resize(el.offsetHeight));
+    const observer = new ResizeObserver(() => {
+      api.resize(el.offsetHeight);
+      if (el.offsetHeight > 0) api.shown(mode);
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, [mode, openKey]);

@@ -163,7 +163,7 @@ grouped by feature:
 | `logs` | `logs:get`, `logs:clear`, `logs:openFolder` | Backing store for the Logs viewer |
 | `config` | `config:get`, `config:set`, `config:set-multiple` | Settings read/write |
 | `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:import-file` | Recording control and device enumeration (FFmpeg devices are Windows-only; macOS returns an error) |
-| `sessions` | `sessions:list`, `session:get/delete/update-notes/rename/open-recording/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title` |
+| `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed |
 | `dialog` | `dialog:choose-folder` | Native folder picker |
 | `pdf` | `pdf:export`, `pdf:reveal`, `pdf:default-dir` | PDF export |
 | `notion` | `notion:upload`, `notion:test` | Notion sync and connection test |
@@ -186,9 +186,12 @@ explicit allowlist of valid channel names (`recording:started`, `recording:stopp
 Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
 
 The meeting overlay window uses its own, smaller preload (`electron/overlay-preload.js`, run
-sandboxed) exposing only `window.meetmindOverlay`: `overlay:get-state`, `overlay:start`,
+sandboxed) exposing only `window.meetmindOverlay`: `overlay:ready`, `overlay:start`,
 `overlay:stop`, `overlay:dismiss`, `overlay:keep-recording`, `overlay:open-session` (invoke),
-`overlay:resize` and `overlay:closed` (send), and the `overlay:state` / `overlay:theme` push events.
+`overlay:shown`, `overlay:resize`, `overlay:move` and `overlay:closed` (send), and the
+`overlay:state` / `overlay:theme` push events. `overlay:ready`, `overlay:shown`,
+`overlay:resize`, `overlay:move` and `overlay:closed` are registered by
+`overlay/overlay-window.js` itself (`registerOverlayIpc()`); the actions are in `main.js`.
 
 Preload also injects the startup theme class (`light`/`dark`) onto `<html>` synchronously, by
 reading a `--meetmind-theme=` argument that main passes via
@@ -286,7 +289,8 @@ browser on the mic that the registry doesn't, and a heartbeat every 10 minutes (
 ticks, the longest gap between ticks, the apps seen on the mic). After sleep (`powerMonitor`
 `resume`) it polls at once rather than waiting for the next tick.
 
-`main.js` turns those events into overlay states, each a single compact row: `prompt` (Record / ×),
+`main.js` turns those events into overlay states, each a single compact row: `prompt` (Record / ×;
+left unanswered for 2 minutes it closes and counts as "Not now"),
 `recording` (timer + Stop), `ended` ("Meeting ended?": it asks, never stops on its own),
 `processing`, `complete` (Open) and `error`. Recordings started from the app, tray or
 extension show the overlay too, and processing updates apply only to the session the overlay is
@@ -294,11 +298,27 @@ following. `overlay/overlay-window.js` owns the window: frameless, transparent, 
 `focusable: false` and shown with `showInactive()` so it never takes focus from the call (on
 macOS a `type: 'panel'` window, which also floats over full-screen apps and every Space without
 the Dock flicker `setVisibleOnAllWorkspaces` causes there),
-placed at the top centre of the display showing the meeting, and sized to the card's reported
-height. The bar animates open (the mic tile drops in, then unfolds to full width) and closed (it
-collapses back to the tile and lifts away; `renderer/styles/overlay.css`). To hide, main sends a
-hidden state and waits for the renderer's `overlay:closed` after the close animation, with a
-1.2 s fallback. The `meetingDetection` setting (default on) turns detection and the overlay off.
+placed at the top centre of the display showing the meeting (Windows reports the meeting
+window's bounds in physical pixels, converted to DIPs with `screen.screenToDipRect`), and sized
+to the card's reported height. The bar animates open (the mic tile drops in, then unfolds to full
+width) and closed (it collapses back to the tile and lifts away; `renderer/styles/overlay.css`).
+To hide, main sends a hidden state and waits for the renderer's `overlay:closed` after the close
+animation, with a 1.2 s fallback.
+
+The overlay window is created for each show and destroyed once it has closed, never kept hidden
+between meetings: a long-lived hidden, transparent window can stop painting (renderer or GPU
+process gone after sleep) and then "shows" as nothing. The pure lifecycle in
+`overlay/overlay-lifecycle.js` (unit-tested) drives it. The window is shown when its renderer
+invokes `overlay:ready`; the renderer then sends `overlay:shown` once a visible state is on
+screen, and a `capturePage()` check confirms something was painted (again after `resume` and
+display changes). A window that crashes (`render-process-gone`), fails to load, hangs, isn't
+acknowledged within 5 s or paints nothing is replaced once. If the replacement fails too, main
+shows the prompt as a system notification instead ("Meeting detected · Click to start
+recording", which starts recording like the Record button, and closes when the meeting ends or
+a recording starts). Each step is logged (`Meeting overlay shown`/`failed`/`recovered`), and
+main also logs any child process (e.g. the GPU process) that dies. For testing the fallback, an
+unpackaged app run with `MEETMIND_DEBUG_OVERLAY_FAIL=1` never acknowledges the overlay. The
+`meetingDetection` setting (default on) turns detection and the overlay off.
 
 ---
 
@@ -595,7 +615,7 @@ registries), service and model selection (`sttService`, `sttModels`, `llmProvide
 `language`, custom `geminiSystemPrompt`), UI preferences (`theme`, `autoLaunch`,
 `hideLogsInSidebar`, `pinNotesViewToggle`, `dashboardRecentLimit`), meeting detection
 (`meetingDetection`, default `true`), update behavior
-(`autoCheckUpdates`), PDF export (`pdfExportDir`, `pdfIncludeTranscript`), and the WebSocket
+(`autoCheckUpdates`, default `true`; `autoInstallUpdates`, default `false`), PDF export (`pdfExportDir`, `pdfIncludeTranscript`), and the WebSocket
 port (`websocketPort`, default `39842`).
 
 Several settings keys have deliberate aliases kept in sync on write (`setConfig`), for backward
@@ -692,13 +712,34 @@ bad; reconnecting with a fresh token, or disconnecting, clears that state immedi
 ## 9. Auto update (`electron/services/updater.js`)
 
 Uses `electron-updater` against the `github` publish provider configured in
-`electron-builder.yml` (owner `aslahtp`, repo `meetmind`, release type `release`). Background
-checks run every `BACKGROUND_CHECK_INTERVAL_MS = 4 hours` while `autoCheckUpdates` is enabled,
-and pause after `MAX_CONSECUTIVE_FAILURES = 3` consecutive failures in a row (so a persistent
-network problem does not retry forever in the background); state
-(`idle`/`checking`/`available`/`not-available`/`downloading`/`downloaded`/`error`, download
-progress, last check time, error message, and failure count) is exposed to the renderer via
-`updater:get-status` and pushed live over the `updater:status` event.
+`electron-builder.yml` (owner `aslahtp`, repo `meetmind`, release type `release`). While
+`autoCheckUpdates` is on (default), a background check runs 6 s after startup and then every
+`CHECK_INTERVAL_MS = 4 hours`. A failed check (typically no network yet, at login or just after
+waking) is retried after 2, 10, 30 and then every 60 minutes (`RETRY_DELAYS_MS`) and never
+stops for good; waking from sleep also checks again after 30 s if the last good check is over an
+hour old. The timing and the rules below live in the pure, unit-tested
+`electron/services/update-policy.js`.
+
+With `autoInstallUpdates` also on (default off; Settings › General › "Download and install
+updates automatically"), an update found downloads by itself through `downloadUpdate()` (which
+refuses a version that isn't newer; electron-updater verifies the SHA-512 from `latest.yml`), a
+failed download is retried on the same backoff, and the update installs when the app quits
+(`autoInstallOnAppQuit`) or once MeetMind is idle: the main window hidden in the tray, no
+recording, no processing run in flight, no detected meeting or overlay (`isIdleForUpdate`),
+checked every minute and true twice in a row. That install runs the NSIS installer silently and
+relaunches; a store flag (`updateRelaunchHiddenAt`, honoured for 10 minutes) makes that
+relaunch start in the tray. With it off, downloading and installing wait for the user. Setting
+changes apply at once (`applyUpdateSettings()` from `config:set`).
+
+State (`idle`/`checking`/`available`/`not-available`/`downloading`/`downloaded`/`error`, with
+`errorPhase` `check` or `download`, download progress, last check time, error message, failure
+count, `autoInstall` and the release page URL) is exposed via `updater:get-status` and pushed
+live over the `updater:status` event. The renderer shows it in the top bar
+(`renderer/components/UpdateIndicator.jsx`): a pill that appears while an update is available,
+downloading (filling with progress), ready, or failed to download (not for a failed check), and
+opens a panel with the version, progress and actions (Download, Restart now, Later, Retry,
+What's new). Settings › System › Application updates has the full controls, and the tray menu
+offers Download / Restart to Update.
 
 macOS builds are ad-hoc signed (no Apple Developer ID yet), and Squirrel.Mac won't install an
 update into an app without a stable signature. So on macOS `CAN_SELF_UPDATE` is false (exposed
