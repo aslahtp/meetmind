@@ -22,6 +22,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 ### Fixed
 
+- **Security**: Google Calendar sign-in only accepts the browser redirect it started (a random `state` plus PKCE), so another web page or app can no longer finish or cancel it, and the sign-in page no longer echoes text from the request.
 - **Calendars**: Recording from an upcoming meeting now names the session after the meeting instead of "Untitled Meeting".
 - **Calendars**: The first "meeting starting" check runs at startup instead of a minute later, and calendar changes apply without restarting MeetMind.
 - **Calendars**: All-day events no longer show on the previous day in time zones west of UTC, and links that merely contain "meet" or "zoom" are no longer mistaken for meeting links.

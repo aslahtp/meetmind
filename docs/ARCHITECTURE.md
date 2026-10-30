@@ -706,7 +706,9 @@ Settings › Integrations › Calendars. They are saved in config as `calendars`
   user creates in their own Google Cloud project (MeetMind ships no client secret). Scopes are
   read-only: `calendar.readonly` and `userinfo.email`. Sign-in runs one at a time on a
   short-lived loopback server on a port in `39880`-`39890` (separate from the WebSocket bridge's
-  range) and can be cancelled. A second account from the same project reuses the saved secret.
+  range) and can be cancelled. Since any web page or local app can reach that port, the redirect must
+  carry the random `state` the sign-in sent, the code exchange uses PKCE (S256), and the callback page
+  shows only fixed text, never request data. A second account from the same project reuses the saved secret.
   If Google rejects a refresh token, that token fails fast locally for 24 hours
   (`AUTH_RETRY_INTERVAL_MS`) instead of hitting Google every minute; signing in again clears it.
 

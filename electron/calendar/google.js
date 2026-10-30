@@ -3,6 +3,7 @@
 // loopback redirect server, one at a time.
 
 const { google } = require('googleapis');
+const crypto = require('crypto');
 const http = require('http');
 const logger = require('../utils/logger');
 const { extractMeetingLink } = require('./calendar-events');
@@ -67,10 +68,19 @@ async function startAuthFlow({ clientId, clientSecret }) {
   const redirectUri = `http://localhost:${port}`;
   const client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 
+  // Any web page or local app can reach the loopback port. `state` proves a redirect belongs to
+  // this sign-in (so nobody else can finish or cancel it), and PKCE means a code issued to any
+  // other sign-in can't be exchanged here.
+  const state = crypto.randomBytes(32).toString('hex');
+  const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync();
+
   const authUrl = client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
     prompt: 'consent', // Always prompt to ensure we get a refresh token
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
 
   return new Promise((resolve, reject) => {
@@ -91,26 +101,39 @@ async function startAuthFlow({ clientId, clientSecret }) {
       finish(new Error('Google sign-in timed out after 2 minutes. Try again.'));
     }, AUTH_TIMEOUT_MS);
 
+    // Request data never goes into the page or an error message (both end up in front of the
+    // user or in the log); only fixed text does.
+    const reply = (res, status, success, message) => {
+      res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(makeCallbackPage(success, message));
+    };
+
     server = http.createServer(async (req, res) => {
       try {
-        const queryParams = new URL(req.url, `http://localhost:${port}`).searchParams;
-        const code = queryParams.get('code');
-        const error = queryParams.get('error');
-
-        if (error) {
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end(makeCallbackPage(false, `Authorization denied: ${error}`));
-          finish(new Error(`Google sign-in was denied (${error}).`));
+        const url = new URL(req.url, redirectUri);
+        if (req.method !== 'GET' || url.pathname !== '/') {
+          reply(res, 404, false, 'Not found.');
+          return;
+        }
+        if (!isExpectedState(url.searchParams.get('state'), state)) {
+          reply(res, 400, false, 'This sign-in link isn’t the one MeetMind opened. Go back to MeetMind and try again.');
           return;
         }
 
+        if (url.searchParams.has('error')) {
+          const declined = url.searchParams.get('error') === 'access_denied';
+          reply(res, 200, false, declined ? 'You declined access. You can close this tab.' : 'Google couldn’t complete the sign-in. You can close this tab.');
+          finish(new Error(declined ? 'You declined access in the browser.' : 'Google couldn’t complete the sign-in. Try again.'));
+          return;
+        }
+
+        const code = url.searchParams.get('code');
         if (!code) {
-          res.writeHead(400, { 'Content-Type': 'text/html' });
-          res.end(makeCallbackPage(false, 'No authorization code received.'));
+          reply(res, 400, false, 'No authorization code received.');
           return;
         }
 
-        const { tokens } = await client.getToken(code);
+        const { tokens } = await client.getToken({ code, codeVerifier });
         client.setCredentials(tokens);
 
         let email = '';
@@ -123,19 +146,17 @@ async function startAuthFlow({ clientId, clientSecret }) {
         }
 
         if (!tokens.refresh_token) {
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end(makeCallbackPage(false, 'Google did not return a refresh token. Remove MeetMind from your Google account’s third-party access and try again.'));
+          reply(res, 200, false, 'Google did not return a refresh token. Remove MeetMind from your Google account’s third-party access and try again.');
           finish(new Error('Google did not return a refresh token. Remove MeetMind from your Google account’s third-party access, then sign in again.'));
           return;
         }
 
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(makeCallbackPage(true, `Connected as ${escapeHtml(email) || 'your Google account'}. You can close this tab.`));
+        reply(res, 200, true, `Connected as ${escapeHtml(email) || 'your Google account'}. You can close this tab.`);
         finish(null, { refreshToken: tokens.refresh_token, email });
       } catch (err) {
-        res.writeHead(500, { 'Content-Type': 'text/html' });
-        res.end(makeCallbackPage(false, `Error: ${escapeHtml(err.message)}`));
-        finish(err);
+        const message = tokenErrorMessage(err);
+        reply(res, 500, false, `${message} You can close this tab.`);
+        finish(new Error(message));
       }
     });
 
@@ -241,6 +262,23 @@ function normalizeEvent(event) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Constant-time comparison of the redirect's `state` with the one this sign-in sent.
+function isExpectedState(received, expected) {
+  if (typeof received !== 'string' || received.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+}
+
+// A fixed message for a failed code exchange, chosen by Google's error code, so nothing from the
+// response is shown or logged verbatim.
+function tokenErrorMessage(err) {
+  const code = err?.response?.data?.error;
+  if (code === 'invalid_client' || code === 'unauthorized_client') {
+    return 'Google didn’t accept the OAuth Client ID or Secret. Check them and try again.';
+  }
+  if (code === 'invalid_grant') return 'The sign-in expired before it finished. Try again.';
+  return 'Google couldn’t complete the sign-in. Try again.';
+}
 
 function findFreePort(start, end) {
   return new Promise((resolve, reject) => {
