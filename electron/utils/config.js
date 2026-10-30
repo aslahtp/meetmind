@@ -2,6 +2,8 @@ const Store = require('electron-store');
 const { DEFAULT_SYSTEM_PROMPT } = require('../services/prompts');
 const { sttRegistry, llmRegistry, providerConfigKeys } = require('../providers');
 const { migrateLegacyModels } = require('./configMigration');
+const { LEGACY_GOOGLE_KEYS, migrateLegacyCalendar, sanitizeSources } = require('../calendar/calendar-sources');
+const { v4: uuidv4 } = require('uuid');
 const { DEFAULT_MAC_CAPTURE_STRATEGY, normalizeMacCaptureStrategy } = require('../audio/mac-capture');
 
 const schema = {
@@ -121,26 +123,15 @@ const schema = {
     type: 'string',
     default: DEFAULT_MAC_CAPTURE_STRATEGY,
   },
-  googleCalendarClientId: {
-    type: 'string',
-    default: '',
-  },
-  googleCalendarClientSecret: {
-    type: 'string',
-    default: '',
-  },
-  googleCalendarRefreshToken: {
-    type: 'string',
-    default: '',
-  },
-  googleCalendarEnabled: {
-    type: 'boolean',
-    default: false,
-  },
-  googleCalendarEmail: {
-    type: 'string',
-    default: '',
-  },
+  // Calendar sources (Google accounts and ICS links), see electron/calendar/. No default: an
+  // unset key tells migrateLegacyCalendar the pre-4.15 Google keys below haven't moved yet.
+  calendars: { type: 'array' },
+  // Legacy (pre-4.15) single Google Calendar keys; read once by migrateLegacyCalendar, then removed.
+  googleCalendarClientId: { type: 'string' },
+  googleCalendarClientSecret: { type: 'string' },
+  googleCalendarRefreshToken: { type: 'string' },
+  googleCalendarEnabled: { type: 'boolean' },
+  googleCalendarEmail: { type: 'string' },
   dashboardRecentLimit: {
     type: 'number',
     default: 5,
@@ -178,6 +169,12 @@ function applyLegacyMigration() {
   const { set, remove } = migrateLegacyModels(raw, llmRegistry.get('gemini')._deprecatedModels);
   for (const [key, value] of Object.entries(set)) store.set(key, value);
   for (const key of remove) store.delete(key);
+
+  const rawCalendar = { calendars: store.get('calendars') };
+  for (const key of LEGACY_GOOGLE_KEYS) rawCalendar[key] = store.get(key);
+  const calendar = migrateLegacyCalendar(rawCalendar, uuidv4);
+  for (const [key, value] of Object.entries(calendar.set)) store.set(key, value);
+  for (const key of calendar.remove) store.delete(key);
 }
 
 /** Saved model per provider, validated against each provider's list. */
@@ -241,11 +238,7 @@ function getConfig() {
     showAudioWaveform:         store.get('showAudioWaveform') !== false,
     meetingDetection:          store.get('meetingDetection') !== false,
     macCaptureStrategy:        normalizeMacCaptureStrategy(store.get('macCaptureStrategy')),
-    googleCalendarClientId:    store.get('googleCalendarClientId') || '',
-    googleCalendarClientSecret: store.get('googleCalendarClientSecret') || '',
-    googleCalendarRefreshToken: store.get('googleCalendarRefreshToken') || '',
-    googleCalendarEnabled:     store.get('googleCalendarEnabled') || false,
-    googleCalendarEmail:       store.get('googleCalendarEmail') || '',
+    calendars:                 sanitizeSources(store.get('calendars')),
     dashboardRecentLimit:      store.get('dashboardRecentLimit') || 5,
     notionUploadTranscript:    store.get('notionUploadTranscript') !== false,
     pdfExportDir:              store.get('pdfExportDir') || '',

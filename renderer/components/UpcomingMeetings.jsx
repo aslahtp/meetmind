@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -8,7 +9,6 @@ import {
   RefreshCw,
   MapPin,
 } from 'lucide-react';
-import GoogleCalendarIcon from './GoogleCalendarIcon.jsx';
 import { IconButton, StatusDot, Skeleton, AvatarTile } from './ui/index.jsx';
 import { formatTime, dayLabel } from '../lib/format.js';
 import { meetingPlatform } from '../lib/platform.js';
@@ -17,6 +17,13 @@ import { useNow } from '../lib/hooks.js';
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const SOON_WINDOW_MS = 15 * 60 * 1000;
 const COLLAPSED_KEY = 'meetmind.upcomingCollapsed';
+
+// All-day events carry a bare YYYY-MM-DD date, which is local midnight (Date would read it as
+// UTC and put the event on the previous day west of Greenwich).
+function eventDate(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value);
+}
 
 function getEventStatus(event, now) {
   const start = new Date(event.start).getTime();
@@ -42,7 +49,7 @@ function writeCollapsed(value) {
   } catch { /* storage unavailable — collapse still works for this session */ }
 }
 
-function EventCard({ event, onStartRecording, isRecording, now }) {
+function EventCard({ event, onStartRecording, isRecording, now, showSource }) {
   const status = getEventStatus(event, now);
   const platform = meetingPlatform(event.meetingLink);
   const isLive = status === 'in-progress';
@@ -67,6 +74,9 @@ function EventCard({ event, onStartRecording, isRecording, now }) {
         {event.location}
       </span>
     );
+  }
+  if (showSource && event.sourceName) {
+    meta.push(<span key="source" className="truncate max-w-[160px]">{event.sourceName}</span>);
   }
   if (platform) {
     meta.push(
@@ -145,9 +155,43 @@ function SkeletonEvent() {
   );
 }
 
+// Calendars that failed this time, listed above the events from the ones that worked.
+function SourceErrors({ errors, onNavigateToSettings }) {
+  return (
+    <div className="card-compact" role="alert">
+      <ul className="space-y-8">
+        {errors.map((err) => (
+          <li key={err.sourceId} className="flex items-start gap-16">
+            <StatusDot tone="error" className="mt-8" />
+            <p className="flex-1 min-w-0 text-body-sm text-ink">
+              <span className="font-medium">{err.name}:</span> {err.message}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-8 mt-16">
+        {errors.filter((e) => e.actionUrl).map((err) => (
+          <button
+            key={err.sourceId}
+            type="button"
+            onClick={() => window.meetmind.shell.openExternal(err.actionUrl)}
+            className="btn-ghost btn-sm"
+          >
+            <ExternalLink size={14} strokeWidth={1.75} />
+            {err.actionLabel || 'Open'}
+          </button>
+        ))}
+        <button type="button" onClick={onNavigateToSettings} className="btn-ghost btn-sm">
+          Calendar settings
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // The last answer, kept across mounts: going back to the Dashboard shows it at once and refreshes
 // in the background, instead of flashing skeleton rows and shifting the page when it lands.
-let lastResult = null;   // { connected, events, error }
+let lastResult = null;   // { connected, events, error, errors, multiSource }
 
 export default function UpcomingMeetings({ onNavigateToSettings, onStartRecording, isRecording, className = '' }) {
   const [events, setEvents] = useState(() => lastResult?.events || []);
@@ -155,6 +199,8 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
   const [error, setError] = useState(() => lastResult?.error || null);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [connected, setConnected] = useState(() => !!lastResult?.connected);
+  const [errors, setErrors] = useState(() => lastResult?.errors || []);
+  const [multiSource, setMultiSource] = useState(() => !!lastResult?.multiSource);
   const [refreshing, setRefreshing] = useState(false);
   const now = useNow(60_000);
 
@@ -172,19 +218,23 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
       if ('connected' in next) setConnected(next.connected);
       if ('events' in next) setEvents(next.events);
       if ('error' in next) setError(next.error);
+      if ('errors' in next) setErrors(next.errors);
+      if ('multiSource' in next) setMultiSource(next.multiSource);
     };
     try {
-      const status = await window.meetmind.calendar.getStatus();
-      if (!status.connected) {
-        remember({ connected: false, events: [], error: null });
+      const { sources = [] } = await window.meetmind.calendar.list();
+      const enabled = sources.filter((s) => s.enabled);
+      if (!enabled.length) {
+        remember({ connected: false, events: [], error: null, errors: [] });
         return;
       }
 
-      const result = await window.meetmind.calendar.getEvents();
+      const result = await window.meetmind.calendar.getEvents({ force: showRefreshState });
+      const multi = enabled.length > 1;
       if (result.success) {
-        remember({ connected: true, events: result.events || [], error: null });
+        remember({ connected: true, events: result.events || [], error: null, errors: result.errors || [], multiSource: multi });
       } else {
-        remember({ connected: true, error: result.error });
+        remember({ connected: true, error: result.error, errors: [], multiSource: multi });
       }
     } catch (err) {
       remember({ error: err.message });
@@ -198,7 +248,12 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
   useEffect(() => {
     fetchEvents();
     const interval = setInterval(() => fetchEvents(), POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    // A calendar added, removed or switched off in Settings.
+    const unsub = window.meetmind?.on?.('calendar:changed', () => fetchEvents());
+    return () => {
+      clearInterval(interval);
+      unsub?.();
+    };
   }, [fetchEvents]);
 
   const toggleCollapsed = () => {
@@ -212,13 +267,13 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
   const groupedEvents = useMemo(() => {
     const groups = {};
     for (const event of events) {
-      const dateKey = new Date(event.start).toDateString();
+      const dateKey = eventDate(event.start).toDateString();
       if (!groups[dateKey]) groups[dateKey] = [];
       groups[dateKey].push(event);
     }
     return Object.entries(groups).map(([dateKey, evts]) => ({
       dateKey,
-      label: dayLabel(evts[0].start),
+      label: dayLabel(eventDate(evts[0].start).toISOString()),
       events: evts,
     }));
   }, [events]);
@@ -232,11 +287,11 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
           className="w-full card-compact text-left flex items-center gap-16 transition-colors duration-150 hover:bg-ink/[0.03]"
         >
           <AvatarTile size={48}>
-            <GoogleCalendarIcon size={20} />
+            <CalendarDays size={20} strokeWidth={1.75} />
           </AvatarTile>
           <div className="flex-1 min-w-0">
-            <p className="text-body-sm font-medium text-ink">Connect Google Calendar</p>
-            <p className="text-caption text-graphite mt-4">See upcoming meetings and get a prompt to record when they start.</p>
+            <p className="text-body-sm font-medium text-ink">Connect a calendar</p>
+            <p className="text-caption text-graphite mt-4">Google, Outlook, Apple, Cal.com or any ICS link. See upcoming meetings and get a prompt to record when they start.</p>
           </div>
           <ChevronRight size={18} strokeWidth={1.75} className="text-graphite flex-shrink-0" />
         </button>
@@ -257,7 +312,7 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
           className="flex items-center gap-8 text-graphite hover:text-ink transition-colors duration-150"
         >
           {collapsed ? <ChevronRight size={16} strokeWidth={1.75} /> : <ChevronDown size={16} strokeWidth={1.75} />}
-          <GoogleCalendarIcon size={16} />
+          <CalendarDays size={16} strokeWidth={1.75} />
           <span id="upcoming-heading" className="eyebrow">Upcoming meetings</span>
           {events.length > 0 && <span className="pill-quiet tabular">{events.length}</span>}
         </button>
@@ -292,7 +347,7 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
                           className="btn-ghost btn-sm"
                         >
                           <ExternalLink size={14} strokeWidth={1.75} />
-                          Enable Google Calendar API
+                          Open
                         </button>
                       )}
                       {error.includes('Settings') && (
@@ -305,25 +360,31 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
                 </div>
               </div>
             </div>
-          ) : events.length === 0 ? (
-            <p className="text-caption text-graphite">No upcoming meetings.</p>
           ) : (
-            groupedEvents.map((group) => (
-              <div key={group.dateKey}>
-                <p className="eyebrow mb-8">{group.label}</p>
-                <div className="flex flex-col gap-8">
-                  {group.events.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onStartRecording={onStartRecording}
-                      isRecording={isRecording}
-                      now={now}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))
+            <>
+              {errors.length > 0 && <SourceErrors errors={errors} onNavigateToSettings={onNavigateToSettings} />}
+              {events.length === 0 ? (
+                <p className="text-caption text-graphite">No upcoming meetings.</p>
+              ) : (
+                groupedEvents.map((group) => (
+                  <div key={group.dateKey}>
+                    <p className="eyebrow mb-8">{group.label}</p>
+                    <div className="flex flex-col gap-8">
+                      {group.events.map((event) => (
+                        <EventCard
+                          key={`${event.sourceId}:${event.id}`}
+                          event={event}
+                          onStartRecording={onStartRecording}
+                          isRecording={isRecording}
+                          now={now}
+                          showSource={multiSource}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
           )}
         </div>
       )}

@@ -40,7 +40,7 @@ body:
         - Note generation (Gemini / Groq / Claude)
         - Meeting detection / overlay
         - Notion sync
-        - Google Calendar
+        - Calendars (Google, ICS)
         - PDF / Markdown export
         - Chrome extension (Google Meet / Zoom)
         - Installer / updates / FFmpeg

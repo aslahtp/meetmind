@@ -68,7 +68,7 @@
           "Selectable model for every speech-to-text and note-generation engine, with cross-provider fallback",
           "Automatic meeting detection for Google Meet, Zoom and Teams with a floating record prompt (Windows)",
           "Optional Chrome extension for Google Meet and Zoom",
-          "Google Calendar reminders to start recording",
+          "Calendar reminders to start recording from up to 5 calendars: any ICS link (Google, Outlook, Apple iCloud) or a Google account",
           "Notion sync",
           "PDF and Markdown export",
           "Local SQLite storage, no account or bot"
@@ -2247,12 +2247,16 @@
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-calendar" />
               </svg></div>
-            <h3>Google Calendar reminders</h3>
-            <p>See upcoming meetings on the dashboard and get a prompt to start recording when one begins.</p>
+            <h3>Calendar reminders</h3>
+            <p>Add up to five calendars by pasting their ICS link, with no API keys, or sign in with Google. See upcoming
+              meetings on the dashboard and get a prompt to start recording when one begins.</p>
             <div class="chips">
               <span class="chip"><svg class="logo" style="--brand:#4285F4" aria-hidden="true">
                   <use href="#l-gcal" />
                 </svg>Google Calendar</span>
+              <span class="chip">Outlook</span>
+              <span class="chip">Apple iCloud</span>
+              <span class="chip">Any ICS link</span>
             </div>
           </div>
           <div class="card" data-reveal>

@@ -606,8 +606,13 @@ export default function App() {
     await updateConfig('theme', validTheme);
   };
 
-  const startRecording = async () => {
-    const result = await window.meetmind.recording.start();
+  // `meeting` ({ meetingUrl, meetingTitle }) names the session after a calendar event; buttons
+  // that call this as a click handler pass an event object, which is ignored.
+  const startRecording = async (meeting) => {
+    const fromCalendar = typeof meeting?.meetingTitle === 'string';
+    const result = fromCalendar
+      ? await window.meetmind.recording.start(undefined, meeting.meetingUrl || undefined, meeting.meetingTitle)
+      : await window.meetmind.recording.start();
     if (result?.success) {
       setIsRecording(true);
       setRecordingSessionId(result.sessionId);

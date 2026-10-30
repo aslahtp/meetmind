@@ -72,7 +72,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 
 ## 🧭 How it works
 
-1. **Record.** Click the MeetMind button in Google Meet or Zoom, press **Record** in the app, or accept the reminder when a Google Calendar meeting starts. MeetMind captures system audio (WASAPI loopback on Windows, Core Audio on macOS) and your microphone together.
+1. **Record.** Click the MeetMind button in Google Meet or Zoom, press **Record** in the app, or accept the reminder when a calendar meeting starts. MeetMind captures system audio (WASAPI loopback on Windows, Core Audio on macOS) and your microphone together.
 2. **Transcribe.** When you stop, the audio goes to your chosen speech-to-text engine, which returns a transcript with speaker labels (diarization).
 3. **Summarize.** Gemini, Groq or Claude (your choice) turns the transcript into meeting minutes — an executive summary, agenda, key decisions and an action items table with owners, deadlines and priorities — as Markdown or structured JSON.
 4. **Share.** Read and search notes and transcripts in the app, export a PDF, copy Markdown, or sync a formatted page to Notion automatically.
@@ -88,7 +88,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 - **Easy to extend**: every speech-to-text and LLM engine is a small self-describing module, so adding a provider needs one file and one registry line (see [docs/ADDING_PROVIDERS.md](docs/ADDING_PROVIDERS.md)).
 - **Automatic meeting detection** (Windows; macOS coming later): when Google Meet, Zoom or Microsoft Teams starts using your microphone, a floating overlay offers to record, then shows the timer, a "Meeting ended?" prompt and processing status. No browser extension needed.
 - **Optional Google Meet and Zoom extension**: a floating overlay inside the Chrome tab with one-click recording and live processing status.
-- **Google Calendar integration**: see upcoming meetings on the dashboard and get a notification to start recording when one begins.
+- **Calendar integration**: add up to 5 calendars (any ICS link from Google, Outlook, Apple iCloud and others, with no setup, or a Google account through your own OAuth client) to see upcoming meetings on the dashboard and get a notification to start recording when one begins.
 - **Notion sync**: notes become native Notion blocks (headings, tables, to-dos); re-syncing replaces the old page instead of duplicating it.
 - **PDF and Markdown export**: save dated PDFs (optionally with the transcript) or copy the notes as Markdown.
 - **Import existing audio or transcripts**: process WAV, MP3, M4A, MP4, WebM and other files, or paste a transcript to skip speech-to-text.
@@ -129,7 +129,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
    Each engine has a model picker below its key.
 3. In **Settings → Notes**, choose **Gemini** ([API key from Google AI Studio](https://aistudio.google.com/app/apikey)), **Groq** ([API key from the Groq console](https://console.groq.com/keys)) or **Claude** ([API key from the Anthropic console](https://console.anthropic.com/settings/keys)) and pick a model. Optionally set a fallback provider and model in case the first one fails (Groq's free tier can reject very long transcripts).
 4. In **Settings → System**, click **Download & Install FFmpeg** if it is not already installed.
-5. Optional: in **Settings → Integrations**, connect **Notion** and **Google Calendar**.
+5. Optional: in **Settings → Integrations**, connect **Notion** and add your **calendars** (paste a calendar's ICS link, or sign in with Google).
 
 Every API key field in Settings has a "How to get a key" guide next to it.
 

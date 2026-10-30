@@ -88,7 +88,8 @@ contextBridge.exposeInMainWorld('meetmind', {
 
   // Recording
   recording: {
-    start: (sessionId) => ipcRenderer.invoke('recording:start', sessionId),
+    // meetingUrl/meetingTitle come from a calendar event when recording one from the Dashboard.
+    start: (sessionId, meetingUrl, meetingTitle) => ipcRenderer.invoke('recording:start', sessionId, meetingUrl, meetingTitle),
     stop: () => ipcRenderer.invoke('recording:stop'),
     listDevices: () => ipcRenderer.invoke('audio:list-devices'),
     probeDevice: (device) => ipcRenderer.invoke('audio:probe-device', device),
@@ -164,12 +165,15 @@ contextBridge.exposeInMainWorld('meetmind', {
     openSettings: (kind) => ipcRenderer.invoke('permissions:open-settings', kind),
   },
 
-  // Google Calendar
+  // Calendars: Google accounts and ICS links (up to 5). Sources come back redacted.
   calendar: {
-    auth: () => ipcRenderer.invoke('calendar:auth'),
-    disconnect: () => ipcRenderer.invoke('calendar:disconnect'),
-    getEvents: () => ipcRenderer.invoke('calendar:events'),
-    getStatus: () => ipcRenderer.invoke('calendar:status'),
+    list: () => ipcRenderer.invoke('calendar:list'),
+    add: (input) => ipcRenderer.invoke('calendar:add', input),
+    update: (id, patch) => ipcRenderer.invoke('calendar:update', id, patch),
+    remove: (id) => ipcRenderer.invoke('calendar:remove', id),
+    reconnect: (id) => ipcRenderer.invoke('calendar:reconnect', id),
+    cancelAuth: () => ipcRenderer.invoke('calendar:cancel-auth'),
+    getEvents: (options) => ipcRenderer.invoke('calendar:events', options),
   },
 
   // Auto updater
@@ -212,6 +216,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'sessions:durations-updated',
       'updater:status',
       'calendar:meeting-starting',
+      'calendar:changed',
       'llm:fallback-used',
       'log:entry',
       'app:open-session',
