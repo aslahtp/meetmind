@@ -17,7 +17,10 @@ function subscribe(channel, callback) {
 
 contextBridge.exposeInMainWorld('meetmindOverlay', {
   startupTheme,
-  getState:      () => ipcRenderer.invoke('overlay:get-state'),
+  // Called once on mount: main shows the window, then answers with the state to render.
+  ready:         () => ipcRenderer.invoke('overlay:ready'),
+  // Tells main a visible state is rendered; without it main replaces the window.
+  shown:         (mode) => ipcRenderer.send('overlay:shown', mode),
   start:         () => ipcRenderer.invoke('overlay:start'),
   stop:          () => ipcRenderer.invoke('overlay:stop'),
   dismiss:       () => ipcRenderer.invoke('overlay:dismiss'),

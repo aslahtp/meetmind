@@ -186,9 +186,12 @@ explicit allowlist of valid channel names (`recording:started`, `recording:stopp
 Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
 
 The meeting overlay window uses its own, smaller preload (`electron/overlay-preload.js`, run
-sandboxed) exposing only `window.meetmindOverlay`: `overlay:get-state`, `overlay:start`,
+sandboxed) exposing only `window.meetmindOverlay`: `overlay:ready`, `overlay:start`,
 `overlay:stop`, `overlay:dismiss`, `overlay:keep-recording`, `overlay:open-session` (invoke),
-`overlay:resize` and `overlay:closed` (send), and the `overlay:state` / `overlay:theme` push events.
+`overlay:shown`, `overlay:resize`, `overlay:move` and `overlay:closed` (send), and the
+`overlay:state` / `overlay:theme` push events. `overlay:ready`, `overlay:shown`,
+`overlay:resize`, `overlay:move` and `overlay:closed` are registered by
+`overlay/overlay-window.js` itself (`registerOverlayIpc()`); the actions are in `main.js`.
 
 Preload also injects the startup theme class (`light`/`dark`) onto `<html>` synchronously, by
 reading a `--meetmind-theme=` argument that main passes via
@@ -294,11 +297,27 @@ following. `overlay/overlay-window.js` owns the window: frameless, transparent, 
 `focusable: false` and shown with `showInactive()` so it never takes focus from the call (on
 macOS a `type: 'panel'` window, which also floats over full-screen apps and every Space without
 the Dock flicker `setVisibleOnAllWorkspaces` causes there),
-placed at the top centre of the display showing the meeting, and sized to the card's reported
-height. The bar animates open (the mic tile drops in, then unfolds to full width) and closed (it
-collapses back to the tile and lifts away; `renderer/styles/overlay.css`). To hide, main sends a
-hidden state and waits for the renderer's `overlay:closed` after the close animation, with a
-1.2 s fallback. The `meetingDetection` setting (default on) turns detection and the overlay off.
+placed at the top centre of the display showing the meeting (Windows reports the meeting
+window's bounds in physical pixels, converted to DIPs with `screen.screenToDipRect`), and sized
+to the card's reported height. The bar animates open (the mic tile drops in, then unfolds to full
+width) and closed (it collapses back to the tile and lifts away; `renderer/styles/overlay.css`).
+To hide, main sends a hidden state and waits for the renderer's `overlay:closed` after the close
+animation, with a 1.2 s fallback.
+
+The overlay window is created for each show and destroyed once it has closed, never kept hidden
+between meetings: a long-lived hidden, transparent window can stop painting (renderer or GPU
+process gone after sleep) and then "shows" as nothing. The pure lifecycle in
+`overlay/overlay-lifecycle.js` (unit-tested) drives it. The window is shown when its renderer
+invokes `overlay:ready`; the renderer then sends `overlay:shown` once a visible state is on
+screen, and a `capturePage()` check confirms something was painted (again after `resume` and
+display changes). A window that crashes (`render-process-gone`), fails to load, hangs, isn't
+acknowledged within 5 s or paints nothing is replaced once. If the replacement fails too, main
+shows the prompt as a system notification instead ("Meeting detected · Click to start
+recording", which starts recording like the Record button, and closes when the meeting ends or
+a recording starts). Each step is logged (`Meeting overlay shown`/`failed`/`recovered`), and
+main also logs any child process (e.g. the GPU process) that dies. For testing the fallback, an
+unpackaged app run with `MEETMIND_DEBUG_OVERLAY_FAIL=1` never acknowledges the overlay. The
+`meetingDetection` setting (default on) turns detection and the overlay off.
 
 ---
 

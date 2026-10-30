@@ -1,12 +1,13 @@
 // `MeetMind --smoke` (or `electron . --smoke`): a headless self-test of a packaged app, run by CI
 // on the macOS and Windows builds since there is no Mac to click through. Uses a throwaway
-// profile, never opens a window, prints one line `MEETMIND_SMOKE {json}` and exits 0 if every
-// check passed, 1 otherwise.
+// profile, opens no window but the meeting overlay for a moment, prints one line
+// `MEETMIND_SMOKE {json}` and exits 0 if every check passed, 1 otherwise.
 //
 // Checks: config + database open; ffmpeg/ffprobe are found and run; ffmpeg encodes a 1 s Opus
 // WebM (what the renderer records) and convertWebmToWav turns it into 16 kHz WAV; ffprobe reads
 // its duration; koffi loads; the permissions API answers; the meeting-detection backend loads
-// and returns lists, including the WASAPI audio sessions it reads the mic users from.
+// and returns lists, including the WASAPI audio sessions it reads the mic users from; the meeting
+// overlay window loads, shows a prompt and its renderer acknowledges it.
 
 const { app } = require('electron');
 const fs = require('fs');
@@ -104,6 +105,26 @@ app.whenReady().then(async () => {
       registryMicApps: mic.registry.length,
       windows: windows.length,
     };
+  });
+
+  await check('meeting-overlay', async () => {
+    const overlay = require('./overlay/overlay-window');
+    overlay.registerOverlayIpc();
+    const startedAt = Date.now();
+    overlay.showOverlay({ mode: 'prompt', meeting: { key: 'smoke', title: 'Smoke test', platformLabel: 'Google Meet' } });
+    try {
+      // Only up to the renderer's acknowledgement: CI runners may not composite, so the paint
+      // check that follows it in the app is skipped here.
+      for (;;) {
+        const phase = overlay.getOverlayPhase();
+        if (phase === 'shown') return { ms: Date.now() - startedAt };
+        if (phase === 'failed') throw new Error('overlay failed to show (see log)');
+        if (Date.now() - startedAt > 15000) throw new Error(`overlay stuck in ${phase}`);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    } finally {
+      overlay.destroyOverlay();
+    }
   });
 
   const ok = checks.every((c) => c.ok);

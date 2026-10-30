@@ -1,10 +1,21 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-23
+updated: 2026-10-30
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.14.0] - 2026-10-30
+
+### Added
+
+- **Meeting detection**: If the meeting pop-up can't be shown, MeetMind shows a Windows notification instead; clicking it starts recording.
+
+### Fixed
+
+- **Meeting detection**: The "Meeting detected" pop-up could stop appearing, often after the PC woke from sleep, until MeetMind was restarted. MeetMind now opens a fresh pop-up for each meeting, checks that it actually appears, and replaces it if it doesn't.
+- **Meeting detection**: With monitors at different display scaling, the pop-up now opens on the monitor showing the meeting.
 
 ## [4.13.1] - 2026-10-26
 
