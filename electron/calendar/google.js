@@ -127,12 +127,9 @@ async function startAuthFlow({ clientId, clientSecret }) {
           return;
         }
 
-        const code = url.searchParams.get('code');
-        if (!code) {
-          reply(res, 400, false, 'No authorization code received.');
-          return;
-        }
-
+        // The state check above already proved this is Google's redirect for this sign-in. A
+        // missing code just fails the exchange below with a fixed message, so it needs no branch.
+        const code = url.searchParams.get('code') || '';
         const { tokens } = await client.getToken({ code, codeVerifier });
         client.setCredentials(tokens);
 

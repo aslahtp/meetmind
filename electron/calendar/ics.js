@@ -58,7 +58,10 @@ async function fetchIcs(url, { etag = '', lastModified = '', fetchImpl = fetch }
 
   if (response.status === 304) return { notModified: true };
   if ([401, 403, 404, 410].includes(response.status)) throw new Error(DEAD_LINK);
-  if (!response.ok) throw new Error(`${host(url)} returned an error (HTTP ${response.status}). Try again later.`);
+  // Fixed wording only: these messages are logged, and nothing from the response goes in them.
+  if (response.status === 429) throw new Error(`${host(url)} is limiting requests. Try a longer sync interval.`);
+  if (response.status >= 500) throw new Error(`${host(url)} is having problems right now. MeetMind will try again.`);
+  if (!response.ok) throw new Error(`${host(url)} refused the request. Check the calendar link.`);
 
   return {
     text: await readCapped(response),
