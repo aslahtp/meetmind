@@ -14,7 +14,8 @@ import { formatTime, dayLabel } from '../lib/format.js';
 import { meetingPlatform } from '../lib/platform.js';
 import { useNow } from '../lib/hooks.js';
 
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+// Reads the main process's cache (synced on the user's interval), so polling often is cheap.
+const POLL_INTERVAL_MS = 60 * 1000;
 const SOON_WINDOW_MS = 15 * 60 * 1000;
 const COLLAPSED_KEY = 'meetmind.upcomingCollapsed';
 

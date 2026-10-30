@@ -1139,6 +1139,7 @@ function registerIpcHandlers() {
   ipcMain.handle('config:set', (_e, key, value) => {
     if (key === 'calendars') return false;
     setConfig(key, value);
+    if (key === 'calendarSyncMinutes') sendToRenderer('calendar:changed');
     if (key === 'autoLaunch') {
       autoLaunch.set(value);
     }

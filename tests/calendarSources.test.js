@@ -4,6 +4,8 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const {
   MAX_CALENDARS,
+  DEFAULT_SYNC_MINUTES,
+  normalizeSyncMinutes,
   normalizeIcsUrl,
   canAddSource,
   publicSource,
@@ -30,6 +32,17 @@ describe('normalizeIcsUrl', () => {
     expect(() => normalizeIcsUrl('')).toThrow(/Paste/);
     expect(() => normalizeIcsUrl('file:///C:/cal.ics')).toThrow(/https/);
     expect(() => normalizeIcsUrl('javascript://alert(1)')).toThrow(/https/);
+  });
+});
+
+describe('normalizeSyncMinutes', () => {
+  it('keeps an offered interval and falls back to the default otherwise', () => {
+    expect(normalizeSyncMinutes(1)).toBe(1);
+    expect(normalizeSyncMinutes(60)).toBe(60);
+    expect(normalizeSyncMinutes('15')).toBe(15);
+    expect(normalizeSyncMinutes(7)).toBe(DEFAULT_SYNC_MINUTES);
+    expect(normalizeSyncMinutes(undefined)).toBe(DEFAULT_SYNC_MINUTES);
+    expect(normalizeSyncMinutes(0)).toBe(DEFAULT_SYNC_MINUTES);
   });
 });
 

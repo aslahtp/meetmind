@@ -12,6 +12,7 @@ const { parseIcs } = require('./ics-parse');
 const { mergeEvents, dueToStart, pruneNotified, eventKey, eventTimeMs } = require('./calendar-events');
 const {
   MAX_CALENDARS,
+  SYNC_INTERVALS,
   normalizeIcsUrl,
   icsHost,
   cleanName,
@@ -22,9 +23,9 @@ const {
   resolveGoogleClient,
 } = require('./calendar-sources');
 
-// How long a source's events are reused. ICS servers regenerate feeds slowly (Google every few
-// hours), so polling them harder buys nothing.
-const CACHE_TTL_MS = { google: 2 * 60 * 1000, ics: 10 * 60 * 1000 };
+// A source's events are reused for the user's sync interval (`calendarSyncMinutes`). The poller
+// ticks every minute, so allow a little slack or a 1-minute interval would re-read every 2.
+const SYNC_SLACK_MS = 5_000;
 // Fetch a little into the past so a meeting in progress is listed, and 36 h ahead (today + tomorrow).
 const LOOKBACK_MS = 12 * 60 * 60 * 1000;
 const LOOKAHEAD_MS = 36 * 60 * 60 * 1000;
@@ -47,6 +48,10 @@ function init(options = {}) {
 
 function sources() {
   return getConfig().calendars;
+}
+
+function syncIntervalMs() {
+  return getConfig().calendarSyncMinutes * 60_000;
 }
 
 function saveSources(list) {
@@ -107,11 +112,11 @@ function setStatus(source, next) {
   }
 }
 
-/** One source's events (tagged with the source), from cache while fresh. */
-async function fetchSource(source, { force = false } = {}) {
+/** One source's events (tagged with the source), from cache while younger than `maxAgeMs`. */
+async function fetchSource(source, { force = false, maxAgeMs = syncIntervalMs() } = {}) {
   const key = cacheKey(source);
   const cached = cache.get(source.id);
-  const fresh = cached && cached.key === key && Date.now() - cached.at < CACHE_TTL_MS[source.type];
+  const fresh = cached && cached.key === key && Date.now() - cached.at < maxAgeMs - SYNC_SLACK_MS;
   if (fresh && !force) return tagEvents(cached.events, source);
   if (inflight.has(source.id)) return inflight.get(source.id);
 
@@ -159,7 +164,8 @@ function activeSources(list = sources()) {
  */
 async function fetchEvents({ force = false } = {}) {
   const list = activeSources();
-  const results = await Promise.allSettled(list.map((s) => fetchSource(s, { force })));
+  const maxAgeMs = syncIntervalMs();
+  const results = await Promise.allSettled(list.map((s) => fetchSource(s, { force, maxAgeMs })));
   const lists = [];
   const errors = [];
   results.forEach((result, i) => {
@@ -183,6 +189,8 @@ async function fetchEvents({ force = false } = {}) {
 function list() {
   return {
     max: MAX_CALENDARS,
+    syncMinutes: getConfig().calendarSyncMinutes,
+    syncIntervals: SYNC_INTERVALS,
     sources: sources().map((source) => {
       const pub = publicSource(source);
       let sync = status.get(source.id) || { state: 'pending' };
@@ -312,12 +320,17 @@ function cancelAuth() {
 
 // ── "Meeting starting" poller ─────────────────────────────────────────────────
 
+// Syncs every enabled calendar whose cache is older than the sync interval, then announces
+// meetings starting now on the calendars with reminders on.
 async function pollOnce(onMeetingStart) {
-  const list = activeSources().filter((s) => s.reminders !== false);
+  const list = activeSources();
   if (!list.length) return;
 
-  const results = await Promise.allSettled(list.map((s) => fetchSource(s)));
-  const lists = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+  const maxAgeMs = syncIntervalMs();
+  const results = await Promise.allSettled(list.map((s) => fetchSource(s, { maxAgeMs })));
+  const lists = results
+    .filter((r, i) => r.status === 'fulfilled' && list[i].reminders !== false)
+    .map((r) => r.value);
   const now = Date.now();
   for (const event of dueToStart(mergeEvents(lists, { now }), now, notified)) {
     notified.set(eventKey(event), eventTimeMs(event.end));
@@ -327,8 +340,9 @@ async function pollOnce(onMeetingStart) {
 }
 
 /**
- * Check every minute (and once now) for a meeting starting within a minute, on the calendars
- * with reminders on. Reads the saved calendars on every tick, so changes apply at once.
+ * Every minute (and once now): sync calendars that are due, and check for a meeting starting
+ * within a minute on the calendars with reminders on. Reads the saved calendars and sync
+ * interval on every tick, so changes apply at once.
  */
 function startPoller(onMeetingStart) {
   stopPoller();

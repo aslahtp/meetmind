@@ -2,7 +2,7 @@ const Store = require('electron-store');
 const { DEFAULT_SYSTEM_PROMPT } = require('../services/prompts');
 const { sttRegistry, llmRegistry, providerConfigKeys } = require('../providers');
 const { migrateLegacyModels } = require('./configMigration');
-const { LEGACY_GOOGLE_KEYS, migrateLegacyCalendar, sanitizeSources } = require('../calendar/calendar-sources');
+const { LEGACY_GOOGLE_KEYS, DEFAULT_SYNC_MINUTES, migrateLegacyCalendar, sanitizeSources, normalizeSyncMinutes } = require('../calendar/calendar-sources');
 const { v4: uuidv4 } = require('uuid');
 const { DEFAULT_MAC_CAPTURE_STRATEGY, normalizeMacCaptureStrategy } = require('../audio/mac-capture');
 
@@ -126,6 +126,8 @@ const schema = {
   // Calendar sources (Google accounts and ICS links), see electron/calendar/. No default: an
   // unset key tells migrateLegacyCalendar the pre-4.15 Google keys below haven't moved yet.
   calendars: { type: 'array' },
+  // Minutes between calendar syncs (one of SYNC_INTERVALS in calendar-sources.js).
+  calendarSyncMinutes: { type: 'number', default: DEFAULT_SYNC_MINUTES },
   // Legacy (pre-4.15) single Google Calendar keys; read once by migrateLegacyCalendar, then removed.
   googleCalendarClientId: { type: 'string' },
   googleCalendarClientSecret: { type: 'string' },
@@ -239,6 +241,7 @@ function getConfig() {
     meetingDetection:          store.get('meetingDetection') !== false,
     macCaptureStrategy:        normalizeMacCaptureStrategy(store.get('macCaptureStrategy')),
     calendars:                 sanitizeSources(store.get('calendars')),
+    calendarSyncMinutes:       normalizeSyncMinutes(store.get('calendarSyncMinutes')),
     dashboardRecentLimit:      store.get('dashboardRecentLimit') || 5,
     notionUploadTranscript:    store.get('notionUploadTranscript') !== false,
     pdfExportDir:              store.get('pdfExportDir') || '',

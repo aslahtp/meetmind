@@ -2,21 +2,32 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, Plus, RefreshCw } from 'lucide-react';
 import { useApp } from '../../../lib/app-context.js';
 import { useNow } from '../../../lib/hooks.js';
-import { IconButton } from '../../ui/index.jsx';
-import { SettingsGroup } from '../SettingsParts.jsx';
+import { IconButton, SegmentedControl } from '../../ui/index.jsx';
+import { SettingsGroup, SettingRow } from '../SettingsParts.jsx';
 import CalendarRow from './CalendarRow.jsx';
 import AddCalendarDialog from './AddCalendarDialog.jsx';
 import EditCalendarDialog from './EditCalendarDialog.jsx';
 
 const REMOVE_ANIMATION_MS = 300; // matches .card-deleting in globals.css
 
+function syncLabel(minutes) {
+  if (minutes === 60) return '1 h';
+  return `${minutes} min`;
+}
+
+function syncPhrase(minutes) {
+  if (minutes === 1) return 'every minute';
+  if (minutes === 60) return 'every hour';
+  return `every ${minutes} minutes`;
+}
+
 /**
  * Settings › Integrations › Calendars: up to 5 Google accounts and ICS links. Changes apply at
  * once (outside the Save bar), since adding one means checking a link or signing in anyway.
  */
 export default function CalendarsCard() {
-  const { confirm, addToast } = useApp();
-  const [data, setData] = useState({ sources: [], max: 5 });
+  const { confirm, addToast, updateConfig } = useApp();
+  const [data, setData] = useState({ sources: [], max: 5, syncMinutes: 5, syncIntervals: [] });
   const [loaded, setLoaded] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [busy, setBusy] = useState({}); // sourceId → 'signin' | 'save'
@@ -50,6 +61,21 @@ export default function CalendarsCard() {
     refresh().then(() => sync(false));
     return window.meetmind.on?.('calendar:changed', refresh);
   }, [refresh, sync]);
+
+  // Background syncs update each calendar's status; re-read it as the clock ticks.
+  useEffect(() => {
+    if (loaded) refresh();
+  }, [now, loaded, refresh]);
+
+  const changeSyncInterval = async (minutes) => {
+    setData((prev) => ({ ...prev, syncMinutes: minutes }));
+    try {
+      await updateConfig('calendarSyncMinutes', minutes);
+    } catch (err) {
+      addToast(`Couldn\u2019t change the sync interval: ${err.message}`, 'error');
+      refresh();
+    }
+  };
 
   const setSourceBusy = (id, value) => setBusy((prev) => {
     const next = { ...prev };
@@ -105,7 +131,7 @@ export default function CalendarsCard() {
     sync(false);
   };
 
-  const { sources, max } = data;
+  const { sources, max, syncMinutes, syncIntervals } = data;
   const full = sources.length >= max;
   const googleSource = sources.find((s) => s.type === 'google' && s.clientId);
 
@@ -155,6 +181,22 @@ export default function CalendarsCard() {
         </ul>
       )}
 
+      {sources.length > 0 && syncIntervals.length > 0 && (
+        <SettingRow
+          label="Sync every"
+          description={`MeetMind checks your calendars for changes ${syncPhrase(syncMinutes)}. Use the refresh button to sync at once.`}
+        >
+          <SegmentedControl
+            label="Sync every"
+            role="radiogroup"
+            size="sm"
+            options={syncIntervals.map((m) => ({ value: m, label: syncLabel(m) }))}
+            value={syncMinutes}
+            onChange={changeSyncInterval}
+          />
+        </SettingRow>
+      )}
+
       <div className="flex flex-wrap items-center gap-16">
         <button type="button" onClick={() => setAdding(true)} disabled={full || !loaded} className="btn-ink btn-sm">
           <Plus size={14} strokeWidth={2} aria-hidden="true" />
@@ -167,6 +209,7 @@ export default function CalendarsCard() {
         open={adding}
         onClose={() => setAdding(false)}
         onAdded={onAdded}
+        syncPhrase={syncPhrase(syncMinutes)}
         googleClient={googleSource ? { clientId: googleSource.clientId, name: googleSource.name } : null}
       />
       <EditCalendarDialog

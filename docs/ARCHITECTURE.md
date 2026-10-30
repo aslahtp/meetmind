@@ -710,14 +710,16 @@ Settings › Integrations › Calendars. They are saved in config as `calendars`
   If Google rejects a refresh token, that token fails fast locally for 24 hours
   (`AUTH_RETRY_INTERVAL_MS`) instead of hitting Google every minute; signing in again clears it.
 
-The manager (`index.js`) fetches every enabled source in parallel, caching each one (Google 2
-minutes, ICS 10 minutes) and sharing in-flight requests, and merges them with
+The manager (`index.js`) fetches every enabled source in parallel, caching each one for the
+user's sync interval (`calendarSyncMinutes`: 1, 5, 10, 15, 30 or 60 minutes, default 5) and
+sharing in-flight requests, and merges them with
 `calendar-events.js`: events that already ended are dropped (meetings in progress stay), a
 meeting found in several calendars (same iCalendar UID and start) shows once, and the meeting
 link comes from the conference fields or a known video host in the URL, description or location.
 `calendar:events` returns `{ events, errors }`, so a failing calendar is reported by name without
-hiding the others. The poller checks once at startup and then every minute, reading the saved
-calendars on each tick, and sends `calendar:meeting-starting` (plus a system notification) for a
+hiding the others. The poller ticks once at startup and then every minute, reading the saved
+calendars and interval on each tick: it re-syncs every enabled calendar whose cache is older than
+the interval, and sends `calendar:meeting-starting` (plus a system notification) for a
 timed meeting starting within a minute on a calendar with reminders on. Recording from an
 upcoming meeting passes its title and link to `recording:start`.
 

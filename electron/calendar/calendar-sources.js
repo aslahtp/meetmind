@@ -3,6 +3,9 @@
 // Calendar keys. No electron imports, so it's unit-testable.
 
 const MAX_CALENDARS = 5;
+// How often calendars are re-read, in minutes (Settings › Integrations › Calendars › Sync every).
+const SYNC_INTERVALS = [1, 5, 10, 15, 30, 60];
+const DEFAULT_SYNC_MINUTES = 5;
 const SOURCE_TYPES = ['google', 'ics'];
 const NAME_MAX_LENGTH = 60;
 
@@ -47,6 +50,11 @@ function icsHost(url) {
 
 function cleanName(name) {
   return String(name || '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX_LENGTH);
+}
+
+function normalizeSyncMinutes(value) {
+  const minutes = Number(value);
+  return SYNC_INTERVALS.includes(minutes) ? minutes : DEFAULT_SYNC_MINUTES;
 }
 
 function canAddSource(sources) {
@@ -151,6 +159,9 @@ function sanitizeSources(list) {
 
 module.exports = {
   MAX_CALENDARS,
+  SYNC_INTERVALS,
+  DEFAULT_SYNC_MINUTES,
+  normalizeSyncMinutes,
   LEGACY_GOOGLE_KEYS,
   normalizeIcsUrl,
   icsHost,

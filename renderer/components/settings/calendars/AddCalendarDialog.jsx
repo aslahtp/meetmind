@@ -27,7 +27,7 @@ const TYPES = [
  * link (or signs in) before anything is saved, so a calendar in the list always worked once.
  * `googleClient` ({ clientId, name }) prefills the client ID from a Google account already added.
  */
-export default function AddCalendarDialog({ open, onClose, onAdded, googleClient }) {
+export default function AddCalendarDialog({ open, onClose, onAdded, googleClient, syncPhrase = 'every 5 minutes' }) {
   const [step, setStep] = useState('type');
   const [type, setType] = useState('ics');
   const [name, setName] = useState('');
@@ -142,7 +142,7 @@ export default function AddCalendarDialog({ open, onClose, onAdded, googleClient
   };
   const descriptions = {
     type: 'Upcoming meetings show on your Dashboard, with a prompt to record when one starts.',
-    ics: 'MeetMind checks the link now, then refreshes it every 10 minutes.',
+    ics: `MeetMind checks the link now, then refreshes it ${syncPhrase}.`,
     google: 'Sign-in opens in your browser. MeetMind only asks to read your calendar.',
   };
 
