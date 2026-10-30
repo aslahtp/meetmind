@@ -11,6 +11,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Added
 
 - **Meeting detection**: If the meeting pop-up can't be shown, MeetMind shows a Windows notification instead; clicking it starts recording.
+- **Meeting detection**: A "Meeting detected" prompt left unanswered for 2 minutes closes on its own and counts as "Not now", so it won't reappear for that meeting.
 
 ### Fixed
 

@@ -923,13 +923,15 @@ async function runProcessingPipeline(sessionId, audioPath, options = {}) {
 
 let overlayState = { mode: 'hidden' };   // prompt | recording | ended | processing | complete | error | hidden
 let overlayHideTimer = null;
+const PROMPT_TIMEOUT_MS = 2 * 60 * 1000;   // an unanswered "Meeting detected" prompt counts as "Not now"
 let meetingToast = null;   // the fallback notification for a prompt the overlay couldn't show
 
 function isMeetingDetectionEnabled() {
   return getConfig().meetingDetection !== false;
 }
 
-function setOverlay(next, { autoHideMs } = {}) {
+// `onAutoHide` replaces the default hide when `autoHideMs` runs out.
+function setOverlay(next, { autoHideMs, onAutoHide } = {}) {
   clearTimeout(overlayHideTimer);
   overlayState = next;
   if (meetingToast && (next.mode !== 'prompt' || next.meeting?.key !== meetingToast.meetingKey)) closeMeetingToast();
@@ -942,7 +944,7 @@ function setOverlay(next, { autoHideMs } = {}) {
     bounds: next.meeting?.bounds || null,
   });
   if (autoHideMs) {
-    overlayHideTimer = setTimeout(() => setOverlay({ ...overlayState, mode: 'hidden' }), autoHideMs);
+    overlayHideTimer = setTimeout(onAutoHide || (() => setOverlay({ ...overlayState, mode: 'hidden' })), autoHideMs);
   }
 }
 
@@ -997,7 +999,19 @@ function handleMeetingDetected(meeting) {
     if (!overlayState.meeting) setOverlay({ ...overlayState, meeting });
     return;
   }
-  setOverlay({ mode: 'prompt', meeting });
+  setOverlay({ mode: 'prompt', meeting }, {
+    autoHideMs: PROMPT_TIMEOUT_MS,
+    onAutoHide: () => {
+      logger.info('Meeting prompt unanswered for 2 minutes; closed as "Not now"', { key: meeting.key });
+      dismissPrompt();
+    },
+  });
+}
+
+// "Not now" (or an unanswered prompt): close it, and don't prompt for this meeting until it ends.
+function dismissPrompt() {
+  if (overlayState.mode === 'prompt' && overlayState.meeting?.key) meetingDetector.dismiss(overlayState.meeting.key);
+  setOverlay({ ...overlayState, mode: 'hidden' });
 }
 
 // Never stops on its own: while recording, ask; while only prompting, withdraw the prompt.
@@ -1162,8 +1176,7 @@ function registerIpcHandlers() {
   ipcMain.handle('overlay:stop', () => handleStopRecording());
 
   ipcMain.handle('overlay:dismiss', () => {
-    if (overlayState.mode === 'prompt' && overlayState.meeting?.key) meetingDetector.dismiss(overlayState.meeting.key);
-    setOverlay({ ...overlayState, mode: 'hidden' });
+    dismissPrompt();
     return true;
   });
 

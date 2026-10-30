@@ -153,7 +153,7 @@ gh attestation verify MeetMind-x.y.z-arm64.dmg --repo aslahtp/meetmind
 
 ### Meeting detection
 
-On Windows, MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay unfolds at the top centre of the screen with a **Record** button (if the overlay can't be shown, a Windows notification offers to record instead). Turn it off in **Settings → General → Meeting detection**. Meeting detection isn't available on macOS yet.
+On Windows, MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay unfolds at the top centre of the screen with a **Record** button (if the overlay can't be shown, a Windows notification offers to record instead). If you don't answer within 2 minutes, the prompt closes and won't come back for that meeting. Turn it off in **Settings → General → Meeting detection**. Meeting detection isn't available on macOS yet.
 
 ### Chrome extension (optional)
 

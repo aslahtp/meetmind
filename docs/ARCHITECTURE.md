@@ -289,7 +289,8 @@ browser on the mic that the registry doesn't, and a heartbeat every 10 minutes (
 ticks, the longest gap between ticks, the apps seen on the mic). After sleep (`powerMonitor`
 `resume`) it polls at once rather than waiting for the next tick.
 
-`main.js` turns those events into overlay states, each a single compact row: `prompt` (Record / ×),
+`main.js` turns those events into overlay states, each a single compact row: `prompt` (Record / ×;
+left unanswered for 2 minutes it closes and counts as "Not now"),
 `recording` (timer + Stop), `ended` ("Meeting ended?": it asks, never stops on its own),
 `processing`, `complete` (Open) and `error`. Recordings started from the app, tray or
 extension show the overlay too, and processing updates apply only to the session the overlay is
