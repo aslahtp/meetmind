@@ -1,6 +1,6 @@
 {
   "name": "meetmind",
-  "version": "4.15.1",
+  "version": "4.15.2",
   "description": "Open-source AI meeting notes app for Windows and macOS: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT, Sarvam AI or Groq, summarize with Gemini, Groq or Claude, and sync to Notion.",
   "keywords": [
     "ai-meeting-notes",
@@ -29,7 +29,7 @@
   "bugs": {
     "url": "https://github.com/aslahtp/meetmind/issues"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "https://github.com/aslahtp/meetmind.git"

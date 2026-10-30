@@ -20,7 +20,7 @@ Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, G
 
 [![Build](https://github.com/aslahtp/meetmind/actions/workflows/release.yml/badge.svg)](https://github.com/aslahtp/meetmind/actions/workflows/release.yml)
 [![Version](https://img.shields.io/github/package-json/v/aslahtp/meetmind?style=flat-square&color=F05032&logo=git)](https://github.com/aslahtp/meetmind/releases/latest)
-[![License](https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNjQiIHdpZHRoPSI2NCIgdmlld0JveD0iLTEzLjI4IC0yMS43NzkgMzIgMzIiPjxwYXRoIGQ9Ik0yLjcyLTIwLjgwNmMtOC41NzIgMC0xNS41MiA2Ljk1LTE1LjUyIDE1LjUyIDAgNi42NTMgNC4xODggMTIuMzI3IDEwLjA3IDE0LjUzNEwuODQ1LS4yOWMtMi4wMjItLjc2LTMuNDYyLTIuNzEtMy40NjItNC45OTYgMC0yLjk0NiAyLjM5LTUuMzM1IDUuMzM1LTUuMzM1czUuMzM1IDIuMzkgNS4zMzUgNS4zMzVjMCAyLjI4Ny0xLjQ0IDQuMjM3LTMuNDYyIDQuOTk2TDguMTcgOS4yNWM1Ljg4My0yLjIwNyAxMC4wNy03Ljg4IDEwLjA3LTE0LjUzNCAwLTguNTctNi45NS0xNS41Mi0xNS41MnoiIGZpbGw9IiM0MGFhNTQiIHN0cm9rZT0iIzIwNTUyYSIgc3Ryb2tlLXdpZHRoPSIuOTU5IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-22d3ee?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNjQiIHdpZHRoPSI2NCIgdmlld0JveD0iLTEzLjI4IC0yMS43NzkgMzIgMzIiPjxwYXRoIGQ9Ik0yLjcyLTIwLjgwNmMtOC41NzIgMC0xNS41MiA2Ljk1LTE1LjUyIDE1LjUyIDAgNi42NTMgNC4xODggMTIuMzI3IDEwLjA3IDE0LjUzNEwuODQ1LS4yOWMtMi4wMjItLjc2LTMuNDYyLTIuNzEtMy40NjItNC45OTYgMC0yLjk0NiAyLjM5LTUuMzM1IDUuMzM1LTUuMzM1czUuMzM1IDIuMzkgNS4zMzUgNS4zMzVjMCAyLjI4Ny0xLjQ0IDQuMjM3LTMuNDYyIDQuOTk2TDguMTcgOS4yNWM1Ljg4My0yLjIwNyAxMC4wNy03Ljg4IDEwLjA3LTE0LjUzNCAwLTguNTctNi45NS0xNS41Mi0xNS41MnoiIGZpbGw9IiM0MGFhNTQiIHN0cm9rZT0iIzIwNTUyYSIgc3Ryb2tlLXdpZHRoPSIuOTU5IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgODggODgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgaGVpZ2h0PSI4OCIgd2lkdGg9Ijg4Ij48cGF0aCBkPSJtMCAxMi40MDIgMzUuNjg3LTQuODYuMDE2IDM0LjQyMy0zNS42Ny4yMDN6bTM1LjY3IDMzLjUyOS4wMjggMzQuNDUzTC4wMjggNzUuNDguMDI2IDQ1Ljd6bTQuMzI2LTM5LjAyNUw4Ny4zMTQgMHY0MS41MjdsLTQ3LjMxOC4zNzZ6bTQ3LjMyOSAzOS4zNDktLjAxMSA0MS4zNC00Ny4zMTgtNi42NzgtLjA2Ni0zNC43Mzl6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==)](https://github.com/aslahtp/meetmind)
 [![macOS](https://img.shields.io/badge/macOS-14.2%2B_(beta)-000000?style=flat-square&logo=apple&logoColor=white)](#macos-app-beta)
 [![Electron](https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
@@ -42,7 +42,7 @@ Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, G
 
 ## What is MeetMind?
 
-**MeetMind is a free, open-source (MIT) desktop app for Windows 10 and 11 and macOS 14.2+ (beta) that turns online meetings into written meeting notes.** It records your computer's system audio and your microphone at the same time, sends the recording to the speech-to-text service you choose (**AssemblyAI**, **Google Cloud Speech-to-Text**, **Sarvam AI** or **Groq**), and uses **Google Gemini**, **Groq** or **Anthropic Claude** to write a speaker-labelled summary with decisions and action items. Notes are stored locally in SQLite and can be exported to PDF, copied as Markdown or pushed to a **Notion** page. On Windows, when Google Meet, Zoom or Teams starts using your microphone, a small overlay offers to start recording; an optional **Chrome extension** also adds a record button inside Meet and Zoom tabs.
+**MeetMind is a free, open-source (GPL-3.0) desktop app for Windows 10 and 11 and macOS 14.2+ (beta) that turns online meetings into written meeting notes.** It records your computer's system audio and your microphone at the same time, sends the recording to the speech-to-text service you choose (**AssemblyAI**, **Google Cloud Speech-to-Text**, **Sarvam AI** or **Groq**), and uses **Google Gemini**, **Groq** or **Anthropic Claude** to write a speaker-labelled summary with decisions and action items. Notes are stored locally in SQLite and can be exported to PDF, copied as Markdown or pushed to a **Notion** page. On Windows, when Google Meet, Zoom or Teams starts using your microphone, a small overlay offers to start recording; an optional **Chrome extension** also adds a record button inside Meet and Zoom tabs.
 
 Because MeetMind records audio on your own computer, nothing joins the meeting as a participant, and it works with any app that plays sound — Google Meet, Zoom, Microsoft Teams, Slack huddles, Discord, or a local recording file.
 
@@ -244,7 +244,7 @@ This produces `dist/desktop/MeetMind-X.Y.Z-arm64.dmg` and `MeetMind-X.Y.Z-x64.dm
 
 ### Is MeetMind free?
 
-Yes. MeetMind is free and open source under the MIT license. You pay only for the AI services you connect, and Gemini and Groq (free tiers) and AssemblyAI (signup credit) can be used at no cost for moderate use.
+Yes. MeetMind is free and open source under the GPL-3.0 license. You pay only for the AI services you connect, and Gemini and Groq (free tiers) and AssemblyAI (signup credit) can be used at no cost for moderate use.
 
 ### Does a bot join my meeting?
 
@@ -290,7 +290,7 @@ If MeetMind is useful to you, consider giving the repository a ⭐ so others can
 
 ## 📄 License
 
-[MIT](LICENSE) © 2026 Aslah
+[GPL-3.0](LICENSE) © 2026 Aslah
 
 ## Star History
 

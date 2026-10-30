@@ -13,7 +13,7 @@ authors:
     alias: aslahtp
 repository-code: "https://github.com/aslahtp/meetmind"
 url: "https://aslahtp.github.io/meetmind/"
-license: MIT
+license: GPL-3.0-only
 keywords:
   - AI meeting notes
   - meeting transcription

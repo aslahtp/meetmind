@@ -97,7 +97,7 @@ Update `electron/audio/ffmpeg-path.js`:
 - Optional dev fallback on macOS and Linux: an `ffmpeg` found on `PATH` (Homebrew, apt).
 - The `ffmpeg:install` runtime download needs per-OS sources. gyan.dev builds are Windows only.
 
-**Licensing check:** confirm whether each chosen FFmpeg build is LGPL or GPL, and that bundling it is compatible with MeetMind's MIT license and your distribution model **[verify]**.
+**Licensing check:** confirm whether each chosen FFmpeg build is LGPL or GPL, and that bundling it is compatible with MeetMind's GPL-3.0 license and your distribution model **[verify]**.
 
 ### 3.3 App lifecycle differences to handle
 

@@ -13,7 +13,7 @@ For contributor commands and day to day workflow rules see [`AGENTS.md`](../AGEN
 
 ## 1. What MeetMind is
 
-MeetMind is a free, MIT licensed desktop app for Windows 10/11 and (as a beta) macOS 14.2+ that
+MeetMind is a free, GPL-3.0 licensed desktop app for Windows 10/11 and (as a beta) macOS 14.2+ that
 turns online meetings into written meeting notes. It:
 
 1. Records system audio (Windows: WASAPI loopback, or a DirectShow fallback; macOS: the CoreAudio

@@ -38,4 +38,4 @@ pnpm run dev
 5. CI must pass: lint, tests, build, the Windows and macOS builds with their smoke tests (skipped for docs-only PRs), secret scan, dependency audit, CodeQL, and the version/changelog check. For comment- or formatting-only changes, a maintainer can add the `skip-version-check` label.
 6. If this is your first PR, a maintainer approves the CI run before it starts. Changes to `.github/`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `electron-builder.yml` or `scripts/` need maintainer review (see `.github/CODEOWNERS`). Pin any new GitHub Action to a full commit SHA, and add dependencies with `pnpm add`, which refuses versions less than a day old; see [AGENTS.md](AGENTS.md#cicd).
 
-By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE) and that you will follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+By contributing, you agree that your contributions are licensed under the [GNU General Public License v3.0](LICENSE) and that you will follow the [Code of Conduct](CODE_OF_CONDUCT.md).

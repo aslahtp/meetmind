@@ -1,10 +1,16 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-30
+updated: 2026-10-31
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.15.2] - 2026-10-31
+
+### Changed
+
+- **License**: MeetMind is now licensed under the GNU General Public License v3.0 (GPL-3.0) instead of MIT.
 
 ## [4.15.1] - 2026-10-30
 
