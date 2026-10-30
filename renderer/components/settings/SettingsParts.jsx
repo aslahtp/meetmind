@@ -73,24 +73,31 @@ export function KeyGuide({ steps: stepsProp, provider, title = 'How to get a key
         <ChevronRight size={14} strokeWidth={2} className="transition-transform duration-150 group-open:rotate-90" aria-hidden="true" />
         {title}
       </summary>
-      <ol className="mt-16 space-y-16">
-        {steps.map((s, idx) => (
-          <li key={idx} className="flex items-start gap-16">
-            <span className="step-badge-num border border-ink flex-shrink-0" aria-hidden="true">{idx + 1}</span>
-            <div className="min-w-0 text-caption text-graphite">
-              <span className="sr-only">Step {idx + 1}: </span>
-              <span className="text-ink">{s.text}</span>
-              {s.url && (
-                <span className="ml-8">
-                  <ExternalLink href={s.url}>Open</ExternalLink>
-                </span>
-              )}
-              {s.hint && <p className="mt-4">{s.hint}</p>}
-            </div>
-          </li>
-        ))}
-      </ol>
+      <GuideSteps steps={steps} className="mt-16" />
     </details>
+  );
+}
+
+// Numbered steps: { text, url?, hint? }.
+export function GuideSteps({ steps, className = '' }) {
+  return (
+    <ol className={`space-y-16 ${className}`}>
+      {steps.map((s, idx) => (
+        <li key={idx} className="flex items-start gap-16">
+          <span className="step-badge-num border border-ink flex-shrink-0" aria-hidden="true">{idx + 1}</span>
+          <div className="min-w-0 text-caption text-graphite">
+            <span className="sr-only">Step {idx + 1}: </span>
+            <span className="text-ink">{s.text}</span>
+            {s.url && (
+              <span className="ml-8">
+                <ExternalLink href={s.url}>Open</ExternalLink>
+              </span>
+            )}
+            {s.hint && <p className="mt-4">{s.hint}</p>}
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 

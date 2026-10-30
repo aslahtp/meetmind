@@ -12,7 +12,7 @@ Key facts:
 - Output: in-app notes and transcripts with relevance-ranked search across every meeting (related words, typo tolerance; no embeddings), PDF export, Markdown copy, Notion sync.
 - Privacy: recordings, transcripts and notes are stored locally in SQLite; there is no MeetMind server or account.
 - Meeting detection (Windows only for now): a desktop overlay offers to record when Google Meet, Zoom or Teams starts using the microphone (no extension needed).
-- Integrations: Google Calendar (upcoming meetings and start-recording reminders), Notion, optional Chrome extension for Google Meet and Zoom.
+- Integrations: calendars, up to 5 ICS links (Google, Outlook, Apple iCloud, Proton…) or Google accounts (upcoming meetings and start-recording reminders), Notion, optional Chrome extension for Google Meet and Zoom.
 - Import: existing audio/video files (WAV, MP3, M4A, AAC, FLAC, OGG, Opus, WebM, MP4, MKV, MOV) or a pasted transcript.
 
 ## Docs

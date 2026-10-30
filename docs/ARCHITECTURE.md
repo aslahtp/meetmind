@@ -172,7 +172,7 @@ grouped by feature:
 | `processing` | `processing:run`, `processing:retry` | Manually (re)run the pipeline on a session |
 | `capture` | `capture:start/stop` (main -> renderer), `capture:started/failed/chunk/audio-data` (renderer -> main; `capture:started` carries `{ systemAudio, mic }`), `capture:test-begin/test-end` (invoke) | Renderer-side system audio capture handshake; the test pair switches the macOS capture strategy for Settings' "Test system audio" |
 | `permissions` | `permissions:status`, `permissions:request`, `permissions:open-settings` | macOS microphone and Screen & System Audio Recording status, prompts, and System Settings deep links (`not-applicable` elsewhere) |
-| `calendar` | `calendar:auth/disconnect/events/status` | Google Calendar OAuth and event polling |
+| `calendar` | `calendar:list/add/update/remove/reconnect/cancel-auth/events` | Calendar sources (Google accounts and ICS links, up to 5; returned redacted), Google sign-in, merged upcoming events with per-calendar errors |
 | `updater` | `updater:check/download/install/get-status` | Auto-update control |
 | `app` | `app:version` | App version string |
 | `ffmpeg` | `ffmpeg:check`, `ffmpeg:install`, `ffmpeg:onProgress` | FFmpeg presence check (`source`: bundled, installed or system) and runtime download |
@@ -181,7 +181,7 @@ Event subscriptions go through a single `on(channel, callback)` / `off(...)` pai
 explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
 `recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
 `processing:error`, `processing:cancelled`, `notes:preview`, `ws:extension-connected`, `ws:recording-requested`,
-`sessions:durations-updated`, `updater:status`, `calendar:meeting-starting`,
+`sessions:durations-updated`, `updater:status`, `calendar:meeting-starting`, `calendar:changed`,
 `llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.
 Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
 
@@ -224,7 +224,7 @@ React 18 + Vite 6, no router: `renderer/app.jsx` is a single view-state switch b
 - `LogsViewer.jsx`: tails `electron/utils/logger.js` output live via the `log:entry` IPC event.
 
 Supporting pieces: `RecordingBar.jsx` (persistent recording control), `ProcessingIndicator.jsx`
-(pipeline progress), `SessionCard.jsx`, `UpcomingMeetings.jsx` (Google Calendar),
+(pipeline progress), `SessionCard.jsx`, `UpcomingMeetings.jsx` (events from every calendar), `settings/calendars/` (the Calendars card, its rows and the add/edit dialogs),
 `PasteTranscriptModal.jsx` (manual transcript import), `note/` (Markdown rendering,
 `copyMarkdown.js` for JSON<->Markdown conversion, `pdfDocument.jsx` for the PDF export
 template, `AudioPlayer.jsx` streaming from `meetmind-audio://`), `ui/` (Dialog, ConfirmDialog,
@@ -606,7 +606,7 @@ in-progress recording indefinitely.
 
 Wraps `electron-store` (itself backed by a JSON file in `userData`) with a typed schema covering:
 API keys (`googleApiKey`, `geminiApiKey`, `claudeApiKey`, `assemblyAiApiKey`, `sarvamApiKey`, `groqApiKey`,
-Notion, Google Calendar OAuth client; the provider ones are generated from the provider
+Notion; the provider ones are generated from the provider
 registries), service and model selection (`sttService`, `sttModels`, `llmProvider`,
 `llmModels`, `llmFallback`), audio device selection (Windows FFmpeg fallback:
 `systemAudioDevice`, `micDevice`; macOS system-audio capture strategy: `macCaptureStrategy`,
@@ -688,24 +688,49 @@ The extension is built from source, not committed as a zip: `scripts/build-exten
 
 ---
 
-## 8. Google Calendar integration (`electron/services/google-calendar.js`)
+## 8. Calendars (`electron/calendar/`)
 
-Optional. Uses `googleapis`' OAuth2 client with a user-supplied OAuth client ID/secret (the user
-creates their own Google Cloud OAuth client, since MeetMind ships no client secret of its own).
-Scopes are read-only: `calendar.readonly` and `userinfo.email`.
+Optional. The user adds up to 5 calendar sources (`MAX_CALENDARS`), in any mix, from
+Settings › Integrations › Calendars. They are saved in config as `calendars`, an array of
+`{ id, type: 'google' | 'ics', name, enabled, reminders, ... }`:
 
-The OAuth redirect is handled by a short-lived local HTTP server bound to a loopback port in the
-range `39880`-`39890` (separate from the WebSocket bridge's port range), which Google redirects
-back to after consent; the resulting code is exchanged for tokens and the server is torn down.
+- **ICS link** (`type: 'ics'`, `url`): a calendar's subscription (iCal / webcal) address, which
+  Google, Outlook / Microsoft 365, Apple iCloud, Proton, Fastmail and most others hand out. It
+  needs no account or API key. `ics.js` downloads it (`webcal://` becomes `https://`, 20 s
+  timeout, 15 MB cap, `If-None-Match` / `If-Modified-Since` so an unchanged feed answers 304) and
+  `ics-parse.js` reads it with `ical.js`: the feed's own VTIMEZONEs (Outlook's Windows zone names
+  included), recurring events expanded inside the window with their moved and cancelled
+  occurrences, an undefined IANA `TZID` resolved through `Intl`, floating times as local time.
+- **Google account** (`type: 'google'`, `clientId`, `clientSecret`, `refreshToken`, `email`): the
+  Calendar API's primary calendar through `googleapis` (`google.js`), with an OAuth client the
+  user creates in their own Google Cloud project (MeetMind ships no client secret). Scopes are
+  read-only: `calendar.readonly` and `userinfo.email`. Sign-in runs one at a time on a
+  short-lived loopback server on a port in `39880`-`39890` (separate from the WebSocket bridge's
+  range) and can be cancelled. Since any web page or local app can reach that port, the redirect must
+  carry the random `state` the sign-in sent, the code exchange uses PKCE (S256), and the callback page
+  shows only fixed text, never request data. A second account from the same project reuses the saved secret.
+  If Google rejects a refresh token, that token fails fast locally for 24 hours
+  (`AUTH_RETRY_INTERVAL_MS`) instead of hitting Google every minute; signing in again clears it.
 
-Once connected, `startEventPoller()` polls upcoming events on an interval, cached for
-`CACHE_TTL_MS = 2 minutes`, with concurrent fetches for the same window collapsed into a single
-in-flight request (`inflightFetches`) rather than each caller hitting the API independently. When
-a calendar event is about to start, the app surfaces a `calendar:meeting-starting` event so the
-renderer can prompt the user to start recording. If Google rejects the stored refresh token
-(revoked or expired), that token is remembered as rejected and calls fail fast locally for 24
-hours (`AUTH_RETRY_INTERVAL_MS`) instead of repeatedly hitting Google with a token known to be
-bad; reconnecting with a fresh token, or disconnecting, clears that state immediately.
+The manager (`index.js`) fetches every enabled source in parallel, caching each one for the
+user's sync interval (`calendarSyncMinutes`: 1, 5, 10, 15, 30 or 60 minutes, default 5) and
+sharing in-flight requests, and merges them with
+`calendar-events.js`: events that already ended are dropped (meetings in progress stay), a
+meeting found in several calendars (same iCalendar UID and start) shows once, and the meeting
+link comes from the conference fields or a known video host in the URL, description or location.
+`calendar:events` returns `{ events, errors }`, so a failing calendar is reported by name without
+hiding the others. The poller ticks once at startup and then every minute, reading the saved
+calendars and interval on each tick: it re-syncs every enabled calendar whose cache is older than
+the interval, and sends `calendar:meeting-starting` (plus a system notification) for a
+timed meeting starting within a minute on a calendar with reminders on. Recording from an
+upcoming meeting passes its title and link to `recording:start`.
+
+Sources hold credentials (an ICS URL is itself one), so `config:get` leaves `calendars` out and
+`config:set` ignores it: the renderer only sees `calendar:list`'s redacted rows (an ICS link's
+host, a Google account's email and client ID) and changes them through the `calendar:*` handlers.
+Pre-4.15 configs kept one Google account in `googleCalendar*` keys; `migrateLegacyCalendar()`
+(`calendar-sources.js`) moves it into the list on first read and deletes them. The pure modules
+(`calendar-sources.js`, `calendar-events.js`, `ics-parse.js`) are unit-tested.
 
 ---
 
@@ -782,7 +807,8 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 | AssemblyAI | Transcription (alternative engine) | API key | `electron/providers/stt/assemblyai.js` (`assemblyai` SDK + REST) |
 | Sarvam AI | Transcription, `saaras:v3` model for English/Indic code-switching | API key | `electron/providers/stt/sarvam.js` (REST) |
 | Notion API | Optional notes sync (Stage 3) | Internal integration token | `electron/services/notion.js` (`@notionhq/client`) |
-| Google Calendar API | Optional upcoming-meeting reminders | OAuth2 (user-supplied client ID/secret) | `electron/services/google-calendar.js` (`googleapis`) |
+| Google Calendar API | Optional upcoming meetings and reminders (Google accounts) | OAuth2 (user-supplied client ID/secret) | `electron/calendar/google.js` (`googleapis`) |
+| ICS calendar feeds | Optional upcoming meetings and reminders (Google, Outlook, Apple, Proton…) | The private subscription URL itself | `electron/calendar/ics.js` (`fetch`), parsed by `ical.js` |
 | GitHub Releases | Auto-update distribution | none (public releases) | `electron-updater`, configured in `electron-builder.yml` |
 | GyanD/codexffmpeg (gyan.dev builds) | Windows FFmpeg binaries | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
 | ffmpeg.martin-riedl.de | macOS FFmpeg binaries (arm64 + x64) | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
@@ -811,6 +837,7 @@ From `package.json` (pnpm, Node 22.12+, Windows or macOS).
 | `electron-updater` | ^6.8.9 | Auto-update via GitHub Releases |
 | `fluent-ffmpeg` | ^2.1.3 | ffmpeg process control (audio capture and conversion) |
 | `googleapis` | ^176.0.0 | Google Calendar OAuth2 + Calendar API client |
+| `ical.js` | ^2.2.1 | Parses ICS calendar feeds (time zones, recurrence expansion) |
 | `koffi` | ^3.3.3 | FFI to `user32`/`kernel32`/`advapi32` for meeting detection (mic users, window titles) on Windows, and to CoreGraphics for the macOS screen-capture permission check; prebuilt binaries from its `@koromix/koffi-<os>-<cpu>` optional dependencies (each package ships only its own OS's, via `electron-builder.yml` `files`), so its install script stays disabled in `allowBuilds` |
 | `lucide-react` | ^1.48.0 | Renderer icon set |
 | `react-markdown` | ^10.1.0 | Notes/transcript Markdown rendering (in-app and PDF) |
@@ -887,7 +914,7 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   bundle, and is SHA-256 checked against pins in the source.
   The overlay window runs sandboxed with its own minimal preload, denies navigation and new
   windows, and can only start or stop a recording through main.
-- **API keys and OAuth tokens at rest**: stored via `electron-store` in a JSON file under the
+- **API keys, OAuth tokens and calendar links at rest**: stored via `electron-store` in a JSON file under the
   OS user profile, in plaintext. There is no OS keychain (Windows Credential Manager, macOS Keychain) integration
   and no additional at-rest encryption layer. This is a known limitation, not a hidden one:
   anyone with file-system access to the user's profile can read these values.

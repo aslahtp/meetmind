@@ -208,7 +208,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
     if (event.meetingLink) {
       window.meetmind.shell.openExternal(event.meetingLink);
     }
-    startRecording();
+    startRecording({ meetingUrl: event.meetingLink || '', meetingTitle: event.title || '' });
   };
 
   const openPaste = useCallback(() => setShowPasteModal(true), []);

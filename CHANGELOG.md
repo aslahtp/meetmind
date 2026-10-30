@@ -6,6 +6,27 @@ updated: 2026-10-30
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.15.0] - 2026-10-30
+
+### Added
+
+- **Calendars**: Add a calendar by pasting its ICS (iCal/webcal) link from Google Calendar, Outlook, Apple iCloud, Proton or any app that offers one, with no Google Cloud project or API key needed. Settings shows where to find the link in each app.
+- **Calendars**: Add up to 5 calendars in any mix of ICS links and Google accounts; the Dashboard merges their upcoming meetings, shows which calendar each came from, and lists a meeting that is in two calendars once.
+- **Calendars**: Each calendar has its own on/off switch, reminders toggle, name and sync status, and a failing calendar is reported by name without hiding the others.
+- **Calendars**: Choose how often calendars sync (every 1, 5, 10, 15 or 30 minutes, or hourly; 5 minutes by default) in Settings › Integrations › Calendars.
+
+### Changed
+
+- **Calendars**: Settings › Integrations has a new Calendars card with an "Add calendar" dialog in place of the single Google Calendar card. A Google Calendar you already connected moves into it automatically.
+- **Calendars**: Sign-in to a Google account can be cancelled, and a second account from the same Google Cloud project reuses the saved client secret.
+
+### Fixed
+
+- **Security**: Google Calendar sign-in only accepts the browser redirect it started (a random `state` plus PKCE), so another web page or app can no longer finish or cancel it, and the sign-in page no longer echoes text from the request.
+- **Calendars**: Recording from an upcoming meeting now names the session after the meeting instead of "Untitled Meeting".
+- **Calendars**: The first "meeting starting" check runs at startup instead of a minute later, and calendar changes apply without restarting MeetMind.
+- **Calendars**: All-day events no longer show on the previous day in time zones west of UTC, and links that merely contain "meet" or "zoom" are no longer mistaken for meeting links.
+
 ## [4.14.0] - 2026-10-30
 
 ### Added

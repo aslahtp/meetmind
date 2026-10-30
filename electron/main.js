@@ -24,7 +24,7 @@ const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./ser
 const { exportPdf, buildPdfFileName, resolveExportDir } = require('./services/pdf-export');
 const { initializeAutoUpdater, checkForUpdates, downloadUpdate, quitAndInstall, getUpdaterState, applyUpdateSettings, takeHiddenRelaunch } = require('./services/updater');
 const { isIdleForUpdate } = require('./services/update-policy');
-const { startAuthFlow, disconnectCalendar, isCalendarConnected, fetchUpcomingEvents, startEventPoller, stopEventPoller } = require('./services/google-calendar');
+const calendar = require('./calendar');
 const db = require('./db/sessions');
 const meetingDetector = require('./detection/meeting-detector');
 const { showOverlay, hideOverlay, destroyOverlay, recheckOverlay, setOverlayTheme, registerOverlayIpc } = require('./overlay/overlay-window');
@@ -1127,12 +1127,19 @@ function registerIpcHandlers() {
   ipcMain.handle('logs:clear', () => logger.clearLogs());
   ipcMain.handle('logs:openFolder', () => shell.openPath(logger.getLogsDir()));
 
-  ipcMain.handle('config:get', () => getConfig());
+  // Calendar sources hold credentials (ICS links, OAuth secrets and tokens); the renderer reads
+  // them redacted through calendar:list and changes them only through the calendar:* handlers.
+  ipcMain.handle('config:get', () => {
+    const { calendars: _calendars, ...config } = getConfig();
+    return config;
+  });
 
   ipcMain.handle('config:autoLaunchStatus', () => autoLaunch.getStatus());
 
   ipcMain.handle('config:set', (_e, key, value) => {
+    if (key === 'calendars') return false;
     setConfig(key, value);
+    if (key === 'calendarSyncMinutes') sendToRenderer('calendar:changed');
     if (key === 'autoLaunch') {
       autoLaunch.set(value);
     }
@@ -1143,7 +1150,7 @@ function registerIpcHandlers() {
     return true;
   });
 
-  ipcMain.handle('config:set-multiple', (_e, updates) => {
+  ipcMain.handle('config:set-multiple', (_e, { calendars: _calendars, ...updates }) => {
     setMultipleConfig(updates);
     if ('autoLaunch' in updates) {
       autoLaunch.set(updates.autoLaunch);
@@ -1679,56 +1686,24 @@ function registerIpcHandlers() {
     });
   });
 
-  // ── Google Calendar ──────────────────────────────────────────────────────
-  ipcMain.handle('calendar:auth', async () => {
-    const config = getConfig();
+  // ── Calendars (Google accounts + ICS links) ──────────────────────────────
+  // Each handler resolves { success, ... } or { success: false, error } instead of throwing, so
+  // the renderer shows the message as written.
+  const calendarCall = (fn) => async (...args) => {
     try {
-      const result = await startAuthFlow(config);
-      // Persist the refresh token and email
-      setMultipleConfig({
-        googleCalendarRefreshToken: result.refreshToken,
-        googleCalendarEnabled: true,
-        googleCalendarEmail: result.email || '',
-      });
-
-      // Start the event poller now that we're connected
-      const updatedConfig = getConfig();
-      startCalendarPoller(updatedConfig);
-
-      return { success: true, email: result.email };
+      return { success: true, ...(await fn(...args)) };
     } catch (err) {
-      logger.error('Google Calendar auth failed', { error: err.message });
-      return { success: false, error: err.message };
+      if (!err.cancelled) logger.warn('Calendar action failed', { error: err.message });
+      return { success: false, error: err.message, cancelled: !!err.cancelled };
     }
-  });
-
-  ipcMain.handle('calendar:disconnect', () => {
-    disconnectCalendar();
-    setMultipleConfig({
-      googleCalendarRefreshToken: '',
-      googleCalendarEnabled: false,
-      googleCalendarEmail: '',
-    });
-    return { success: true };
-  });
-
-  ipcMain.handle('calendar:events', async () => {
-    const config = getConfig();
-    try {
-      const events = await fetchUpcomingEvents(config);
-      return { success: true, events };
-    } catch (err) {
-      return { success: false, error: err.message, events: [] };
-    }
-  });
-
-  ipcMain.handle('calendar:status', () => {
-    const config = getConfig();
-    return {
-      connected: isCalendarConnected(config),
-      email: config.googleCalendarEmail || '',
-    };
-  });
+  };
+  ipcMain.handle('calendar:list', () => calendar.list());
+  ipcMain.handle('calendar:add', calendarCall((_e, input) => calendar.addSource(input)));
+  ipcMain.handle('calendar:update', calendarCall((_e, id, patch) => calendar.updateSource(id, patch)));
+  ipcMain.handle('calendar:remove', calendarCall((_e, id) => calendar.removeSource(id)));
+  ipcMain.handle('calendar:reconnect', calendarCall((_e, id) => calendar.reconnect(id)));
+  ipcMain.handle('calendar:cancel-auth', () => calendar.cancelAuth());
+  ipcMain.handle('calendar:events', calendarCall((_e, { force } = {}) => calendar.fetchEvents({ force: !!force })));
 }
 
 function resolveSessionAudioPath(sessionId) {
@@ -2020,8 +1995,9 @@ app.whenReady().then(async () => {
   const autoLaunchEnabled = autoLaunch.sync(config.autoLaunch);
   if (autoLaunchEnabled !== config.autoLaunch) setConfig('autoLaunch', autoLaunchEnabled);
 
-  // Start calendar event poller if connected
-  startCalendarPoller(config);
+  // "Meeting starting" prompts from the calendars with reminders on.
+  calendar.init({ onChanged: () => sendToRenderer('calendar:changed') });
+  startCalendarPoller();
 
   if (config.meetingDetection !== false) applyMeetingDetection(true);
   // After sleep, poll at once so a call joined right after waking is caught without waiting.
@@ -2051,7 +2027,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   stopWebSocketServer();
-  stopEventPoller();
+  calendar.stopPoller();
   meetingDetector.stop();
   destroyOverlay();
   logger.info('MeetMind shutting down');
@@ -2059,11 +2035,9 @@ app.on('before-quit', () => {
 
 // ── Calendar Event Poller ─────────────────────────────────────────────────────
 
-function startCalendarPoller(config) {
-  if (!isCalendarConnected(config)) return;
-
-  startEventPoller(config, (event) => {
-    logger.info('Calendar meeting starting', { title: event.title, start: event.start });
+function startCalendarPoller() {
+  calendar.startPoller((event) => {
+    logger.info('Calendar meeting starting', { title: event.title, start: event.start, calendar: event.sourceName });
 
     // System notification. macOS (Electron 42+) shows notifications only for signed apps; an
     // unsigned build gets 'failed', and the in-app prompt below is all the user sees.

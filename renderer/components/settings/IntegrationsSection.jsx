@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
-import { useApp } from '../../lib/app-context.js';
+import React, { useState } from 'react';
 import NotionIcon from '../NotionIcon.jsx';
-import GoogleCalendarIcon from '../GoogleCalendarIcon.jsx';
-import { PasswordField, TextField, Switch, StatusDot } from '../ui/index.jsx';
+import { PasswordField, TextField, Switch } from '../ui/index.jsx';
 import { SettingsGroup, SettingRow, KeyGuide, TestAction, ExternalLink } from './SettingsParts.jsx';
+import CalendarsCard from './calendars/CalendarsCard.jsx';
 
 function notionSuccessLabel(result) {
   if (result?.type === 'page') return 'Notion page connected';
@@ -13,23 +11,8 @@ function notionSuccessLabel(result) {
 }
 
 export default function IntegrationsSection({ form, onChange }) {
-  const { confirm } = useApp();
   const [testingNotion, setTestingNotion] = useState(false);
   const [notionResult, setNotionResult] = useState(null);
-  const [calendarStatus, setCalendarStatus] = useState({ connected: false, email: '' });
-  const [connectingCalendar, setConnectingCalendar] = useState(false);
-  const [calendarError, setCalendarError] = useState(null);
-
-  useEffect(() => {
-    async function loadCalendarStatus() {
-      if (!window.meetmind?.calendar?.getStatus) return;
-      try {
-        const status = await window.meetmind.calendar.getStatus();
-        setCalendarStatus(status);
-      } catch {}
-    }
-    loadCalendarStatus();
-  }, []);
 
   const handleTestNotion = async () => {
     setTestingNotion(true);
@@ -44,51 +27,10 @@ export default function IntegrationsSection({ form, onChange }) {
     }
   };
 
-  const handleConnectCalendar = async () => {
-    if (!form.googleCalendarClientId || !form.googleCalendarClientSecret) {
-      setCalendarError('Enter your OAuth Client ID and Client Secret first.');
-      return;
-    }
-    setConnectingCalendar(true);
-    setCalendarError(null);
-    try {
-      // Save credentials first so the main process can use them
-      await window.meetmind.config.setMultiple({
-        googleCalendarClientId: form.googleCalendarClientId,
-        googleCalendarClientSecret: form.googleCalendarClientSecret,
-      });
-      const result = await window.meetmind.calendar.auth();
-      if (result.success) {
-        setCalendarStatus({ connected: true, email: result.email || '' });
-      } else {
-        setCalendarError(result.error || 'Connection failed');
-      }
-    } catch (err) {
-      setCalendarError(err.message);
-    } finally {
-      setConnectingCalendar(false);
-    }
-  };
-
-  const handleDisconnectCalendar = async () => {
-    const ok = await confirm({
-      title: 'Disconnect Google Calendar?',
-      message: 'Upcoming meetings will no longer appear on the Dashboard. You can reconnect at any time.',
-      confirmLabel: 'Disconnect',
-      destructive: true,
-    });
-    if (!ok) return;
-    try {
-      await window.meetmind.calendar.disconnect();
-      setCalendarStatus({ connected: false, email: '' });
-      setCalendarError(null);
-    } catch (err) {
-      setCalendarError(err.message);
-    }
-  };
-
   return (
     <div className="space-y-24">
+      <CalendarsCard />
+
       <SettingsGroup
         title="Notion"
         description="Sync meeting notes into a Notion database or as child pages under any page."
@@ -135,77 +77,6 @@ export default function IntegrationsSection({ form, onChange }) {
           result={notionResult}
           successLabel={notionSuccessLabel(notionResult)}
         />
-      </SettingsGroup>
-
-      <SettingsGroup
-        title="Google Calendar"
-        description="See upcoming meetings on your Dashboard and get recording prompts."
-        icon={<GoogleCalendarIcon size={20} />}
-        aside={
-          calendarStatus.connected ? (
-            <span className="pill">
-              <StatusDot tone="ok" />
-              Connected
-            </span>
-          ) : (
-            <ExternalLink href="https://console.cloud.google.com/apis/credentials">Google Cloud Console</ExternalLink>
-          )
-        }
-      >
-        <div className="space-y-16">
-          <TextField
-            id="gcal-client-id"
-            label="OAuth client ID"
-            value={form.googleCalendarClientId || ''}
-            onChange={(e) => onChange('googleCalendarClientId', e.target.value.trim())}
-            placeholder="xxxxxxxxx.apps.googleusercontent.com"
-          />
-          <PasswordField
-            id="gcal-secret"
-            label="OAuth client secret"
-            value={form.googleCalendarClientSecret || ''}
-            onChange={(e) => onChange('googleCalendarClientSecret', e.target.value)}
-            placeholder="GOCSPX-..."
-          />
-          <KeyGuide provider="google-calendar" title="How to create OAuth credentials" />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-16">
-          {calendarStatus.connected ? (
-            <>
-              <span className="inline-flex items-center gap-8 text-caption text-ink">
-                <StatusDot tone="ok" />
-                Connected as {calendarStatus.email || 'Google account'}
-              </span>
-              <button type="button" onClick={handleDisconnectCalendar} className="btn-danger btn-sm">
-                Disconnect
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={handleConnectCalendar}
-              disabled={connectingCalendar}
-              className="btn-ink btn-sm"
-            >
-              {connectingCalendar ? (
-                <>
-                  <Loader2 size={14} strokeWidth={2} className="spinner" />
-                  Connecting…
-                </>
-              ) : (
-                'Connect Google Calendar'
-              )}
-            </button>
-          )}
-
-          {calendarError && (
-            <span className="inline-flex items-center gap-8 text-caption text-signal" role="alert">
-              <StatusDot tone="error" />
-              {calendarError}
-            </span>
-          )}
-        </div>
       </SettingsGroup>
     </div>
   );
