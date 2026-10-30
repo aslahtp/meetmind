@@ -6,6 +6,12 @@ updated: 2026-10-30
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.15.1] - 2026-10-30
+
+### Fixed
+
+- **Windows**: Running MeetMind from source (`pnpm run dev`) no longer renames the installed app to "Electron" with Electron's icon in Start search and the taskbar. Development runs now use their own app ID, so a notification shown from one can't take over the installed app's.
+
 ## [4.15.0] - 2026-10-30
 
 ### Added

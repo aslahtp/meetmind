@@ -947,7 +947,9 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   `overlay.html` (the meeting overlay window).
 - **Extension**: `scripts/build-extension.js` zips `extension/` into
   `dist/meetmind-extension.zip` (`pnpm run build:ext`).
-- **Electron packaging** (`electron-builder.yml`): `appId: com.meetmind.app`, Windows NSIS
+- **Electron packaging** (`electron-builder.yml`): `appId: com.meetmind.app` (also the Windows
+  AppUserModelId of the packaged app; unpackaged runs use `com.meetmind.app.dev` so their
+  notifications can't rename the installed app to "Electron"), Windows NSIS
   installer (`x64` only), `signAndEditExecutable: false` (unsigned), custom installer/uninstaller
   icons, desktop and start-menu shortcuts created, an `afterPack` hook
   (`scripts/after-pack.js`), and the `meetmind://` protocol association declared via `protocols`.

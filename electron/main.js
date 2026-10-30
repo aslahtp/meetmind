@@ -1837,8 +1837,11 @@ async function recoverOrphanedWebmFiles() {
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
+// Unpackaged runs (`pnpm run dev`, test drivers) get their own ID. When the bare electron.exe shows
+// a notification, Electron creates a Start Menu shortcut ("Electron.lnk") for its ID; under the
+// installed app's ID that shortcut renames MeetMind to "Electron" in Start search and the taskbar.
 if (process.platform === 'win32') {
-  app.setAppUserModelId('com.meetmind.app');
+  app.setAppUserModelId(app.isPackaged ? 'com.meetmind.app' : 'com.meetmind.app.dev');
 }
 
 app.whenReady().then(async () => {
