@@ -80,9 +80,6 @@ linux:
   category: Office
   synopsis: AI meeting notes from your meeting audio
   description: Records your computer's audio and microphone during online meetings, transcribes them and writes meeting notes.
-  # Registers meetmind:// links (the .deb's desktop entry; AppImages need desktop integration).
-  mimeTypes:
-    - x-scheme-handler/meetmind
   maintainer: Aslah <87909460+aslahtp@users.noreply.github.com>
   # Keep ${arch} in the name: electron-updater picks the file by it (x86_64 AppImage, amd64 .deb).
   artifactName: "${productName}-${version}-${arch}.${ext}"

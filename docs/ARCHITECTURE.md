@@ -131,8 +131,8 @@ Owns:
   **only when packaged** (`app.isPackaged`). Registering it from `pnpm run dev` would steal the
   handler and point "Open App" links at the raw `electron.exe`, breaking the flow after a real
   install. Windows and Linux deliver links in `argv` (`second-instance`, or `process.argv` on a
-  cold start; on Linux the `.deb`'s desktop entry declares `x-scheme-handler/meetmind` through
-  electron-builder's `linux.mimeTypes`, and an AppImage needs desktop integration); macOS delivers them through `open-url`, registered before `ready` so the link that
+  cold start; on Linux the `.deb`'s desktop entry declares `x-scheme-handler/meetmind` from
+  electron-builder's `protocols`, and an AppImage needs desktop integration); macOS delivers them through `open-url`, registered before `ready` so the link that
   launched the app isn't lost, and gets the scheme from electron-builder's `protocols`.
 - `--smoke` (checked on the first line of `main.js`, before anything else loads): hands over to
   `electron/smoke.js`, a headless self-test of the packaged app run by CI (section 16).
@@ -1032,8 +1032,8 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
 - **Linux packaging** (`linux:` and `deb:` in `electron-builder.yml`): `AppImage` + `deb` targets
   for `x64` (`MeetMind-X.Y.Z-x86_64.AppImage`, `MeetMind-X.Y.Z-amd64.deb`, and `latest-linux.yml`
   listing the AppImage for its self-update), executable `meetmind`, icon from
-  `assets/icons/icon.png`, category `Office`, `mimeTypes: [x-scheme-handler/meetmind]` for
-  `meetmind://` links, and `syncDesktopName` so the installed `.desktop` file is named after
+  `assets/icons/icon.png`, category `Office` (the top-level `protocols` adds
+  `x-scheme-handler/meetmind` to the desktop entry for `meetmind://` links), and `syncDesktopName` so the installed `.desktop` file is named after
   `package.json`'s `desktopName` (`meetmind.desktop`, matching Electron's Wayland app_id and
   WM_CLASS). The `.deb` recommends `pulseaudio-utils` (`pactl`) and, from electron-builder, ships
   an AppArmor profile so Chromium's sandbox works on Ubuntu 24.04+. koffi's binaries are left out
