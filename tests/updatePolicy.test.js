@@ -6,6 +6,7 @@ const {
   CHECK_INTERVAL_MS,
   RETRY_DELAYS_MS,
   HIDDEN_RELAUNCH_WINDOW_MS,
+  canSelfUpdate,
   nextCheckDelay,
   autoInstallEnabled,
   isIdleForUpdate,
@@ -25,6 +26,15 @@ describe('nextCheckDelay', () => {
     expect(delays[4]).toBe(RETRY_DELAYS_MS.at(-1));
     expect(delays[5]).toBe(RETRY_DELAYS_MS.at(-1));
     expect(delays.every((d) => d < CHECK_INTERVAL_MS)).toBe(true);
+  });
+});
+
+describe('canSelfUpdate', () => {
+  it('is on for Windows and a Linux AppImage, off for unsigned macOS and a Linux .deb', () => {
+    expect(canSelfUpdate('win32', {})).toBe(true);
+    expect(canSelfUpdate('darwin', {})).toBe(false);
+    expect(canSelfUpdate('linux', { APPIMAGE: '/home/me/Apps/MeetMind.AppImage' })).toBe(true);
+    expect(canSelfUpdate('linux', {})).toBe(false);
   });
 });
 

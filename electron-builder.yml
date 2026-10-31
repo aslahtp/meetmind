@@ -63,6 +63,39 @@ mac:
 dmg:
   artifactName: "${productName}-${version}-${arch}.${ext}"
 
+# Linux (x64): an AppImage, which updates itself through latest-linux.yml, and a .deb, which the
+# user updates by installing the new package (the app then only checks and links to it). Built on
+# Linux (`pnpm run build:linux`); the .deb needs fpm, which electron-builder downloads.
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  executableName: meetmind
+  # The installed .desktop file is named after package.json's desktopName (meetmind.desktop), which
+  # matches Electron's Wayland app_id and WM_CLASS, so docks show the right icon.
+  syncDesktopName: true
+  icon: icons/icon.png
+  category: Office
+  synopsis: AI meeting notes from your meeting audio
+  description: Records your computer's audio and microphone during online meetings, transcribes them and writes meeting notes.
+  maintainer: Aslah <87909460+aslahtp@users.noreply.github.com>
+  # Keep ${arch} in the name: electron-updater picks the file by it (x86_64 AppImage, amd64 .deb).
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+  # Pinned FFmpeg (with PulseAudio input), fetched by scripts/fetch-ffmpeg.js.
+  extraResources:
+    - from: assets/ffmpeg/linux-${arch}/
+      to: ffmpeg/
+  # Nothing loads koffi on Linux (meeting detection there uses pactl and Electron's window list).
+  files:
+    - "!node_modules/@koromix/**"
+
+deb:
+  # pactl finds the audio devices (system audio, meeting detection). Desktop installs have it.
+  recommends:
+    - pulseaudio-utils
+
 afterPack: scripts/after-pack.js
 
 nsis:
@@ -97,8 +130,8 @@ files:
   - assets/icons/**
   - package.json
   - "!assets/ffmpeg/**"
-  # koffi's optional dependencies cover every OS/CPU; only Windows and macOS builds exist, and
-  # each platform section below drops the other platform's binaries.
+  # koffi's optional dependencies cover every OS/CPU; only the Windows and macOS builds use koffi,
+  # and each platform section above drops the other platforms' binaries.
   - "!node_modules/@koromix/koffi-{android,freebsd,linux,openbsd}-*/**"
 
 # No `electronVersion`: electron-builder packages the Electron the lockfile installed

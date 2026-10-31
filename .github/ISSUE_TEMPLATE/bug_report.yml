@@ -45,6 +45,7 @@ body:
         - Chrome extension (Google Meet / Zoom)
         - Installer / updates / FFmpeg
         - macOS permissions / system audio
+        - Linux system audio (PulseAudio / PipeWire)
         - Other
     validations:
       required: true
@@ -71,8 +72,8 @@ body:
     id: os
     attributes:
       label: Operating system and version
-      description: On a Mac, also say Apple silicon or Intel.
-      placeholder: Windows 11 23H2 / macOS 15.4 (Apple silicon)
+      description: On a Mac, also say Apple silicon or Intel. On Linux, say the distribution, desktop, X11 or Wayland, and AppImage or .deb.
+      placeholder: Windows 11 23H2 / macOS 15.4 (Apple silicon) / Ubuntu 24.04 GNOME Wayland (.deb)
   - type: textarea
     id: logs
     attributes:

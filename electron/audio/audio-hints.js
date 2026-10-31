@@ -11,6 +11,11 @@ const HINTS = {
     'Allow system audio: System Settings → Privacy & Security → Screen & System Audio Recording → turn on MeetMind, so other participants are recorded.',
     'Check the input level: System Settings → Sound → Input.',
   ],
+  linux: [
+    'Check the microphone: your sound settings → Input → pick the right device, unmute it and raise the level.',
+    'MeetMind records whatever your default output device plays, so keep the meeting audio on that device.',
+    'If system audio is missing, open Settings → System → System audio in MeetMind; it needs pactl (the pulseaudio-utils package).',
+  ],
 };
 
 const TEST_HINT = 'To test capture, play a video while recording for a few seconds.';

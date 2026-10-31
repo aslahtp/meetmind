@@ -5,11 +5,29 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 
 /**
+ * Linux: make the bundled ffmpeg/ffprobe executable. extraResources copies keep whatever mode the
+ * staged files had, which is 0644 when they were fetched or copied on a filesystem without Unix
+ * permissions; the AppImage and .deb then ship binaries the app can't run (EACCES).
+ */
+function makeFfmpegExecutable(context) {
+  const dir = path.join(context.appOutDir, 'resources', 'ffmpeg');
+  for (const name of ['ffmpeg', 'ffprobe']) {
+    const file = path.join(dir, name);
+    if (fs.existsSync(file)) fs.chmodSync(file, 0o755);
+    else console.warn(`[afterPack] ${file} not found`);
+  }
+}
+
+/**
  * Embed MeetMind icon + version metadata into the Windows exe.
  * Needed because signAndEditExecutable is false (avoids winCodeSign symlink errors).
  * rcedit is a Windows binary, so skip it on non-Windows hosts.
  */
 exports.default = async function afterPack(context) {
+  if (context.electronPlatformName === 'linux') {
+    makeFfmpegExecutable(context);
+    return;
+  }
   if (context.electronPlatformName !== 'win32') return;
   if (process.platform !== 'win32') {
     console.warn('[afterPack] Skipping rcedit on non-Windows host.');

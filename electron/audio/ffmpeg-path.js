@@ -11,20 +11,23 @@ function binaryName(tool, platform) {
 
 /**
  * Folder under assets/ffmpeg/ that holds the dev binaries. Windows keeps them at the root
- * (unchanged layout); macOS keeps one folder per architecture (mac-arm64, mac-x64), the same
- * folders electron-builder copies into the app as resources/ffmpeg/.
+ * (unchanged layout); macOS and Linux keep one folder per architecture (mac-arm64, mac-x64,
+ * linux-x64), the same folders electron-builder copies into the app as resources/ffmpeg/.
  */
 function devBinaryDir(platform, arch) {
-  return platform === 'darwin' ? `mac-${arch}` : '';
+  if (platform === 'darwin') return `mac-${arch}`;
+  if (platform === 'linux') return `linux-${arch}`;
+  return '';
 }
 
 /**
  * Every place a tool may live, most preferred first, as { source, path }:
  *   bundled   — resources/ffmpeg/ in the packaged app, assets/ffmpeg/ in development
- *   installed — userData/ffmpeg/, where the in-app download puts it on macOS (never inside the
- *               signed .app bundle)
+ *   installed — userData/ffmpeg/, where the in-app download puts it on macOS and Linux (never
+ *               inside the signed .app bundle or the read-only AppImage)
  *   system    — Homebrew locations on macOS; apps launched from Finder don't inherit the
- *               shell's PATH, so the bare-command lookup below would miss them
+ *               shell's PATH, so the bare-command lookup below would miss them. On Linux the
+ *               distro's ffmpeg is found by that PATH lookup.
  */
 function ffmpegCandidates(tool, { platform, arch, isPackaged, resourcesPath, appRoot, userData }) {
   const p = platform === 'win32' ? path.win32 : path.posix;

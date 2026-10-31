@@ -15,6 +15,7 @@ const {
   WASAPI_LOOPBACK_ID,
   WASAPI_LOOPBACK_LABEL,
 } = require('./mixer');
+const { defaultPulseSources } = require('./pulse');
 const { getConfig, setConfig } = require('../utils/config');
 const logger = require('../utils/logger');
 
@@ -25,9 +26,40 @@ let currentOutputPath = null;
 let recordingStartTime = null;
 let wasapiKnownUnsupported = false;
 
+const isLinux = process.platform === 'linux';
+// Linux records through PulseAudio source names; Windows through WASAPI / DirectShow devices.
+const BACKEND = isLinux ? 'pulse' : 'windows';
+
+/**
+ * Whether this FFmpeg can record from PulseAudio (`-f pulse`), which the Linux fallback needs.
+ * The pinned Linux build can; some distro or custom builds can't.
+ */
+const pulseSupport = new Map();
+function ffmpegSupportsPulse(ffmpegPath = resolveFfmpegPath()) {
+  if (!ffmpegPath) return false;
+  if (!pulseSupport.has(ffmpegPath)) {
+    const result = spawnSync(ffmpegPath, ['-hide_banner', '-devices'], { encoding: 'utf8', timeout: 5000 });
+    pulseSupport.set(ffmpegPath, /^\s*D\S*\s+pulse\b/m.test(`${result.stdout || ''}${result.stderr || ''}`));
+  }
+  return pulseSupport.get(ffmpegPath);
+}
+
 // ── Device enumeration ────────────────────────────────────────────────────────
 
+// Linux: PulseAudio sources. The default output's monitor is the system audio.
+async function listPulseDevices() {
+  try {
+    const { system, mic, sources } = await defaultPulseSources();
+    logger.info('Audio devices enumerated (PulseAudio)', { system, mic, sources: sources.length });
+    return { all: sources.map((s) => ({ id: s.name, label: s.name })), system, mic };
+  } catch (err) {
+    logger.error('Failed to enumerate PulseAudio sources', { error: err.message });
+    return { all: [], system: null, mic: null, error: err.message };
+  }
+}
+
 async function listAudioDevices() {
+  if (isLinux) return listPulseDevices();
   const ffmpegPath = resolveFfmpegPath();
 
   if (!ffmpegPath) {
@@ -104,7 +136,7 @@ async function listAudioDevices() {
  * Rejects with an error (including the raw FFmpeg output) if it fails.
  */
 function _spawnFFmpegRecording(sessionId, systemDevice, micDevice, outputPath, ffmpegPath) {
-  const { inputs, filterParts, outputArgs } = buildAmixFilter(systemDevice, micDevice);
+  const { inputs, filterParts, outputArgs } = buildAmixFilter(systemDevice, micDevice, { backend: BACKEND });
   const ffmpegArgs = [
     '-hide_banner',
     ...inputs,
@@ -186,7 +218,7 @@ async function probeAudioDevice(device, durationSec = 3) {
   }
 
   const tmpPath = path.join(app.getPath('temp'), `meetmind-probe-${Date.now()}.wav`);
-  const { inputs, outputArgs } = buildSingleDeviceArgs(device);
+  const { inputs, outputArgs } = buildSingleDeviceArgs(device, { backend: BACKEND });
   const args = ['-hide_banner', ...inputs, '-t', String(durationSec), ...outputArgs, '-y', tmpPath];
 
   return new Promise((resolve) => {
@@ -229,6 +261,29 @@ async function probeAudioDevice(device, durationSec = 3) {
   });
 }
 
+function recordingPath(sessionId) {
+  const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+  if (!fs.existsSync(recordingsDir)) {
+    fs.mkdirSync(recordingsDir, { recursive: true });
+  }
+  return path.join(recordingsDir, `${sessionId}.wav`);
+}
+
+// Linux: records the default output's monitor (system audio) and the default microphone,
+// whatever the user picks as default in their sound settings at the time.
+async function startPulseRecording(sessionId, ffmpegPath) {
+  if (!ffmpegSupportsPulse(ffmpegPath)) {
+    throw new Error('This FFmpeg build cannot record from PulseAudio. Install FFmpeg from Settings → System.');
+  }
+  const { system, mic } = await defaultPulseSources();
+  if (!system && !mic) {
+    throw new Error('No audio sources found. Check that PulseAudio or PipeWire is running and an output and input device are selected in your sound settings.');
+  }
+  currentOutputPath = recordingPath(sessionId);
+  logger.info('Starting recording (PulseAudio)', { sessionId, system, mic, outputPath: currentOutputPath });
+  return _spawnFFmpegRecording(sessionId, system, mic, currentOutputPath, ffmpegPath);
+}
+
 async function startRecording(sessionId) {
   if (ffmpegProcess) {
     throw new Error('Recording already in progress');
@@ -236,6 +291,7 @@ async function startRecording(sessionId) {
 
   const ffmpegPath = resolveFfmpegPath();
   if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System.');
+  if (isLinux) return startPulseRecording(sessionId, ffmpegPath);
   const config = getConfig();
 
   let systemDevice = config.systemAudioDevice;
@@ -283,13 +339,7 @@ async function startRecording(sessionId) {
     }
   }
 
-  // Ensure recordings directory exists
-  const recordingsDir = path.join(app.getPath('userData'), 'recordings');
-  if (!fs.existsSync(recordingsDir)) {
-    fs.mkdirSync(recordingsDir, { recursive: true });
-  }
-
-  currentOutputPath = path.join(recordingsDir, `${sessionId}.wav`);
+  currentOutputPath = recordingPath(sessionId);
 
   logger.info('Starting recording', { sessionId, systemDevice, micDevice, outputPath: currentOutputPath });
 
@@ -495,6 +545,7 @@ module.exports = {
   stopRecording,
   listAudioDevices,
   probeAudioDevice,
+  ffmpegSupportsPulse,
   convertWebmToWav,
   convertFileToWav,
   getMediaDurationSeconds,

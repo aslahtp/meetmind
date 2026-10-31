@@ -13,7 +13,8 @@ const { Readable } = require('stream');
 const { getConfig, setConfig, setMultipleConfig } = require('./utils/config');
 const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
-const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
+const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, ffmpegSupportsPulse, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
+const { pulseInfo } = require('./audio/pulse');
 const { getSessionWaveform, deleteSessionWaveform } = require('./audio/waveform');
 const { transcribe } = require('./services/transcription');
 const { generateNotes } = require('./services/notes');
@@ -34,13 +35,19 @@ const { createAutoLaunch, HIDDEN_ARG } = require('./services/auto-launch');
 
 const isDev = process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
+const isLinux = process.platform === 'linux';
 
-// Launch at login (services/auto-launch.js). A login launch on Windows passes --hidden, so the app
-// starts in the tray and only meeting detection and the overlay show up. Only the packaged app
-// registers: an unpackaged run (pnpm run dev, the run-meetmind driver) would point the entry at
-// the bare dev electron binary.
+// Linux: on a Wayland session, run through XWayland when it is there. Native Wayland doesn't let
+// an app keep a window on top or place it, which the meeting overlay needs, nor read other apps'
+// window titles, which meeting detection needs. Must be set before the app is ready.
+if (isLinux && process.env.DISPLAY) app.commandLine.appendSwitch('ozone-platform', 'x11');
+
+// Launch at login (services/auto-launch.js). A login launch on Windows and Linux passes --hidden,
+// so the app starts in the tray and only meeting detection and the overlay show up. Only the
+// packaged app registers: an unpackaged run (pnpm run dev, the run-meetmind driver) would point
+// the entry at the bare dev electron binary.
 const autoLaunch = createAutoLaunch({ app, isDev: !app.isPackaged, logger });
-const launchedHidden = process.platform === 'win32' && process.argv.includes(HIDDEN_ARG);
+const launchedHidden = !isMac && process.argv.includes(HIDDEN_ARG);
 
 // Uploads a session's notes to Notion. If the session already has a page (re-sync or
 // regenerated notes), the new page is created first and the old one is then moved to Notion's
@@ -397,9 +404,10 @@ function resolveIconPath(...candidates) {
 }
 
 function getAppIconPath() {
-  // Prefer .ico on Windows for taskbar / window chrome; fall back to PNG.
+  // Prefer .ico on Windows for taskbar / window chrome; fall back to PNG. Electron can't read
+  // .ico on Linux.
   return resolveIconPath(
-    path.join(__dirname, '../assets/icons/icon.ico'),
+    isLinux ? null : path.join(__dirname, '../assets/icons/icon.ico'),
     path.join(__dirname, '../assets/icons/icon256.png'),
     path.join(__dirname, '../assets/icons/icon128.png'),
   );
@@ -562,7 +570,23 @@ const cancelledSessions = new Set();
 
 // ── Renderer capture IPC helpers ─────────────────────────────────────────────
 
-function requestRendererCaptureStart() {
+// Whether main can record system audio itself with FFmpeg if the renderer gets none: always on
+// Windows (WASAPI loopback); on Linux when PulseAudio (or pipewire-pulse) answers and this FFmpeg
+// can record from it; never on macOS. When it can, the renderer fails rather than record the
+// microphone alone, so the FFmpeg fallback below takes over.
+async function canRecordSystemAudioWithFfmpeg() {
+  if (isMac) return false;
+  if (!isLinux) return true;
+  try {
+    const info = await pulseInfo();
+    return !!info.defaultSink && ffmpegSupportsPulse();
+  } catch {
+    return false;
+  }
+}
+
+async function requestRendererCaptureStart() {
+  const requireSystemAudio = await canRecordSystemAudioWithFfmpeg();
   return new Promise((resolve) => {
     if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
       resolve(false);
@@ -583,7 +607,7 @@ function requestRendererCaptureStart() {
 
     ipcMain.once('capture:started', onStarted);
     ipcMain.once('capture:failed', onFailed);
-    sendToRenderer('capture:start');
+    sendToRenderer('capture:start', { requireSystemAudio });
 
     // macOS may show permission prompts (screen & system audio, microphone) on the first
     // recording, so give the user time to answer them.
@@ -668,7 +692,8 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
       return { success: true, sessionId: currentSessionId };
     }
 
-    // The FFmpeg fallback records through Windows devices (WASAPI loopback / DirectShow) only.
+    // The FFmpeg fallback records through Windows devices (WASAPI loopback / DirectShow) or, on
+    // Linux, PulseAudio sources; macOS has none.
     if (isMac) {
       throw new Error(
         'Could not start recording. Check that MeetMind may use the microphone and Screen & System Audio Recording ' +
@@ -676,7 +701,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
       );
     }
 
-    // Fallback: FFmpeg dshow recording (mic + Stereo Mix if available)
+    // Fallback: FFmpeg recording (Windows: WASAPI loopback + mic; Linux: default output's monitor + mic)
     logger.info('Renderer capture unavailable, falling back to FFmpeg');
     captureMode = 'ffmpeg';
     await startRecording(currentSessionId);
@@ -1231,11 +1256,27 @@ function registerIpcHandlers() {
     }
   });
 
-  // FFmpeg device capture (the recording fallback) uses Windows devices only.
-  const FFMPEG_DEVICES_UNSUPPORTED = 'FFmpeg device capture is only available on Windows';
+  // FFmpeg device capture (the recording fallback) uses Windows or Linux (PulseAudio) devices.
+  const FFMPEG_DEVICES_UNSUPPORTED = 'FFmpeg device capture is only available on Windows and Linux';
   ipcMain.handle('audio:list-devices', () => (isMac ? { all: [], error: FFMPEG_DEVICES_UNSUPPORTED } : listAudioDevices()));
 
   ipcMain.handle('audio:probe-device', (_e, device) => (isMac ? { error: FFMPEG_DEVICES_UNSUPPORTED } : probeAudioDevice(device)));
+
+  // Settings › System › System audio (Linux): the audio server MeetMind records from, and whether
+  // the FFmpeg fallback can record from it.
+  ipcMain.handle('audio:linux-status', async () => {
+    if (!isLinux) return { error: 'Linux only' };
+    let info = null;
+    let error = null;
+    try { info = await pulseInfo(); } catch (err) { error = err.message; }
+    return {
+      server: info?.serverName || null,
+      defaultSink: info?.defaultSink || null,
+      defaultSource: info?.defaultSource || null,
+      ffmpegPulse: ffmpegSupportsPulse(),
+      error,
+    };
+  });
 
   ipcMain.handle('audio:import-file', async () => {
     const parentWin = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;

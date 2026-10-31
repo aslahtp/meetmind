@@ -7,6 +7,8 @@ const {
   TITLE_MEMORY_MS,
   END_GRACE_MS,
   exeFromConsentKey,
+  linuxAppId,
+  appFromWindowTitle,
   mergeMicUsers,
   browsersMissingFromRegistry,
   cleanMeetingTitle,
@@ -183,5 +185,43 @@ describe('reduceTick', () => {
     expect(ended.events.map((e) => e.type)).toEqual(['meeting-ended']);
     const again = run(Array(2).fill(live), { start: ended.now, state: ended.state });
     expect(again.events.map((e) => e.type)).toEqual(['meeting-detected']);
+  });
+});
+
+describe('Linux', () => {
+  it('folds the process names distros use onto one id per app', () => {
+    expect(linuxAppId('google-chrome-stable')).toBe('chrome');
+    expect(linuxAppId('Chromium-Browser')).toBe('chromium');
+    expect(linuxAppId('firefox-esr')).toBe('firefox');
+    expect(linuxAppId('zoom.real')).toBe('zoom');
+    expect(linuxAppId('spotify')).toBe('spotify');
+  });
+
+  it('tells the browser or Zoom window from its title alone', () => {
+    expect(appFromWindowTitle('Meet - abc-defg-hij - Camera or microphone recording - Google Chrome')).toBe('chrome');
+    expect(appFromWindowTitle('Meet – abc-defg-hij — Mozilla Firefox')).toBe('firefox');
+    expect(appFromWindowTitle('Inbox - Gmail - Chromium')).toBe('chromium');
+    expect(appFromWindowTitle('Teams | Microsoft Teams - Personal - Microsoft\u200b Edge')).toBe('msedge');
+    expect(appFromWindowTitle('Zoom Meeting')).toBe('zoom');
+    expect(appFromWindowTitle('Terminal')).toBe('');
+  });
+
+  it('detects a Meet tab in Chrome once Chrome holds the mic', () => {
+    const window = { exe: appFromWindowTitle(MEET_WINDOW.title), title: MEET_WINDOW.title, bounds: null };
+    const { events } = run(Array(DEBOUNCE_TICKS).fill({ micExes: [linuxAppId('chrome')], windows: [window], selfExe: 'meetmind' }));
+    expect(events).toHaveLength(1);
+    expect(events[0].meeting).toMatchObject({ key: 'meet|chrome', platform: 'meet', appLabel: 'Chrome', title: 'abc-defg-hij' });
+  });
+
+  it('needs a meeting title for a browser, so Wayland (no window list) only detects native apps', () => {
+    const browser = run(Array(DEBOUNCE_TICKS + 1).fill({ micExes: ['firefox'], windows: [] }));
+    expect(browser.events).toEqual([]);
+    const zoom = run(Array(DEBOUNCE_TICKS).fill({ micExes: ['zoom'], windows: [] }));
+    expect(zoom.events.map((e) => e.meeting.key)).toEqual(['zoom|zoom']);
+  });
+
+  it('ignores MeetMind itself on the mic', () => {
+    expect(run(Array(DEBOUNCE_TICKS + 1).fill({ micExes: ['meetmind', 'zoom'], selfExe: 'meetmind', windows: [] })).events).toHaveLength(1);
+    expect(run(Array(DEBOUNCE_TICKS + 1).fill({ micExes: ['meetmind'], selfExe: 'meetmind', windows: [] })).events).toEqual([]);
   });
 });

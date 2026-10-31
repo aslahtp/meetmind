@@ -5,7 +5,7 @@ name: Build
 # Supply-chain hardening (public repo): actions are pinned to commit SHAs; the build job runs
 # all dependency code with a read-only token and no dependency cache; only the small publish
 # job, which runs no dependency code or third-party actions, gets `contents: write`. FFmpeg (shipped inside the
-# Windows installer and the macOS apps) comes from the SHA-256 pins in electron/audio/ffmpeg-sources.js.
+# Windows installer, the macOS apps and the Linux packages) comes from the SHA-256 pins in electron/audio/ffmpeg-sources.js.
 # Every downloadable file gets a signed build-provenance attestation (`gh attestation verify`),
 # made by a separate job that runs no project code.
 
@@ -203,13 +203,80 @@ jobs:
             dist/desktop/*.blockmap
             dist/desktop/latest-mac.yml
 
+  # Linux AppImage (updates itself through latest-linux.yml) and .deb, x64. Same rules as the other
+  # builds: read-only token, no dependency cache, FFmpeg from its SHA-256 pin. Nothing to sign.
+  build-linux:
+    name: Build Linux app
+    needs: [check-version, checks]
+    if: needs.check-version.outputs.release_needed == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No cache: the app is built from a clean, lockfile-verified install.
+      - name: Setup
+        uses: $/.github/actions/setup
+        with:
+          cache: 'false'
+
+      - name: Download FFmpeg Binaries (checksum-verified)
+        run: node scripts/fetch-ffmpeg.js --platform linux
+
+      # `build:linux` passes --publish never, like `build`.
+      - name: Build Linux App
+        run: |
+          pnpm run build:linux
+          ls -l dist/desktop/*.AppImage dist/desktop/*.deb dist/desktop/latest-linux.yml
+
+      # The AppImage must be listed in latest-linux.yml, or AppImage installs never see the update.
+      - name: Verify packages
+        run: |
+          test -x dist/desktop/linux-unpacked/resources/ffmpeg/ffmpeg
+          grep -q -- '-x86_64.AppImage' dist/desktop/latest-linux.yml || { echo "::error::latest-linux.yml has no AppImage"; exit 1; }
+          dpkg-deb --field dist/desktop/*.deb Package Version
+
+      # See ci.yml's linux-build job for why each of these is needed.
+      - name: Prepare display and audio
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb pulseaudio pulseaudio-utils
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=smoke
+          pactl set-default-sink smoke
+
+      - name: Smoke test
+        timeout-minutes: 3
+        run: |
+          xvfb-run -a dist/desktop/linux-unpacked/meetmind --smoke > smoke.txt || true
+          node scripts/check-smoke.js smoke.txt "Linux x64 (release)"
+
+      - name: Upload release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-files-linux
+          if-no-files-found: error
+          retention-days: 7
+          # The AppImage and .deb are already compressed.
+          compression-level: 0
+          path: |
+            dist/desktop/*.AppImage
+            dist/desktop/*.deb
+            dist/desktop/latest-linux.yml
+
   # Signed SLSA build provenance for every file users download, so anyone can check that a file
   # came from this workflow and commit: gh attestation verify <file> --repo aslahtp/meetmind.
   # Its own job: the OIDC token that signs attestations is never available to the build jobs,
   # which run dependency code.
   attest:
     name: Attest build provenance
-    needs: [build, build-mac]
+    needs: [build, build-mac, build-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -229,6 +296,12 @@ jobs:
           name: release-files-mac
           path: release-files-mac
 
+      - name: Download Linux release files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-files-linux
+          path: release-files-linux
+
       - name: Attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
@@ -236,11 +309,13 @@ jobs:
             release-files/desktop/*.exe
             release-files-mac/*.dmg
             release-files-mac/*-mac.zip
+            release-files-linux/*.AppImage
+            release-files-linux/*.deb
             release-files/meetmind-extension.zip
 
   publish:
     name: Publish Release
-    needs: [check-version, build, build-mac, attest]
+    needs: [check-version, build, build-mac, build-linux, attest]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # The only job with write access; it runs no project dependencies.
@@ -265,6 +340,13 @@ jobs:
         with:
           name: release-files-mac
           path: release-files-mac
+
+      # Also uploaded from dist/desktop/ only.
+      - name: Download Linux release files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-files-linux
+          path: release-files-linux
 
       - name: Generate Release Notes from Template and CHANGELOG
         run: node scripts/generate-release-notes.js
@@ -291,4 +373,7 @@ jobs:
             release-files-mac/*-mac.zip \
             release-files-mac/*.blockmap \
             release-files-mac/latest-mac.yml \
+            release-files-linux/*.AppImage \
+            release-files-linux/*.deb \
+            release-files-linux/latest-linux.yml \
             release-files/meetmind-extension.zip

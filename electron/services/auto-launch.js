@@ -7,11 +7,72 @@
 // which lists only the Run entries that start this exe, with whether Task Manager or
 // Settings › Apps › Startup has disabled them.
 //
+// Electron has no login items on Linux, so there it is an XDG autostart entry,
+// ~/.config/autostart/meetmind.desktop, that starts the app with --hidden. An AppImage runs from a
+// temporary mount, so the entry points at the AppImage file itself ($APPIMAGE). Desktops disable
+// an entry without deleting it (Hidden=true, or GNOME's X-GNOME-Autostart-enabled=false), which
+// reads like a Run entry disabled in Task Manager.
+//
 // No electron import: main passes `app` in, which keeps this unit-testable. `isDev` (any unpackaged
 // run) writes nothing, since the exe would be the bare dev electron binary.
 
+const path = require('path');
+
 const AUTO_LAUNCH_NAME = 'MeetMind';
 const HIDDEN_ARG = '--hidden';
+const AUTOSTART_FILE = 'meetmind.desktop';
+
+// Exec= quoting from the Desktop Entry spec: double quotes, with " ` $ \ escaped.
+function quoteExec(arg) {
+  return `"${String(arg).replace(/(["`$\\])/g, '\\$1')}"`;
+}
+
+/** The autostart entry that launches `execPath` hidden at login. */
+function buildAutostartEntry(execPath) {
+  return [
+    '[Desktop Entry]',
+    'Type=Application',
+    `Name=${AUTO_LAUNCH_NAME}`,
+    'Comment=Open MeetMind in the tray at login',
+    `Exec=${quoteExec(execPath)} ${HIDDEN_ARG}`,
+    'Icon=meetmind',
+    'Terminal=false',
+    'X-GNOME-Autostart-enabled=true',
+    '',
+  ].join('\n');
+}
+
+/** Whether an autostart entry's text leaves it enabled (no Hidden=true, not turned off in GNOME). */
+function autostartEnabled(text) {
+  return !/^Hidden\s*=\s*true\s*$/mi.test(text) && !/^X-GNOME-Autostart-enabled\s*=\s*false\s*$/mi.test(text);
+}
+
+// Reads and writes the XDG autostart entry. `fs`, `env` and `execPath` come in for tests.
+function linuxAutostart({ fs, env, execPath, homedir }) {
+  const dir = path.posix.join(env.XDG_CONFIG_HOME || path.posix.join(homedir, '.config'), 'autostart');
+  const file = path.posix.join(dir, AUTOSTART_FILE);
+  const target = env.APPIMAGE || execPath;
+  return {
+    file,
+    // null when there is no entry, else { enabled }.
+    read() {
+      try {
+        return { enabled: autostartEnabled(fs.readFileSync(file, 'utf8')) };
+      } catch (err) {
+        if (err.code === 'ENOENT') return null;
+        throw err;
+      }
+    },
+    write(enabled) {
+      if (enabled) {
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(file, buildAutostartEntry(target));
+      } else {
+        fs.rmSync(file, { force: true });
+      }
+    },
+  };
+}
 
 // Once our entry exists Windows is the source of truth, since the user can disable it outside
 // MeetMind; without one, the saved setting decides.
@@ -20,7 +81,19 @@ function resolveStartupState(configured, item) {
   return !!configured;
 }
 
-function createAutoLaunch({ app, platform = process.platform, isDev = false, logger = console }) {
+function createAutoLaunch({ app, platform = process.platform, isDev = false, logger = console, linux = null }) {
+  if (platform === 'linux') {
+    return createLinuxAutoLaunch({
+      isDev,
+      logger,
+      autostart: linuxAutostart(linux || {
+        fs: require('fs'),
+        env: process.env,
+        execPath: process.execPath,
+        homedir: require('os').homedir(),
+      }),
+    });
+  }
   const isWindows = platform === 'win32';
 
   const read = () => app.getLoginItemSettings();
@@ -106,4 +179,64 @@ function createAutoLaunch({ app, platform = process.platform, isDev = false, log
   return { getStatus, set, sync };
 }
 
-module.exports = { AUTO_LAUNCH_NAME, HIDDEN_ARG, resolveStartupState, createAutoLaunch };
+// Linux: same contract as above over the autostart entry. Like Windows, once the entry exists it
+// is the source of truth, since the desktop's startup-apps settings can disable it.
+function createLinuxAutoLaunch({ isDev, logger, autostart }) {
+  function getStatus() {
+    if (isDev) return { openAtLogin: false, isDev: true };
+    try {
+      const entry = autostart.read();
+      return { openAtLogin: resolveStartupState(false, entry), disabledInSystem: !!entry && entry.enabled === false };
+    } catch (err) {
+      logger.error('Failed to read auto-launch status', err);
+      return { openAtLogin: false, error: err.message };
+    }
+  }
+
+  function set(enabled) {
+    if (isDev) {
+      logger.info('Skipping autostart entry in an unpackaged app', { enabled });
+      return;
+    }
+    try {
+      autostart.write(!!enabled);
+      logger.info('Auto-launch updated', { enabled: !!enabled, file: autostart.file });
+    } catch (err) {
+      logger.error('Failed to update auto-launch', err);
+    }
+  }
+
+  function sync(configured) {
+    if (isDev) {
+      logger.info('Skipping autostart entry in an unpackaged app', { enabled: configured });
+      return !!configured;
+    }
+    try {
+      const entry = autostart.read();
+      const enabled = resolveStartupState(configured, entry);
+      // Rewriting an enabled entry refreshes its path after the AppImage is moved or updated.
+      if (enabled) autostart.write(true);
+      logger.info('Auto-launch synced', {
+        enabled,
+        configured: !!configured,
+        entry: entry ? (entry.enabled ? 'enabled' : 'disabled in startup settings') : 'none',
+      });
+      return enabled;
+    } catch (err) {
+      logger.error('Failed to sync auto-launch', err);
+      return !!configured;
+    }
+  }
+
+  return { getStatus, set, sync };
+}
+
+module.exports = {
+  AUTO_LAUNCH_NAME,
+  HIDDEN_ARG,
+  resolveStartupState,
+  buildAutostartEntry,
+  autostartEnabled,
+  linuxAutostart,
+  createAutoLaunch,
+};

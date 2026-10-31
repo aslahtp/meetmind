@@ -3,11 +3,12 @@
  * and puts ffmpeg + ffprobe where electron-builder bundles them as resources/ffmpeg/:
  *   Windows → assets/ffmpeg/ffmpeg.exe, ffprobe.exe
  *   macOS   → assets/ffmpeg/mac-<arch>/ffmpeg, ffprobe
+ *   Linux   → assets/ffmpeg/linux-<arch>/ffmpeg, ffprobe
  * Used by CI and the release builds; also the quickest local dev setup.
  *
- * Run: node scripts/fetch-ffmpeg.js [--platform win32|darwin] [--arch x64|arm64]... [--out <dir>]
+ * Run: node scripts/fetch-ffmpeg.js [--platform win32|darwin|linux] [--arch x64|arm64]... [--out <dir>]
  *   --platform  defaults to this machine's
- *   --arch      repeatable; defaults to both Mac architectures on darwin, x64 on win32
+ *   --arch      repeatable; defaults to both Mac architectures on darwin, x64 on win32 and linux
  *   --out       put the binaries here instead (one arch only); handy for testing
  */
 

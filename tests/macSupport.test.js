@@ -5,6 +5,7 @@ import { CAPTURE_STRATEGIES, HEARD_THRESHOLD, describeAudioTest, peakOf } from '
 const require = createRequire(import.meta.url);
 const { MAC_CAPTURE_STRATEGIES, DEFAULT_MAC_CAPTURE_STRATEGY, normalizeMacCaptureStrategy } = require('../electron/audio/mac-capture.js');
 const { FFMPEG_VERSION, ffmpegDownloads, pinnedTargets } = require('../electron/audio/ffmpeg-sources.js');
+const { archiveType } = require('../electron/audio/ffmpeg-fetch.js');
 
 describe('mac capture strategies', () => {
   it('falls back to the default for unknown values', () => {
@@ -44,15 +45,15 @@ describe('describeAudioTest', () => {
 
 describe('ffmpegDownloads', () => {
   it('pins every shipped platform/arch', () => {
-    expect(pinnedTargets().sort()).toEqual(['darwin-arm64', 'darwin-x64', 'win32-x64']);
+    expect(pinnedTargets().sort()).toEqual(['darwin-arm64', 'darwin-x64', 'linux-x64', 'win32-x64']);
   });
 
-  it('pins an https zip and a SHA-256 for each download, and covers ffmpeg and ffprobe exactly once', () => {
+  it('pins an https zip or tar.xz and a SHA-256 for each download, and covers ffmpeg and ffprobe exactly once', () => {
     for (const target of pinnedTargets()) {
       const [platform, arch] = target.split('-');
       const downloads = ffmpegDownloads(platform, arch);
       for (const d of downloads) {
-        expect(d.url).toMatch(/^https:\/\/.+\.zip$/);
+        expect(d.url).toMatch(/^https:\/\/.+\.(zip|tar\.xz)$/);
         expect(d.url).toContain(FFMPEG_VERSION);
         expect(d.sha256).toMatch(/^[0-9a-f]{64}$/);
       }
@@ -60,8 +61,14 @@ describe('ffmpegDownloads', () => {
     }
   });
 
+  it('unpacks each archive by its extension', () => {
+    expect(archiveType('https://example.com/a/ffmpeg-9.0.2-linux64-gpl-9.0.tar.xz')).toBe('tar.xz');
+    expect(archiveType('https://example.com/a/ffmpeg.zip')).toBe('zip');
+    expect(archiveType(ffmpegDownloads('linux', 'x64')[0].url)).toBe('tar.xz');
+  });
+
   it('has nothing for other platforms or architectures', () => {
-    expect(ffmpegDownloads('linux', 'x64')).toBeNull();
+    expect(ffmpegDownloads('linux', 'arm64')).toBeNull();
     expect(ffmpegDownloads('darwin', 'ia32')).toBeNull();
   });
 });

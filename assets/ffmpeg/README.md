@@ -46,6 +46,21 @@ For development you can also skip this and `brew install ffmpeg`: the app finds 
 `/opt/homebrew/bin` and `/usr/local/bin`. The in-app download installs into the app's data folder
 (`~/Library/Application Support/MeetMind/ffmpeg/`), never inside the app bundle.
 
+## Linux
+
+One folder per architecture: `linux-x64/`, holding `ffmpeg` and `ffprobe`. Fetch the pinned,
+checksum-verified build (a GPL static build from BtbN/FFmpeg-Builds; pin in
+`electron/audio/ffmpeg-sources.js`) with:
+
+```
+pnpm run fetch-ffmpeg
+```
+
+For development your distribution's `ffmpeg` package also works (the app finds it on `PATH`), but
+the FFmpeg recording fallback needs a build with PulseAudio input (`ffmpeg -devices` lists
+`pulse`). The in-app download installs into the app's data folder (`~/.config/MeetMind/ffmpeg/`),
+since an AppImage is read-only.
+
 ## Notes
 
 - Minimum recommended version: FFmpeg 6.0+

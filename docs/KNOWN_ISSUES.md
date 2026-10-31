@@ -52,6 +52,20 @@ Track ``` / `~~~` fences in `listItems` and in `parseTopic`'s list modes, and sk
 
 ---
 
+## Linux FFmpeg pin is kept online until September 2028
+
+**Affects:** Linux releases and, through `publish`, every release; also the in-app FFmpeg download on Linux.
+
+### What happens
+
+The Linux FFmpeg build comes from a [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) release, pinned by URL and SHA-256 in `electron/audio/ffmpeg-sources.js`. BtbN keeps the last build of each month for two years and deletes the rest after 14 days. The pin is the September 2026 month-end build (`autobuild-2026-09-30-13-08`), so it should stay downloadable until about September 2028. After that, `scripts/fetch-ffmpeg.js` fails in the `build-linux` job with an HTTP 404 and no release is published.
+
+### Fix
+
+Before then, move the pin to a newer month-end build (download it, compute its SHA-256 yourself, update the URL and hash), or mirror the pinned archive as an asset of a GitHub release in this repo and point the URL there, keeping the hash. Either changes what users download, so give it a changelog entry.
+
+---
+
 ## Intel Mac FFmpeg source ends in January 2027
 
 **Affects:** macOS releases (the Intel DMG and, through it, the whole release) and the in-app FFmpeg download on Intel Macs. Windows and Apple silicon downloads are not affected by this source change, but a failed Intel download still blocks the whole release.

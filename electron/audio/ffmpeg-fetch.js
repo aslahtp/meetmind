@@ -10,6 +10,11 @@ const { downloadFile, assertSha256 } = require('../utils/download');
 const { ffmpegDownloads } = require('./ffmpeg-sources');
 const { binaryName } = require('./ffmpeg-path');
 
+/** How a pinned download is packed, from its URL: 'tar.xz' or 'zip'. */
+function archiveType(url) {
+  return /\.tar\.xz$/i.test(new URL(url).pathname) ? 'tar.xz' : 'zip';
+}
+
 // Unpacks with a tool the host OS ships: PowerShell on Windows, ditto on macOS, unzip elsewhere.
 function unzip(zipPath, destDir) {
   if (process.platform === 'win32') {
@@ -19,6 +24,17 @@ function unzip(zipPath, destDir) {
     execFileSync('/usr/bin/ditto', ['-x', '-k', zipPath, destDir], { timeout: 300_000 });
   } else {
     execFileSync('unzip', ['-o', '-q', zipPath, '-d', destDir], { timeout: 300_000 });
+  }
+}
+
+// tar ships with Linux, macOS and Windows 10+. On Windows, call System32's bsdtar (which detects
+// xz itself) by path: a GNU tar from Git or MSYS earlier on PATH reads `C:` as a remote host.
+function untarXz(archivePath, destDir) {
+  if (process.platform === 'win32') {
+    const tar = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+    execFileSync(tar, ['-xf', archivePath, '-C', destDir], { timeout: 300_000 });
+  } else {
+    execFileSync('tar', ['-xJf', archivePath, '-C', destDir], { timeout: 300_000 });
   }
 }
 
@@ -38,7 +54,7 @@ function findFile(dir, name) {
 
 /**
  * Installs the pinned ffmpeg and ffprobe for `platform`/`arch` into `outDir`, using `tmpDir`
- * (created, and left for the caller to remove) for the downloads. Each zip's SHA-256 is checked
+ * (created, and left for the caller to remove) for the downloads. Each archive's SHA-256 is checked
  * before it is unpacked. `onProgress({ stage: 'download' | 'extract' | 'copy', index, count,
  * downloaded, total })` reports progress. Resolves with { ffmpeg, ffprobe } paths.
  */
@@ -50,8 +66,9 @@ async function fetchPinnedFfmpeg({ platform, arch, outDir, tmpDir, onProgress, u
 
   const installed = {};
   for (const [index, { url, sha256, tools }] of downloads.entries()) {
-    const zipPath = path.join(tmpDir, `download-${index}.zip`);
-    const actual = await downloadFile(url, zipPath, {
+    const type = archiveType(url);
+    const archivePath = path.join(tmpDir, `download-${index}.${type}`);
+    const actual = await downloadFile(url, archivePath, {
       userAgent,
       onProgress: ({ downloaded, total }) => onProgress?.({ stage: 'download', index, count: downloads.length, downloaded, total }),
     });
@@ -60,7 +77,8 @@ async function fetchPinnedFfmpeg({ platform, arch, outDir, tmpDir, onProgress, u
     onProgress?.({ stage: 'extract', index, count: downloads.length });
     const extractDir = path.join(tmpDir, `extracted-${index}`);
     fs.mkdirSync(extractDir, { recursive: true });
-    unzip(zipPath, extractDir);
+    if (type === 'tar.xz') untarXz(archivePath, extractDir);
+    else unzip(archivePath, extractDir);
 
     onProgress?.({ stage: 'copy', index, count: downloads.length });
     for (const tool of tools) {
@@ -76,4 +94,4 @@ async function fetchPinnedFfmpeg({ platform, arch, outDir, tmpDir, onProgress, u
   return installed;
 }
 
-module.exports = { fetchPinnedFfmpeg };
+module.exports = { fetchPinnedFfmpeg, archiveType };

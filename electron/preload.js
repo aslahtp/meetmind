@@ -93,6 +93,8 @@ contextBridge.exposeInMainWorld('meetmind', {
     stop: () => ipcRenderer.invoke('recording:stop'),
     listDevices: () => ipcRenderer.invoke('audio:list-devices'),
     probeDevice: (device) => ipcRenderer.invoke('audio:probe-device', device),
+    // Linux: the audio server (PulseAudio / PipeWire) and whether FFmpeg can record from it.
+    linuxStatus: () => ipcRenderer.invoke('audio:linux-status'),
     uploadFile: () => ipcRenderer.invoke('audio:import-file'),
   },
 
@@ -147,7 +149,8 @@ contextBridge.exposeInMainWorld('meetmind', {
 
   // System audio capture (main ↔ renderer)
   capture: {
-    onStart: (callback) => { ipcRenderer.on('capture:start', () => callback()); },
+    // options: { requireSystemAudio } — fail rather than record the mic alone (main can fall back).
+    onStart: (callback) => { ipcRenderer.on('capture:start', (_e, options) => callback(options || {})); },
     onStop: (callback) => { ipcRenderer.on('capture:stop', () => callback()); },
     sendStarted: (sources) => ipcRenderer.send('capture:started', sources),
     sendFailed: (error) => ipcRenderer.send('capture:failed', error),

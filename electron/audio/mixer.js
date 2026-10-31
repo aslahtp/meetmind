@@ -11,11 +11,18 @@ function isWasapiLoopback(device) {
   return device === WASAPI_LOOPBACK_ID;
 }
 
+// PulseAudio input (Linux, also PipeWire through pipewire-pulse) for a source name: a monitor
+// (`<sink>.monitor`, what an output device plays) for system audio, or a microphone.
+function pulseInput(source) {
+  return ['-f', 'pulse', '-thread_queue_size', '512', '-i', source];
+}
+
 /**
  * Builds FFmpeg filter graph arguments for mixing system audio + mic.
- * Returns the filter_complex string and output options.
+ * Returns the filter_complex string and output options. `backend` picks the input devices:
+ * 'windows' (WASAPI loopback / DirectShow) or 'pulse' (Linux PulseAudio source names).
  */
-function buildAmixFilter(systemDevice, micDevice) {
+function buildAmixFilter(systemDevice, micDevice, { backend = 'windows' } = {}) {
   const inputs = [];
   const filterParts = [];
 
@@ -36,11 +43,16 @@ function buildAmixFilter(systemDevice, micDevice) {
     '-i', `audio=${device}`,
   ];
 
-  const sysInput = (device) => isWasapiLoopback(device) ? wasapiLoopbackInput() : dshowInput(device);
+  const pulse = backend === 'pulse';
+  const sysInput = (device) => {
+    if (pulse) return pulseInput(device);
+    return isWasapiLoopback(device) ? wasapiLoopbackInput() : dshowInput(device);
+  };
+  const micInput = pulse ? pulseInput : dshowInput;
 
   if (systemDevice && micDevice) {
     inputs.push(...sysInput(systemDevice));
-    inputs.push(...dshowInput(micDevice));
+    inputs.push(...micInput(micDevice));
     // asetpts=PTS-STARTPTS resets each input's timestamps to start at zero.
     // Without this, dshow devices often have different start timestamps (e.g.
     // 0.5 s apart) which can cause amix to output silence while waiting for
@@ -56,7 +68,7 @@ function buildAmixFilter(systemDevice, micDevice) {
   } else if (systemDevice) {
     inputs.push(...sysInput(systemDevice));
   } else if (micDevice) {
-    inputs.push(...dshowInput(micDevice));
+    inputs.push(...micInput(micDevice));
   } else {
     throw new Error('No audio device specified');
   }
@@ -191,11 +203,11 @@ function detectMicrophone(devices) {
 /**
  * Build FFmpeg args for recording a single device (used for device probing).
  */
-function buildSingleDeviceArgs(device) {
-  const inputs = isWasapiLoopback(device)
-    ? ['-f', 'wasapi', '-thread_queue_size', '512', '-loopback', '-i', '']
-    : ['-f', 'dshow', '-thread_queue_size', '512', '-rtbufsize', '30485760',
-       '-audio_buffer_size', '80', '-i', `audio=${device}`];
+function buildSingleDeviceArgs(device, { backend = 'windows' } = {}) {
+  let inputs;
+  if (backend === 'pulse') inputs = pulseInput(device);
+  else if (isWasapiLoopback(device)) inputs = ['-f', 'wasapi', '-thread_queue_size', '512', '-loopback', '-i', ''];
+  else inputs = ['-f', 'dshow', '-thread_queue_size', '512', '-rtbufsize', '30485760', '-audio_buffer_size', '80', '-i', `audio=${device}`];
   return {
     inputs,
     outputArgs: ['-af', 'volume=1', '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le'],

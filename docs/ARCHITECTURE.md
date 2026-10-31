@@ -13,11 +13,12 @@ For contributor commands and day to day workflow rules see [`AGENTS.md`](../AGEN
 
 ## 1. What MeetMind is
 
-MeetMind is a free, GPL-3.0 licensed desktop app for Windows 10/11 and (as a beta) macOS 14.2+ that
-turns online meetings into written meeting notes. It:
+MeetMind is a free, GPL-3.0 licensed desktop app for Windows 10/11 and (as betas) macOS 14.2+ and
+Linux x64 that turns online meetings into written meeting notes. It:
 
 1. Records system audio (Windows: WASAPI loopback, or a DirectShow fallback; macOS: the CoreAudio
-   Tap API) and the microphone at the same time, on the user's own computer. Nothing joins the
+   Tap API; Linux: Electron's loopback, or FFmpeg recording the PulseAudio/PipeWire output monitor)
+   and the microphone at the same time, on the user's own computer. Nothing joins the
    meeting as a bot or participant.
 2. Sends the recording to a speech to text engine chosen by the user (AssemblyAI, Google Cloud
    Speech to Text v1/v2, Sarvam AI, or Groq Whisper) to get a speaker labeled transcript.
@@ -83,7 +84,7 @@ tests/           Vitest suite (pure logic only, kept out of electron-builder's f
 docs/            This file, GCS setup guide, known issues, new-features notes, brand assets, screenshots
 site/            Static marketing site published to GitHub Pages
 .github/         Workflows, reusable actions, CODEOWNERS, Dependabot config
-electron-builder.yml   Packaging config: Windows NSIS installer, macOS DMGs + update zips
+electron-builder.yml   Packaging config: Windows NSIS installer, macOS DMGs + update zips, Linux AppImage + .deb
 vite.config.js         Renderer build config
 vitest.config.mjs      Test runner config (separate root from vite.config.js)
 eslint.config.mjs      Flat ESLint config, scoped per directory
@@ -98,14 +99,18 @@ pnpm-workspace.yaml    pnpm settings (hoisted node_modules, supportedArchitectur
 
 Owns:
 
-- The `BrowserWindow` (custom titlebar in the renderer: frameless on Windows, with the window
+- The `BrowserWindow` (custom titlebar in the renderer: frameless on Windows and Linux, with the window
   buttons drawn by the renderer and driven by `window:*` IPC; on macOS `titleBarStyle:
   'hiddenInset'` keeps the native traffic lights inset into the renderer's top bar, which leaves
   room for them and hides its own buttons), the tray icon (a monochrome `trayTemplate.png` in the
   macOS menu bar), the macOS application menu (`createAppMenu()`: About, Settings… ⌘, which sends
   `app:navigate`, Hide/Quit, Edit and Window menus), and `app.requestSingleInstanceLock()` to
   prevent duplicate windows/tray icons on relaunch (focuses the existing window on
-  `second-instance` instead). Closing the window only hides it on both platforms.
+  `second-instance` instead). Closing the window only hides it on every platform. On Linux,
+  `main.js` runs Electron through XWayland (`--ozone-platform=x11`, set before `ready`) whenever
+  `DISPLAY` is set, because a native Wayland window can't stay on top or be placed (the meeting
+  overlay) and can't list other apps' windows (meeting detection); the window icon is a PNG, since
+  Electron can't read `.ico` there.
 - Launch at login (`autoLaunch`, `electron/services/auto-launch.js`). On Windows the
   `HKCU\…\CurrentVersion\Run` entry is named `MeetMind` and passes `--hidden`, so a login launch
   creates the window without showing it and the app starts in the tray, with meeting detection
@@ -115,12 +120,19 @@ Owns:
   exists Windows is the source of truth: a disabled entry stays disabled and the stored setting
   follows it; with no entry the stored setting decides. Leftover entries for this exe under other
   names are removed. Only the packaged app writes an entry (an unpackaged run would point it at the
-  bare dev electron binary). macOS keeps plain `openAtLogin`.
+  bare dev electron binary). macOS keeps plain `openAtLogin`. Electron has no login items on Linux,
+  so there it writes an XDG autostart entry, `~/.config/autostart/meetmind.desktop` (under
+  `$XDG_CONFIG_HOME` if set), whose `Exec=` runs the app with `--hidden`; an AppImage entry points
+  at the AppImage file (`$APPIMAGE`), since the app itself runs from a temporary mount. An entry the
+  desktop's startup settings turned off (`Hidden=true`, `X-GNOME-Autostart-enabled=false`) counts
+  as disabled, like a Task Manager-disabled Run entry, and an enabled one is rewritten at startup so
+  a moved AppImage keeps launching.
 - Registration of the `meetmind://` custom protocol as the app's default protocol client, but
   **only when packaged** (`app.isPackaged`). Registering it from `pnpm run dev` would steal the
   handler and point "Open App" links at the raw `electron.exe`, breaking the flow after a real
-  install. Windows delivers links in `argv` (`second-instance`, or `process.argv` on a cold
-  start); macOS delivers them through `open-url`, registered before `ready` so the link that
+  install. Windows and Linux deliver links in `argv` (`second-instance`, or `process.argv` on a
+  cold start; on Linux the `.deb`'s desktop entry declares `x-scheme-handler/meetmind` from
+  electron-builder's `protocols`, and an AppImage needs desktop integration); macOS delivers them through `open-url`, registered before `ready` so the link that
   launched the app isn't lost, and gets the scheme from electron-builder's `protocols`.
 - `--smoke` (checked on the first line of `main.js`, before anything else loads): hands over to
   `electron/smoke.js`, a headless self-test of the packaged app run by CI (section 16).
@@ -157,12 +169,12 @@ grouped by feature:
 
 | Namespace | Channels | Purpose |
 | --- | --- | --- |
-| `platform` | (value, not a channel) | `process.platform`, read by the renderer through `renderer/lib/os.js` (`isMac`, `isWindows`) |
-| `window` | `window:minimize/maximize/close/isMaximized` | Custom titlebar controls (frameless window; Windows only, macOS uses its traffic lights) |
+| `platform` | (value, not a channel) | `process.platform`, read by the renderer through `renderer/lib/os.js` (`isMac`, `isWindows`, `isLinux`) |
+| `window` | `window:minimize/maximize/close/isMaximized` | Custom titlebar controls (frameless window on Windows and Linux; macOS uses its traffic lights) |
 | `shell` | `shell:open-external` | Open a URL in the system default browser |
 | `logs` | `logs:get`, `logs:clear`, `logs:openFolder` | Backing store for the Logs viewer |
 | `config` | `config:get`, `config:set`, `config:set-multiple` | Settings read/write |
-| `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:import-file` | Recording control and device enumeration (FFmpeg devices are Windows-only; macOS returns an error) |
+| `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:linux-status`, `audio:import-file` | Recording control and device enumeration (FFmpeg devices: DirectShow/WASAPI on Windows, PulseAudio sources on Linux; macOS returns an error). `audio:linux-status` returns the PulseAudio/PipeWire server, default output and input, and whether FFmpeg can record from it, for Settings › System › System audio |
 | `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed |
 | `dialog` | `dialog:choose-folder` | Native folder picker |
 | `pdf` | `pdf:export`, `pdf:reveal`, `pdf:default-dir` | PDF export |
@@ -170,7 +182,7 @@ grouped by feature:
 | `providers` | `providers:list`, `providers:test` | Provider descriptors (models, credential fields, guides) and generic connection test |
 | `gemini` | `gemini:default-system-prompt`, `gemini:default-md-system-prompt` | Default prompt text for Settings |
 | `processing` | `processing:run`, `processing:retry` | Manually (re)run the pipeline on a session |
-| `capture` | `capture:start/stop` (main -> renderer), `capture:started/failed/chunk/audio-data` (renderer -> main; `capture:started` carries `{ systemAudio, mic }`), `capture:test-begin/test-end` (invoke) | Renderer-side system audio capture handshake; the test pair switches the macOS capture strategy for Settings' "Test system audio" |
+| `capture` | `capture:start/stop` (main -> renderer; `capture:start` carries `{ requireSystemAudio }`), `capture:started/failed/chunk/audio-data` (renderer -> main; `capture:started` carries `{ systemAudio, mic }`), `capture:test-begin/test-end` (invoke) | Renderer-side system audio capture handshake; the test pair switches the macOS capture strategy for Settings' "Test system audio" (on Linux it just wraps the one test capture) |
 | `permissions` | `permissions:status`, `permissions:request`, `permissions:open-settings` | macOS microphone and Screen & System Audio Recording status, prompts, and System Settings deep links (`not-applicable` elsewhere) |
 | `calendar` | `calendar:list/add/update/remove/reconnect/cancel-auth/events` | Calendar sources (Google accounts and ICS links, up to 5; returned redacted), Google sign-in, merged upcoming events with per-calendar errors |
 | `updater` | `updater:check/download/install/get-status` | Auto-update control |
@@ -220,7 +232,9 @@ React 18 + Vite 6, no router: `renderer/app.jsx` is a single view-state switch b
   selection, FFmpeg install flow, onboarding. On macOS, `SystemSection` also shows
   `settings/MacPermissions.jsx`: permission statuses and the "Test system audio" check, which
   records 3 s with each capture strategy and offers to switch to one that heard audio
-  (`lib/audioTest.js`).
+  (`lib/audioTest.js`). On Linux it shows `settings/LinuxAudio.jsx` instead: the PulseAudio or
+  PipeWire server and default output (`audio:linux-status`), whether the FFmpeg fallback can
+  record from it, and the same 3 s "Test system audio" capture.
 - `LogsViewer.jsx`: tails `electron/utils/logger.js` output live via the `log:entry` IPC event.
 
 Supporting pieces: `RecordingBar.jsx` (persistent recording control), `ProcessingIndicator.jsx`
@@ -251,11 +265,12 @@ preview of notes still being written runs the Markdown through `remend` first.
 ### 3.4 Meeting detection and overlay (`electron/detection/`, `electron/overlay/`)
 
 The desktop app notices calls by itself, without the extension, the way Notion's and Granola's
-desktop apps do. This is Windows-only for now: on macOS `win32.js` reports itself unavailable,
-the detector logs that and stays off, and Settings shows "Not available on macOS yet" instead of
-the switch. `detection/meeting-detector.js` polls every 1.5 s, using two Win32 reads made
-through `koffi` FFI in `detection/win32.js` (loaded lazily, so a load failure only disables
-detection):
+desktop apps do. It works on Windows and Linux; on macOS there is no backend yet, so the
+detector logs that and stays off, and Settings shows "Not available on macOS yet" instead of the
+switch. `detection/meeting-detector.js` polls every 1.5 s through a per-OS backend with the same
+readers (`isAvailable`, `getLoadError`, `readMicUsers`, `listVisibleWindows`). On Windows that is
+two Win32 reads made through `koffi` FFI in `detection/win32.js` (loaded lazily, so a load failure
+only disables detection):
 
 - **Who holds the mic**, from two sources merged by `mergeMicUsers()`:
   - the apps with an active WASAPI capture session on any active microphone
@@ -273,12 +288,29 @@ detection):
 - **Window titles**: `EnumWindows` + `GetWindowTextW`, with the owning exe resolved via
   `QueryFullProcessImageNameW`.
 
+On Linux, `detection/linux.js` (no koffi):
+
+- **Who holds the mic**: the PulseAudio/PipeWire streams recording from a source
+  (`pactl list source-outputs`, parsed by `audio/pulse-parse.js`), as each stream's
+  `application.process.binary`, folded onto one id per app by `linuxAppId()` (`google-chrome` and
+  `chrome` are both `chrome`, `zoom.real` is `zoom`). Needs `pactl` (`pulseaudio-utils`); without
+  it the backend reports itself unavailable.
+- **Window titles**: Electron's `desktopCapturer.getSources({ types: ['window'] })` with no
+  thumbnails. It lists windows without their process, so `appFromWindowTitle()` names the app from
+  the title's browser suffix (" - Google Chrome", " — Mozilla Firefox", …) or a Zoom meeting title.
+  This needs X11 or XWayland (`DISPLAY`); on a native Wayland session no titles are read, so only
+  the Zoom desktop app (which counts on its mic use alone) is detected there.
+
+  Both reads are asynchronous: each poll returns the previous refresh's result and starts the
+  next, so the main process never waits on `pactl`, and the two-poll debounce absorbs the lag.
+
 The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) decide:
 
-- A browser (Chrome, Edge, Brave, Firefox, Opera, Vivaldi, Arc) holding the mic counts as a
+- A browser (Chrome, Chromium, Edge, Brave, Firefox, Opera, Vivaldi, Arc) holding the mic counts as a
   meeting only if it showed a Google Meet, Zoom web or Teams web title in the last 2 minutes, so
   switching tabs mid-call keeps the meeting but voice search on another site never prompts.
-- The Zoom and Teams desktop apps holding the mic count on their own.
+- The Zoom and Teams desktop apps holding the mic count on their own (on Linux, Zoom and the
+  community `teams-for-linux` app; Microsoft has no Teams app for Linux).
 - Two consecutive positive polls emit `meeting-detected`; 15 s with no positive poll emits
   `meeting-ended`. "Not now" suppresses a meeting until it ends.
 
@@ -286,7 +318,8 @@ Detection runs in the main process, so it keeps working while the window is mini
 in the tray. The detector logs which mic source works when it starts, a warning if the audio
 sessions become unreadable (and when they recover), a note the first time the sessions show a
 browser on the mic that the registry doesn't, and a heartbeat every 10 minutes (ticks, failed
-ticks, the longest gap between ticks, the apps seen on the mic). After sleep (`powerMonitor`
+ticks, the longest gap between ticks, the apps seen on the mic). The registry note is Windows-only.
+On Linux a failing `pactl` is logged as the audio server being unreadable. After sleep (`powerMonitor`
 `resume`) it polls at once rather than waiting for the next tick.
 
 `main.js` turns those events into overlay states, each a single compact row: `prompt` (Record / ×;
@@ -324,7 +357,7 @@ unpackaged app run with `MEETMIND_DEBUG_OVERLAY_FAIL=1` never acknowledges the o
 
 ## 4. Audio capture pipeline
 
-MeetMind has two independent capture paths, tried in order (the second on Windows only).
+MeetMind has two independent capture paths, tried in order (the second on Windows and Linux only).
 
 ### 4.1 Primary path: renderer capture
 
@@ -349,18 +382,28 @@ picker and answers with `audio: 'loopback'`:
   system picker). Settings › System › "Test system audio" runs a 3 s capture per strategy via
   `capture:test-begin`/`capture:test-end` and lets the user switch. On macOS `main.js` asks for
   microphone access before a recording and allows 60 s for the renderer to start (permission
-  prompts), versus 6 s on Windows.
+  prompts), versus 6 s elsewhere.
+- **Linux**: Chromium's loopback where it gives an audio track, through the same screen-source
+  handler as Windows. When it doesn't, 4.2 records the default output's monitor instead.
 
-If the renderer gets no system audio (the request is refused, or the stream has no audio track),
-it fails on Windows, so main falls back to 4.2, which can still capture it; on other platforms
-it records the microphone alone and shows a warning.
+`capture:start` tells the renderer whether main can capture system audio itself
+(`requireSystemAudio`, from `canRecordSystemAudioWithFfmpeg()`): always on Windows, on Linux when
+`pactl info` reports a default output and the located FFmpeg lists the `pulse` input device,
+never on macOS. If the renderer then gets no system audio (the request is refused, or the stream
+has no audio track), it fails, so main falls back to 4.2; otherwise it records the microphone
+alone and shows a warning.
 
-### 4.2 Fallback path: direct ffmpeg capture (Windows)
+### 4.2 Fallback path: direct ffmpeg capture (Windows and Linux)
 
-If renderer capture fails to start, `handleStartRecording()` in `main.js` falls back on Windows
-to a direct
-ffmpeg DirectShow (`dshow`) capture combining the microphone and system audio, using
-`electron/audio/mixer.js`:
+If renderer capture fails to start, `handleStartRecording()` in `main.js` falls back to a direct
+ffmpeg capture combining the microphone and system audio, using `electron/audio/mixer.js` (the
+`backend` option picks the inputs). On Linux it records two PulseAudio inputs (`-f pulse`, which
+PipeWire serves through pipewire-pulse): the default output's monitor (`<sink>.monitor`, what the
+speakers or headphones play) and the default input, read from `pactl info` and
+`pactl list short sources` (`electron/audio/pulse.js`, parsed by the pure `pulse-parse.js`), so
+it follows whatever the user picked in their sound settings. It needs an FFmpeg built with
+PulseAudio input (`ffmpegSupportsPulse()` runs `ffmpeg -devices` once per binary); the bundled
+Linux build has it. On Windows it is a DirectShow (`dshow`) / WASAPI capture:
 
 - **WASAPI loopback** (`WASAPI_LOOPBACK_ID`): captures whatever is currently playing through the
   Windows default output device (speakers, 3.5mm, USB, or Bluetooth headphones), without
@@ -381,17 +424,19 @@ pointing at the Privacy & Security permissions.
 `electron/audio/ffmpeg-path.js` resolves the ffmpeg/ffprobe binary path (`ffmpeg.exe` on
 Windows, `ffmpeg` elsewhere) in this order: a bundled copy under Electron's `extraResources`
 (production installs) or a local copy at `assets/ffmpeg/` (dev machines that downloaded it
-manually; per-arch `assets/ffmpeg/mac-<arch>/` on macOS), then on macOS the in-app install in
-`userData/ffmpeg/` and Homebrew's `/opt/homebrew/bin` and `/usr/local/bin` (Finder-launched apps
-don't inherit the shell PATH), and finally the bare command on PATH. The candidate list is built
+manually; per-arch `assets/ffmpeg/mac-<arch>/` on macOS and `assets/ffmpeg/linux-<arch>/` on
+Linux), then on macOS and Linux the in-app install in `userData/ffmpeg/`, on macOS Homebrew's
+`/opt/homebrew/bin` and `/usr/local/bin` (Finder-launched apps don't inherit the shell PATH), and
+finally the bare command on PATH (where Linux finds a distro `ffmpeg`). The candidate list is built
 by the pure `ffmpegCandidates()` (unit-tested in `tests/ffmpeg-path.test.js`). If nothing is
 found, Settings → System offers a runtime download via the `ffmpeg:install` IPC handler
 (`electron/services/ffmpeg-installer.js`).
 
 Every FFmpeg MeetMind ships or installs comes from one table of pinned downloads,
-`electron/audio/ffmpeg-sources.js`, and goes through `electron/audio/ffmpeg-fetch.js`: each zip
-is checked against its pinned SHA-256 (`electron/utils/download.js`) before it is unpacked
-(PowerShell `Expand-Archive` on Windows, `ditto` on macOS). The same code serves the in-app
+`electron/audio/ffmpeg-sources.js`, and goes through `electron/audio/ffmpeg-fetch.js`: each
+archive is checked against its pinned SHA-256 (`electron/utils/download.js`) before it is
+unpacked (a zip with PowerShell `Expand-Archive` on Windows, `ditto` on macOS, `unzip` elsewhere;
+a `.tar.xz` with `tar`, System32's bsdtar on Windows). The same code serves the in-app
 installer and `scripts/fetch-ffmpeg.js`, which stages the binaries for CI and release builds.
 
 - **Windows**: the essentials build from [GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg)
@@ -402,9 +447,15 @@ installer and `scripts/fetch-ffmpeg.js`, which stages the binaries for CI and re
   per tool. The in-app installer puts them in `userData/ffmpeg/`, never inside the app bundle,
   whose signature it would break. Intel release builds there end in January 2027, so the pinned
   x64 zips need mirroring before then (see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)).
+- **Linux**: a GPL static build of the 9.0 release branch from
+  [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) (glibc 2.28+, with PulseAudio input
+  and libopus), one `.tar.xz` with both executables. It is the last build of a month, which BtbN
+  keeps for two years (daily builds only 14 days), so the pin needs bumping before September 2028.
+  The in-app installer puts it in `userData/ffmpeg/`: an AppImage is read-only and a `.deb`
+  installs under `/opt`.
 
 FFmpeg binaries are never committed to git (they exceed GitHub's 100 MB file limit and CI's
-repo-hygiene job actively rejects any `.exe`/`.dll`/`.msi`/`.dylib`, or anything in
+repo-hygiene job actively rejects any `.exe`/`.dll`/`.msi`/`.dylib`/`.so`/`.AppImage`/`.deb`, or anything in
 `assets/ffmpeg/` but its README).
 
 ---
@@ -609,7 +660,7 @@ API keys (`googleApiKey`, `geminiApiKey`, `claudeApiKey`, `assemblyAiApiKey`, `s
 Notion; the provider ones are generated from the provider
 registries), service and model selection (`sttService`, `sttModels`, `llmProvider`,
 `llmModels`, `llmFallback`), audio device selection (Windows FFmpeg fallback:
-`systemAudioDevice`, `micDevice`; macOS system-audio capture strategy: `macCaptureStrategy`,
+`systemAudioDevice`, `micDevice`; the Linux fallback always uses the default output and input; macOS system-audio capture strategy: `macCaptureStrategy`,
 `screen`/`frame`/`picker`, default `screen`), diarization parameters
 (`enableDiarization`, `minSpeakers`, `maxSpeakers`), output preferences (`noteOutputMode`,
 `language`, custom `geminiSystemPrompt`), UI preferences (`theme`, `autoLaunch`,
@@ -770,8 +821,11 @@ macOS builds are ad-hoc signed (no Apple Developer ID yet), and Squirrel.Mac won
 update into an app without a stable signature. So on macOS `CAN_SELF_UPDATE` is false (exposed
 as `canSelfUpdate` in the state): the app still checks `latest-mac.yml`, but "Download" opens
 the GitHub release page instead of downloading, and the UI says "Download from GitHub". Once
-mac builds are Developer ID signed and notarized, flipping that one constant enables in-app
-updates there too.
+mac builds are Developer ID signed and notarized, changing `canSelfUpdate()` in
+`update-policy.js` enables in-app updates there too. On Linux only the AppImage replaces itself
+(`$APPIMAGE` is set when one runs); a `.deb` install checks `latest-linux.yml` the same way and
+links to the new package, and Settings › General explains that instead of showing the
+auto-install switch.
 
 After an update installs, a post-update check verifies FFmpeg is still present and correctly
 resolvable (since `assets/ffmpeg/` is excluded from the packaged app's files and only ships via
@@ -812,6 +866,7 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 | GitHub Releases | Auto-update distribution | none (public releases) | `electron-updater`, configured in `electron-builder.yml` |
 | GyanD/codexffmpeg (gyan.dev builds) | Windows FFmpeg binaries | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
 | ffmpeg.martin-riedl.de | macOS FFmpeg binaries (arm64 + x64) | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
+| BtbN/FFmpeg-Builds (GitHub releases) | Linux x64 FFmpeg binaries (GPL static build with PulseAudio input) | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
 | Sigstore (via `actions/attest`) | Signed build-provenance attestations for release files | GitHub OIDC (release workflow only) | `attest` job in `release.yml` |
 
 All of the above except GitHub Releases and FFmpeg distribution are bring-your-own-credentials:
@@ -823,7 +878,7 @@ encryption of these values; see section 14).
 
 ## 12. Package inventory
 
-From `package.json` (pnpm, Node 22.12+, Windows or macOS).
+From `package.json` (pnpm, Node 22.12+, Windows, macOS or Linux).
 
 ### 12.1 Runtime dependencies
 
@@ -838,7 +893,7 @@ From `package.json` (pnpm, Node 22.12+, Windows or macOS).
 | `fluent-ffmpeg` | ^2.1.3 | ffmpeg process control (audio capture and conversion) |
 | `googleapis` | ^176.0.0 | Google Calendar OAuth2 + Calendar API client |
 | `ical.js` | ^2.2.1 | Parses ICS calendar feeds (time zones, recurrence expansion) |
-| `koffi` | ^3.3.3 | FFI to `user32`/`kernel32`/`advapi32` for meeting detection (mic users, window titles) on Windows, and to CoreGraphics for the macOS screen-capture permission check; prebuilt binaries from its `@koromix/koffi-<os>-<cpu>` optional dependencies (each package ships only its own OS's, via `electron-builder.yml` `files`), so its install script stays disabled in `allowBuilds` |
+| `koffi` | ^3.3.3 | FFI to `user32`/`kernel32`/`advapi32` for meeting detection (mic users, window titles) on Windows, and to CoreGraphics for the macOS screen-capture permission check (not used on Linux, whose package leaves its binaries out); prebuilt binaries from its `@koromix/koffi-<os>-<cpu>` optional dependencies (each package ships only its own OS's, via `electron-builder.yml` `files`), so its install script stays disabled in `allowBuilds` |
 | `lucide-react` | ^1.48.0 | Renderer icon set |
 | `react-markdown` | ^10.1.0 | Notes/transcript Markdown rendering (in-app and PDF) |
 | `remark-gfm` | ^4.0.1 | GitHub-flavored Markdown extensions (tables, task lists) for `react-markdown` |
@@ -853,7 +908,7 @@ From `package.json` (pnpm, Node 22.12+, Windows or macOS).
 | Package | Version | Purpose |
 | --- | --- | --- |
 | `electron` | ^44.7.0 | Runtime; electron-builder packages the version the lockfile installed. Since Electron 42 the package has no install script: the binary downloads the first time Electron is launched, or with `pnpm exec install-electron` |
-| `electron-builder` | ^26.17.0 | Packaging the Windows NSIS installer and the macOS DMGs (26.0.13+ is needed for ad-hoc `identity: "-"` signing) |
+| `electron-builder` | ^26.17.0 | Packaging the Windows NSIS installer, the macOS DMGs and the Linux AppImage and `.deb` (26.0.13+ is needed for ad-hoc `identity: "-"` signing) |
 | `react`, `react-dom` | ^18.3.1 | Renderer UI framework |
 | `vite`, `@vitejs/plugin-react` | ^6.4.3 / ^4.7.0 | Renderer dev server and build |
 | `vitest` | ^5.0.1 | Test runner (`tests/**/*.test.{js,jsx}`, Node environment) |
@@ -884,7 +939,7 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
 | Path | Contents |
 | --- | --- |
 | `assets/icons/` | Source SVG/PNG icon plus every generated resolution (16 through 1024px; the 1024px `icon.png` is what electron-builder turns into the macOS `.icns`), the Windows `.ico`, and the macOS menu-bar `trayTemplate.png`/`@2x` (from `tray-template.svg`), regenerated by `pnpm run generate-icons` (`scripts/generate-icons.js`, via `sharp` + `png-to-ico`); also holds third-party service icons (Google Calendar, Google Meet, Notion) used in the UI, and an `icons/services` subfolder |
-| `assets/ffmpeg/` | Empty at rest (only a `README.md`); FFmpeg binaries are never committed (over GitHub's 100 MB limit and actively rejected by CI's repo-hygiene check). Windows: `ffmpeg.exe`/`ffprobe.exe` at the root, placed manually or by `release.yml`. macOS: `mac-arm64/` and `mac-x64/`, filled by `scripts/fetch-ffmpeg.js` |
+| `assets/ffmpeg/` | Empty at rest (only a `README.md`); FFmpeg binaries are never committed (over GitHub's 100 MB limit and actively rejected by CI's repo-hygiene check). Windows: `ffmpeg.exe`/`ffprobe.exe` at the root, placed manually or by `release.yml`. macOS: `mac-arm64/` and `mac-x64/`; Linux: `linux-x64/`; both filled by `scripts/fetch-ffmpeg.js` |
 | `assets/installer.nsh` | Custom NSIS installer script logic (referenced by `electron-builder.yml`'s `nsis.include`) |
 | `assets/entitlements.mac.plist` | macOS entitlements (JIT, library validation, audio input), applied once the hardened runtime is turned on with Developer ID signing |
 | `renderer/assets/fonts/` and `extension/fonts/` | `DMSans-Variable.woff2` (OFL licensed, see accompanying `OFL.txt`), used identically in the app UI and the injected extension overlay so both match the design system in `DESIGN.md` |
@@ -904,8 +959,9 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   authentication token exchanged, so any locally running process capable of spoofing that
   origin header (in practice, only the extension's own runtime does this reliably) is trusted;
   this is an accepted tradeoff for a purely local, single-user bridge.
-- **Meeting detection** (Windows) reads only local state (the apps recording from a microphone,
-  through the audio-session API and the mic consent registry, and visible window titles);
+- **Meeting detection** (Windows and Linux) reads only local state (the apps recording from a
+  microphone, through the audio-session API and the mic consent registry on Windows or PulseAudio
+  on Linux, and visible window titles);
   nothing it reads leaves the machine or is stored beyond the detected meeting's title.
 - **macOS code signing**: builds are ad-hoc signed only (`identity: "-"`, no hardened runtime,
   not notarized), so Gatekeeper asks the user to approve the app once (Privacy & Security →
@@ -952,9 +1008,11 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   notifications can't rename the installed app to "Electron"), Windows NSIS
   installer (`x64` only), `signAndEditExecutable: false` (unsigned), custom installer/uninstaller
   icons, desktop and start-menu shortcuts created, an `afterPack` hook
-  (`scripts/after-pack.js`), and the `meetmind://` protocol association declared via `protocols`.
+  (`scripts/after-pack.js`: rcedit embeds the icon and version in the Windows exe; on Linux it
+  marks the bundled ffmpeg/ffprobe executable, since `extraResources` keeps the staged files' mode), and the `meetmind://` protocol association declared via `protocols`.
   FFmpeg is pulled in as per-platform `extraResources` (`assets/ffmpeg/*.exe` on Windows,
-  `assets/ffmpeg/mac-${arch}/` on macOS -> `ffmpeg/` in the packaged app),
+  `assets/ffmpeg/mac-${arch}/` on macOS, `assets/ffmpeg/linux-${arch}/` on Linux -> `ffmpeg/` in
+  the packaged app),
   explicitly excluded from the `asar` archive's `files` list (`!assets/ffmpeg/**`) since ffmpeg
   needs to run as a native subprocess, not live inside the packed archive. There is deliberately
   no `electronVersion`: electron-builder packages the Electron installed from the lockfile
@@ -970,22 +1028,35 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   and `notarize: false` until there is a Developer ID, entitlements ready in
   `assets/entitlements.mac.plist`, and `extendInfo` adding `NSMicrophoneUsageDescription` and
   `NSAudioCaptureUsageDescription`. `pnpm run build:mac` builds both arches in one run so a single
-  `latest-mac.yml` lists both; it must run on a Mac. `scripts/after-pack.js` (rcedit) and
-  `assets/installer.nsh` are Windows-only.
+  `latest-mac.yml` lists both; it must run on a Mac. `assets/installer.nsh` is Windows-only.
+- **Linux packaging** (`linux:` and `deb:` in `electron-builder.yml`): `AppImage` + `deb` targets
+  for `x64` (`MeetMind-X.Y.Z-x86_64.AppImage`, `MeetMind-X.Y.Z-amd64.deb`, and `latest-linux.yml`
+  listing the AppImage for its self-update), executable `meetmind`, icon from
+  `assets/icons/icon.png`, category `Office` (the top-level `protocols` adds
+  `x-scheme-handler/meetmind` to the desktop entry for `meetmind://` links), and `syncDesktopName` so the installed `.desktop` file is named after
+  `package.json`'s `desktopName` (`meetmind.desktop`, matching Electron's Wayland app_id and
+  WM_CLASS). The `.deb` recommends `pulseaudio-utils` (`pactl`) and, from electron-builder, ships
+  an AppArmor profile so Chromium's sandbox works on Ubuntu 24.04+. koffi's binaries are left out
+  (nothing loads koffi on Linux). `pnpm run build:linux` must run on Linux; the `.deb` needs fpm,
+  which electron-builder downloads.
 - **Build must include `dist/renderer/**` in `build.files`**; since `dist/` is gitignored,
   omitting this would ship an installer whose window is blank (a documented, previously-hit
   failure mode, called out explicitly in `AGENTS.md`'s "Learned Workspace Facts").
 - **Production build** (`pnpm run build`) requires `assets/ffmpeg/ffmpeg.exe` and
-  `assets/ffmpeg/ffprobe.exe` to already exist locally (not committed), and `pnpm run build:mac`
-  needs `assets/ffmpeg/mac-<arch>/`; `pnpm run fetch-ffmpeg` stages either from the pins.
-- **`pnpm run build:dir`** / **`pnpm run build:mac:dir`**: production renderer build + an
+  `assets/ffmpeg/ffprobe.exe` to already exist locally (not committed), `pnpm run build:mac`
+  needs `assets/ffmpeg/mac-<arch>/` and `pnpm run build:linux` needs `assets/ffmpeg/linux-x64/`;
+  `pnpm run fetch-ffmpeg` stages any of them from the pins.
+- **`pnpm run build:dir`** / **`pnpm run build:mac:dir`** / **`pnpm run build:linux:dir`**: production renderer build + an
   unpacked Electron app under `dist/desktop/`, for fast local iteration without building the full
   installer.
 - **Smoke test**: a packaged app started with `--smoke` (`electron/smoke.js`) uses a throwaway
   profile, opens no window, checks config + DB, finds and runs ffmpeg/ffprobe, encodes a 1 s Opus
-  WebM and converts it with `convertWebmToWav`, loads koffi, queries the permissions API and the
-  meeting-detection backend (including the WASAPI audio sessions, whose status it reports without
-  failing, since a CI runner may have no audio service), prints `MEETMIND_SMOKE {json}` and exits non-zero on any failure.
+  WebM and converts it with `convertWebmToWav`, loads koffi (not on Linux), on Linux reaches the
+  audio server with `pactl` and records a second from the default output's monitor with the bundled
+  FFmpeg (the fallback path; a missing `pactl` is reported, not failed), queries the permissions
+  API and the meeting-detection backend (including the WASAPI audio sessions or PulseAudio
+  streams, whose status it reports without failing, since a CI runner may have no audio service),
+  shows the meeting overlay until its renderer acknowledges it, prints `MEETMIND_SMOKE {json}` and exits non-zero on any failure.
   `scripts/check-smoke.js` reads that output in CI, fails the step unless every check passed,
   and writes a table of the checks to the job summary.
 
@@ -1002,9 +1073,14 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   `windows-build` on `windows-latest` (tests, fetch the pinned FFmpeg, `build:dir`, `--smoke`);
   `mac-build` on `macos-latest` (tests, fetch the pinned arm64 FFmpeg, `build:mac:dir`,
   `codesign --verify`, Info.plist privacy keys, `--smoke`, and the zipped `.app` uploaded as a
-  7-day artifact for testers); a `changes` job that skips those two builds on PRs touching only
-  docs (a skipped job still satisfies a required check); a repo-hygiene job (rejects a committed
-  npm/yarn lockfile, committed `.exe`/`.dll`/`.msi`/`.dylib` or anything in `assets/ffmpeg/` but
+  7-day artifact for testers); `linux-build` on `ubuntu-latest` (tests, fetch the pinned Linux
+  FFmpeg, `build:linux`, checks the bundled FFmpeg, `latest-linux.yml` and the `.deb`'s desktop
+  entry, then lifts Ubuntu 24.04's AppArmor user-namespace restriction for the unpacked app's
+  sandbox, starts Xvfb and a PulseAudio server with a null output, runs `--smoke`, and uploads the
+  AppImage as a 7-day artifact for testers); a `changes` job that skips those three builds on PRs
+  touching only docs (a skipped job still satisfies a required check); a repo-hygiene job (rejects
+  a committed npm/yarn lockfile, committed `.exe`/`.dll`/`.msi`/`.dylib`/`.so`/`.AppImage`/`.deb`
+  or anything in `assets/ffmpeg/` but
   its README, a real `.env` file, or any file over 10 MB), a gitleaks secret scan (checksum-verified download) over the full git
   history, `pnpm audit --prod --audit-level high`, and a zizmor audit of the workflows
   themselves. No job has secrets, so all of it is safe on fork PRs. A new commit on a PR cancels
@@ -1025,15 +1101,18 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   job (`macos-latest`, same read-only/no-cache rules) fetches the pinned macOS FFmpeg for arm64
   and x64, runs `pnpm run build:mac`, verifies both apps' signatures and bundled FFmpeg and that
   `latest-mac.yml` lists both update zips, and smoke-tests the arm64 app; signing secrets would
-  go in a protected environment on this job once there is a Developer ID. An `attest` job, the
+  go in a protected environment on this job once there is a Developer ID. The `build-linux` job
+  (`ubuntu-latest`, same rules) fetches the pinned Linux FFmpeg, runs `pnpm run build:linux`,
+  checks that `latest-linux.yml` lists the AppImage, and smoke-tests the unpacked app the way
+  `ci.yml` does. An `attest` job, the
   only one with `id-token: write` and `attestations: write` and running no project code, signs
   SLSA build provenance (`actions/attest`, Sigstore) for the installer, both DMGs, the mac update
-  zips and the extension, so anyone can check a download with
+  zips, the AppImage, the `.deb` and the extension, so anyone can check a download with
   `gh attestation verify <file> --repo aslahtp/meetmind`. A separate `publish` job, which waits
   for the attestations, the only one granted
   `contents: write`, runs no dependency code and no third-party actions, and creates the GitHub
-  release (Windows installer, both DMGs, the mac update zips, `latest.yml`, `latest-mac.yml`,
-  blockmaps and the extension) using the runner's own `gh` CLI. `pnpm run build` is always invoked with
+  release (Windows installer, both DMGs, the mac update zips, the AppImage and `.deb`,
+  `latest.yml`, `latest-mac.yml`, `latest-linux.yml`, blockmaps and the extension) using the runner's own `gh` CLI. `pnpm run build` is always invoked with
   `--publish never`, so electron-builder itself never needs a publish token.
 - **`pr-checks.yml`**: PR-only. Enforces that any PR changing code also bumps `package.json`'s
   `version` and adds a matching `## [X.Y.Z] - YYYY-MM-DD` heading to `CHANGELOG.md` (docs and
@@ -1068,19 +1147,21 @@ Current coverage is pure logic only:
 | `tests/pdf-export.test.js` | PDF file naming (`electron/services/pdf-export.js`) |
 | `tests/meetingFilters.test.js` | Meetings filters and sorting (`renderer/lib/meetingFilters.js`) |
 | `tests/meetingSearch.test.js` | Meeting search: stemming, concept map, typos, prefixes, phrases, ranking and snippets (`renderer/lib/meetingSearch.js`) |
-| `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, merging the two mic sources, meeting window titles, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
-| `tests/autoLaunch.test.js` | Launch at login on Windows and macOS: reading the state from `launchItems`, `--hidden`, respecting an entry disabled in Task Manager, removing leftover entries, dev mode (`electron/services/auto-launch.js`) |
+| `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, merging the two mic sources, meeting window titles, Linux app ids and title-based app names, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
+| `tests/autoLaunch.test.js` | Launch at login on Windows, macOS and Linux: reading the state from `launchItems`, `--hidden`, respecting an entry disabled in Task Manager, removing leftover entries, dev mode, and the Linux XDG autostart entry (AppImage path, quoting, entries disabled in the desktop's settings) (`electron/services/auto-launch.js`) |
+| `tests/pulseParse.test.js` | `pactl` output parsing (server and defaults, sources, recording streams), picking the monitor and microphone, and the PulseAudio FFmpeg arguments (`electron/audio/pulse-parse.js`, `electron/audio/mixer.js`) |
+| `tests/updatePolicy.test.js` | Update rules: check scheduling and retries, which installs can update themselves (`canSelfUpdate`), auto-install, idle detection and hidden relaunch (`electron/services/update-policy.js`) |
 | `tests/settingsForm.test.js` | Settings dirty checks and saving only the changed fields (`renderer/lib/settingsForm.js`) |
 | `tests/notesPreview.test.js` | Live notes preview: partial Markdown and JSON (`buildNotesPreview` in `electron/services/notes-normalize.js`) and the throttled `onPreview` snapshots of `generateNotes`, including a fallback |
 | `tests/meetingTitle.test.js` | Which source titles name the meeting, and how one replaces the LLM's title and prompts it (`electron/services/meeting-title.js`, `buildUserPrompt`) |
 | `tests/ffmpeg-path.test.js` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.js`) and the per-OS silent-recording hints (`electron/audio/audio-hints.js`) |
-| `tests/macSupport.test.js` | macOS capture strategies (`electron/audio/mac-capture.js`), "Test system audio" verdicts (`renderer/lib/audioTest.js`), and the shape of the pinned macOS FFmpeg downloads (`electron/audio/ffmpeg-sources.js`) |
+| `tests/macSupport.test.js` | macOS capture strategies (`electron/audio/mac-capture.js`), "Test system audio" verdicts (`renderer/lib/audioTest.js`), and the shape of every pinned FFmpeg download and how each archive is unpacked (`electron/audio/ffmpeg-sources.js`, `ffmpeg-fetch.js`) |
 | `tests/macPermissions.test.jsx` | Server-renders the macOS Permissions card (`renderer/components/settings/MacPermissions.jsx`), which can't be seen in the Windows dev app |
 
 The packaged app is additionally checked by its `--smoke` self-test in CI (section 15). There is
-no maintainer Mac, so macOS behaviour beyond that (permission prompts, actual system-audio
-capture) is verified by testers on real hardware, using the CI artifact and the in-app "Test
-system audio" check.
+no maintainer Mac or Linux machine, so macOS and Linux behaviour beyond that (permission prompts,
+actual system-audio capture, desktop integration) is verified by testers on real hardware, using
+the CI artifacts and the in-app "Test system audio" check.
 
 This suite does **not** cover the UI, IPC handlers, the recording state machine, or any of the
 third-party API integrations. Per `AGENTS.md`, UI and main-process changes must additionally be
@@ -1104,7 +1185,14 @@ Structural limitations, by design rather than oversight:
 - **macOS is a beta.** It needs macOS 14.2+, is ad-hoc signed (Gatekeeper approval once,
   permissions lost on every update, no in-app update install), has no FFmpeg capture fallback,
   and has no meeting detection yet. Electron's macOS system-audio loopback is new, which is why
-  the capture strategy is configurable and testable in Settings. There is no Linux build target.
+  the capture strategy is configurable and testable in Settings.
+- **Linux is a beta.** x64 only (AppImage and `.deb`). Only the AppImage updates itself, and only
+  the `.deb` registers `meetmind://` links without extra desktop integration. System audio needs
+  PulseAudio or PipeWire with `pactl`. Browser meetings are detected only where window titles can
+  be read (X11, or XWayland, which MeetMind uses whenever `DISPLAY` is set); on a Wayland-only
+  session just the Zoom desktop app is detected. The tray needs AppIndicator support (GNOME needs
+  the AppIndicator extension, which Ubuntu ships), and AppIndicator ignores clicks on the icon,
+  so the tray menu is the way in.
 - **Meeting detection sees titles, not URLs.** A browser only exposes its active tab's title,
   so the meeting URL is unknown, and a meeting is recognised by its tab title (`Meet - …`,
   `Zoom Meeting`, `… | Microsoft Teams`). Other call apps (Slack, Discord, Webex) are recorded

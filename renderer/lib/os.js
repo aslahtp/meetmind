@@ -6,3 +6,4 @@ export const OS = (typeof window !== 'undefined' && window.meetmind?.platform) |
 
 export const isMac = OS === 'darwin';
 export const isWindows = OS === 'win32';
+export const isLinux = OS === 'linux';
