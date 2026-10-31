@@ -1008,7 +1008,8 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   notifications can't rename the installed app to "Electron"), Windows NSIS
   installer (`x64` only), `signAndEditExecutable: false` (unsigned), custom installer/uninstaller
   icons, desktop and start-menu shortcuts created, an `afterPack` hook
-  (`scripts/after-pack.js`), and the `meetmind://` protocol association declared via `protocols`.
+  (`scripts/after-pack.js`: rcedit embeds the icon and version in the Windows exe; on Linux it
+  marks the bundled ffmpeg/ffprobe executable, since `extraResources` keeps the staged files' mode), and the `meetmind://` protocol association declared via `protocols`.
   FFmpeg is pulled in as per-platform `extraResources` (`assets/ffmpeg/*.exe` on Windows,
   `assets/ffmpeg/mac-${arch}/` on macOS, `assets/ffmpeg/linux-${arch}/` on Linux -> `ffmpeg/` in
   the packaged app),
@@ -1027,8 +1028,7 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   and `notarize: false` until there is a Developer ID, entitlements ready in
   `assets/entitlements.mac.plist`, and `extendInfo` adding `NSMicrophoneUsageDescription` and
   `NSAudioCaptureUsageDescription`. `pnpm run build:mac` builds both arches in one run so a single
-  `latest-mac.yml` lists both; it must run on a Mac. `scripts/after-pack.js` (rcedit) and
-  `assets/installer.nsh` are Windows-only.
+  `latest-mac.yml` lists both; it must run on a Mac. `assets/installer.nsh` is Windows-only.
 - **Linux packaging** (`linux:` and `deb:` in `electron-builder.yml`): `AppImage` + `deb` targets
   for `x64` (`MeetMind-X.Y.Z-x86_64.AppImage`, `MeetMind-X.Y.Z-amd64.deb`, and `latest-linux.yml`
   listing the AppImage for its self-update), executable `meetmind`, icon from
