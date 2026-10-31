@@ -5,6 +5,8 @@
 //          development).
 // macOS:   into userData/ffmpeg: never inside the .app, whose code signature would break and
 //          which may sit on a read-only volume.
+// Linux:   into userData/ffmpeg too: an AppImage is a read-only image, and a .deb installs into
+//          /opt, which the user can't write to.
 
 const fs = require('fs');
 const os = require('os');
@@ -16,7 +18,7 @@ const { getFfmpegInstallDir } = require('../audio/ffmpeg-path');
 const { fetchPinnedFfmpeg } = require('../audio/ffmpeg-fetch');
 
 function targetDir() {
-  if (process.platform === 'darwin') return getFfmpegInstallDir();
+  if (process.platform === 'darwin' || process.platform === 'linux') return getFfmpegInstallDir();
   return app.isPackaged
     ? path.join(process.resourcesPath, 'ffmpeg')
     : path.join(app.getAppPath(), 'assets', 'ffmpeg');

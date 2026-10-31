@@ -137,7 +137,7 @@ function generateReleaseNotes() {
     throw new Error(`Changelog body for v${version} was empty or fell back to a placeholder.`);
   }
 
-  let template = '## Changelog\n\n{CHANGELOG_BODY}\n\n## Downloads\n\n- Windows: `MeetMind-Setup-x.y.z.exe`\n- macOS (beta): `MeetMind-x.y.z-arm64.dmg` (Apple silicon), `MeetMind-x.y.z-x64.dmg` (Intel)';
+  let template = '## Changelog\n\n{CHANGELOG_BODY}\n\n## Downloads\n\n- Windows: `MeetMind-Setup-x.y.z.exe`\n- macOS (beta): `MeetMind-x.y.z-arm64.dmg` (Apple silicon), `MeetMind-x.y.z-x64.dmg` (Intel)\n- Linux (beta): `MeetMind-x.y.z-x86_64.AppImage`, `MeetMind-x.y.z-amd64.deb`';
   if (fs.existsSync(templatePath)) {
     template = fs.readFileSync(templatePath, 'utf8');
   }

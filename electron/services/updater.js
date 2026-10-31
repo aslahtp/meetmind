@@ -11,7 +11,7 @@ const { app, shell, powerMonitor } = require('electron');
 const logger = require('../utils/logger');
 const { getConfig, store } = require('../utils/config');
 const { binaryName, getFfmpegPath, getFfprobePath } = require('../audio/ffmpeg-path');
-const { CHECK_INTERVAL_MS, nextCheckDelay, autoInstallEnabled, shouldRelaunchHidden } = require('./update-policy');
+const { CHECK_INTERVAL_MS, canSelfUpdate, nextCheckDelay, autoInstallEnabled, shouldRelaunchHidden } = require('./update-policy');
 
 const FIRST_CHECK_DELAY_MS = 6000;        // let startup settle first
 const RESUME_CHECK_DELAY_MS = 30 * 1000;  // give the network a moment after waking
@@ -23,9 +23,11 @@ const HIDDEN_RELAUNCH_KEY = 'updateRelaunchHiddenAt';
 
 // macOS builds are ad-hoc signed, and Squirrel.Mac refuses to install an update into an app
 // without a stable signature. Until there is a Developer ID, the Mac app only checks
-// latest-mac.yml and sends the user to the release page to download the new DMG. Flip this to
-// true once mac builds are Developer ID signed and notarized.
-const CAN_SELF_UPDATE = process.platform !== 'darwin';
+// latest-mac.yml and sends the user to the release page to download the new DMG (change
+// canSelfUpdate in update-policy.js once mac builds are Developer ID signed and notarized). On
+// Linux only the AppImage replaces itself; a .deb install checks latest-linux.yml the same way
+// and links to the new .deb.
+const CAN_SELF_UPDATE = canSelfUpdate(process.platform, process.env);
 
 let currentStatus = 'idle'; // 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
 let updateInfo = null;

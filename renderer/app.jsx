@@ -250,25 +250,25 @@ export default function App() {
 
     // System audio via Electron loopback. getDisplayMedia must ask for video too; that track is
     // stopped at once. Returns null when the OS gives no system audio (permission denied, or no
-    // audio track): on Windows main then falls back to FFmpeg/WASAPI, which can still capture it,
-    // so we fail; elsewhere there is no such fallback, so the caller records the mic alone.
-    async function openSystemStream() {
+    // audio track). When main can capture it with FFmpeg instead (`requireSystemAudio`: Windows
+    // WASAPI, Linux PulseAudio) we fail so it falls back; otherwise the caller records the mic alone.
+    async function openSystemStream(requireSystemAudio) {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
         stream.getVideoTracks().forEach((t) => t.stop());
         if (stream.getAudioTracks().length > 0) return stream;
         stream.getTracks().forEach((t) => t.stop());
-        if (isWindows) throw new Error('System audio capture returned no audio track');
+        if (requireSystemAudio) throw new Error('System audio capture returned no audio track');
       } catch (err) {
-        if (isWindows) throw err;
+        if (requireSystemAudio) throw err;
         console.warn('System audio unavailable, recording microphone only:', err);
       }
       return null;
     }
 
-    window.meetmind.capture.onStart(async () => {
+    window.meetmind.capture.onStart(async ({ requireSystemAudio = isWindows } = {}) => {
       try {
-        const sysStream = await openSystemStream();
+        const sysStream = await openSystemStream(requireSystemAudio);
 
         let micStream = null;
         try {
@@ -322,7 +322,9 @@ export default function App() {
 
         window.meetmind.capture.sendStarted({ systemAudio: !!sysStream, mic: !!micStream });
         if (!sysStream) {
-          addToast('Recording your microphone only: system audio is unavailable. Check Screen & System Audio Recording permission.', 'warning');
+          addToast(isMac
+            ? 'Recording your microphone only: system audio is unavailable. Check Screen & System Audio Recording permission.'
+            : 'Recording your microphone only: system audio is unavailable. Check that PulseAudio or PipeWire is running.', 'warning');
         }
       } catch (err) {
         console.error('Renderer audio capture failed:', err);

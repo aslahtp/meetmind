@@ -143,9 +143,9 @@ jobs:
         run: pnpm run build:ext
 
   # Whether a PR touches anything that can change the packaged apps. Docs-only PRs skip the
-  # Windows and macOS builds below (a skipped job still satisfies a required status check).
+  # Windows, macOS and Linux builds below (a skipped job still satisfies a required status check).
   # Pushes and release runs (workflow_call) always build, unless already-tested skips this job,
-  # which skips the two builds with it.
+  # which skips the three builds with it.
   changes:
     name: Detect changes
     needs: already-tested
@@ -287,6 +287,72 @@ jobs:
           retention-days: 7
           compression-level: 0
 
+  # Linux has no maintainer hardware either, so every PR builds the AppImage and .deb, checks the
+  # bundled FFmpeg, and runs the headless self-test against a PulseAudio server with a null
+  # output, which also records a second from that output's monitor (the FFmpeg fallback). The
+  # AppImage is kept for testers.
+  linux-build:
+    name: Linux build & smoke test
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup
+        uses: $/.github/actions/setup
+
+      - name: Test
+        run: pnpm run test
+
+      - name: Fetch FFmpeg (checksum-verified)
+        run: node scripts/fetch-ffmpeg.js --platform linux
+
+      - name: Build AppImage and .deb
+        run: pnpm run build:linux
+
+      - name: Check packages
+        run: |
+          ls -l dist/desktop/*.AppImage dist/desktop/*.deb dist/desktop/latest-linux.yml
+          test -x dist/desktop/linux-unpacked/resources/ffmpeg/ffmpeg
+          test -x dist/desktop/linux-unpacked/resources/ffmpeg/ffprobe
+          grep -q -- '-x86_64.AppImage' dist/desktop/latest-linux.yml
+          dpkg-deb --field dist/desktop/*.deb Package Version Recommends
+          dpkg-deb --contents dist/desktop/*.deb | grep -E 'meetmind\.desktop$'
+
+      # Ubuntu 24.04 stops unprivileged user namespaces through AppArmor, which Electron's sandbox
+      # needs when chrome-sandbox isn't setuid root (an unpacked app). The .deb installs an AppArmor
+      # profile instead. Xvfb gives the overlay window a display; the null sink gives the audio
+      # checks an output with a monitor.
+      - name: Prepare display and audio
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb pulseaudio pulseaudio-utils
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=smoke
+          pactl set-default-sink smoke
+
+      - name: Smoke test
+        timeout-minutes: 3
+        run: |
+          xvfb-run -a dist/desktop/linux-unpacked/meetmind --smoke > smoke.txt || true
+          node scripts/check-smoke.js smoke.txt "Linux x64"
+
+      # Already compressed (squashfs): compressing it again only costs time.
+      - name: Upload AppImage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: MeetMind-linux-x64
+          path: dist/desktop/*.AppImage
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
   repo-hygiene:
     name: Repo hygiene
     needs: already-tested
@@ -307,9 +373,9 @@ jobs:
             echo "::error::package-lock.json or yarn.lock is committed; this repo uses pnpm."
             status=1
           fi
-          # FFmpeg and other binaries are downloaded at build time, never committed. macOS
-          # binaries have no extension, so anything in assets/ffmpeg/ but its README counts too.
-          binaries=$( { git ls-files '*.exe' '*.dll' '*.msi' '*.dylib'; git ls-files 'assets/ffmpeg/' | grep -v '^assets/ffmpeg/README\.md$'; } || true)
+          # FFmpeg and other binaries are downloaded at build time, never committed. macOS and
+          # Linux binaries have no extension, so anything in assets/ffmpeg/ but its README counts too.
+          binaries=$( { git ls-files '*.exe' '*.dll' '*.msi' '*.dylib' '*.so' '*.AppImage' '*.deb'; git ls-files 'assets/ffmpeg/' | grep -v '^assets/ffmpeg/README\.md$'; } || true)
           if [ -n "$binaries" ]; then
             echo "::error::Binaries are committed:"; echo "$binaries"
             status=1

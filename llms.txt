@@ -1,17 +1,17 @@
 # MeetMind
 
-> MeetMind is a free, open-source (GPL-3.0) AI meeting notes app for Windows 10 and 11 and macOS 14.2+ (beta). It records system audio and the microphone together, transcribes the recording with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, uses Google Gemini, Groq or Anthropic Claude to write meeting minutes (summary, decisions, action items), and optionally syncs them to Notion. On Windows it detects Google Meet, Zoom and Teams calls on its own and offers to record from a floating overlay; an optional Chrome extension adds a record button inside Meet and Zoom tabs. No bot joins the meeting.
+> MeetMind is a free, open-source (GPL-3.0) AI meeting notes app for Windows 10 and 11, macOS 14.2+ (beta) and Linux x64 (beta). It records system audio and the microphone together, transcribes the recording with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, uses Google Gemini, Groq or Anthropic Claude to write meeting minutes (summary, decisions, action items), and optionally syncs them to Notion. On Windows it detects Google Meet, Zoom and Teams calls on its own and offers to record from a floating overlay; an optional Chrome extension adds a record button inside Meet and Zoom tabs. No bot joins the meeting.
 
 Key facts:
 
-- Platform: desktop app (Electron, React) for Windows 10/11 and, as a beta, macOS 14.2+ on Apple silicon and Intel (unsigned for now). Not available for Linux.
+- Platform: desktop app (Electron, React) for Windows 10/11 and, as betas, macOS 14.2+ on Apple silicon and Intel (unsigned for now) and Linux x64 (AppImage and .deb).
 - Price: free; users bring their own API keys (the Gemini and Groq free tiers and the AssemblyAI signup credit are enough for moderate use).
-- Recording: local capture of system audio (WASAPI loopback on Windows, Core Audio on macOS) plus microphone, so it works with Google Meet, Zoom, Microsoft Teams, Slack, Discord and any app that plays audio.
+- Recording: local capture of system audio (WASAPI loopback on Windows, Core Audio on macOS, PulseAudio or PipeWire on Linux) plus microphone, so it works with Google Meet, Zoom, Microsoft Teams, Slack, Discord and any app that plays audio.
 - Transcription: AssemblyAI, Google Cloud Speech-to-Text v1/v2, Sarvam AI `saaras:v3` or Groq Whisper (large-v3, large-v3-turbo), each with a model picker. All but Groq label speakers (diarization). Sarvam AI supports English–Indic code-switching.
 - Notes: Gemini, Groq (Llama 3.3, GPT-OSS) or Anthropic Claude (Sonnet 5.5, Fable 5.1, Opus 5.5, Haiku 5.5) generates executive-style Markdown minutes or structured JSON notes; the notes stream into a live preview as the model writes them, the model is selectable (including Gemini's auto-updating "latest" models), the system prompt is editable, and a fallback provider/model is used if the primary fails.
 - Output: in-app notes and transcripts with relevance-ranked search across every meeting (related words, typo tolerance; no embeddings), PDF export, Markdown copy, Notion sync.
 - Privacy: recordings, transcripts and notes are stored locally in SQLite; there is no MeetMind server or account.
-- Meeting detection (Windows only for now): a desktop overlay offers to record when Google Meet, Zoom or Teams starts using the microphone (no extension needed).
+- Meeting detection (Windows and Linux; on Linux, browser meetings need an X11 session): a desktop overlay offers to record when Google Meet, Zoom or Teams starts using the microphone (no extension needed).
 - Integrations: calendars, up to 5 ICS links (Google, Outlook, Apple iCloud, Proton…) or Google accounts (upcoming meetings and start-recording reminders), Notion, optional Chrome extension for Google Meet and Zoom.
 - Import: existing audio/video files (WAV, MP3, M4A, AAC, FLAC, OGG, Opus, WebM, MP4, MKV, MOV) or a pasted transcript.
 
@@ -24,7 +24,7 @@ Key facts:
 
 ## Download
 
-- [Latest release](https://github.com/aslahtp/meetmind/releases/latest): Windows installer (`MeetMind-Setup-x.y.z.exe`), macOS disk images (`MeetMind-x.y.z-arm64.dmg` for Apple silicon, `MeetMind-x.y.z-x64.dmg` for Intel) and Chrome extension (`meetmind-extension.zip`)
+- [Latest release](https://github.com/aslahtp/meetmind/releases/latest): Windows installer (`MeetMind-Setup-x.y.z.exe`), macOS disk images (`MeetMind-x.y.z-arm64.dmg` for Apple silicon, `MeetMind-x.y.z-x64.dmg` for Intel), Linux packages (`MeetMind-x.y.z-x86_64.AppImage`, `MeetMind-x.y.z-amd64.deb`) and Chrome extension (`meetmind-extension.zip`)
 - [Source code](https://github.com/aslahtp/meetmind)
 
 ## Optional

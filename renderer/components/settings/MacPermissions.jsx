@@ -3,7 +3,7 @@ import { Loader2, ShieldCheck, Volume2 } from 'lucide-react';
 import { StatusDot } from '../ui/index.jsx';
 import { SettingsGroup, SettingRow, RowList } from './SettingsParts.jsx';
 import { useApp } from '../../lib/app-context.js';
-import { CAPTURE_STRATEGIES, describeAudioTest, peakOf } from '../../lib/audioTest.js';
+import { CAPTURE_STRATEGIES, CAPTURE_TEST_SECONDS as TEST_SECONDS, describeAudioTest, runCaptureTest } from '../../lib/audioTest.js';
 
 // macOS only (rendered by SystemSection): the privacy permissions MeetMind needs, and a test that
 // records 3 seconds of system audio with each capture method so a tester can see which one works
@@ -28,46 +28,6 @@ const STATUS = {
   restricted: { tone: 'error', text: 'Blocked by a profile' },
   'not-determined': { tone: 'neutral', text: 'Not asked yet' },
 };
-
-const TEST_SECONDS = 3;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// One short system-audio capture with `strategy`, measuring the peak level.
-async function runCaptureTest(strategy) {
-  const begin = await window.meetmind.capture.testBegin(strategy);
-  if (!begin?.success) return { error: begin?.error || 'Could not start the test' };
-  let stream = null;
-  let ctx = null;
-  try {
-    stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
-    stream.getVideoTracks().forEach((t) => t.stop());
-    const track = stream.getAudioTracks()[0];
-    if (!track) return { error: 'No system audio track (permission denied?)' };
-
-    ctx = new AudioContext();
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 2048;
-    ctx.createMediaStreamSource(stream).connect(analyser);
-    const buf = new Float32Array(analyser.fftSize);
-
-    let peak = 0;
-    let ended = track.readyState === 'ended';
-    const until = Date.now() + TEST_SECONDS * 1000;
-    while (!ended && Date.now() < until) {
-      await sleep(100);
-      analyser.getFloatTimeDomainData(buf);
-      peak = Math.max(peak, peakOf(buf));
-      ended = track.readyState === 'ended';
-    }
-    return { peak, ended };
-  } catch (err) {
-    return { error: err?.message || String(err) };
-  } finally {
-    stream?.getTracks().forEach((t) => t.stop());
-    ctx?.close().catch(() => {});
-    await window.meetmind.capture.testEnd();
-  }
-}
 
 export default function MacPermissions() {
   const { config, updateConfig, isRecording } = useApp();

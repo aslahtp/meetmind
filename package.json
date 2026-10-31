@@ -1,7 +1,7 @@
 {
   "name": "meetmind",
-  "version": "4.15.2",
-  "description": "Open-source AI meeting notes app for Windows and macOS: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT, Sarvam AI or Groq, summarize with Gemini, Groq or Claude, and sync to Notion.",
+  "version": "4.16.0",
+  "description": "Open-source AI meeting notes app for Windows, macOS and Linux: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT, Sarvam AI or Groq, summarize with Gemini, Groq or Claude, and sync to Notion.",
   "keywords": [
     "ai-meeting-notes",
     "meeting-notes",
@@ -22,6 +22,7 @@
     "electron",
     "windows",
     "macos",
+    "linux",
     "chrome-extension",
     "otter-alternative"
   ],
@@ -35,6 +36,7 @@
     "url": "https://github.com/aslahtp/meetmind.git"
   },
   "main": "electron/main.js",
+  "desktopName": "meetmind.desktop",
   "packageManager": "pnpm@12.3.4",
   "scripts": {
     "predev": "pnpm run generate-icons && pnpm run build:ext",
@@ -49,6 +51,9 @@
     "prebuild:mac": "pnpm run generate-icons && pnpm run build:ext",
     "build:mac": "vite build && electron-builder --mac --arm64 --x64 --config electron-builder.yml --publish never",
     "build:mac:dir": "vite build && electron-builder --mac --dir --config electron-builder.yml",
+    "prebuild:linux": "pnpm run generate-icons && pnpm run build:ext",
+    "build:linux": "vite build && electron-builder --linux --x64 --config electron-builder.yml --publish never",
+    "build:linux:dir": "vite build && electron-builder --linux --x64 --dir --config electron-builder.yml",
     "fetch-ffmpeg": "node scripts/fetch-ffmpeg.js",
     "build:ext": "node scripts/build-extension.js",
     "preview": "vite preview",

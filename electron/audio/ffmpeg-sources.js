@@ -3,23 +3,28 @@
 // scripts/fetch-ffmpeg.js, which stages the binaries for CI and release builds. Pure: no
 // electron import.
 //
-// Every zip is verified against the SHA-256 below before it is unpacked. To bump a build: take
-// the new release's versioned URLs, download each zip, compute its SHA-256 yourself (don't just
-// copy a hash published next to the file), then update this table and FFMPEG_VERSION.
+// Every archive is verified against the SHA-256 below before it is unpacked. To bump a build:
+// take the new release's versioned URLs, download each archive, compute its SHA-256 yourself
+// (don't just copy a hash published next to the file), then update this table and FFMPEG_VERSION.
 //
 // - Windows: the "essentials" build from GyanD/codexffmpeg on GitHub (the same builds gyan.dev
 //   serves); one zip holding both executables under bin/.
 // - macOS: ffmpeg.martin-riedl.de release builds (static, Developer ID signed), one zip per
 //   tool. Intel (amd64) release builds there end in January 2027; mirror the pinned x64 zips
 //   before then (see docs/KNOWN_ISSUES.md).
+// - Linux: a BtbN/FFmpeg-Builds GPL static build of the release branch (glibc 2.28+), one
+//   tar.xz holding both executables under bin/. It includes PulseAudio input, which the Linux
+//   FFmpeg recording fallback needs. Pin the last build of a month: BtbN keeps those for two
+//   years (daily builds only for 14 days), so bump this one before September 2028.
 
 const FFMPEG_VERSION = '9.0.2';
 
 const GYAN = 'https://github.com/GyanD/codexffmpeg/releases/download';
 const RIEDL = 'https://ffmpeg.martin-riedl.de/download/macos';
+const BTBN = 'https://github.com/BtbN/FFmpeg-Builds/releases/download';
 
-// `${platform}-${arch}` → the zips that together provide ffmpeg and ffprobe. `tools` names the
-// executables (without .exe) found anywhere inside each zip.
+// `${platform}-${arch}` → the archives (.zip or .tar.xz) that together provide ffmpeg and
+// ffprobe. `tools` names the executables (without .exe) found anywhere inside each archive.
 const SOURCES = {
   'win32-x64': [
     {
@@ -50,6 +55,13 @@ const SOURCES = {
       url: `${RIEDL}/amd64/1789931006_9.0.2/ffprobe.zip`,
       sha256: '2322438ed2f6319a691291b247d09c69dcaa3a982460d1f269a7e1af335cfdfd',
       tools: ['ffprobe'],
+    },
+  ],
+  'linux-x64': [
+    {
+      url: `${BTBN}/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-9.0.tar.xz`,
+      sha256: '68ee646831adaae2495618346f3bba94ff207ff83bbd34d643e7004730d66269',
+      tools: ['ffmpeg', 'ffprobe'],
     },
   ],
 };

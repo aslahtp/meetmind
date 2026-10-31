@@ -4,9 +4,25 @@ Target: macOS and Linux support alongside Windows, with CI/CD producing installe
 
 Baseline: MeetMind 3.6.2 as described in `docs/ARCHITECTURE.md`.
 
-> **Status (4.6.0): macOS shipped as a beta; Linux not started.** The macOS sections below are
+> **Status (4.16.0): macOS and Linux shipped as betas.** The macOS and Linux sections below are
 > superseded by what was built; `docs/ARCHITECTURE.md` describes it. Decisions that differ from
-> this plan:
+> this plan, for Linux:
+>
+> - **Capture**: the renderer path stays primary on Linux too (Electron's loopback through the
+>   Windows-style screen handler); FFmpeg `-f pulse` recording of the default output's monitor and
+>   the default input is the fallback, used when the renderer gets no system audio and `pactl` and
+>   a pulse-capable FFmpeg are present. There is no `capture/{win,mac,linux}.js` abstraction:
+>   `mixer.js` and `recorder.js` take a `backend` instead.
+> - **FFmpeg**: a BtbN/FFmpeg-Builds GPL static build (glibc 2.28+, with PulseAudio input), pinned
+>   by SHA-256 like the others; the in-app download goes to `userData/ffmpeg`.
+> - **Packaging**: AppImage + `.deb`, x64 only, no rpm. Only the AppImage updates itself; a `.deb`
+>   install checks and links to the new package.
+> - **Meeting detection** is built for Linux: `pactl list source-outputs` for apps on the mic and
+>   Electron's `desktopCapturer` window list for titles (X11/XWayland only; MeetMind forces
+>   XWayland when it can), in `electron/detection/linux.js`.
+> - **Auto-launch** writes an XDG autostart entry, as section 3.3 suggested.
+>
+> For macOS:
 >
 > - **Capture**: Electron's own loopback (Electron 44, CoreAudio Tap API, macOS 14.2+) rather than
 >   a Swift helper (option A). Because its behaviour varies by video source, the source is a

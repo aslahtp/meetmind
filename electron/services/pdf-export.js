@@ -47,7 +47,7 @@ function resolveExportDir(configuredDir) {
 }
 
 const FOOTER_TEMPLATE = `
-  <div style="width:100%; font-size:8px; color:#707070; font-family:'Segoe UI', sans-serif; padding:0 14mm; display:flex; justify-content:space-between;">
+  <div style="width:100%; font-size:8px; color:#707070; font-family:'Segoe UI', 'Helvetica Neue', Cantarell, 'Noto Sans', sans-serif; padding:0 14mm; display:flex; justify-content:space-between;">
     <span class="title"></span>
     <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
   </div>`;

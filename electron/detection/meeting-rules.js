@@ -8,6 +8,7 @@ const PLATFORMS = {
   teams: 'Microsoft Teams',
 };
 
+// Windows exe names, then the Linux ids linuxAppId() and appFromWindowTitle() produce.
 const BROWSERS = {
   'chrome.exe': 'Chrome',
   'msedge.exe': 'Edge',
@@ -16,16 +17,63 @@ const BROWSERS = {
   'opera.exe': 'Opera',
   'vivaldi.exe': 'Vivaldi',
   'arc.exe': 'Arc',
+  chrome: 'Chrome',
+  chromium: 'Chromium',
+  msedge: 'Edge',
+  brave: 'Brave',
+  firefox: 'Firefox',
+  opera: 'Opera',
+  vivaldi: 'Vivaldi',
 };
 
 // Desktop meeting apps: holding the mic is enough to count as a call. Keys are what the mic
-// consent registry reports — an exe name for win32 apps, a package family name for packaged ones.
+// consent registry reports — an exe name for win32 apps, a package family name for packaged ones —
+// or, on Linux, a linuxAppId(). Microsoft has no Teams app for Linux; teams-for-linux is the
+// community one.
 const NATIVE_APPS = {
   'zoom.exe': { platform: 'zoom', label: 'Zoom app' },
   'ms-teams.exe': { platform: 'teams', label: 'Teams app' },
   'teams.exe': { platform: 'teams', label: 'Teams app' },
   'msteams_8wekyb3d8bbwe': { platform: 'teams', label: 'Teams app', windowExe: 'ms-teams.exe' },
+  zoom: { platform: 'zoom', label: 'Zoom app' },
+  'teams-for-linux': { platform: 'teams', label: 'Teams app' },
 };
+
+// Linux: process names PulseAudio/PipeWire reports for apps on the mic, folded onto one id per
+// app (distros and packages name the same browser differently).
+const LINUX_APP_IDS = {
+  'google-chrome': 'chrome',
+  'google-chrome-stable': 'chrome',
+  chrome: 'chrome',
+  chromium: 'chromium',
+  'chromium-browser': 'chromium',
+  msedge: 'msedge',
+  'microsoft-edge': 'msedge',
+  'microsoft-edge-stable': 'msedge',
+  brave: 'brave',
+  'brave-browser': 'brave',
+  firefox: 'firefox',
+  'firefox-bin': 'firefox',
+  'firefox-esr': 'firefox',
+  opera: 'opera',
+  vivaldi: 'vivaldi',
+  'vivaldi-bin': 'vivaldi',
+  zoom: 'zoom',
+  'zoom.real': 'zoom',
+  zoomlauncher: 'zoom',
+  'teams-for-linux': 'teams-for-linux',
+};
+
+// Linux window titles end with the browser's name; this maps it onto the ids above.
+const LINUX_TITLE_APPS = [
+  [/\s[-–—]\s+Google Chrome$/i, 'chrome'],
+  [/\s[-–—]\s+Chromium$/i, 'chromium'],
+  [/\s[-–—]\s+Microsoft.?Edge$/i, 'msedge'],
+  [/\s[-–—]\s+Brave$/i, 'brave'],
+  [/\s[-–—]\s+Mozilla Firefox$/i, 'firefox'],
+  [/\s[-–—]\s+Opera$/i, 'opera'],
+  [/\s[-–—]\s+Vivaldi$/i, 'vivaldi'],
+];
 
 const DEBOUNCE_TICKS = 2;               // consecutive positive polls before prompting
 const TITLE_MEMORY_MS = 2 * 60 * 1000;  // a browser keeps a meeting this long after its tab loses focus
@@ -33,7 +81,7 @@ const END_GRACE_MS = 15 * 1000;         // mic released / title gone this long b
 
 // Browsers append these after the page title, e.g. "Meet - abc-defg-hij - Camera or microphone
 // recording - Google Chrome" or "… and 3 more pages - Personal - Microsoft Edge".
-const TITLE_SUFFIX = /\s+[-–—]\s+(?:Camera or microphone recording|Camera recording|Microphone recording|Audio playing|Network error|Google Chrome|Microsoft.?Edge|Brave|Mozilla Firefox|Opera|Vivaldi|Arc|Personal|Work)\b.*$/i;
+const TITLE_SUFFIX = /\s+[-–—]\s+(?:Camera or microphone recording|Camera recording|Microphone recording|Audio playing|Network error|Google Chrome|Chromium|Microsoft.?Edge|Brave|Mozilla Firefox|Opera|Vivaldi|Arc|Personal|Work)\b.*$/i;
 const MORE_PAGES = /\s+and \d+ more pages?$/i;
 
 const MEET_TITLE = /^(?:Google )?Meet\s*[-–—:]\s*|\bmeet\.google\.com\b/i;
@@ -45,6 +93,25 @@ const TEAMS_TITLE = /\|\s*Microsoft Teams\b|^Microsoft Teams\b/i;
 function exeFromConsentKey(name) {
   const parts = String(name || '').split('#');
   return parts[parts.length - 1].toLowerCase();
+}
+
+/** Linux: the app id for a process name from PulseAudio/PipeWire (see LINUX_APP_IDS). */
+function linuxAppId(binary) {
+  const name = String(binary || '').toLowerCase();
+  return LINUX_APP_IDS[name] || name;
+}
+
+/**
+ * Linux: which app a window belongs to, from its title alone (Electron lists windows without
+ * their process): a browser by its title suffix, a Zoom meeting window as the Zoom app, and ''
+ * when it can't tell.
+ */
+function appFromWindowTitle(title) {
+  const raw = String(title || '').replace(/[\u200b\u200e\u200f]/g, '');
+  const hit = LINUX_TITLE_APPS.find(([re]) => re.test(raw));
+  if (hit) return hit[1];
+  if (ZOOM_TITLE.test(raw)) return 'zoom';
+  return '';
 }
 
 // One list of apps holding the mic from both sources: active WASAPI capture sessions (exe names)
@@ -207,6 +274,8 @@ module.exports = {
   TITLE_MEMORY_MS,
   END_GRACE_MS,
   exeFromConsentKey,
+  linuxAppId,
+  appFromWindowTitle,
   mergeMicUsers,
   browsersMissingFromRegistry,
   cleanMeetingTitle,

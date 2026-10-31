@@ -1,10 +1,12 @@
-// Polls Windows for an active call (see meeting-rules.js) and reports meeting-detected /
+// Polls the OS for an active call (see meeting-rules.js) and reports meeting-detected /
 // meeting-ended transitions. Ticks are silent; transitions, mic-source problems and a heartbeat
 // every 10 minutes are logged, so a detector that has gone quiet can be told from one that broke.
 
 const path = require('path');
 const logger = require('../utils/logger');
-const win32 = require('./win32');
+// Who is on the mic and which windows are open: Win32 APIs on Windows, PulseAudio/PipeWire and
+// Electron's window list on Linux (detection/linux.js). macOS has no backend yet.
+const backend = process.platform === 'linux' ? require('./linux') : require('./win32');
 const { createDetectorState, reduceTick, dismissMeeting, mergeMicUsers, browsersMissingFromRegistry } = require('./meeting-rules');
 
 const POLL_MS = 1500;
@@ -34,13 +36,16 @@ function createHealth(now, prev = null) {
 function noteMicSources(mic) {
   if (mic.sessionsError !== health.sessionsError) {
     if (mic.sessionsError) {
-      logger.warn('Audio sessions unreadable; meeting detection is using the consent registry only', { error: mic.sessionsError });
+      logger.warn(process.platform === 'win32'
+        ? 'Audio sessions unreadable; meeting detection is using the consent registry only'
+        : 'Audio server unreadable; meeting detection cannot see which apps use the microphone', { error: mic.sessionsError });
     } else {
       logger.info('Audio sessions readable again');
     }
     health.sessionsError = mic.sessionsError;
   }
-  if (!health.registryGapLogged) {
+  // Only Windows has a consent registry to fall behind.
+  if (!health.registryGapLogged && process.platform === 'win32') {
     const missing = browsersMissingFromRegistry(mic.sessions, mic.registry);
     if (missing.length) {
       logger.info('Microphone consent registry is not reporting a browser on the mic; using audio sessions', { browsers: missing });
@@ -70,13 +75,13 @@ function tick() {
 
   let result;
   try {
-    const mic = win32.readMicUsers();
+    const mic = backend.readMicUsers();
     noteMicSources(mic);
     const micExes = mergeMicUsers(mic.sessions, mic.registry);
     for (const id of micExes) health.micApps.add(id);
     result = reduceTick(state, {
       micExes,
-      windows: win32.listVisibleWindows(),
+      windows: backend.listVisibleWindows(),
       now,
       selfExe: path.basename(process.execPath),
     });
@@ -103,13 +108,13 @@ function tick() {
 function start(nextHandlers = {}) {
   handlers = nextHandlers;
   if (timer) return true;
-  if (!win32.isAvailable()) {
-    logger.warn('Meeting detection unavailable', { error: win32.getLoadError()?.message });
+  if (!backend.isAvailable()) {
+    logger.warn('Meeting detection unavailable', { error: backend.getLoadError()?.message });
     return false;
   }
   state = createDetectorState();
   health = createHealth(Date.now());
-  const mic = win32.readMicUsers();
+  const mic = backend.readMicUsers();
   health.sessionsError = mic.sessionsError;
   timer = setInterval(tick, POLL_MS);
   timer.unref?.();

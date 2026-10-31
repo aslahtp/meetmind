@@ -7,8 +7,9 @@ dist
 ffmpeg.exe
 ffprobe.exe
 ffplay.exe
-# macOS FFmpeg binaries (scripts/fetch-ffmpeg.js); no extension, so match the folders
+# macOS and Linux FFmpeg binaries (scripts/fetch-ffmpeg.js); no extension, so match the folders
 assets/ffmpeg/mac-*/
+assets/ffmpeg/linux-*/
 
 .cursor
 _site

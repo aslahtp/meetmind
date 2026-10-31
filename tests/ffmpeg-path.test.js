@@ -21,6 +21,14 @@ const MAC = {
   userData: '/Users/me/Library/Application Support/MeetMind',
 };
 
+const LINUX = {
+  platform: 'linux',
+  arch: 'x64',
+  resourcesPath: '/tmp/.mount_MeetMiXXXX/resources',
+  appRoot: '/home/me/meetmind',
+  userData: '/home/me/.config/MeetMind',
+};
+
 describe('binaryName', () => {
   it('adds .exe on Windows only', () => {
     expect(binaryName('ffmpeg', 'win32')).toBe('ffmpeg.exe');
@@ -29,14 +37,27 @@ describe('binaryName', () => {
 });
 
 describe('devBinaryDir', () => {
-  it('keeps Windows binaries at the assets/ffmpeg root and splits macOS by arch', () => {
+  it('keeps Windows binaries at the assets/ffmpeg root and splits macOS and Linux by arch', () => {
     expect(devBinaryDir('win32', 'x64')).toBe('');
     expect(devBinaryDir('darwin', 'arm64')).toBe('mac-arm64');
     expect(devBinaryDir('darwin', 'x64')).toBe('mac-x64');
+    expect(devBinaryDir('linux', 'x64')).toBe('linux-x64');
   });
 });
 
 describe('ffmpegCandidates', () => {
+  it('packaged Linux: bundled, then the in-app install in userData (PATH is tried last by locate)', () => {
+    expect(ffmpegCandidates('ffmpeg', { ...LINUX, isPackaged: true })).toEqual([
+      { source: 'bundled', path: '/tmp/.mount_MeetMiXXXX/resources/ffmpeg/ffmpeg' },
+      { source: 'installed', path: '/home/me/.config/MeetMind/ffmpeg/ffmpeg' },
+    ]);
+  });
+
+  it('development Linux: the per-arch assets folder comes first', () => {
+    const [first] = ffmpegCandidates('ffprobe', { ...LINUX, isPackaged: false });
+    expect(first).toEqual({ source: 'bundled', path: '/home/me/meetmind/assets/ffmpeg/linux-x64/ffprobe' });
+  });
+
   it('packaged Windows: only the bundled binary in resources', () => {
     expect(ffmpegCandidates('ffmpeg', { ...WIN, isPackaged: true })).toEqual([
       { source: 'bundled', path: 'C:\\Program Files\\MeetMind\\resources\\ffmpeg\\ffmpeg.exe' },
@@ -76,8 +97,14 @@ describe('silenceHints', () => {
     expect(hints.join(' ')).not.toContain('Windows');
   });
 
+  it('gives Linux users sound-settings and pactl steps', () => {
+    const hints = silenceHints('linux').join(' ');
+    expect(hints).toContain('pulseaudio-utils');
+    expect(hints).not.toContain('Windows');
+  });
+
   it('falls back to the Windows wording for other platforms', () => {
-    expect(silenceHints('win32')).toEqual(silenceHints('linux'));
+    expect(silenceHints('freebsd')).toEqual(silenceHints('win32'));
     expect(silenceHints('win32').join(' ')).toContain('Privacy & security');
   });
 });

@@ -7,11 +7,11 @@
   </picture>
 </h1>
 
-<p><strong>Open-source AI meeting notes app for Windows and macOS.</strong><br>
+<p><strong>Open-source AI meeting notes app for Windows, macOS and Linux.</strong><br>
 Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, Groq or Claude, and sync the minutes to Notion — no meeting bot joins your call.</p>
 
 <p>
-  <a href="https://github.com/aslahtp/meetmind/releases/latest"><strong>Download for Windows or macOS</strong></a> ·
+  <a href="https://github.com/aslahtp/meetmind/releases/latest"><strong>Download for Windows, macOS or Linux</strong></a> ·
   <a href="https://aslahtp.github.io/meetmind/">Website</a> ·
   <a href="#-features">Features</a> ·
   <a href="#-faq">FAQ</a> ·
@@ -23,6 +23,7 @@ Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, G
 [![License](https://img.shields.io/badge/license-GPL--3.0-22d3ee?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNjQiIHdpZHRoPSI2NCIgdmlld0JveD0iLTEzLjI4IC0yMS43NzkgMzIgMzIiPjxwYXRoIGQ9Ik0yLjcyLTIwLjgwNmMtOC41NzIgMC0xNS41MiA2Ljk1LTE1LjUyIDE1LjUyIDAgNi42NTMgNC4xODggMTIuMzI3IDEwLjA3IDE0LjUzNEwuODQ1LS4yOWMtMi4wMjItLjc2LTMuNDYyLTIuNzEtMy40NjItNC45OTYgMC0yLjk0NiAyLjM5LTUuMzM1IDUuMzM1LTUuMzM1czUuMzM1IDIuMzkgNS4zMzUgNS4zMzVjMCAyLjI4Ny0xLjQ0IDQuMjM3LTMuNDYyIDQuOTk2TDguMTcgOS4yNWM1Ljg4My0yLjIwNyAxMC4wNy03Ljg4IDEwLjA3LTE0LjUzNCAwLTguNTctNi45NS0xNS41Mi0xNS41MnoiIGZpbGw9IiM0MGFhNTQiIHN0cm9rZT0iIzIwNTUyYSIgc3Ryb2tlLXdpZHRoPSIuOTU5IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgODggODgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgaGVpZ2h0PSI4OCIgd2lkdGg9Ijg4Ij48cGF0aCBkPSJtMCAxMi40MDIgMzUuNjg3LTQuODYuMDE2IDM0LjQyMy0zNS42Ny4yMDN6bTM1LjY3IDMzLjUyOS4wMjggMzQuNDUzTC4wMjggNzUuNDguMDI2IDQ1Ljd6bTQuMzI2LTM5LjAyNUw4Ny4zMTQgMHY0MS41MjdsLTQ3LjMxOC4zNzZ6bTQ3LjMyOSAzOS4zNDktLjAxMSA0MS4zNC00Ny4zMTgtNi42NzgtLjA2Ni0zNC43Mzl6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==)](https://github.com/aslahtp/meetmind)
 [![macOS](https://img.shields.io/badge/macOS-14.2%2B_(beta)-000000?style=flat-square&logo=apple&logoColor=white)](#macos-app-beta)
+[![Linux](https://img.shields.io/badge/Linux-x64_(beta)-fcc624?style=flat-square&logo=linux&logoColor=black)](#linux-app-beta)
 [![Electron](https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6-646cff?style=flat-square&logo=vite)](https://vitejs.dev/)
@@ -42,7 +43,7 @@ Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, G
 
 ## What is MeetMind?
 
-**MeetMind is a free, open-source (GPL-3.0) desktop app for Windows 10 and 11 and macOS 14.2+ (beta) that turns online meetings into written meeting notes.** It records your computer's system audio and your microphone at the same time, sends the recording to the speech-to-text service you choose (**AssemblyAI**, **Google Cloud Speech-to-Text**, **Sarvam AI** or **Groq**), and uses **Google Gemini**, **Groq** or **Anthropic Claude** to write a speaker-labelled summary with decisions and action items. Notes are stored locally in SQLite and can be exported to PDF, copied as Markdown or pushed to a **Notion** page. On Windows, when Google Meet, Zoom or Teams starts using your microphone, a small overlay offers to start recording; an optional **Chrome extension** also adds a record button inside Meet and Zoom tabs.
+**MeetMind is a free, open-source (GPL-3.0) desktop app for Windows 10 and 11, macOS 14.2+ (beta) and Linux (beta) that turns online meetings into written meeting notes.** It records your computer's system audio and your microphone at the same time, sends the recording to the speech-to-text service you choose (**AssemblyAI**, **Google Cloud Speech-to-Text**, **Sarvam AI** or **Groq**), and uses **Google Gemini**, **Groq** or **Anthropic Claude** to write a speaker-labelled summary with decisions and action items. Notes are stored locally in SQLite and can be exported to PDF, copied as Markdown or pushed to a **Notion** page. On Windows and Linux, when Google Meet, Zoom or Teams starts using your microphone, a small overlay offers to start recording; an optional **Chrome extension** also adds a record button inside Meet and Zoom tabs.
 
 Because MeetMind records audio on your own computer, nothing joins the meeting as a participant, and it works with any app that plays sound — Google Meet, Zoom, Microsoft Teams, Slack huddles, Discord, or a local recording file.
 
@@ -72,7 +73,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 
 ## 🧭 How it works
 
-1. **Record.** Click the MeetMind button in Google Meet or Zoom, press **Record** in the app, or accept the reminder when a calendar meeting starts. MeetMind captures system audio (WASAPI loopback on Windows, Core Audio on macOS) and your microphone together.
+1. **Record.** Click the MeetMind button in Google Meet or Zoom, press **Record** in the app, or accept the reminder when a calendar meeting starts. MeetMind captures system audio (WASAPI loopback on Windows, Core Audio on macOS, PulseAudio or PipeWire on Linux) and your microphone together.
 2. **Transcribe.** When you stop, the audio goes to your chosen speech-to-text engine, which returns a transcript with speaker labels (diarization).
 3. **Summarize.** Gemini, Groq or Claude (your choice) turns the transcript into meeting minutes — an executive summary, agenda, key decisions and an action items table with owners, deadlines and priorities — as Markdown or structured JSON.
 4. **Share.** Read and search notes and transcripts in the app, export a PDF, copy Markdown, or sync a formatted page to Notion automatically.
@@ -81,12 +82,12 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 
 ## 🚀 Features
 
-- **System audio + microphone recording**: records both sides of any call on Windows and macOS, with FFmpeg bundled or installed from inside the app.
+- **System audio + microphone recording**: records both sides of any call on Windows, macOS and Linux, with FFmpeg bundled or installed from inside the app.
 - **Choice of speech-to-text**: AssemblyAI, Google Cloud Speech-to-Text (v1 and v2), Sarvam AI or Groq Whisper, with a model picker for each. All except Groq label speakers (diarization).
 - **English–Indic code-switching**: accurate transcripts of mixed-language meetings with Sarvam AI's `saaras:v3` model.
 - **Choice of note-generation model**: Google Gemini, Groq (Llama 3.3, GPT-OSS) or Anthropic Claude (Sonnet 5.5, Fable 5.1, Opus 5.5, Haiku 5.5), with a model picker and optional custom model ID (for Gemini, also Google's auto-updating Flash, Flash Lite and Pro "latest" models). Executive-style Markdown or structured JSON notes, a live preview of the notes as the model writes them, an editable system prompt, and an automatic fallback that can be any provider and model (for example Groq first, Gemini as backup).
 - **Easy to extend**: every speech-to-text and LLM engine is a small self-describing module, so adding a provider needs one file and one registry line (see [docs/ADDING_PROVIDERS.md](docs/ADDING_PROVIDERS.md)).
-- **Automatic meeting detection** (Windows; macOS coming later): when Google Meet, Zoom or Microsoft Teams starts using your microphone, a floating overlay offers to record, then shows the timer, a "Meeting ended?" prompt and processing status. No browser extension needed.
+- **Automatic meeting detection** (Windows and Linux; macOS coming later): when Google Meet, Zoom or Microsoft Teams starts using your microphone, a floating overlay offers to record, then shows the timer, a "Meeting ended?" prompt and processing status. No browser extension needed.
 - **Optional Google Meet and Zoom extension**: a floating overlay inside the Chrome tab with one-click recording and live processing status.
 - **Calendar integration**: add up to 5 calendars (any ICS link from Google, Outlook, Apple iCloud and others, with no setup, or a Google account through your own OAuth client) to see upcoming meetings on the dashboard and get a notification to start recording when one begins.
 - **Notion sync**: notes become native Notion blocks (headings, tables, to-dos); re-syncing replaces the old page instead of duplicating it.
@@ -151,9 +152,21 @@ To check that a download really was built by this repository's release workflow 
 gh attestation verify MeetMind-x.y.z-arm64.dmg --repo aslahtp/meetmind
 ```
 
+### Linux app (beta)
+
+MeetMind for Linux is a beta for x64 desktops (Ubuntu 22.04, Debian 12, Fedora 38 or newer, or similar). It records what your default output device plays through PulseAudio or PipeWire, which needs `pactl` from the `pulseaudio-utils` package (most desktops have it).
+
+1. From the [latest GitHub release](https://github.com/aslahtp/meetmind/releases/latest), download one of:
+   - `MeetMind-x.y.z-amd64.deb` for Ubuntu, Debian and derivatives, and install it with `sudo apt install ./MeetMind-x.y.z-amd64.deb`.
+   - `MeetMind-x.y.z-x86_64.AppImage` for any distribution. Make it executable (`chmod +x MeetMind-*.AppImage`) and run it. AppImages need FUSE 2 (`sudo apt install libfuse2t64` on Ubuntu 24.04 and later).
+2. Set up your keys as in steps 2–3 above. FFmpeg is already included.
+3. Play a video and use **Settings → System → System audio → Test** to check that MeetMind hears your computer's audio. That card also shows whether `pactl` found your audio server.
+
+The AppImage updates itself like the Windows app; with the `.deb`, MeetMind tells you when a new version is out and you install the new package. `meetmind://` links open the app when it's installed from the `.deb`.
+
 ### Meeting detection
 
-On Windows, MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay unfolds at the top centre of the screen with a **Record** button (if the overlay can't be shown, a Windows notification offers to record instead). If you don't answer within 2 minutes, the prompt closes and won't come back for that meeting. Turn it off in **Settings → General → Meeting detection**. Meeting detection isn't available on macOS yet.
+On Windows and Linux, MeetMind watches for calls on its own: when Google Meet, Zoom or Teams (in a browser or the desktop app) starts using your microphone, a slim overlay unfolds at the top centre of the screen with a **Record** button (if the overlay can't be shown, a system notification offers to record instead). If you don't answer within 2 minutes, the prompt closes and won't come back for that meeting. Turn it off in **Settings → General → Meeting detection**. On Linux, browser meetings are recognised from window titles, which only X11 sessions expose (MeetMind runs through XWayland when it can); on a Wayland-only session it still detects the Zoom desktop app, and the Chrome extension covers browser meetings. Meeting detection isn't available on macOS yet.
 
 ### Chrome extension (optional)
 
@@ -170,7 +183,7 @@ The extension only talks to the MeetMind desktop app over a local WebSocket (`12
 
 ## 💻 Developer setup
 
-Requires Windows or macOS 14.2+, Node.js 22.12+ and [pnpm](https://pnpm.io/).
+Requires Windows, macOS 14.2+ or Linux (x64), Node.js 22.12+ and [pnpm](https://pnpm.io/).
 
 ### 1. Clone and install
 
@@ -187,9 +200,10 @@ Fetch the pinned, checksum-verified FFmpeg build for your OS (the same one the r
 ```bash
 pnpm run fetch-ffmpeg                     # Windows: assets/ffmpeg/ffmpeg.exe, ffprobe.exe
 pnpm run fetch-ffmpeg -- --arch arm64     # macOS: just your Mac's architecture (or x64)
+pnpm run fetch-ffmpeg                     # Linux: assets/ffmpeg/linux-x64/ffmpeg, ffprobe
 ```
 
-Alternatively, let the app install it (**Settings → System → Download & Install FFmpeg**), or on macOS just `brew install ffmpeg`.
+Alternatively, let the app install it (**Settings → System → Download & Install FFmpeg**), or on macOS just `brew install ffmpeg` (on Linux, your distribution's `ffmpeg` package works too).
 
 ### 3. Run
 
@@ -233,7 +247,18 @@ pnpm run fetch-ffmpeg
 pnpm run build:mac
 ```
 
-This produces `dist/desktop/MeetMind-X.Y.Z-arm64.dmg` and `MeetMind-X.Y.Z-x64.dmg`, ad-hoc signed, plus the zips and `latest-mac.yml` the in-app update check reads. Releases are built by GitHub Actions, which also runs a `--smoke` self-test of each app.
+This produces `dist/desktop/MeetMind-X.Y.Z-arm64.dmg` and `MeetMind-X.Y.Z-x64.dmg`, ad-hoc signed, plus the zips and `latest-mac.yml` the in-app update check reads.
+
+**Linux** (on Linux, x64): fetch FFmpeg, then build the AppImage and `.deb`:
+
+```bash
+pnpm run fetch-ffmpeg
+pnpm run build:linux
+```
+
+This produces `dist/desktop/MeetMind-X.Y.Z-x86_64.AppImage`, `MeetMind-X.Y.Z-amd64.deb` and the `latest-linux.yml` the AppImage's update check reads.
+
+Releases are built by GitHub Actions, which also runs a `--smoke` self-test of each app.
 
 > [!CAUTION]
 > Never commit downloaded FFmpeg binaries, as they exceed GitHub's 100MB file size limit.
@@ -252,11 +277,11 @@ No. MeetMind records the audio playing on your own computer plus your microphone
 
 ### Which meeting apps does it work with?
 
-Any app that plays audio on your computer: Google Meet, Zoom, Microsoft Teams, Slack, Discord, Webex and others. On Windows, for Google Meet, Zoom and Teams, MeetMind also detects the call and offers to start recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs.
+Any app that plays audio on your computer: Google Meet, Zoom, Microsoft Teams, Slack, Discord, Webex and others. On Windows and Linux, for Google Meet, Zoom and Teams, MeetMind also detects the call and offers to start recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs.
 
 ### Does MeetMind work on macOS or Linux?
 
-macOS: yes, as a beta for macOS 14.2 and later on Apple silicon and Intel Macs (see [macOS app](#macos-app-beta)). It records system audio with the Core Audio capture added in macOS 14.2; meeting detection isn't available on macOS yet. Linux isn't supported.
+macOS: yes, as a beta for macOS 14.2 and later on Apple silicon and Intel Macs (see [macOS app](#macos-app-beta)). It records system audio with the Core Audio capture added in macOS 14.2; meeting detection isn't available on macOS yet. Linux: yes, as a beta for x64 (an AppImage and a `.deb`; see [Linux app](#linux-app-beta)). It records system audio through PulseAudio or PipeWire and detects meetings like the Windows app, except browser meetings on Wayland-only sessions.
 
 ### Where is my data stored? Is it private?
 

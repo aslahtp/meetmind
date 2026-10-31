@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Sun, Moon, Monitor, Palette, Power, Radar } from 'lucide-react';
 import { useApp } from '../../lib/app-context.js';
 import { SegmentedControl, Switch } from '../ui/index.jsx';
 import { SettingsGroup, SettingRow, RowList } from './SettingsParts.jsx';
-import { isMac } from '../../lib/os.js';
+import { isMac, isLinux } from '../../lib/os.js';
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -15,6 +15,14 @@ const RECENT_LIMIT_OPTIONS = [5, 10, 15].map((n) => ({ value: n, label: String(n
 
 export default function GeneralSection({ form, onChange }) {
   const { theme, setTheme } = useApp();
+  // Unsigned macOS builds and Linux .deb installs can't replace themselves; updates there are
+  // downloaded from GitHub.
+  const [canSelfUpdate, setCanSelfUpdate] = useState(!isMac);
+  useEffect(() => {
+    window.meetmind?.updater?.getStatus?.()
+      .then((s) => { if (typeof s?.canSelfUpdate === 'boolean') setCanSelfUpdate(s.canSelfUpdate); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="space-y-24">
@@ -91,7 +99,9 @@ export default function GeneralSection({ form, onChange }) {
             label="Detect meetings"
             description={isMac
               ? 'Not available on macOS yet. Start recordings with Record, or from the Chrome extension.'
-              : 'Shows a floating prompt to record when Google Meet, Zoom or Teams starts using your microphone, and keeps a timer on screen while you record.'}
+              : isLinux
+                ? 'Shows a floating prompt to record when the Zoom app, or Google Meet, Zoom or Teams in a browser, starts using your microphone. Browser meetings are detected on X11 sessions; on Wayland, use the Chrome extension.'
+                : 'Shows a floating prompt to record when Google Meet, Zoom or Teams starts using your microphone, and keeps a timer on screen while you record.'}
             htmlFor={isMac ? undefined : 'pref-meeting-detection'}
           >
             {!isMac && (
@@ -136,14 +146,16 @@ export default function GeneralSection({ form, onChange }) {
           </SettingRow>
           <SettingRow
             label="Download and install updates automatically"
-            description={isMac
-              ? 'Not available on macOS yet: new versions download from GitHub.'
+            description={!canSelfUpdate
+              ? (isLinux
+                ? 'Only the AppImage updates itself. For the .deb, MeetMind tells you when a new version is out and links to it.'
+                : 'Not available on macOS yet: new versions download from GitHub.')
               : form.autoCheckUpdates === false
                 ? 'Turn on automatic checks to use this.'
                 : 'Downloads new versions in the background and installs them when MeetMind is idle in the tray or quits. Never during a recording.'}
-            htmlFor={isMac ? undefined : 'pref-auto-install'}
+            htmlFor={canSelfUpdate ? 'pref-auto-install' : undefined}
           >
-            {!isMac && (
+            {canSelfUpdate && (
               <Switch
                 id="pref-auto-install"
                 label="Download and install updates automatically"

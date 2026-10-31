@@ -6,6 +6,20 @@ updated: 2026-10-31
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.16.0] - 2026-10-31
+
+### Added
+
+- **Linux (beta)**: MeetMind runs on 64-bit Linux, as an AppImage that updates itself or a `.deb` for Ubuntu, Debian and derivatives, with FFmpeg included.
+- **Linux**: Records your microphone and system audio through PulseAudio or PipeWire; when the app's own capture hears no system audio, it records your default output with FFmpeg instead.
+- **Linux**: Settings › System › System audio shows the audio server MeetMind records from and tests system audio capture.
+- **Linux**: Meeting detection offers to record when the Zoom app, or Google Meet, Zoom or Teams in a browser (on X11 sessions), starts using your microphone.
+- **Linux**: Launch on startup opens MeetMind in the tray at login, and the `.deb` opens `meetmind://` links.
+
+### Changed
+
+- **Updates**: The automatic install switch in Settings › General now appears wherever MeetMind can update itself; a Linux `.deb` install explains that it updates by installing the new package.
+
 ## [4.15.2] - 2026-10-31
 
 ### Changed

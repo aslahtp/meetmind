@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, RefreshCw, RotateCcw, Download, ArrowUpCircle, FileAudio } from 'lucide-react';
 import { StatusDot, ProgressBar } from '../ui/index.jsx';
 import { SettingsGroup, ExternalLink } from './SettingsParts.jsx';
-import { isMac } from '../../lib/os.js';
+import { isMac, isLinux } from '../../lib/os.js';
 import MacPermissions from './MacPermissions.jsx';
+import LinuxAudio from './LinuxAudio.jsx';
 
 const BINARIES = [
   { key: 'ffmpeg', label: 'ffmpeg', desc: 'Audio capture & conversion' },
@@ -14,7 +15,7 @@ const BINARIES = [
 const UPDATE_RECHECK_MS = 60 * 1000;
 
 const INSTALL_STAGE_HINT = {
-  download: 'Downloading FFmpeg (~80 MB)…',
+  download: `Downloading FFmpeg (~${isLinux ? 150 : 80} MB)…`,
   extract: 'Extracting archive…',
   copy: 'Installing…',
 };
@@ -22,7 +23,9 @@ const INSTALL_STAGE_HINT = {
 // Package-manager alternative to the in-app download, per OS.
 const PACKAGE_MANAGER = isMac
   ? { title: 'Or install with Homebrew', command: 'brew install ffmpeg', hint: 'Run in Terminal, then check again.' }
-  : { title: 'Or install with Windows Package Manager', command: 'winget install Gyan.FFmpeg', hint: 'Run in PowerShell or Command Prompt, then restart MeetMind and check again.' };
+  : isLinux
+    ? { title: 'Or install with your package manager', command: 'sudo apt install ffmpeg', hint: 'Run in a terminal (Fedora: sudo dnf install ffmpeg; Arch: sudo pacman -S ffmpeg), then check again.' }
+    : { title: 'Or install with Windows Package Manager', command: 'winget install Gyan.FFmpeg', hint: 'Run in PowerShell or Command Prompt, then restart MeetMind and check again.' };
 
 const SOURCE_LABEL = { bundled: '(bundled)', installed: '(installed)', system: '(system)' };
 
@@ -172,12 +175,14 @@ export default function SystemSection({ active }) {
   const missingBinaries = ffmpegStatus && (!ffmpegStatus.ffmpeg?.found || !ffmpegStatus.ffprobe?.found);
   const progress = updaterStatus?.downloadProgress;
 
-  // Unsigned macOS builds can't replace themselves; "Download" opens the release page instead.
+  // Unsigned macOS builds and Linux .deb installs can't replace themselves; "Download" opens the
+  // release page instead.
   const canSelfUpdate = updaterStatus?.canSelfUpdate !== false;
 
   return (
     <div className="space-y-24">
       {isMac && <MacPermissions />}
+      {isLinux && <LinuxAudio />}
 
       {/* ── FFmpeg ─────────────────────────────────────────────────────────── */}
       <SettingsGroup
