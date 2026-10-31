@@ -1575,6 +1575,262 @@
       }
     }
 
+    /* ── Download ─────────────────────────────────────────────────────────── */
+    .dl {
+      max-width: 1040px;
+      margin: 48px auto 0;
+      text-align: left;
+    }
+
+    /* Platform switcher: an ink-outlined pill; the chosen platform takes the dark chip fill
+       (DESIGN.md "applied state"), so the page's one yellow stays on the hero button. */
+    .dl-tabs {
+      display: none;
+      width: fit-content;
+      max-width: 100%;
+      margin: 0 auto 32px;
+      padding: 4px;
+      gap: 4px;
+      border: 1px solid var(--ink);
+      border-radius: var(--radius-tags);
+    }
+
+    .js .dl-tabs {
+      display: flex;
+    }
+
+    .dl-tab {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 10px 22px;
+      border: 0;
+      border-radius: var(--radius-tags);
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: var(--text-body-sm);
+      font-weight: 500;
+      line-height: 1.25;
+      cursor: pointer;
+      transition: background-color .2s ease, color .2s ease;
+    }
+
+    .dl-tab:hover {
+      background: var(--hover-wash);
+    }
+
+    .dl-tab[aria-selected="true"] {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .dl-tab .logo {
+      width: 16px;
+      height: 16px;
+      flex: none;
+    }
+
+    .dl-panel+.dl-panel {
+      margin-top: 48px;
+    }
+
+    .js .dl-panel+.dl-panel {
+      margin-top: 0;
+    }
+
+    /* Without JS every platform is listed, each under its own heading. */
+    .dl-panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: var(--text-heading-sm);
+      margin-bottom: 16px;
+    }
+
+    .dl-panel-title .logo {
+      width: 20px;
+      height: 20px;
+    }
+
+    .js .dl-panel-title {
+      display: none;
+    }
+
+    .dl-list {
+      list-style: none;
+      border: 1px solid var(--ink);
+      border-radius: var(--radius-cards);
+      overflow: hidden;
+    }
+
+    .dl-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.5fr) auto;
+      align-items: center;
+      gap: 16px 32px;
+      padding: 24px 32px;
+      transition: background-color .2s ease;
+    }
+
+    .dl-row+.dl-row {
+      border-top: 1px solid var(--hairline-soft);
+    }
+
+    .dl-row:hover {
+      background: var(--hover-wash);
+    }
+
+    .dl-name {
+      font-size: var(--text-body);
+      font-weight: 500;
+      line-height: 1.35;
+    }
+
+    .dl-kind {
+      font-size: var(--text-body-sm);
+      font-weight: 500;
+    }
+
+    .dl-row .caption {
+      display: block;
+      margin-top: 2px;
+    }
+
+    .dl-file {
+      font-size: var(--text-caption);
+      color: var(--graphite);
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
+    .dl-row .btn {
+      padding: 12px 20px;
+    }
+
+    .dl-row .btn .icon {
+      width: 16px;
+      height: 16px;
+    }
+
+    .dl-steps {
+      margin-top: 32px;
+      padding: 0 8px;
+    }
+
+    .dl-steps h3 {
+      font-size: var(--text-subheading);
+      margin-bottom: 4px;
+    }
+
+    .dl-steps .caption {
+      margin-bottom: 16px;
+    }
+
+    .dl-steps ol {
+      list-style: none;
+      counter-reset: dl-step;
+      display: grid;
+      gap: 12px;
+    }
+
+    .dl-steps li {
+      counter-increment: dl-step;
+      position: relative;
+      padding-left: 40px;
+      color: var(--graphite);
+      font-size: var(--text-body-sm);
+      text-wrap: pretty;
+    }
+
+    .dl-steps li::before {
+      content: counter(dl-step);
+      position: absolute;
+      left: 0;
+      top: -1px;
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border: 1px solid var(--ink);
+      border-radius: var(--radius-tags);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .dl-steps strong {
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    .dl-foot {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    .dl-foot a {
+      color: var(--ink);
+      text-underline-offset: 3px;
+    }
+
+    @media (max-width: 759px) {
+      .dl-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        padding: 20px 24px;
+      }
+
+      .dl-row .dl-format,
+      .dl-row .dl-file {
+        grid-column: 1;
+      }
+
+      .dl-row .btn {
+        grid-column: 2;
+        grid-row: 1 / span 3;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .dl-tab {
+        padding: 10px 14px;
+      }
+
+      .dl-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      .dl-row .btn {
+        grid-column: 1;
+        grid-row: auto;
+        margin-top: 8px;
+        width: 100%;
+      }
+
+      .dl-steps {
+        padding: 0;
+      }
+    }
+
+    @media (max-width: 359px) {
+      /* Logos only on the narrowest phones; the names stay for screen readers. */
+      .dl-tab .label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+
+      .dl-tab {
+        padding: 10px 18px;
+      }
+    }
+
     /* ── CTA ──────────────────────────────────────────────────────────────── */
     .cta {
       padding-bottom: 96px;
@@ -1923,7 +2179,7 @@
               <use href="#l-github" />
             </svg><span class="label">GitHub</span></a>
           <div class="nav-cta-slot">
-            <div><a class="btn btn-primary nav-cta" href="https://github.com/aslahtp/meetmind/releases/latest"
+            <div><a class="btn btn-primary nav-cta" href="#download"
                 tabindex="-1"><svg class="icon" aria-hidden="true">
                   <use href="#i-download" />
                 </svg>Download</a></div>
@@ -1953,7 +2209,7 @@
           transcribes it with AssemblyAI, Google Speech-to-Text, Sarvam AI or Groq, and writes clear meeting minutes with
           Gemini, Groq or Claude — then syncs them to Notion.</p>
         <div class="actions" id="hero-actions" data-reveal>
-          <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"
+          <a class="btn btn-primary" href="#download"><svg class="icon"
               aria-hidden="true">
               <use href="#i-download" />
             </svg>Download for Windows, Mac or Linux</a>
@@ -2055,10 +2311,146 @@
       </div>
     </section>
 
-    <!-- 2 How it works -->
+    <!-- 2 Download -->
+    <section id="download" aria-labelledby="download-h">
+      <div class="wrap center">
+        <span class="badge" data-reveal="sm"><span class="num">2</span><span class="label">Download</span></span>
+        <h2 class="display" id="download-h" data-reveal="lg">Download MeetMind</h2>
+        <p class="sub" data-reveal>Free for Windows, macOS and Linux. Pick your system, download the file for your
+          computer, and follow the steps below it.</p>
+
+        <div class="dl" data-reveal>
+          <div class="dl-tabs" role="tablist" aria-label="Operating system">
+            <button class="dl-tab" type="button" role="tab" id="dl-tab-windows" aria-controls="dl-windows"
+              aria-selected="false" tabindex="-1"><svg class="logo" aria-hidden="true">
+                <use href="#l-windows" />
+              </svg><span class="label">Windows</span></button>
+            <button class="dl-tab" type="button" role="tab" id="dl-tab-macos" aria-controls="dl-macos"
+              aria-selected="false" tabindex="-1"><svg class="logo" aria-hidden="true">
+                <use href="#l-apple" />
+              </svg><span class="label">macOS</span></button>
+            <button class="dl-tab" type="button" role="tab" id="dl-tab-linux" aria-controls="dl-linux"
+              aria-selected="false" tabindex="-1"><svg class="logo" aria-hidden="true">
+                <use href="#l-linux" />
+              </svg><span class="label">Linux</span></button>
+          </div>
+
+          <!-- Links point at this version's release; the script below swaps in the latest release's
+               actual files and sizes. -->
+          <div class="dl-panel" id="dl-windows" role="tabpanel" aria-labelledby="dl-tab-windows">
+            <h3 class="dl-panel-title"><svg class="logo" aria-hidden="true">
+                <use href="#l-windows" />
+              </svg>Windows</h3>
+            <ul class="dl-list">
+              <li class="dl-row" data-asset="-Setup-" data-ext=".exe">
+                <div><span class="dl-name">Windows 10 &amp; 11</span><span class="caption">64-bit PCs</span></div>
+                <div class="dl-format"><span class="dl-kind">Installer (.exe)</span><span class="caption dl-size"></span></div>
+                <span class="dl-file">MeetMind-Setup-__VERSION__.exe</span>
+                <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind/releases/download/v__VERSION__/MeetMind-Setup-__VERSION__.exe"><svg class="icon" aria-hidden="true">
+                    <use href="#i-download" />
+                  </svg>Download</a>
+              </li>
+            </ul>
+            <div class="dl-steps">
+              <h3>Install on Windows</h3>
+              <p class="caption">Windows 10 or 11, 64-bit. FFmpeg is included.</p>
+              <ol>
+                <li>Run <strong>MeetMind-Setup.exe</strong>. The installer isn’t code-signed yet, so if Windows shows
+                  “Windows protected your PC”, click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
+                <li>Open MeetMind and go to <strong>Settings</strong>. Add a speech-to-text key (AssemblyAI, Google,
+                  Sarvam AI or Groq) and a notes key (Gemini, Groq or Claude); each field links to where you get one.</li>
+                <li>Join a call. MeetMind offers to record when Google Meet, Zoom or Teams starts using your
+                  microphone, or press <strong>Record</strong>. Updates install themselves if you turn that on in
+                  <strong>Settings › General</strong>.</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="dl-panel" id="dl-macos" role="tabpanel" aria-labelledby="dl-tab-macos">
+            <h3 class="dl-panel-title"><svg class="logo" aria-hidden="true">
+                <use href="#l-apple" />
+              </svg>macOS (beta)</h3>
+            <ul class="dl-list">
+              <li class="dl-row" data-asset="-arm64" data-ext=".dmg">
+                <div><span class="dl-name">Apple silicon</span><span class="caption">Macs with an M-series chip</span></div>
+                <div class="dl-format"><span class="dl-kind">Disk image (.dmg)</span><span class="caption dl-size"></span></div>
+                <span class="dl-file">MeetMind-__VERSION__-arm64.dmg</span>
+                <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind/releases/download/v__VERSION__/MeetMind-__VERSION__-arm64.dmg"><svg class="icon" aria-hidden="true">
+                    <use href="#i-download" />
+                  </svg>Download</a>
+              </li>
+              <li class="dl-row" data-asset="-x64" data-ext=".dmg">
+                <div><span class="dl-name">Intel</span><span class="caption">Macs with an Intel processor</span></div>
+                <div class="dl-format"><span class="dl-kind">Disk image (.dmg)</span><span class="caption dl-size"></span></div>
+                <span class="dl-file">MeetMind-__VERSION__-x64.dmg</span>
+                <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind/releases/download/v__VERSION__/MeetMind-__VERSION__-x64.dmg"><svg class="icon" aria-hidden="true">
+                    <use href="#i-download" />
+                  </svg>Download</a>
+              </li>
+            </ul>
+            <div class="dl-steps">
+              <h3>Install on macOS</h3>
+              <p class="caption">macOS 14.2 or later. Not signed by Apple yet. FFmpeg is included.</p>
+              <ol>
+                <li>Open the <strong>.dmg</strong> and drag <strong>MeetMind</strong> to <strong>Applications</strong>.</li>
+                <li>Open MeetMind. When macOS says it can’t verify the developer, click <strong>Done</strong>, then
+                  open <strong>System Settings › Privacy &amp; Security</strong> and click <strong>Open Anyway</strong>.</li>
+                <li>In <strong>Settings › System</strong>, allow <strong>Microphone</strong> and <strong>Screen &amp;
+                    System Audio Recording</strong>, then play a video and click <strong>Test</strong> to check MeetMind
+                  hears it. Add your speech-to-text and notes keys in <strong>Settings</strong>.</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="dl-panel" id="dl-linux" role="tabpanel" aria-labelledby="dl-tab-linux">
+            <h3 class="dl-panel-title"><svg class="logo" aria-hidden="true">
+                <use href="#l-linux" />
+              </svg>Linux (beta)</h3>
+            <ul class="dl-list">
+              <li class="dl-row" data-asset="-x86_64" data-ext=".AppImage">
+                <div><span class="dl-name">AppImage</span><span class="caption">Most distributions · updates itself</span></div>
+                <div class="dl-format"><span class="dl-kind">AppImage (x64)</span><span class="caption dl-size"></span></div>
+                <span class="dl-file">MeetMind-__VERSION__-x86_64.AppImage</span>
+                <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind/releases/download/v__VERSION__/MeetMind-__VERSION__-x86_64.AppImage"><svg class="icon" aria-hidden="true">
+                    <use href="#i-download" />
+                  </svg>Download</a>
+              </li>
+              <li class="dl-row" data-asset="-amd64" data-ext=".deb">
+                <div><span class="dl-name">Debian package</span><span class="caption">Ubuntu, Debian and derivatives</span></div>
+                <div class="dl-format"><span class="dl-kind">Package (.deb, x64)</span><span class="caption dl-size"></span></div>
+                <span class="dl-file">MeetMind-__VERSION__-amd64.deb</span>
+                <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind/releases/download/v__VERSION__/MeetMind-__VERSION__-amd64.deb"><svg class="icon" aria-hidden="true">
+                    <use href="#i-download" />
+                  </svg>Download</a>
+              </li>
+            </ul>
+            <div class="dl-steps">
+              <h3>Install on Linux</h3>
+              <p class="caption">64-bit, with PulseAudio or PipeWire and <code>pactl</code> (the pulseaudio-utils
+                package, on most desktops already). FFmpeg is included.</p>
+              <ol>
+                <li><strong>.deb</strong>: run <code>sudo apt install ./MeetMind-*-amd64.deb</code>. To update,
+                  install the new .deb the same way; MeetMind tells you when one is out.</li>
+                <li><strong>AppImage</strong>: run <code>chmod +x MeetMind-*.AppImage</code>, then open it. It needs
+                  FUSE 2 (<code>sudo apt install libfuse2t64</code> on Ubuntu 24.04 and later) and updates itself.</li>
+                <li>In <strong>Settings › System › System audio</strong>, play a video and click <strong>Test</strong>
+                  to check MeetMind hears it, then add your keys in <strong>Settings</strong>. Browser meetings are
+                  detected on X11 sessions; on Wayland, press <strong>Record</strong>.</li>
+              </ol>
+            </div>
+          </div>
+
+          <p class="caption dl-foot">Every file is on <a href="https://github.com/aslahtp/meetmind/releases/latest">GitHub
+              Releases</a> with a signed build attestation. Found a problem with a build?
+            <a href="https://github.com/aslahtp/meetmind/issues/new?template=bug_report.yml">Report a bug</a></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 How it works -->
     <section id="how" aria-labelledby="how-h">
       <div class="wrap center">
-        <span class="badge" data-reveal="sm"><span class="num">2</span><span class="label">How it works</span></span>
+        <span class="badge" data-reveal="sm"><span class="num">3</span><span class="label">How it works</span></span>
         <h2 class="display" id="how-h" data-reveal="lg">From call to minutes in four steps</h2>
         <p class="sub" data-reveal>Start a recording however suits you. When you stop, MeetMind does the rest.</p>
         <ol class="grid grid-4 steps">
@@ -2138,10 +2530,10 @@
       </div>
     </section>
 
-    <!-- 3 Features -->
+    <!-- 4 Features -->
     <section id="features" aria-labelledby="features-h">
       <div class="wrap center">
-        <span class="badge" data-reveal="sm"><span class="num">3</span><span class="label">Features</span></span>
+        <span class="badge" data-reveal="sm"><span class="num">4</span><span class="label">Features</span></span>
         <h2 class="display" id="features-h" data-reveal="lg">Everything a meeting note taker needs</h2>
         <div class="grid grid-2">
           <div class="card" data-reveal>
@@ -2283,10 +2675,10 @@
       </div>
     </section>
 
-    <!-- 4 Privacy / data flow -->
+    <!-- 5 Privacy / data flow -->
     <section id="privacy" aria-labelledby="data-h">
       <div class="wrap center">
-        <span class="badge" data-reveal="sm"><span class="num">4</span><span class="label">Your data</span></span>
+        <span class="badge" data-reveal="sm"><span class="num">5</span><span class="label">Your data</span></span>
         <h2 class="display" id="data-h" data-reveal="lg">Where your meeting goes</h2>
         <p class="sub" data-reveal>There is no MeetMind server in the middle. Each step talks directly to the provider
           you picked, using your own API keys.</p>
@@ -2343,10 +2735,10 @@
       </div>
     </section>
 
-    <!-- 5 Screenshots -->
+    <!-- 6 Screenshots -->
     <section id="screenshots" class="shots" aria-labelledby="shots">
       <div class="wrap center">
-        <span class="badge" data-reveal="sm"><span class="num">5</span><span class="label">Screenshots</span></span>
+        <span class="badge" data-reveal="sm"><span class="num">6</span><span class="label">Screenshots</span></span>
         <h2 class="display" id="shots" data-reveal="lg">Meeting minutes you can actually use</h2>
         <figure class="shot-feature" data-reveal="img">
           <div class="frame">
@@ -2388,10 +2780,10 @@
       </div>
     </section>
 
-    <!-- 6 Compare -->
+    <!-- 7 Compare -->
     <section id="compare-section" aria-labelledby="compare">
       <div class="wrap center">
-        <span class="badge" data-reveal="sm"><span class="num">6</span><span class="label">Compare</span></span>
+        <span class="badge" data-reveal="sm"><span class="num">7</span><span class="label">Compare</span></span>
         <h2 class="display" id="compare" data-reveal="lg">MeetMind vs. hosted AI note takers</h2>
         <p class="sub" data-reveal>An open-source alternative to subscription tools such as Otter.ai and Fireflies.ai.
         </p>
@@ -2465,10 +2857,10 @@
       </div>
     </section>
 
-    <!-- 7 FAQ -->
+    <!-- 8 FAQ -->
     <section id="faq" aria-labelledby="faq-h">
       <div class="wrap center">
-        <span class="badge" data-reveal="sm"><span class="num">7</span><span class="label">FAQ</span></span>
+        <span class="badge" data-reveal="sm"><span class="num">8</span><span class="label">FAQ</span></span>
         <h2 class="display" id="faq-h" data-reveal="lg">Frequently asked questions</h2>
         <div class="faq">
           <details open data-reveal>
@@ -2567,10 +2959,10 @@
         <p class="sub" data-reveal>Install MeetMind, add a Gemini, Groq or Claude key and a speech-to-text key,
           and your next call becomes searchable minutes.</p>
         <div class="actions" data-reveal>
-          <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"
+          <a class="btn btn-primary" href="#download"><svg class="icon"
               aria-hidden="true">
               <use href="#i-download" />
-            </svg>Download the latest release</a>
+            </svg>Download MeetMind</a>
           <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind#-install">Read the setup guide<svg
               class="icon icon-trail" aria-hidden="true">
               <use href="#i-arrow" />
@@ -2795,6 +3187,72 @@
           setOpen(d, open);
         });
       });
+    })();
+  </script>
+  <script>
+    // Download section: platform tabs, opening on the visitor's OS, and the latest release's actual
+    // files and sizes from the GitHub API. Without JS (or if the API fails) every platform is
+    // listed with this version's links.
+    (function () {
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('.dl-tab'));
+      if (!tabs.length) return;
+
+      function guessOS() {
+        var p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '') +
+          ' ' + navigator.userAgent;
+        if (/Win/i.test(p)) return 'windows';
+        if (/Mac|iPhone|iPad|iPod/i.test(p)) return 'macos';
+        if (/Linux|X11|CrOS/i.test(p) && !/Android/i.test(p)) return 'linux';
+        return 'windows';
+      }
+
+      function select(tab, focus) {
+        tabs.forEach(function (t) {
+          var on = t === tab;
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+          t.tabIndex = on ? 0 : -1;
+          document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+        });
+        if (focus) tab.focus();
+      }
+
+      tabs.forEach(function (t, i) {
+        t.addEventListener('click', function () { select(t); });
+        t.addEventListener('keydown', function (e) {
+          var keys = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 };
+          if (!(e.key in keys)) return;
+          e.preventDefault();
+          select(tabs[(keys[e.key] + tabs.length) % tabs.length], true);
+        });
+      });
+      select(document.getElementById('dl-tab-' + guessOS()));
+
+      if (!window.fetch) return;
+      fetch('https://api.github.com/repos/aslahtp/meetmind/releases/latest', {
+        headers: { Accept: 'application/vnd.github+json' },
+      }).then(function (r) { return r.ok ? r.json() : null; }).then(function (release) {
+        if (!release || !Array.isArray(release.assets)) return;
+        document.querySelectorAll('.dl-row[data-asset]').forEach(function (row) {
+          var part = row.getAttribute('data-asset');
+          var ext = row.getAttribute('data-ext');
+          var asset = release.assets.filter(function (a) {
+            return a.name.indexOf('MeetMind') === 0 && a.name.indexOf(part) > 0 &&
+              a.name.slice(-ext.length) === ext;
+          })[0];
+          var link = row.querySelector('.btn');
+          var file = row.querySelector('.dl-file');
+          if (asset) {
+            link.href = asset.browser_download_url;
+            file.textContent = asset.name;
+            row.querySelector('.dl-size').textContent = Math.round(asset.size / 1e6) + ' MB';
+          } else {
+            // A platform newer than the latest release: point at the releases page until it ships.
+            link.href = 'https://github.com/aslahtp/meetmind/releases';
+            file.textContent = 'Coming in the next release';
+            link.lastChild.textContent = 'All releases';
+          }
+        });
+      }).catch(function () { });
     })();
   </script>
 </body>

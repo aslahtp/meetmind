@@ -15,6 +15,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 - **Linux**: Settings › System › System audio shows the audio server MeetMind records from and tests system audio capture.
 - **Linux**: Meeting detection offers to record when the Zoom app, or Google Meet, Zoom or Teams in a browser (on X11 sessions), starts using your microphone.
 - **Linux**: Launch on startup opens MeetMind in the tray at login, and the `.deb` opens `meetmind://` links.
+- **Site**: A Download section with Windows, macOS and Linux tabs (opening on the visitor's system), direct links to each file of the latest release with its size, and install steps for each platform; every Download button now leads there.
 
 ### Changed
 
