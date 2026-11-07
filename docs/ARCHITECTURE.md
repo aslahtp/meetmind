@@ -175,7 +175,7 @@ grouped by feature:
 | `logs` | `logs:get`, `logs:clear`, `logs:openFolder` | Backing store for the Logs viewer |
 | `config` | `config:get`, `config:set`, `config:set-multiple` | Settings read/write |
 | `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:linux-status`, `audio:import-file` | Recording control and device enumeration (FFmpeg devices: DirectShow/WASAPI on Windows, PulseAudio sources on Linux; macOS returns an error). `audio:linux-status` returns the PulseAudio/PipeWire server, default output and input, and whether FFmpeg can record from it, for Settings › System › System audio |
-| `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/waveform/audio-status/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `audio-status` returns `{ available, deletedAt, source }`, so the Audio tab shows the player, "Recording deleted" or "No recording" (a pasted transcript has `source: 'transcript'`). `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed |
+| `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/waveform/audio-status/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `audio-status` returns `{ available, deletedAt, source }`, so the Audio tab shows the player, "Recording deleted" or "No recording" (a pasted transcript has `source: 'transcript'`). `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed. Every write also sends `sessions:changed` (writes within 30 ms are sent once; `db.onChange` in `sessions.js`), and the renderer re-reads the list and the open meeting, so each status change shows at once on every screen; showing or focusing the window re-checks the revision too |
 | `storage` | `storage:summary`, `storage:cleanup`, `storage:delete-all`, `storage:open-folder` | Settings › Storage (section 6.3): the recordings' count and size, plus what a "Keep recordings" period (saved, or passed in to preview) would delete; deleting old or all recordings' audio; opening the recordings folder |
 | `dialog` | `dialog:choose-folder` | Native folder picker |
 | `pdf` | `pdf:export`, `pdf:reveal`, `pdf:default-dir` | PDF export |
@@ -194,7 +194,7 @@ Event subscriptions go through a single `on(channel, callback)` / `off(...)` pai
 explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
 `recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
 `processing:error`, `processing:cancelled`, `notes:preview`, `ws:extension-connected`, `ws:recording-requested`,
-`sessions:durations-updated`, `sessions:audio-deleted`, `updater:status`, `calendar:meeting-starting`, `calendar:changed`,
+`sessions:changed`, `updater:status`, `calendar:meeting-starting`, `calendar:changed`,
 `llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.
 Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
 
@@ -696,7 +696,7 @@ how many recordings there are and their total size, sets how long they are kept
   `runProcessingPipeline`) are never deleted.
 - The retention cleanup runs once at startup, after crash recovery and the duration backfill.
   Saving a new period in Settings first asks to confirm if it would delete anything, then runs it
-  at once. Every deletion sends `sessions:audio-deleted` so the renderer reloads its sessions.
+  at once. Like every database write, a deletion reaches the renderer as `sessions:changed`.
 - The pure rules (grouping the folder's files, what a period deletes, totals) are in
   `storage-rules.js`; the renderer's period choices (`renderer/lib/storage.js`) must match
   `RETENTION_DAYS`, which `tests/storageRules.test.js` checks.

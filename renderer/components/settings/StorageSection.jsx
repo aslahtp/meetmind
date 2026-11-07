@@ -32,12 +32,12 @@ export default function StorageSection({ form, onChange, active, savedRetentionD
     if (active) load();
   }, [active, load]);
 
-  // Recordings deleted elsewhere: the startup cleanup, or saving a shorter period.
+  // Recordings deleted elsewhere (the startup cleanup, saving a shorter period) or a new one saved.
   useEffect(() => {
-    if (!window.meetmind?.on) return undefined;
-    const unsubscribe = window.meetmind.on('sessions:audio-deleted', () => load());
+    if (!window.meetmind?.on || !active) return undefined;
+    const unsubscribe = window.meetmind.on('sessions:changed', () => load());
     return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
-  }, [load]);
+  }, [active, load]);
 
   const openFolder = async () => {
     setBusy('open');

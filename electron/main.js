@@ -179,6 +179,19 @@ function getRecordingsDir() {
   return path.join(app.getPath('userData'), 'recordings');
 }
 
+// Every database write reaches the renderer as one sessions:changed event (a burst of writes, like
+// the duration backfill, is sent once), so the Dashboard, Meetings and an open meeting show each
+// status change the moment it is saved: recording → transcribing → writing notes → complete.
+const SESSIONS_CHANGED_DELAY_MS = 30;
+let sessionsChangedTimer = null;
+db.onChange(() => {
+  if (sessionsChangedTimer) return;
+  sessionsChangedTimer = setTimeout(() => {
+    sessionsChangedTimer = null;
+    sendToRenderer('sessions:changed', { revision: db.getRevision() });
+  }, SESSIONS_CHANGED_DELAY_MS);
+});
+
 function sendToRenderer(channel, ...args) {
   try {
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
@@ -867,9 +880,7 @@ const recordingsStorage = createRecordingsStorage({ getRecordingsDir, db, delete
 /** Deletes recordings older than the "Keep recordings" setting. Runs at startup and on request. */
 function runRetentionCleanup(reason) {
   const { recordingRetentionDays } = getConfig();
-  const result = recordingsStorage.cleanup({ retentionDays: recordingRetentionDays, busyIds: busySessionIds(), reason });
-  if (result.count > 0) sendToRenderer('sessions:audio-deleted');
-  return result;
+  return recordingsStorage.cleanup({ retentionDays: recordingRetentionDays, busyIds: busySessionIds(), reason });
 }
 
 async function processSession(sessionId, audioPath, options = {}) {
@@ -1502,9 +1513,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('storage:delete-all', () => {
     try {
-      const result = recordingsStorage.deleteAll({ busyIds: busySessionIds() });
-      if (result.count > 0) sendToRenderer('sessions:audio-deleted');
-      return { success: true, ...result };
+      return { success: true, ...recordingsStorage.deleteAll({ busyIds: busySessionIds() }) };
     } catch (err) {
       logger.error('Deleting all recordings failed', { error: err.message });
       return { success: false, error: err.message };
@@ -1881,7 +1890,6 @@ function backfillSessionDurations() {
       updated,
       total: sessions.length,
     });
-    sendToRenderer('sessions:durations-updated');
   } else {
     logger.info('Session duration backfill complete (no changes)', {
       total: sessions.length,

@@ -18,6 +18,15 @@ function getRevision() {
   return revision;
 }
 
+// Called after every write with the new revision; main.js tells the renderer (sessions:changed),
+// so every screen shows a status change the moment it is saved.
+const changeListeners = new Set();
+
+function onChange(listener) {
+  changeListeners.add(listener);
+  return () => changeListeners.delete(listener);
+}
+
 function persist() {
   if (!db) return;
   revision += 1;
@@ -27,6 +36,13 @@ function persist() {
     fs.writeFileSync(getDbPath(), buf);
   } catch (err) {
     logger.error('Failed to persist database', { error: err.message });
+  }
+  for (const listener of changeListeners) {
+    try {
+      listener(revision);
+    } catch (err) {
+      logger.warn('Database change listener failed', { error: err.message });
+    }
   }
 }
 
@@ -217,5 +233,6 @@ module.exports = {
   getRecentSessions,
   markStaleRecordingSessionsAsError,
   getRevision,
+  onChange,
   computeDuration,
 };
