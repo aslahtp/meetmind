@@ -19,6 +19,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Fixed
 
 - **Meetings**: The Audio tab of a meeting made from a pasted transcript, or with no audio file, shows "No recording" instead of an error.
+- **Meetings**: A meeting's link counts as Google Meet, Zoom or Teams only when its host is that service (or a subdomain of it), not when the name appears elsewhere in the URL.
 - **Meetings**: Meeting cards on the Dashboard and Meetings page, and an open meeting, now update the moment a recording starts, stops or moves through transcribing and writing notes, instead of showing an old status until processing finished.
 
 ## [4.16.0] - 2026-10-31

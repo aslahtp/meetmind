@@ -12,6 +12,21 @@ describe('meeting platform', () => {
     expect(meetingHostname('https://www.zoom.us/j/1')).toBe('zoom.us');
   });
 
+  it('matches the link’s host, not the domain anywhere in the URL', () => {
+    expect(meetingPlatform('https://MEET.GOOGLE.COM/abc-defg-hij')).toMatchObject({ key: 'meet' });
+    expect(meetingPlatform('https://acme.zoom.com/j/1')).toMatchObject({ key: 'zoom' });
+    expect(meetingPlatform('https://teams.live.com/meet/1')).toMatchObject({ key: 'teams' });
+    for (const url of [
+      'https://evil.example/?next=meet.google.com',
+      'https://meet.google.com.evil.example/abc',
+      'https://notzoom.us/j/1',
+      'https://evil.example/teams.microsoft.com/x',
+      'meet.google.com/abc-defg-hij', // not a URL
+    ]) {
+      expect(meetingPlatform(url)).toEqual({ key: 'other', name: 'Video call' });
+    }
+  });
+
   it('prefers the platform meeting detection saved, then the link', () => {
     expect(sessionPlatform({ meeting_platform: 'zoom', meeting_url: '' })).toMatchObject({ key: 'zoom', name: 'Zoom' });
     expect(sessionPlatform({ meeting_platform: 'meet', meeting_url: 'https://meet.google.com/abc-defg-hij' }))
