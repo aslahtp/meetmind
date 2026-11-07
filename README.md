@@ -93,7 +93,7 @@ Because MeetMind records audio on your own computer, nothing joins the meeting a
 - **Notion sync**: notes become native Notion blocks (headings, tables, to-dos); re-syncing replaces the old page instead of duplicating it.
 - **PDF and Markdown export**: save dated PDFs (optionally with the transcript) or copy the notes as Markdown.
 - **Import existing audio or transcripts**: process WAV, MP3, M4A, MP4, WebM and other files, or paste a transcript to skip speech-to-text.
-- **Local-first storage**: recordings, transcripts and notes stay in a local SQLite database; retries reuse the saved transcript instead of paying for transcription twice.
+- **Local-first storage**: recordings, transcripts and notes stay on your computer (notes and transcripts in a local SQLite database); retries reuse the saved transcript instead of paying for transcription twice. Settings › Storage shows how much space recordings take and can delete old ones automatically, keeping their notes and transcripts.
 - **Search across every meeting**: titles, notes and transcripts, ranked by relevance, with related words, typo tolerance and the matching passage highlighted; filter a transcript by speaker.
 - **Light and dark themes**, keyboard-accessible UI, and in-app updates from GitHub Releases, shown in the top bar and optionally downloaded and installed automatically while MeetMind sits idle in the tray.
 
@@ -285,7 +285,7 @@ macOS: yes, as a beta for macOS 14.2 and later on Apple silicon and Intel Macs (
 
 ### Where is my data stored? Is it private?
 
-Recordings, transcripts and notes are stored locally on your computer. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to the note-generation provider you choose (Gemini, Groq or Claude), using your own API keys. Notion sync is optional.
+Recordings, transcripts and notes are stored locally on your computer. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to the note-generation provider you choose (Gemini, Groq or Claude), using your own API keys. Notion sync is optional. Settings › Storage shows how much space recordings take, and "Keep recordings" can delete recordings older than a chosen period while keeping their notes and transcripts.
 
 ### Which languages are supported?
 

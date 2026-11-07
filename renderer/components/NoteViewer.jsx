@@ -4,7 +4,7 @@ import { useApp } from '../lib/app-context.js';
 import TranscriptViewer from './TranscriptViewer.jsx';
 import { NoteToolbar, NoteTitleBlock } from './note/NoteHeader.jsx';
 import SummaryJson from './note/SummaryJson.jsx';
-import AudioPlayer from './note/AudioPlayer.jsx';
+import SessionAudio from './note/SessionAudio.jsx';
 import { MarkdownNoteView } from './note/markdown.jsx';
 import { buildNotesMarkdown, parseNotesMarkdown, notesTitle } from './note/copyMarkdown.js';
 import { EmptyState, StepBadge, ProgressBar, SaveBar, SegmentedControl } from './ui/index.jsx';
@@ -649,8 +649,8 @@ export default function NoteViewer({ session, onBack, onRefresh }) {
           )}
           {activeTab === 'audio' && (
             <div className="pt-24">
-              <AudioPlayer
-                sessionId={session.id}
+              <SessionAudio
+                session={session}
                 title={title}
                 durationLabel={durationLabel}
                 showWaveform={config?.showAudioWaveform !== false}

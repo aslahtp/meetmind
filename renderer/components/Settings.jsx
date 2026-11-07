@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { SlidersHorizontal, AudioLines, NotebookPen, Blocks, Cpu } from 'lucide-react';
+import { SlidersHorizontal, AudioLines, NotebookPen, Blocks, HardDrive, Cpu } from 'lucide-react';
 import { useApp } from '../lib/app-context.js';
 import { providerConfigKeys } from '../lib/providers.js';
 import { sameValue, changedFields } from '../lib/settingsForm.js';
+import { readSettingsTab, storeSettingsTab, takeRequestedSettingsTab } from '../lib/settingsTab.js';
+import { retentionPeriod, describeRecordings, deletionToast } from '../lib/storage.js';
 import { PageHeader, SaveBar, SegmentedControl } from './ui/index.jsx';
 import GeneralSection from './settings/GeneralSection.jsx';
 import TranscriptionSection from './settings/TranscriptionSection.jsx';
 import NotesSection from './settings/NotesSection.jsx';
 import IntegrationsSection from './settings/IntegrationsSection.jsx';
+import StorageSection from './settings/StorageSection.jsx';
 import SystemSection from './settings/SystemSection.jsx';
 
 const TABS = [
@@ -15,22 +18,13 @@ const TABS = [
   { value: 'transcription', label: 'Transcription', icon: AudioLines },
   { value: 'notes', label: 'Notes', icon: NotebookPen },
   { value: 'integrations', label: 'Integrations', icon: Blocks },
+  { value: 'storage', label: 'Storage', icon: HardDrive },
   { value: 'system', label: 'System', icon: Cpu },
 ];
 
-const TAB_STORAGE_KEY = 'meetmind.settingsTab';
-
 function readStoredTab() {
-  try {
-    const v = localStorage.getItem(TAB_STORAGE_KEY);
-    return TABS.some((t) => t.value === v) ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-function storeTab(tab) {
-  try { localStorage.setItem(TAB_STORAGE_KEY, tab); } catch {}
+  const v = readSettingsTab();
+  return TABS.some((t) => t.value === v) ? v : null;
 }
 
 const DEFAULT_FORM = {
@@ -61,6 +55,7 @@ const DEFAULT_FORM = {
   dashboardRecentLimit: 5,
   pdfExportDir: '',
   pdfIncludeTranscript: false,
+  recordingRetentionDays: 0,
 };
 
 // Provider credential/option keys come from the provider descriptors, so adding a provider needs
@@ -97,12 +92,17 @@ function formFromConfig(cfg, providers) {
     dashboardRecentLimit: cfg.dashboardRecentLimit || 5,
     pdfExportDir: cfg.pdfExportDir || '',
     pdfIncludeTranscript: cfg.pdfIncludeTranscript === true,
+    recordingRetentionDays: cfg.recordingRetentionDays ?? 0,
   };
 }
 
 export default function Settings({ onSave }) {
   const { confirm, addToast, setNavGuard, keysNotSet, providers } = useApp();
-  const [tab, setTab] = useState(() => (keysNotSet ? 'transcription' : readStoredTab() || 'general'));
+  const [tab, setTab] = useState(() => {
+    const requested = takeRequestedSettingsTab();
+    if (TABS.some((t) => t.value === requested)) return requested;
+    return keysNotSet ? 'transcription' : readStoredTab() || 'general';
+  });
   const [form, setForm] = useState(DEFAULT_FORM);
   const [initialForm, setInitialForm] = useState(null);
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState('');
@@ -184,15 +184,44 @@ export default function Settings({ onSave }) {
 
   const handleTabChange = (next) => {
     setTab(next);
-    storeTab(next);
+    storeSettingsTab(next);
+  };
+
+  // A new "Keep recordings" period that would delete recordings right away asks first; Cancel
+  // leaves the change unsaved. Returns false to stop the save.
+  const confirmRetentionChange = async () => {
+    const days = form.recordingRetentionDays;
+    if (!days || days === initialForm?.recordingRetentionDays || !window.meetmind?.storage) return true;
+    let expiring;
+    try {
+      ({ expiring } = await window.meetmind.storage.summary(days));
+    } catch {
+      return true; // the startup cleanup applies it later
+    }
+    if (!expiring?.count) return true;
+    return confirm({
+      title: 'Delete old recordings?',
+      message: `${describeRecordings(expiring.count, expiring.bytes)} ${expiring.count === 1 ? 'is' : 'are'} older than ${retentionPeriod(days)} and will be deleted now. Their notes and transcripts are kept. This can’t be undone.`,
+      confirmLabel: 'Save and delete',
+      destructive: true,
+    });
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      const retentionChanged = form.recordingRetentionDays !== initialForm?.recordingRetentionDays;
+      if (retentionChanged && !(await confirmRetentionChange())) return;
       await onSave(changedFields(form, initialForm));
       setInitialForm({ ...form });
       setSaved(true);
+      if (retentionChanged && form.recordingRetentionDays > 0) {
+        const result = await window.meetmind.storage.cleanup();
+        if (!result?.success || result.count > 0 || result.failed > 0) {
+          const { message, type } = deletionToast(result);
+          addToast(message, type);
+        }
+      }
     } catch (err) {
       addToast(`Couldn't save settings: ${err?.message || 'unknown error'}`, 'error');
     } finally {
@@ -236,6 +265,14 @@ export default function Settings({ onSave }) {
               />
             )}
             {t.value === 'integrations' && <IntegrationsSection form={form} onChange={handleChange} />}
+            {t.value === 'storage' && (
+              <StorageSection
+                form={form}
+                onChange={handleChange}
+                active={tab === 'storage'}
+                savedRetentionDays={initialForm?.recordingRetentionDays}
+              />
+            )}
             {t.value === 'system' && <SystemSection active={tab === 'system'} />}
           </div>
         ))}

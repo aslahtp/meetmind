@@ -505,7 +505,9 @@ export default function App() {
       refreshSessions();
     });
 
-    const unsubDurations = window.meetmind.on('sessions:durations-updated', async () => {
+    // Durations backfilled, or recordings deleted from Settings › Storage: reload the sessions,
+    // including the open one.
+    const reloadSessions = async () => {
       const updated = await window.meetmind.sessions.list();
       setSessions(updated);
       setSelectedSession((prev) => {
@@ -513,7 +515,9 @@ export default function App() {
         const next = updated.find((s) => s.id === prev.id);
         return next ? { ...next, _processingError: prev._processingError } : prev;
       });
-    });
+    };
+    const unsubDurations = window.meetmind.on('sessions:durations-updated', reloadSessions);
+    const unsubAudioDeleted = window.meetmind.on('sessions:audio-deleted', reloadSessions);
 
     const unsubUpdater = window.meetmind.on('updater:status', (status) => {
       setUpdaterState(status);
@@ -539,6 +543,7 @@ export default function App() {
       unsubError?.();
       unsubCancelled?.();
       unsubDurations?.();
+      unsubAudioDeleted?.();
       unsubUpdater?.();
       unsubFallback?.();
     };

@@ -175,7 +175,8 @@ grouped by feature:
 | `logs` | `logs:get`, `logs:clear`, `logs:openFolder` | Backing store for the Logs viewer |
 | `config` | `config:get`, `config:set`, `config:set-multiple` | Settings read/write |
 | `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:linux-status`, `audio:import-file` | Recording control and device enumeration (FFmpeg devices: DirectShow/WASAPI on Windows, PulseAudio sources on Linux; macOS returns an error). `audio:linux-status` returns the PulseAudio/PipeWire server, default output and input, and whether FFmpeg can record from it, for Settings › System › System audio |
-| `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed |
+| `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/waveform/audio-status/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `audio-status` returns `{ available, deletedAt, source }`, so the Audio tab shows the player, "Recording deleted" or "No recording" (a pasted transcript has `source: 'transcript'`). `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed |
+| `storage` | `storage:summary`, `storage:cleanup`, `storage:delete-all`, `storage:open-folder` | Settings › Storage (section 6.3): the recordings' count and size, plus what a "Keep recordings" period (saved, or passed in to preview) would delete; deleting old or all recordings' audio; opening the recordings folder |
 | `dialog` | `dialog:choose-folder` | Native folder picker |
 | `pdf` | `pdf:export`, `pdf:reveal`, `pdf:default-dir` | PDF export |
 | `notion` | `notion:upload`, `notion:test` | Notion sync and connection test |
@@ -193,7 +194,7 @@ Event subscriptions go through a single `on(channel, callback)` / `off(...)` pai
 explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
 `recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
 `processing:error`, `processing:cancelled`, `notes:preview`, `ws:extension-connected`, `ws:recording-requested`,
-`sessions:durations-updated`, `updater:status`, `calendar:meeting-starting`, `calendar:changed`,
+`sessions:durations-updated`, `sessions:audio-deleted`, `updater:status`, `calendar:meeting-starting`, `calendar:changed`,
 `llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.
 Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
 
@@ -644,7 +645,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   notion_page_url   TEXT,
   status            TEXT NOT NULL DEFAULT 'recording',
   last_error        TEXT,   -- added in 4.0.0 via ALTER TABLE: why the last processing run failed
-  meeting_title     TEXT    -- added in 4.10.0 via ALTER TABLE: the meeting's own title (see 5.2)
+  meeting_title     TEXT,   -- added in 4.10.0 via ALTER TABLE: the meeting's own title (see 5.2)
+  audio_deleted_at  TEXT,   -- added in 4.17.0 via ALTER TABLE: when Settings › Storage deleted the audio (6.3)
+  source            TEXT    -- added in 4.17.0 via ALTER TABLE: 'transcript' for a pasted transcript, else NULL
 )
 ```
 
@@ -666,7 +669,8 @@ registries), service and model selection (`sttService`, `sttModels`, `llmProvide
 `language`, custom `geminiSystemPrompt`), UI preferences (`theme`, `autoLaunch`,
 `hideLogsInSidebar`, `pinNotesViewToggle`, `dashboardRecentLimit`), meeting detection
 (`meetingDetection`, default `true`), update behavior
-(`autoCheckUpdates`, default `true`; `autoInstallUpdates`, default `false`), PDF export (`pdfExportDir`, `pdfIncludeTranscript`), and the WebSocket
+(`autoCheckUpdates`, default `true`; `autoInstallUpdates`, default `false`), PDF export (`pdfExportDir`, `pdfIncludeTranscript`), recording
+retention (`recordingRetentionDays`: `0` = forever, the default, or 1, 7, 30, 90 or 365; section 6.3), and the WebSocket
 port (`websocketPort`, default `39842`).
 
 Several settings keys have deliberate aliases kept in sync on write (`setConfig`), for backward
@@ -675,6 +679,27 @@ compatibility with older releases' field names: `notionToken`/`notionApiKey`,
 `systemPrompt`/`geminiSystemPrompt`, `promptOutputMode`/`noteOutputMode`. The pre-4.0 keys `selectedModel`/`geminiModel` and
 `secondaryGeminiModel` are migrated once into `llmModels.gemini` and `llmFallback`
 (`utils/configMigration.js`).
+
+### 6.3 Recording storage (`electron/services/recordings-storage.js`, `storage-rules.js`)
+
+Each meeting's audio is `userData/recordings/<sessionId>.wav` (`.webm` while recording, or left
+by a crash; `getRecordingsDir()` in `main.js`). Settings › Storage (`StorageSection.jsx`) shows
+how many recordings there are and their total size, sets how long they are kept
+(`recordingRetentionDays`), and can delete old ones now, delete them all, or open the folder.
+
+- Deleting removes only the audio files and the cached waveform; the meeting row stays with its
+  transcript and notes, `audio_path` set to `NULL` and `audio_deleted_at` set. A file that can't
+  be deleted (in use) is left with its meeting untouched and is retried next time.
+- A recording's age is its meeting's `started_at`; an audio file with no meeting counts too, aged
+  by its modified time.
+- The meeting being recorded and any meeting being processed (`busySessionIds()`: tracked by
+  `runProcessingPipeline`) are never deleted.
+- The retention cleanup runs once at startup, after crash recovery and the duration backfill.
+  Saving a new period in Settings first asks to confirm if it would delete anything, then runs it
+  at once. Every deletion sends `sessions:audio-deleted` so the renderer reloads its sessions.
+- The pure rules (grouping the folder's files, what a period deletes, totals) are in
+  `storage-rules.js`; the renderer's period choices (`renderer/lib/storage.js`) must match
+  `RETENTION_DAYS`, which `tests/storageRules.test.js` checks.
 
 ---
 
@@ -1142,7 +1167,8 @@ Current coverage is pure logic only:
 | Test file | Covers |
 | --- | --- |
 | `tests/copyMarkdown.test.js` | Notes JSON <-> Markdown round-tripping (`renderer/components/note/copyMarkdown.js`) |
-| `tests/format.test.js` | Formatting helpers (`renderer/lib/format.js`) |
+| `tests/format.test.js` | Formatting helpers (`renderer/lib/format.js`), including file sizes |
+| `tests/storageRules.test.js` | Recording retention: periods, grouping the recordings folder, what cleanup and "Delete all" delete (meeting date vs file date, busy meetings kept) and the Settings › Storage copy (`electron/services/storage-rules.js`, `renderer/lib/storage.js`) |
 | `tests/markdown.test.jsx` | Markdown rendering (`renderer/components/note/markdown.jsx`) |
 | `tests/pdf-export.test.js` | PDF file naming (`electron/services/pdf-export.js`) |
 | `tests/meetingFilters.test.js` | Meetings filters and sorting (`renderer/lib/meetingFilters.js`) |

@@ -5,6 +5,7 @@ const { migrateLegacyModels } = require('./configMigration');
 const { LEGACY_GOOGLE_KEYS, DEFAULT_SYNC_MINUTES, migrateLegacyCalendar, sanitizeSources, normalizeSyncMinutes } = require('../calendar/calendar-sources');
 const { v4: uuidv4 } = require('uuid');
 const { DEFAULT_MAC_CAPTURE_STRATEGY, normalizeMacCaptureStrategy } = require('../audio/mac-capture');
+const { DEFAULT_RETENTION_DAYS, normalizeRetentionDays } = require('../services/storage-rules');
 
 const schema = {
   notionToken: {
@@ -151,6 +152,12 @@ const schema = {
     type: 'boolean',
     default: false,
   },
+  // Days to keep recordings' audio (0 = forever); older audio is deleted at startup. See
+  // electron/services/storage-rules.js.
+  recordingRetentionDays: {
+    type: 'number',
+    default: DEFAULT_RETENTION_DAYS,
+  },
 };
 
 // Provider credential/option keys (API keys, project IDs, ...) come from the provider registries.
@@ -246,6 +253,7 @@ function getConfig() {
     notionUploadTranscript:    store.get('notionUploadTranscript') !== false,
     pdfExportDir:              store.get('pdfExportDir') || '',
     pdfIncludeTranscript:      store.get('pdfIncludeTranscript') === true,
+    recordingRetentionDays:    normalizeRetentionDays(store.get('recordingRetentionDays')),
   };
 }
 

@@ -1,10 +1,22 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-31
+updated: 2026-11-08
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.17.0] - 2026-11-08
+
+### Added
+
+- **Storage**: A new Settings › Storage tab shows how many recordings are saved and how much space they take, with buttons to open the recordings folder, clean up old recordings now or delete them all.
+- **Storage**: "Keep recordings" deletes recordings older than 1 day, 7, 30 or 90 days or 1 year when MeetMind starts (default Forever); only the audio is deleted, the meeting's notes and transcript stay. A recording in progress or being processed is never deleted.
+- **Meetings**: The Audio tab of a meeting whose recording was deleted says so, with a link to Settings › Storage.
+
+### Fixed
+
+- **Meetings**: The Audio tab of a meeting made from a pasted transcript, or with no audio file, shows "No recording" instead of an error.
 
 ## [4.16.0] - 2026-10-31
 
