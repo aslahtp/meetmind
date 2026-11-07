@@ -314,6 +314,12 @@ The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) d
   community `teams-for-linux` app; Microsoft has no Teams app for Linux).
 - Two consecutive positive polls emit `meeting-detected`; 15 s with no positive poll emits
   `meeting-ended`. "Not now" suppresses a meeting until it ends.
+- The detected meeting carries its platform (`meet`, `zoom`, `teams`) and, when an untitled Google
+  Meet tab shows its code ("Meet - abc-defg-hij"), the rebuilt link
+  (`https://meet.google.com/abc-defg-hij`). Recording from the prompt or its notification fallback
+  saves both (`meeting_platform`, `meeting_url`), so the meeting shows its source like an extension
+  recording: the card, the meeting page chip (a link only when there is a URL), the Meetings
+  platform filter, search and the PDF all use `sessionPlatform()` in `renderer/lib/platform.js`.
 
 Detection runs in the main process, so it keeps working while the window is minimised or hidden
 in the tray. The detector logs which mic source works when it starts, a warning if the audio
@@ -647,7 +653,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_error        TEXT,   -- added in 4.0.0 via ALTER TABLE: why the last processing run failed
   meeting_title     TEXT,   -- added in 4.10.0 via ALTER TABLE: the meeting's own title (see 5.2)
   audio_deleted_at  TEXT,   -- added in 4.17.0 via ALTER TABLE: when Settings › Storage deleted the audio (6.3)
-  source            TEXT    -- added in 4.17.0 via ALTER TABLE: 'transcript' for a pasted transcript, else NULL
+  source            TEXT,   -- added in 4.17.0 via ALTER TABLE: 'transcript' for a pasted transcript, else NULL
+  meeting_platform  TEXT    -- added in 4.17.0 via ALTER TABLE: 'meet' | 'zoom' | 'teams' from meeting detection (3.4)
 )
 ```
 
@@ -1167,13 +1174,14 @@ Current coverage is pure logic only:
 | Test file | Covers |
 | --- | --- |
 | `tests/copyMarkdown.test.js` | Notes JSON <-> Markdown round-tripping (`renderer/components/note/copyMarkdown.js`) |
+| `tests/platform.test.js` | A meeting's platform from detection or its link, and finding detected meetings by platform in search (`renderer/lib/platform.js`) |
 | `tests/format.test.js` | Formatting helpers (`renderer/lib/format.js`), including file sizes |
 | `tests/storageRules.test.js` | Recording retention: periods, grouping the recordings folder, what cleanup and "Delete all" delete (meeting date vs file date, busy meetings kept) and the Settings › Storage copy (`electron/services/storage-rules.js`, `renderer/lib/storage.js`) |
 | `tests/markdown.test.jsx` | Markdown rendering (`renderer/components/note/markdown.jsx`) |
 | `tests/pdf-export.test.js` | PDF file naming (`electron/services/pdf-export.js`) |
 | `tests/meetingFilters.test.js` | Meetings filters and sorting (`renderer/lib/meetingFilters.js`) |
 | `tests/meetingSearch.test.js` | Meeting search: stemming, concept map, typos, prefixes, phrases, ranking and snippets (`renderer/lib/meetingSearch.js`) |
-| `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, merging the two mic sources, meeting window titles, Linux app ids and title-based app names, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
+| `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, merging the two mic sources, meeting window titles (and Google Meet links rebuilt from a meeting code), Linux app ids and title-based app names, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
 | `tests/autoLaunch.test.js` | Launch at login on Windows, macOS and Linux: reading the state from `launchItems`, `--hidden`, respecting an entry disabled in Task Manager, removing leftover entries, dev mode, and the Linux XDG autostart entry (AppImage path, quoting, entries disabled in the desktop's settings) (`electron/services/auto-launch.js`) |
 | `tests/pulseParse.test.js` | `pactl` output parsing (server and defaults, sources, recording streams), picking the monitor and microphone, and the PulseAudio FFmpeg arguments (`electron/audio/pulse-parse.js`, `electron/audio/mixer.js`) |
 | `tests/updatePolicy.test.js` | Update rules: check scheduling and retries, which installs can update themselves (`canSelfUpdate`), auto-install, idle detection and hidden relaunch (`electron/services/update-policy.js`) |

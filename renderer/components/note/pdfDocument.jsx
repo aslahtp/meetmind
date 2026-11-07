@@ -7,7 +7,7 @@ import { buildNotesMarkdown, notesTitle } from './copyMarkdown.js';
 import { stripDuplicateTitle } from './markdown.jsx';
 import { metaText } from './meta.js';
 import { formatClock, formatDurationSeconds, speakerName } from '../../lib/format.js';
-import { meetingHostname } from '../../lib/platform.js';
+import { meetingHostname, sessionPlatform } from '../../lib/platform.js';
 
 // Builds the self-contained HTML that the main process prints to PDF. Notes go through the
 // same react-markdown + remark-gfm pipeline as the in-app view (raw HTML stays disabled), and
@@ -84,7 +84,7 @@ function PdfDocument({ session, notes, transcript, includeTranscript, title }) {
   const duration = session.duration_seconds > 0 ? formatDurationSeconds(session.duration_seconds) : null;
   const meta = metaText(session, notes, duration);
   const sentiment = SENTIMENT_LABELS[notes?.sentiment];
-  const host = meetingHostname(session.meeting_url);
+  const host = meetingHostname(session.meeting_url) || sessionPlatform(session)?.name;
   const tags = [sentiment, host].filter(Boolean);
   const segments = includeTranscript ? (transcript || []).filter((s) => s?.text) : [];
 

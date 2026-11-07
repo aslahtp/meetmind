@@ -227,6 +227,16 @@ describe('filterAndSort — platform filter', () => {
     expect(result.length).toBe(1);
     expect(result[0].id).toBe('s5');
   });
+
+  it('uses the platform meeting detection saved when there is no link', () => {
+    const detected = [
+      ...SESSIONS,
+      session({ id: 'zoom-app', meeting_platform: 'zoom' }),
+      session({ id: 'teams-app', meeting_platform: 'teams' }),
+    ];
+    expect(filterAndSort(detected, { platform: 'zoom' }).map((s) => s.id).sort()).toEqual(['s5', 'zoom-app']);
+    expect(filterAndSort(detected, { platform: 'teams' }).map((s) => s.id)).toEqual(['teams-app']);
+  });
 });
 
 // ── filterAndSort — date range ───────────────────────────────────────────────

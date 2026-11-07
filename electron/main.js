@@ -666,7 +666,12 @@ function requestRendererCaptureStop() {
 
 // ── Start / Stop recording ───────────────────────────────────────────────────
 
-async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
+// MEETING_PLATFORMS: what meeting detection can name as a source when it has no link.
+const MEETING_PLATFORMS = new Set(['meet', 'zoom', 'teams']);
+
+// meetingPlatform: set when recording from the meeting-detection prompt, which knows the platform
+// (Google Meet, Zoom, Teams) but rarely the link.
+async function handleStartRecording(sessionId, meetingUrl, meetingTitle, meetingPlatform) {
   if (isRecording) return { success: false, error: 'Already recording' };
 
   const { v4: uuidv4 } = require('uuid');
@@ -677,6 +682,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
     title: meetingTitle || 'Untitled Meeting',
     meeting_title: sourceMeetingTitle(meetingTitle),
     meeting_url: meetingUrl || '',
+    meeting_platform: MEETING_PLATFORMS.has(meetingPlatform) ? meetingPlatform : null,
     started_at: new Date().toISOString(),
     status: 'recording',
   });
@@ -1130,7 +1136,7 @@ function showMeetingToast(meeting) {
       return;
     }
     logger.info('Recording started from the meeting notification', { key: meeting.key });
-    handleStartRecording(null, '', meeting.title || '');
+    handleStartRecording(null, meeting.url || '', meeting.title || '', meeting.platform);
   });
   toast.on('failed', (_e, error) => logger.warn('Meeting notification failed', { error }));
   meetingToast = toast;
@@ -1259,7 +1265,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle('overlay:start', () => {
     if (overlayState.mode !== 'prompt') return { success: false, error: 'Nothing to record' };
-    return handleStartRecording(null, '', overlayState.meeting?.title || '');
+    const meeting = overlayState.meeting || {};
+    return handleStartRecording(null, meeting.url || '', meeting.title || '', meeting.platform);
   });
 
   ipcMain.handle('overlay:stop', () => handleStopRecording());

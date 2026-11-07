@@ -84,6 +84,9 @@ async function initialize() {
   // and where a meeting came from ('transcript' for a pasted transcript, otherwise NULL).
   if (!cols.includes('audio_deleted_at')) db.run('ALTER TABLE sessions ADD COLUMN audio_deleted_at TEXT');
   if (!cols.includes('source')) db.run('ALTER TABLE sessions ADD COLUMN source TEXT');
+  // Added in 4.17.0: the platform meeting detection saw ('meet' | 'zoom' | 'teams'), for meetings
+  // recorded from its prompt, which have no link to read it from.
+  if (!cols.includes('meeting_platform')) db.run('ALTER TABLE sessions ADD COLUMN meeting_platform TEXT');
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
   persist();
@@ -102,13 +105,14 @@ function ensureDb() {
 function createSession(session) {
   const d = ensureDb();
   d.run(
-    `INSERT INTO sessions (id, title, meeting_title, meeting_url, started_at, audio_path, status, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO sessions (id, title, meeting_title, meeting_url, meeting_platform, started_at, audio_path, status, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       session.id,
       session.title         || 'Untitled Meeting',
       session.meeting_title || null,
       session.meeting_url   || null,
+      session.meeting_platform || null,
       session.started_at  || new Date().toISOString(),
       session.audio_path  || null,
       session.status      || 'recording',

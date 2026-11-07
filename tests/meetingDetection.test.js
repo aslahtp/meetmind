@@ -89,10 +89,20 @@ describe('cleanMeetingTitle', () => {
 
 describe('matchMeetingWindow', () => {
   it('matches Google Meet tabs in any supported browser', () => {
-    expect(matchMeetingWindow(MEET_WINDOW)).toEqual({ platform: 'meet', title: 'abc-defg-hij' });
+    expect(matchMeetingWindow(MEET_WINDOW))
+      .toEqual({ platform: 'meet', title: 'abc-defg-hij', url: 'https://meet.google.com/abc-defg-hij' });
     expect(matchMeetingWindow({ exe: 'msedge.exe', title: 'Meet – Weekly sync - Personal - Microsoft\u200b Edge' }))
       .toEqual({ platform: 'meet', title: 'Weekly sync' });
     expect(matchMeetingWindow({ exe: 'firefox.exe', title: 'Meet - abc-defg-hij — Mozilla Firefox' })?.platform).toBe('meet');
+  });
+
+  it('rebuilds the link only from a Google Meet code', () => {
+    expect(matchMeetingWindow({ exe: 'firefox.exe', title: 'Meet - ABC-DEFG-HIJ — Mozilla Firefox' })?.url)
+      .toBe('https://meet.google.com/abc-defg-hij');
+    // A named meeting doesn't show its code, so there's no link to rebuild.
+    expect(matchMeetingWindow({ exe: 'chrome.exe', title: 'Meet - Weekly sync - Google Chrome' })).not.toHaveProperty('url');
+    // Something code-shaped on Zoom or Teams isn't a Meet code.
+    expect(matchMeetingWindow({ exe: 'chrome.exe', title: 'abc-defg-hij | Microsoft Teams - Google Chrome' })).not.toHaveProperty('url');
   });
 
   it('matches Zoom and Teams in the browser', () => {
@@ -126,6 +136,7 @@ describe('reduceTick', () => {
       meeting: { key: 'meet|chrome.exe', platform: 'meet', platformLabel: 'Google Meet', appLabel: 'Chrome', title: 'abc-defg-hij' },
     });
     expect(two.events[0].meeting.bounds).toEqual(MEET_WINDOW.bounds);
+    expect(two.events[0].meeting.url).toBe('https://meet.google.com/abc-defg-hij');
   });
 
   it('does not prompt when a browser uses the mic without a meeting tab', () => {
