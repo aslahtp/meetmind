@@ -1,10 +1,26 @@
 ---
 tags: [meta, changelog]
-updated: 2026-10-31
+updated: 2026-11-08
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.17.0] - 2026-11-08
+
+### Added
+
+- **Storage**: A new Settings › Storage tab shows how many recordings are saved and how much space they take, with buttons to open the recordings folder, clean up old recordings now or delete them all.
+- **Storage**: "Keep recordings" deletes recordings older than 1 day, 7, 30 or 90 days or 1 year when MeetMind starts (default Forever); only the audio is deleted, the meeting's notes and transcript stay. A recording in progress or being processed is never deleted.
+- **Meetings**: The Audio tab of a meeting whose recording was deleted says so, with a link to Settings › Storage.
+- **Meeting detection**: Recording from the meeting prompt saves where the meeting was, like the extension: its card and page show Google Meet, Zoom or Teams, and the Meetings platform filter and search find it. An untitled Google Meet also keeps its link (rebuilt from the meeting code in the tab title).
+- **Meeting detection (beta)**: Pressing Record in the app or the tray during a detected call saves the meeting's platform the same way. On by default; turn it off in Settings › General › Meeting detection.
+
+### Fixed
+
+- **Meetings**: The Audio tab of a meeting made from a pasted transcript, or with no audio file, shows "No recording" instead of an error.
+- **Meetings**: A meeting's link counts as Google Meet, Zoom or Teams only when its host is that service (or a subdomain of it), not when the name appears elsewhere in the URL.
+- **Meetings**: Meeting cards on the Dashboard and Meetings page, and an open meeting, now update the moment a recording starts, stops or moves through transcribing and writing notes, instead of showing an old status until processing finished.
 
 ## [4.16.0] - 2026-10-31
 

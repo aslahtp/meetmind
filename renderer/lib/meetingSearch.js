@@ -8,6 +8,7 @@
 //   • "quoted phrases" that must appear verbatim
 
 import { sessionDisplayTitle, speakerName } from './format.js';
+import { sessionPlatform } from './platform.js';
 
 // ── Text pipeline ───────────────────────────────────────────────────────────
 
@@ -267,6 +268,7 @@ function collectPassages(session) {
   }
   if (speakers.size) add('Speakers', [...speakers].join(', '), W.people);
   if (session.meeting_url) add('Link', hostname(session.meeting_url), W.link, false);
+  else if (sessionPlatform(session)) add('Platform', sessionPlatform(session).name, W.link, false);
   return out;
 }
 

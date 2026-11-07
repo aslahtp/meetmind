@@ -16,9 +16,10 @@ const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = requ
 const { startRecording, stopRecording, listAudioDevices, probeAudioDevice, ffmpegSupportsPulse, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } = require('./audio/recorder');
 const { pulseInfo } = require('./audio/pulse');
 const { getSessionWaveform, deleteSessionWaveform } = require('./audio/waveform');
+const { createRecordingsStorage } = require('./services/recordings-storage');
 const { transcribe } = require('./services/transcription');
 const { generateNotes } = require('./services/notes');
-const { cleanTitle, sourceMeetingTitle, applyMeetingTitle } = require('./services/meeting-title');
+const { cleanTitle, sourceMeetingTitle, applyMeetingTitle, resolveMeetingSource } = require('./services/meeting-title');
 const { DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/prompts');
 const { registries, describeProviders } = require('./providers');
 const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./services/notion');
@@ -172,6 +173,24 @@ protocol.registerSchemesAsPrivileged([{
 let mainWindow = null;
 let tray = null;
 let isRecording = false;
+
+// Where every meeting's audio lives: <sessionId>.wav, or .webm while recording.
+function getRecordingsDir() {
+  return path.join(app.getPath('userData'), 'recordings');
+}
+
+// Every database write reaches the renderer as one sessions:changed event (a burst of writes, like
+// the duration backfill, is sent once), so the Dashboard, Meetings and an open meeting show each
+// status change the moment it is saved: recording → transcribing → writing notes → complete.
+const SESSIONS_CHANGED_DELAY_MS = 30;
+let sessionsChangedTimer = null;
+db.onChange(() => {
+  if (sessionsChangedTimer) return;
+  sessionsChangedTimer = setTimeout(() => {
+    sessionsChangedTimer = null;
+    sendToRenderer('sessions:changed', { revision: db.getRevision() });
+  }, SESSIONS_CHANGED_DELAY_MS);
+});
 
 function sendToRenderer(channel, ...args) {
   try {
@@ -647,17 +666,34 @@ function requestRendererCaptureStop() {
 
 // ── Start / Stop recording ───────────────────────────────────────────────────
 
-async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
+// The meeting detection sees right now: the one its prompt offers, else the live one (also after
+// "Not now"). Null when detection is off or sees no call.
+function detectedMeeting() {
+  if (overlayState.mode === 'prompt' && overlayState.meeting) return overlayState.meeting;
+  return meetingDetector.activeMeeting();
+}
+
+// meetingPlatform: set when recording from the meeting-detection prompt, which knows the platform
+// (Google Meet, Zoom, Teams) but rarely the link. Without a link or platform (the app's Record
+// button, the tray), the meeting detection sees supplies them (resolveMeetingSource), unless the
+// beta setting recordUsesDetectedMeeting is off.
+async function handleStartRecording(sessionId, rawUrl, rawTitle, rawPlatform) {
   if (isRecording) return { success: false, error: 'Already recording' };
 
   const { v4: uuidv4 } = require('uuid');
   currentSessionId = sessionId || uuidv4();
+  const detected = getConfig().recordUsesDetectedMeeting !== false ? detectedMeeting() : null;
+  const { url: meetingUrl, title: meetingTitle, platform: meetingPlatform } = resolveMeetingSource(
+    { meetingUrl: rawUrl, meetingTitle: rawTitle, meetingPlatform: rawPlatform },
+    detected,
+  );
 
   db.createSession({
     id: currentSessionId,
     title: meetingTitle || 'Untitled Meeting',
     meeting_title: sourceMeetingTitle(meetingTitle),
     meeting_url: meetingUrl || '',
+    meeting_platform: meetingPlatform,
     started_at: new Date().toISOString(),
     status: 'recording',
   });
@@ -678,7 +714,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
       isRecording = true;
 
       // Open write stream so incoming chunks are appended to disk immediately
-      const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+      const recordingsDir = getRecordingsDir();
       if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
       rendererWebmPath = path.join(recordingsDir, `${currentSessionId}.webm`);
       rendererWriteStream = fs.createWriteStream(rendererWebmPath, { flags: 'w' });
@@ -726,7 +762,7 @@ async function handleStopRecording() {
   try {
     let audioPath;
     const endedAt = new Date().toISOString();
-    const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+    const recordingsDir = getRecordingsDir();
     if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
 
     if (captureMode === 'renderer') {
@@ -832,14 +868,36 @@ function hasReusableTranscript(session) {
 }
 
 let activePipelines = 0;   // processing runs in flight; an automatic update install waits for them
+// Sessions being processed right now; Settings › Storage never deletes their audio.
+const processingSessionIds = new Map(); // sessionId → runs in flight
 
 async function runProcessingPipeline(sessionId, audioPath, options = {}) {
   activePipelines += 1;
+  processingSessionIds.set(sessionId, (processingSessionIds.get(sessionId) || 0) + 1);
   try {
     return await processSession(sessionId, audioPath, options);
   } finally {
     activePipelines -= 1;
+    const left = (processingSessionIds.get(sessionId) || 1) - 1;
+    if (left > 0) processingSessionIds.set(sessionId, left);
+    else processingSessionIds.delete(sessionId);
   }
+}
+
+/** Meetings whose audio is in use: the one being recorded and the ones being processed. */
+function busySessionIds() {
+  const ids = new Set(processingSessionIds.keys());
+  if (isRecording && currentSessionId) ids.add(currentSessionId);
+  return ids;
+}
+
+// Settings › Storage: counts recordings and deletes their audio, keeping notes and transcripts.
+const recordingsStorage = createRecordingsStorage({ getRecordingsDir, db, deleteSessionWaveform, logger });
+
+/** Deletes recordings older than the "Keep recordings" setting. Runs at startup and on request. */
+function runRetentionCleanup(reason) {
+  const { recordingRetentionDays } = getConfig();
+  return recordingsStorage.cleanup({ retentionDays: recordingRetentionDays, busyIds: busySessionIds(), reason });
 }
 
 async function processSession(sessionId, audioPath, options = {}) {
@@ -1089,7 +1147,7 @@ function showMeetingToast(meeting) {
       return;
     }
     logger.info('Recording started from the meeting notification', { key: meeting.key });
-    handleStartRecording(null, '', meeting.title || '');
+    handleStartRecording(null, meeting.url || '', meeting.title || '', meeting.platform);
   });
   toast.on('failed', (_e, error) => logger.warn('Meeting notification failed', { error }));
   meetingToast = toast;
@@ -1218,7 +1276,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle('overlay:start', () => {
     if (overlayState.mode !== 'prompt') return { success: false, error: 'Nothing to record' };
-    return handleStartRecording(null, '', overlayState.meeting?.title || '');
+    const meeting = overlayState.meeting || {};
+    return handleStartRecording(null, meeting.url || '', meeting.title || '', meeting.platform);
   });
 
   ipcMain.handle('overlay:stop', () => handleStopRecording());
@@ -1301,7 +1360,7 @@ function registerIpcHandlers() {
       const { v4: uuidv4 } = require('uuid');
       const sessionId = uuidv4();
 
-      const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+      const recordingsDir = getRecordingsDir();
       if (!fs.existsSync(recordingsDir)) {
         fs.mkdirSync(recordingsDir, { recursive: true });
       }
@@ -1361,7 +1420,7 @@ function registerIpcHandlers() {
 
     // Clean up the audio file — it's no longer needed.
     try {
-      const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+      const recordingsDir = getRecordingsDir();
       for (const ext of ['.wav', '.webm']) {
         const fp = path.join(recordingsDir, `${id}${ext}`);
         if (fs.existsSync(fp)) fs.unlinkSync(fp);
@@ -1440,6 +1499,53 @@ function registerIpcHandlers() {
     } catch (err) {
       logger.warn('Failed to compute waveform', { sessionId, audioPath, error: err.message });
       return { success: false, error: err.message || 'Failed to compute waveform.' };
+    }
+  });
+
+  // Whether a meeting's Audio tab can play something, and if not, why.
+  ipcMain.handle('session:audio-status', (_e, sessionId) => {
+    const session = db.getSession(sessionId);
+    if (!session) return { available: false, deletedAt: null, source: null };
+    return {
+      available: !!resolveSessionAudioPath(sessionId),
+      deletedAt: session.audio_deleted_at || null,
+      source: session.source || null,
+    };
+  });
+
+  // ── Recording storage (Settings › Storage) ─────────────────────────────────
+  // retentionDays previews a "Keep recordings" choice that isn't saved yet.
+  ipcMain.handle('storage:summary', (_e, retentionDays) => {
+    const days = retentionDays === undefined ? getConfig().recordingRetentionDays : retentionDays;
+    return recordingsStorage.getSummary({ retentionDays: days, busyIds: busySessionIds() });
+  });
+
+  ipcMain.handle('storage:cleanup', () => {
+    try {
+      return { success: true, ...runRetentionCleanup('manual') };
+    } catch (err) {
+      logger.error('Recording cleanup failed', { error: err.message });
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('storage:delete-all', () => {
+    try {
+      return { success: true, ...recordingsStorage.deleteAll({ busyIds: busySessionIds() }) };
+    } catch (err) {
+      logger.error('Deleting all recordings failed', { error: err.message });
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('storage:open-folder', async () => {
+    const dir = getRecordingsDir();
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const error = await shell.openPath(dir);
+      return error ? { success: false, error } : { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
     }
   });
 
@@ -1634,6 +1740,7 @@ function registerIpcHandlers() {
       meeting_title: meetingTitle,
       started_at:    now,
       status:     'generating',
+      source:     'transcript',
     });
 
     // Run note generation + optional Notion upload asynchronously so the IPC call returns immediately
@@ -1755,7 +1862,7 @@ function resolveSessionAudioPath(sessionId) {
   let audioPath = session.audio_path;
   if (audioPath && fs.existsSync(audioPath)) return audioPath;
 
-  const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+  const recordingsDir = getRecordingsDir();
   const wavPath = path.join(recordingsDir, `${sessionId}.wav`);
   const webmPath = path.join(recordingsDir, `${sessionId}.webm`);
   if (fs.existsSync(wavPath)) return wavPath;
@@ -1801,7 +1908,6 @@ function backfillSessionDurations() {
       updated,
       total: sessions.length,
     });
-    sendToRenderer('sessions:durations-updated');
   } else {
     logger.info('Session duration backfill complete (no changes)', {
       total: sessions.length,
@@ -1819,7 +1925,7 @@ function backfillSessionDurations() {
  * update the matching database session so the user can still access the audio.
  */
 async function recoverOrphanedWebmFiles() {
-  const recordingsDir = path.join(app.getPath('userData'), 'recordings');
+  const recordingsDir = getRecordingsDir();
   if (!fs.existsSync(recordingsDir)) return;
 
   const webmFiles = fs.readdirSync(recordingsDir).filter((f) => f.endsWith('.webm'));
@@ -2032,6 +2138,12 @@ app.whenReady().then(async () => {
         backfillSessionDurations();
       } catch (err) {
         logger.error('Duration backfill failed', err);
+      }
+      // After crash recovery, so a recovered recording is judged by its meeting's date.
+      try {
+        runRetentionCleanup('startup');
+      } catch (err) {
+        logger.error('Recording cleanup failed', err);
       }
     });
 

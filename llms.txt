@@ -10,7 +10,7 @@ Key facts:
 - Transcription: AssemblyAI, Google Cloud Speech-to-Text v1/v2, Sarvam AI `saaras:v3` or Groq Whisper (large-v3, large-v3-turbo), each with a model picker. All but Groq label speakers (diarization). Sarvam AI supports English–Indic code-switching.
 - Notes: Gemini, Groq (Llama 3.3, GPT-OSS) or Anthropic Claude (Sonnet 5.5, Fable 5.1, Opus 5.5, Haiku 5.5) generates executive-style Markdown minutes or structured JSON notes; the notes stream into a live preview as the model writes them, the model is selectable (including Gemini's auto-updating "latest" models), the system prompt is editable, and a fallback provider/model is used if the primary fails.
 - Output: in-app notes and transcripts with relevance-ranked search across every meeting (related words, typo tolerance; no embeddings), PDF export, Markdown copy, Notion sync.
-- Privacy: recordings, transcripts and notes are stored locally in SQLite; there is no MeetMind server or account.
+- Privacy: recordings, transcripts and notes are stored locally (notes and transcripts in SQLite); there is no MeetMind server or account. Settings › Storage shows the space recordings take and can delete old recordings automatically, keeping notes and transcripts.
 - Meeting detection (Windows and Linux; on Linux, browser meetings need an X11 session): a desktop overlay offers to record when Google Meet, Zoom or Teams starts using the microphone (no extension needed).
 - Integrations: calendars, up to 5 ICS links (Google, Outlook, Apple iCloud, Proton…) or Google accounts (upcoming meetings and start-recording reminders), Notion, optional Chrome extension for Google Meet and Zoom.
 - Import: existing audio/video files (WAV, MP3, M4A, AAC, FLAC, OGG, Opus, WebM, MP4, MKV, MOV) or a pasted transcript.

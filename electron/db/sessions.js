@@ -18,6 +18,15 @@ function getRevision() {
   return revision;
 }
 
+// Called after every write with the new revision; main.js tells the renderer (sessions:changed),
+// so every screen shows a status change the moment it is saved.
+const changeListeners = new Set();
+
+function onChange(listener) {
+  changeListeners.add(listener);
+  return () => changeListeners.delete(listener);
+}
+
 function persist() {
   if (!db) return;
   revision += 1;
@@ -27,6 +36,13 @@ function persist() {
     fs.writeFileSync(getDbPath(), buf);
   } catch (err) {
     logger.error('Failed to persist database', { error: err.message });
+  }
+  for (const listener of changeListeners) {
+    try {
+      listener(revision);
+    } catch (err) {
+      logger.warn('Database change listener failed', { error: err.message });
+    }
   }
 }
 
@@ -64,6 +80,13 @@ async function initialize() {
   if (!cols.includes('last_error')) db.run('ALTER TABLE sessions ADD COLUMN last_error TEXT');
   // Added in 4.10.0: the meeting's own title (detected tab, calendar, pasted title), kept over the LLM's.
   if (!cols.includes('meeting_title')) db.run('ALTER TABLE sessions ADD COLUMN meeting_title TEXT');
+  // Added in 4.17.0: when Settings › Storage deleted the recording (the notes and transcript stay),
+  // and where a meeting came from ('transcript' for a pasted transcript, otherwise NULL).
+  if (!cols.includes('audio_deleted_at')) db.run('ALTER TABLE sessions ADD COLUMN audio_deleted_at TEXT');
+  if (!cols.includes('source')) db.run('ALTER TABLE sessions ADD COLUMN source TEXT');
+  // Added in 4.17.0: the platform meeting detection saw ('meet' | 'zoom' | 'teams'), for meetings
+  // recorded from its prompt, which have no link to read it from.
+  if (!cols.includes('meeting_platform')) db.run('ALTER TABLE sessions ADD COLUMN meeting_platform TEXT');
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
   persist();
@@ -82,16 +105,18 @@ function ensureDb() {
 function createSession(session) {
   const d = ensureDb();
   d.run(
-    `INSERT INTO sessions (id, title, meeting_title, meeting_url, started_at, audio_path, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO sessions (id, title, meeting_title, meeting_url, meeting_platform, started_at, audio_path, status, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       session.id,
       session.title         || 'Untitled Meeting',
       session.meeting_title || null,
       session.meeting_url   || null,
+      session.meeting_platform || null,
       session.started_at  || new Date().toISOString(),
       session.audio_path  || null,
       session.status      || 'recording',
+      session.source      || null,
     ]
   );
   persist();
@@ -100,7 +125,7 @@ function createSession(session) {
 
 function updateSession(id, updates) {
   const d = ensureDb();
-  const allowed = ['title', 'meeting_title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status', 'last_error'];
+  const allowed = ['title', 'meeting_title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status', 'last_error', 'audio_deleted_at'];
   const keys = Object.keys(updates).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;
 
@@ -212,5 +237,6 @@ module.exports = {
   getRecentSessions,
   markStaleRecordingSessionsAsError,
   getRevision,
+  onChange,
   computeDuration,
 };

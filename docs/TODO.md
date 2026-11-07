@@ -6,3 +6,6 @@
 - Local transcription (L): an offline option using whisper.cpp for sensitive meetings. Code-switching quality would need testing.
 - Backup and restore (S): export the database, settings and optionally audio to a zip, and import it on a new machine.
 - Redaction (M): mask phone numbers, emails and card numbers before anything goes to Gemini or Notion.
+- Add scratchpad for the meeetings to note down anything and passes as context to summary generation
+- implement meeting detection in macOS
+- sign for windows, macOS and linux

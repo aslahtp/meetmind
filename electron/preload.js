@@ -108,7 +108,18 @@ contextBridge.exposeInMainWorld('meetmind', {
     rename: (id, title) => ipcRenderer.invoke('session:rename', id, title),
     openRecording: (id) => ipcRenderer.invoke('session:open-recording', id),
     waveform: (id) => ipcRenderer.invoke('session:waveform', id),
+    // { available, deletedAt, source }: whether the Audio tab has a recording to play, and if not, why.
+    audioStatus: (id) => ipcRenderer.invoke('session:audio-status', id),
     createFromTranscript: (opts) => ipcRenderer.invoke('session:create-from-transcript', opts),
+  },
+
+  // Recording storage (Settings › Storage). Deleting keeps each meeting's notes and transcript.
+  storage: {
+    // retentionDays previews an unsaved "Keep recordings" choice; omit it for the saved one.
+    summary: (retentionDays) => ipcRenderer.invoke('storage:summary', retentionDays),
+    cleanup: () => ipcRenderer.invoke('storage:cleanup'),
+    deleteAll: () => ipcRenderer.invoke('storage:delete-all'),
+    openFolder: () => ipcRenderer.invoke('storage:open-folder'),
   },
 
   // Native dialogs
@@ -216,7 +227,7 @@ contextBridge.exposeInMainWorld('meetmind', {
       'notes:preview',
       'ws:extension-connected',
       'ws:recording-requested',
-      'sessions:durations-updated',
+      'sessions:changed',
       'updater:status',
       'calendar:meeting-starting',
       'calendar:changed',

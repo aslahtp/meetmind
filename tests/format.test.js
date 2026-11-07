@@ -7,6 +7,8 @@ import {
   sessionDisplayTitle,
   initials,
   speakerName,
+  formatBytes,
+  plural,
 } from '../renderer/lib/format.js';
 import { sessionStatus, isProcessing, stageIndex } from '../renderer/lib/status.js';
 
@@ -74,5 +76,25 @@ describe('status helpers', () => {
     expect(stageIndex('uploading')).toBe(2);
     expect(stageIndex('complete')).toBe(3);
     expect(stageIndex('nope')).toBe(-1);
+  });
+});
+
+describe('formatBytes', () => {
+  it('formats sizes in binary units', () => {
+    expect(formatBytes(0)).toBe('0 B');
+    expect(formatBytes(undefined)).toBe('0 B');
+    expect(formatBytes(-5)).toBe('0 B');
+    expect(formatBytes(512)).toBe('512 B');
+    expect(formatBytes(839680)).toBe('820 KB');
+    expect(formatBytes(1536)).toBe('1.5 KB');
+    expect(formatBytes(1503238554)).toBe('1.4 GB');
+  });
+});
+
+describe('plural', () => {
+  it('adds an s except for one', () => {
+    expect(plural(0, 'recording')).toBe('0 recordings');
+    expect(plural(1, 'recording')).toBe('1 recording');
+    expect(plural(2, 'recording')).toBe('2 recordings');
   });
 });

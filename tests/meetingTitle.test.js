@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cleanTitle, sourceMeetingTitle, applyMeetingTitle } from '../electron/services/meeting-title.js';
+import { cleanTitle, sourceMeetingTitle, applyMeetingTitle, resolveMeetingSource } from '../electron/services/meeting-title.js';
 import { buildUserPrompt } from '../electron/services/notes-normalize.js';
 
 describe('cleanTitle', () => {
@@ -107,5 +107,35 @@ describe('buildUserPrompt', () => {
 
   it('keeps the word JSON in JSON mode', () => {
     expect(buildUserPrompt('t', false, 'Weekly Sync')).toContain('JSON');
+  });
+});
+
+describe('resolveMeetingSource', () => {
+  const meet = { platform: 'meet', title: 'abc-defg-hij', url: 'https://meet.google.com/abc-defg-hij' };
+  const zoomApp = { platform: 'zoom', title: 'Zoom', url: '' };
+
+  it('fills a plain Record (no link, no platform) from the detected meeting', () => {
+    expect(resolveMeetingSource({}, meet))
+      .toEqual({ url: 'https://meet.google.com/abc-defg-hij', title: 'abc-defg-hij', platform: 'meet' });
+    expect(resolveMeetingSource({ meetingUrl: undefined, meetingTitle: undefined }, zoomApp))
+      .toEqual({ url: '', title: 'Zoom', platform: 'zoom' });
+  });
+
+  it('keeps a calendar title but takes the detected platform and link', () => {
+    expect(resolveMeetingSource({ meetingTitle: 'Weekly sync' }, meet))
+      .toEqual({ url: 'https://meet.google.com/abc-defg-hij', title: 'Weekly sync', platform: 'meet' });
+  });
+
+  it('never overrides a link or platform the caller passed', () => {
+    expect(resolveMeetingSource({ meetingUrl: 'https://zoom.us/j/1', meetingTitle: 'Tab' }, meet))
+      .toEqual({ url: 'https://zoom.us/j/1', title: 'Tab', platform: null });
+    expect(resolveMeetingSource({ meetingTitle: 'Zoom', meetingPlatform: 'zoom' }, meet))
+      .toEqual({ url: '', title: 'Zoom', platform: 'zoom' });
+  });
+
+  it('records with no source when nothing is detected, and drops unknown platforms', () => {
+    expect(resolveMeetingSource({}, null)).toEqual({ url: '', title: '', platform: null });
+    expect(resolveMeetingSource({ meetingPlatform: 'skype' }, null)).toEqual({ url: '', title: '', platform: null });
+    expect(resolveMeetingSource({}, { platform: 'skype', title: 'Call' })).toEqual({ url: '', title: 'Call', platform: null });
   });
 });

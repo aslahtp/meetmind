@@ -93,3 +93,23 @@ export function speakerName(raw) {
   if (/^([A-Z]|\d+)$/.test(label)) return `Speaker ${label}`;
   return label;
 }
+
+// File sizes in binary units: 0 → "0 B", 839680 → "820 KB", 1503238554 → "1.4 GB"
+export function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = n;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 || value >= 10 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unit]}`;
+}
+
+// "1 recording" / "3 recordings"
+export function plural(count, word) {
+  return `${count} ${word}${count === 1 ? '' : 's'}`;
+}

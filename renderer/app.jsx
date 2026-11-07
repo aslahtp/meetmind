@@ -364,20 +364,34 @@ export default function App() {
 
   // The database revision the current `sessions` list was read at (see sessions:revision).
   const sessionsRevisionRef = useRef(null);
+  // Refreshes can overlap (sessions:changed arrives at every write); only the latest one applies,
+  // so a slow, older read never overwrites a newer list.
+  const refreshSeqRef = useRef(0);
 
-  // Re-reads every session, with full transcripts (several MB for a few hundred meetings). With
-  // { ifChanged: true }, as the Dashboard and Meetings pages do each time they open, it first
-  // asks main whether anything was written since the last read and stops there if not, so
-  // switching tabs doesn't copy and re-render the whole list for nothing.
+  // Re-reads every session, with full transcripts (several MB for a few hundred meetings), and
+  // the open meeting with it. With { ifChanged: true }, as sessions:changed and the Dashboard and
+  // Meetings pages use, it first asks main whether anything was written since the last read and
+  // stops there if not, so switching tabs doesn't copy and re-render the whole list for nothing.
   const refreshSessions = useCallback(async ({ ifChanged = false } = {}) => {
     if (!window.meetmind) return;
+    const seq = ++refreshSeqRef.current;
     try {
       const revision = await window.meetmind.sessions.revision?.();
       if (ifChanged && revision != null && revision === sessionsRevisionRef.current) return;
       const list = await window.meetmind.sessions.list();
+      if (seq !== refreshSeqRef.current) return;
       sessionsRevisionRef.current = revision ?? null;
       setSessions(list);
       setSessionsError(null);
+      setSelectedSession((prev) => {
+        if (!prev?.id) return prev;
+        const next = list.find((s) => s.id === prev.id);
+        if (!next) return prev;
+        // The failure message from processing:error stays only while the meeting is still failed.
+        return next.status === 'error' && prev._processingError
+          ? { ...next, _processingError: prev._processingError }
+          : next;
+      });
     } catch (err) {
       console.error('Failed to load sessions:', err);
       setSessionsError(err.message || 'Failed to load meetings');
@@ -414,6 +428,20 @@ export default function App() {
     });
 
     return () => clearTimeout(failsafe);
+  }, [refreshSessions]);
+
+  // Safety net for sessions:changed: when the window is shown or focused again (e.g. from the tray),
+  // catch up on anything written meanwhile. Cheap when nothing changed (one revision check).
+  useEffect(() => {
+    const catchUp = () => {
+      if (document.visibilityState === 'visible') refreshSessions({ ifChanged: true });
+    };
+    document.addEventListener('visibilitychange', catchUp);
+    window.addEventListener('focus', catchUp);
+    return () => {
+      document.removeEventListener('visibilitychange', catchUp);
+      window.removeEventListener('focus', catchUp);
+    };
   }, [refreshSessions]);
 
   // Follow OS theme changes when theme is set to 'system'
@@ -505,14 +533,11 @@ export default function App() {
       refreshSessions();
     });
 
-    const unsubDurations = window.meetmind.on('sessions:durations-updated', async () => {
-      const updated = await window.meetmind.sessions.list();
-      setSessions(updated);
-      setSelectedSession((prev) => {
-        if (!prev?.id) return prev;
-        const next = updated.find((s) => s.id === prev.id);
-        return next ? { ...next, _processingError: prev._processingError } : prev;
-      });
+    // Main sends this after every database write (a recording starting or stopping, each pipeline
+    // stage, imports, renames, deletions, the startup recovery and cleanup), so the cards and the
+    // open meeting always show the saved status.
+    const unsubSessionsChanged = window.meetmind.on('sessions:changed', () => {
+      refreshSessions({ ifChanged: true });
     });
 
     const unsubUpdater = window.meetmind.on('updater:status', (status) => {
@@ -538,7 +563,7 @@ export default function App() {
       unsubComplete?.();
       unsubError?.();
       unsubCancelled?.();
-      unsubDurations?.();
+      unsubSessionsChanged?.();
       unsubUpdater?.();
       unsubFallback?.();
     };

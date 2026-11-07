@@ -86,6 +86,9 @@ const MORE_PAGES = /\s+and \d+ more pages?$/i;
 
 const MEET_TITLE = /^(?:Google )?Meet\s*[-–—:]\s*|\bmeet\.google\.com\b/i;
 const ZOOM_TITLE = /^Zoom (?:Meeting|Webinar|Workplace)\b/i;
+// An untitled Google Meet tab shows its code ("Meet - abc-defg-hij"), which is enough to rebuild
+// the meeting's link, as the extension saves it.
+const MEET_CODE = /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i;
 const TEAMS_TITLE = /\|\s*Microsoft Teams\b|^Microsoft Teams\b/i;
 
 // "C:#Program Files#Google#Chrome#Application#chrome.exe" -> "chrome.exe";
@@ -141,7 +144,8 @@ function cleanMeetingTitle(title) {
   return t.trim();
 }
 
-// Returns { platform, title } when a window looks like a meeting, else null.
+// Returns { platform, title } when a window looks like a meeting, else null; plus `url` when the
+// title holds a Google Meet code.
 function matchMeetingWindow({ exe, title }) {
   const app = String(exe || '').toLowerCase();
   const raw = String(title || '');
@@ -154,7 +158,11 @@ function matchMeetingWindow({ exe, title }) {
     else if (TEAMS_TITLE.test(raw)) platform = 'teams';
     if (!platform) return null;
     const cleaned = cleanMeetingTitle(raw);
-    return { platform, title: cleaned === 'meet.google.com' ? '' : cleaned };
+    const title = cleaned === 'meet.google.com' ? '' : cleaned;
+    if (platform === 'meet' && MEET_CODE.test(title)) {
+      return { platform, title, url: `https://meet.google.com/${title.toLowerCase()}` };
+    }
+    return { platform, title };
   }
 
   const native = Object.entries(NATIVE_APPS)
@@ -175,7 +183,7 @@ function createDetectorState() {
   };
 }
 
-function toMeeting(key, platform, appLabel, title, bounds) {
+function toMeeting(key, platform, appLabel, title, bounds, url) {
   return {
     key,
     platform,
@@ -183,6 +191,8 @@ function toMeeting(key, platform, appLabel, title, bounds) {
     appLabel,
     title: title || PLATFORMS[platform],
     bounds: bounds || null,
+    // The meeting's link when the window showed it (a Google Meet code), else ''.
+    url: url || '',
   };
 }
 
@@ -195,12 +205,12 @@ function findCandidate(state, micExes, windows, now) {
       const own = windows.filter((w) => String(w.exe).toLowerCase() === windowExe);
       const match = own.map((w) => ({ w, m: matchMeetingWindow(w) })).find((x) => x.m);
       return toMeeting(`${native.platform}|${id}`, native.platform, native.label,
-        match?.m.title, (match?.w || own[0])?.bounds);
+        match?.m.title, (match?.w || own[0])?.bounds, match?.m.url);
     }
     if (BROWSERS[id]) {
       const seen = state.recent[id];
       if (seen && now - seen.seenAt <= TITLE_MEMORY_MS) {
-        return toMeeting(`${seen.platform}|${id}`, seen.platform, BROWSERS[id], seen.title, seen.bounds);
+        return toMeeting(`${seen.platform}|${id}`, seen.platform, BROWSERS[id], seen.title, seen.bounds, seen.url);
       }
     }
   }

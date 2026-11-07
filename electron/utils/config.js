@@ -5,6 +5,7 @@ const { migrateLegacyModels } = require('./configMigration');
 const { LEGACY_GOOGLE_KEYS, DEFAULT_SYNC_MINUTES, migrateLegacyCalendar, sanitizeSources, normalizeSyncMinutes } = require('../calendar/calendar-sources');
 const { v4: uuidv4 } = require('uuid');
 const { DEFAULT_MAC_CAPTURE_STRATEGY, normalizeMacCaptureStrategy } = require('../audio/mac-capture');
+const { DEFAULT_RETENTION_DAYS, normalizeRetentionDays } = require('../services/storage-rules');
 
 const schema = {
   notionToken: {
@@ -118,6 +119,12 @@ const schema = {
     type: 'boolean',
     default: true,
   },
+  // Beta: the app's Record button and the tray take the detected meeting's platform, link and
+  // title (the detection prompt always does). See resolveMeetingSource in services/meeting-title.js.
+  recordUsesDetectedMeeting: {
+    type: 'boolean',
+    default: true,
+  },
   // macOS only: how system audio is captured (see electron/audio/mac-capture.js).
   macCaptureStrategy: {
     type: 'string',
@@ -150,6 +157,12 @@ const schema = {
   pdfIncludeTranscript: {
     type: 'boolean',
     default: false,
+  },
+  // Days to keep recordings' audio (0 = forever); older audio is deleted at startup. See
+  // electron/services/storage-rules.js.
+  recordingRetentionDays: {
+    type: 'number',
+    default: DEFAULT_RETENTION_DAYS,
   },
 };
 
@@ -239,6 +252,7 @@ function getConfig() {
     pinNotesViewToggle:        store.get('pinNotesViewToggle') !== false,
     showAudioWaveform:         store.get('showAudioWaveform') !== false,
     meetingDetection:          store.get('meetingDetection') !== false,
+    recordUsesDetectedMeeting: store.get('recordUsesDetectedMeeting') !== false,
     macCaptureStrategy:        normalizeMacCaptureStrategy(store.get('macCaptureStrategy')),
     calendars:                 sanitizeSources(store.get('calendars')),
     calendarSyncMinutes:       normalizeSyncMinutes(store.get('calendarSyncMinutes')),
@@ -246,6 +260,7 @@ function getConfig() {
     notionUploadTranscript:    store.get('notionUploadTranscript') !== false,
     pdfExportDir:              store.get('pdfExportDir') || '',
     pdfIncludeTranscript:      store.get('pdfIncludeTranscript') === true,
+    recordingRetentionDays:    normalizeRetentionDays(store.get('recordingRetentionDays')),
   };
 }
 

@@ -15,7 +15,7 @@ import {
 import { IconButton, SegmentedControl, Menu, MenuItem } from '../ui/index.jsx';
 import NotionIcon from '../NotionIcon.jsx';
 import { metaText } from './meta.js';
-import { meetingHostname, meetingPlatform } from '../../lib/platform.js';
+import { meetingHostname, sessionPlatform } from '../../lib/platform.js';
 import { useApp } from '../../lib/app-context.js';
 import { providerName } from '../../lib/providers.js';
 
@@ -37,7 +37,7 @@ function editedLabel(iso) {
 function metaChips(session, notes, providers) {
   const sentiment = SENTIMENT_LABELS[notes?.sentiment];
   const hostname = meetingHostname(session.meeting_url);
-  const platform = meetingPlatform(session.meeting_url);
+  const platform = sessionPlatform(session);
   const stt = notes?._sttService && notes._sttService !== 'none' ? providerName(providers, 'stt', notes._sttService) : null;
   const llmModel = notes?._llmModel || notes?._geminiModel;
 
@@ -80,6 +80,16 @@ function metaChips(session, notes, providers) {
         )}
         {hostname}
       </button>
+    );
+  } else if (platform) {
+    // Recorded from meeting detection without a link (e.g. the Zoom app): name the platform.
+    chips.push(
+      <span key="host" className="pill-quiet" title={`Recorded from ${platform.name}`}>
+        {platform.icon && (
+          <img src={platform.icon} alt="" className="w-16 h-16 object-contain logo-mono" aria-hidden="true" />
+        )}
+        {platform.name}
+      </span>
     );
   }
   return chips;

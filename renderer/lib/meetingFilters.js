@@ -4,6 +4,7 @@
 import { sessionDisplayTitle } from './format.js';
 import { isProcessing } from './status.js';
 import { searchSessions } from './meetingSearch.js';
+import { sessionPlatform } from './platform.js';
 
 // ── Status filters ──────────────────────────────────────────────────────────
 
@@ -44,14 +45,6 @@ function matchesDuration(session, durationKey) {
 
 // ── Platform filter ─────────────────────────────────────────────────────────
 
-function detectPlatform(url) {
-  if (!url) return null;
-  if (url.includes('meet.google.com')) return 'meet';
-  if (url.includes('zoom.us') || url.includes('zoom.com')) return 'zoom';
-  if (url.includes('teams.microsoft.com') || url.includes('teams.live.com')) return 'teams';
-  return 'other';
-}
-
 export const PLATFORM_FILTERS = [
   { key: 'any',   label: 'Any platform' },
   { key: 'meet',  label: 'Google Meet' },
@@ -61,7 +54,7 @@ export const PLATFORM_FILTERS = [
 
 function matchesPlatform(session, platformKey) {
   if (platformKey === 'any') return true;
-  return detectPlatform(session.meeting_url) === platformKey;
+  return sessionPlatform(session)?.key === platformKey;
 }
 
 // ── Date range ──────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ import {
   getSessionDuration,
   sessionDisplayTitle,
 } from '../lib/format.js';
-import { meetingHostname, meetingPlatform } from '../lib/platform.js';
+import { meetingHostname, sessionPlatform } from '../lib/platform.js';
 import { useSessionActions } from '../lib/hooks.js';
 
 // `match` is this session's searchSessions() result, shown as the passage that matched.
@@ -22,7 +22,7 @@ export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting, ma
   const topicCount = notes?.topics?.length || notes?.key_points?.length || 0;
   const isComplete = session.status === 'complete';
   const isError = session.status === 'error';
-  const platform = meetingPlatform(session.meeting_url);
+  const platform = sessionPlatform(session);
   const hostname = meetingHostname(session.meeting_url);
   const hasFooter = isComplete && (actionCount > 0 || session.notion_page_url || platform || topicCount > 0);
 
