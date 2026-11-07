@@ -317,8 +317,11 @@ The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) d
 - The detected meeting carries its platform (`meet`, `zoom`, `teams`) and, when an untitled Google
   Meet tab shows its code ("Meet - abc-defg-hij"), the rebuilt link
   (`https://meet.google.com/abc-defg-hij`). Recording from the prompt or its notification fallback
-  saves both (`meeting_platform`, `meeting_url`), so the meeting shows its source like an extension
-  recording: the card, the meeting page chip (a link only when there is a URL), the Meetings
+  saves both (`meeting_platform`, `meeting_url`), and so does any other start without a link or
+  platform (the app's Record button, the tray) while a meeting is detected
+  (`resolveMeetingSource()` in `services/meeting-title.js`; a calendar event's title is kept),
+  unless the beta setting `recordUsesDetectedMeeting` (default `true`) is off. The
+  meeting then shows its source like an extension recording: the card, the meeting page chip (a link only when there is a URL), the Meetings
   platform filter, search and the PDF all use `sessionPlatform()` in `renderer/lib/platform.js`.
 
 Detection runs in the main process, so it keeps working while the window is minimised or hidden
@@ -675,7 +678,7 @@ registries), service and model selection (`sttService`, `sttModels`, `llmProvide
 (`enableDiarization`, `minSpeakers`, `maxSpeakers`), output preferences (`noteOutputMode`,
 `language`, custom `geminiSystemPrompt`), UI preferences (`theme`, `autoLaunch`,
 `hideLogsInSidebar`, `pinNotesViewToggle`, `dashboardRecentLimit`), meeting detection
-(`meetingDetection`, default `true`), update behavior
+(`meetingDetection`, default `true`; beta `recordUsesDetectedMeeting`, default `true`, section 3.4), update behavior
 (`autoCheckUpdates`, default `true`; `autoInstallUpdates`, default `false`), PDF export (`pdfExportDir`, `pdfIncludeTranscript`), recording
 retention (`recordingRetentionDays`: `0` = forever, the default, or 1, 7, 30, 90 or 365; section 6.3), and the WebSocket
 port (`websocketPort`, default `39842`).
@@ -1187,7 +1190,7 @@ Current coverage is pure logic only:
 | `tests/updatePolicy.test.js` | Update rules: check scheduling and retries, which installs can update themselves (`canSelfUpdate`), auto-install, idle detection and hidden relaunch (`electron/services/update-policy.js`) |
 | `tests/settingsForm.test.js` | Settings dirty checks and saving only the changed fields (`renderer/lib/settingsForm.js`) |
 | `tests/notesPreview.test.js` | Live notes preview: partial Markdown and JSON (`buildNotesPreview` in `electron/services/notes-normalize.js`) and the throttled `onPreview` snapshots of `generateNotes`, including a fallback |
-| `tests/meetingTitle.test.js` | Which source titles name the meeting, and how one replaces the LLM's title and prompts it (`electron/services/meeting-title.js`, `buildUserPrompt`) |
+| `tests/meetingTitle.test.js` | Which source titles name the meeting, how one replaces the LLM's title and prompts it, and how a recording's link, title and platform are filled from the detected meeting (`electron/services/meeting-title.js`, `buildUserPrompt`) |
 | `tests/ffmpeg-path.test.js` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.js`) and the per-OS silent-recording hints (`electron/audio/audio-hints.js`) |
 | `tests/macSupport.test.js` | macOS capture strategies (`electron/audio/mac-capture.js`), "Test system audio" verdicts (`renderer/lib/audioTest.js`), and the shape of every pinned FFmpeg download and how each archive is unpacked (`electron/audio/ffmpeg-sources.js`, `ffmpeg-fetch.js`) |
 | `tests/macPermissions.test.jsx` | Server-renders the macOS Permissions card (`renderer/components/settings/MacPermissions.jsx`), which can't be seen in the Windows dev app |

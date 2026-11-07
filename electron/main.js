@@ -19,7 +19,7 @@ const { getSessionWaveform, deleteSessionWaveform } = require('./audio/waveform'
 const { createRecordingsStorage } = require('./services/recordings-storage');
 const { transcribe } = require('./services/transcription');
 const { generateNotes } = require('./services/notes');
-const { cleanTitle, sourceMeetingTitle, applyMeetingTitle } = require('./services/meeting-title');
+const { cleanTitle, sourceMeetingTitle, applyMeetingTitle, resolveMeetingSource } = require('./services/meeting-title');
 const { DEFAULT_SYSTEM_PROMPT, DEFAULT_MD_SYSTEM_PROMPT } = require('./services/prompts');
 const { registries, describeProviders } = require('./providers');
 const { uploadToNotion, testNotionConnection, trashNotionPage } = require('./services/notion');
@@ -666,23 +666,34 @@ function requestRendererCaptureStop() {
 
 // ── Start / Stop recording ───────────────────────────────────────────────────
 
-// MEETING_PLATFORMS: what meeting detection can name as a source when it has no link.
-const MEETING_PLATFORMS = new Set(['meet', 'zoom', 'teams']);
+// The meeting detection sees right now: the one its prompt offers, else the live one (also after
+// "Not now"). Null when detection is off or sees no call.
+function detectedMeeting() {
+  if (overlayState.mode === 'prompt' && overlayState.meeting) return overlayState.meeting;
+  return meetingDetector.activeMeeting();
+}
 
 // meetingPlatform: set when recording from the meeting-detection prompt, which knows the platform
-// (Google Meet, Zoom, Teams) but rarely the link.
-async function handleStartRecording(sessionId, meetingUrl, meetingTitle, meetingPlatform) {
+// (Google Meet, Zoom, Teams) but rarely the link. Without a link or platform (the app's Record
+// button, the tray), the meeting detection sees supplies them (resolveMeetingSource), unless the
+// beta setting recordUsesDetectedMeeting is off.
+async function handleStartRecording(sessionId, rawUrl, rawTitle, rawPlatform) {
   if (isRecording) return { success: false, error: 'Already recording' };
 
   const { v4: uuidv4 } = require('uuid');
   currentSessionId = sessionId || uuidv4();
+  const detected = getConfig().recordUsesDetectedMeeting !== false ? detectedMeeting() : null;
+  const { url: meetingUrl, title: meetingTitle, platform: meetingPlatform } = resolveMeetingSource(
+    { meetingUrl: rawUrl, meetingTitle: rawTitle, meetingPlatform: rawPlatform },
+    detected,
+  );
 
   db.createSession({
     id: currentSessionId,
     title: meetingTitle || 'Untitled Meeting',
     meeting_title: sourceMeetingTitle(meetingTitle),
     meeting_url: meetingUrl || '',
-    meeting_platform: MEETING_PLATFORMS.has(meetingPlatform) ? meetingPlatform : null,
+    meeting_platform: meetingPlatform,
     started_at: new Date().toISOString(),
     status: 'recording',
   });

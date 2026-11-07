@@ -113,6 +113,28 @@ export default function GeneralSection({ form, onChange }) {
               />
             )}
           </SettingRow>
+          {!isMac && (
+            <SettingRow
+              label={(
+                <>
+                  Save the meeting’s platform when you press Record
+                  <span className="pill-quiet ml-8 px-8 py-0 align-middle">Beta</span>
+                </>
+              )}
+              description={form.meetingDetection === false
+                ? 'Turn on meeting detection to use this.'
+                : 'Starting a recording with Record or from the tray during a detected call saves it as Google Meet, Zoom or Teams (an untitled Google Meet keeps its link), as recording from the prompt does.'}
+              htmlFor="pref-record-detected-meeting"
+            >
+              <Switch
+                id="pref-record-detected-meeting"
+                label="Save the meeting’s platform when you press Record"
+                checked={form.meetingDetection !== false && form.recordUsesDetectedMeeting !== false}
+                disabled={form.meetingDetection === false}
+                onChange={(v) => onChange('recordUsesDetectedMeeting', v)}
+              />
+            </SettingRow>
+          )}
         </RowList>
       </SettingsGroup>
 

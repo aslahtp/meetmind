@@ -47,4 +47,28 @@ function applyMeetingTitle(notes, meetingTitle) {
   return notes;
 }
 
-module.exports = { cleanTitle, sourceMeetingTitle, applyMeetingTitle };
+// Platforms meeting detection can name (see PLATFORMS in detection/meeting-rules.js).
+const MEETING_PLATFORMS = ['meet', 'zoom', 'teams'];
+
+/**
+ * Where a new recording's meeting is: what the caller passed (the extension's tab, a calendar
+ * event, the detection prompt), filled in from the meeting detection sees right now when the
+ * caller had no link and no platform (the app's Record button, the tray). A calendar event's
+ * title still wins over the detected one.
+ * @returns {{ url: string, title: string, platform: string|null }}
+ */
+function resolveMeetingSource({ meetingUrl, meetingTitle, meetingPlatform } = {}, detected = null) {
+  const source = {
+    url: meetingUrl || '',
+    title: meetingTitle || '',
+    platform: MEETING_PLATFORMS.includes(meetingPlatform) ? meetingPlatform : null,
+  };
+  if (source.url || source.platform || !detected) return source;
+  return {
+    url: detected.url || '',
+    title: source.title || detected.title || '',
+    platform: MEETING_PLATFORMS.includes(detected.platform) ? detected.platform : null,
+  };
+}
+
+module.exports = { cleanTitle, sourceMeetingTitle, applyMeetingTitle, resolveMeetingSource };

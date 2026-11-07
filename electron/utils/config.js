@@ -119,6 +119,12 @@ const schema = {
     type: 'boolean',
     default: true,
   },
+  // Beta: the app's Record button and the tray take the detected meeting's platform, link and
+  // title (the detection prompt always does). See resolveMeetingSource in services/meeting-title.js.
+  recordUsesDetectedMeeting: {
+    type: 'boolean',
+    default: true,
+  },
   // macOS only: how system audio is captured (see electron/audio/mac-capture.js).
   macCaptureStrategy: {
     type: 'string',
@@ -246,6 +252,7 @@ function getConfig() {
     pinNotesViewToggle:        store.get('pinNotesViewToggle') !== false,
     showAudioWaveform:         store.get('showAudioWaveform') !== false,
     meetingDetection:          store.get('meetingDetection') !== false,
+    recordUsesDetectedMeeting: store.get('recordUsesDetectedMeeting') !== false,
     macCaptureStrategy:        normalizeMacCaptureStrategy(store.get('macCaptureStrategy')),
     calendars:                 sanitizeSources(store.get('calendars')),
     calendarSyncMinutes:       normalizeSyncMinutes(store.get('calendarSyncMinutes')),
