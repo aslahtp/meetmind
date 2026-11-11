@@ -1,0 +1,10 @@
+{
+  // Main process, preloads and smoke test: CommonJS on Node (Electron 44 = Node 24).
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
+    "types": ["node"]
+  },
+  "include": ["./**/*"]
+}

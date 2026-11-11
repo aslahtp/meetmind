@@ -1,0 +1,10 @@
+{
+  // Root config files only (vite, vitest, tailwind, postcss, eslint). The other folders have their own tsconfig.json.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
+    "types": ["node"]
+  },
+  "include": ["vite.config.*", "vitest.config.*", "tailwind.config.*", "postcss.config.*", "eslint.config.*"]
+}

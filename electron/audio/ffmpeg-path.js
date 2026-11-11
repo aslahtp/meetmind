@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { spawnSync } = require('child_process');
+const { appRoot } = require('../utils/paths');
 
 // ── Pure helpers (no electron import, unit-tested in tests/ffmpeg-path.test.js) ──────────────
 
@@ -54,7 +55,7 @@ function runtimeContext() {
     arch: process.arch,
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
-    appRoot: path.join(__dirname, '../..'),
+    appRoot,
     userData,
   };
 }

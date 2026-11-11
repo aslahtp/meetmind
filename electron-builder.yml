@@ -126,7 +126,8 @@ asarUnpack:
 
 files:
   - dist/renderer/**
-  - electron/**
+  # The compiled main process (pnpm run compile:electron); package.json `main` points into it.
+  - dist/electron/**
   - assets/icons/**
   - package.json
   - "!assets/ffmpeg/**"

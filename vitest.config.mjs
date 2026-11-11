@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   test: {
-    include: ['tests/**/*.test.{js,jsx}'],
+    include: ['tests/**/*.test.{js,jsx,ts,tsx}'],
     environment: 'node',
     env: {
       // Main-process modules `require('electron')`, which in plain Node returns the binary's path.

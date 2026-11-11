@@ -1,14 +1,8 @@
-// `--smoke`: headless self-test for CI (electron/smoke.js). It must run before anything below
-// loads, because the config store opens the profile folder as soon as it is required.
-if (process.argv.includes('--smoke')) {
-  require('./smoke');
-  return;
-}
-
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme, Notification, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Readable } = require('stream');
+const { appRoot } = require('./utils/paths');
 
 const { getConfig, setConfig, setMultipleConfig } = require('./utils/config');
 const logger = require('./utils/logger');
@@ -283,7 +277,7 @@ function createMainWindow({ reveal = true } = {}) {
 
   const rendererUrl = isDev
     ? 'http://localhost:5173'
-    : `file://${path.join(__dirname, '../dist/renderer/index.html')}`;
+    : `file://${path.join(appRoot, 'dist/renderer/index.html')}`;
 
   mainWindow.loadURL(rendererUrl);
   mainWindow.setTitle('MeetMind');
@@ -426,9 +420,9 @@ function getAppIconPath() {
   // Prefer .ico on Windows for taskbar / window chrome; fall back to PNG. Electron can't read
   // .ico on Linux.
   return resolveIconPath(
-    isLinux ? null : path.join(__dirname, '../assets/icons/icon.ico'),
-    path.join(__dirname, '../assets/icons/icon256.png'),
-    path.join(__dirname, '../assets/icons/icon128.png'),
+    isLinux ? null : path.join(appRoot, 'assets/icons/icon.ico'),
+    path.join(appRoot, 'assets/icons/icon256.png'),
+    path.join(appRoot, 'assets/icons/icon128.png'),
   );
 }
 
@@ -436,7 +430,7 @@ function getTrayIcon() {
   // macOS menu bar: a monochrome template image (trayTemplate@2x.png is picked up for Retina),
   // which macOS tints to match light and dark menu bars.
   if (isMac) {
-    const templatePath = resolveIconPath(path.join(__dirname, '../assets/icons/trayTemplate.png'));
+    const templatePath = resolveIconPath(path.join(appRoot, 'assets/icons/trayTemplate.png'));
     if (templatePath) {
       const image = nativeImage.createFromPath(templatePath);
       image.setTemplateImage(true);
@@ -446,9 +440,9 @@ function getTrayIcon() {
 
   // Windows tray looks crisp at 16/32; avoid empty/placeholder images.
   const trayPath = resolveIconPath(
-    path.join(__dirname, '../assets/icons/icon32.png'),
-    path.join(__dirname, '../assets/icons/icon16.png'),
-    path.join(__dirname, '../assets/icons/icon.ico'),
+    path.join(appRoot, 'assets/icons/icon32.png'),
+    path.join(appRoot, 'assets/icons/icon16.png'),
+    path.join(appRoot, 'assets/icons/icon.ico'),
   );
 
   if (!trayPath) return nativeImage.createEmpty();
@@ -1137,7 +1131,7 @@ function showMeetingToast(meeting) {
   const toast = new Notification({
     title: 'Meeting detected',
     body: `${meeting.title || meeting.platformLabel || 'A meeting'} · Click to start recording`,
-    icon: nativeImage.createFromPath(path.join(__dirname, '../assets/icons/icon.png')),
+    icon: nativeImage.createFromPath(path.join(appRoot, 'assets/icons/icon.png')),
   });
   toast.meetingKey = meeting.key;
   toast.on('click', () => {
@@ -2077,7 +2071,7 @@ app.whenReady().then(async () => {
 
   createAppMenu();
   // Packaged mac apps get their Dock icon from the bundle's .icns; in dev it's Electron's.
-  if (isMac && !app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../assets/icons/icon.png'));
+  if (isMac && !app.isPackaged) app.dock?.setIcon(path.join(appRoot, 'assets/icons/icon.png'));
   // A restart into an automatically installed update comes back where it was: in the tray.
   const relaunchedAfterUpdate = takeHiddenRelaunch();
   if (launchedHidden) logger.info('Started at login; staying in the tray');
@@ -2201,7 +2195,7 @@ function startCalendarPoller() {
       const notif = new Notification({
         title: 'Meeting Starting',
         body: `"${event.title}" is starting now.${event.meetingLink ? ' Click to start recording.' : ''}`,
-        icon: nativeImage.createFromPath(path.join(__dirname, '../assets/icons/icon.png')),
+        icon: nativeImage.createFromPath(path.join(appRoot, 'assets/icons/icon.png')),
       });
       notif.on('click', () => {
         focusMainWindow();

@@ -1,0 +1,13 @@
+{
+  // React renderer, bundled by Vite (never emitted by tsc).
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "paths": { "@/*": ["./*"], "@assets/*": ["../assets/*"], "@shared": ["../electron/shared"], "@shared/*": ["../electron/shared/*"] }
+  },
+  "include": ["./**/*"]
+}

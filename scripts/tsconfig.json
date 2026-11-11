@@ -1,0 +1,10 @@
+{
+  // Build and CI scripts (Node).
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
+    "types": ["node"]
+  },
+  "include": ["./**/*"]
+}

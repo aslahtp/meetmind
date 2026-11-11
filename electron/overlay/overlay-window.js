@@ -12,6 +12,7 @@
 const path = require('path');
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const logger = require('../utils/logger');
+const { appRoot } = require('../utils/paths');
 const { createLifecycle, reduceOverlay } = require('./overlay-lifecycle');
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -151,7 +152,7 @@ function createWindow(gen) {
 
   const url = isDev
     ? 'http://localhost:5173/overlay.html'
-    : `file://${path.join(__dirname, '../../dist/renderer/overlay.html')}`;
+    : `file://${path.join(appRoot, 'dist/renderer/overlay.html')}`;
   w.loadURL(url).catch(() => { /* reported by did-fail-load */ });
 }
 
