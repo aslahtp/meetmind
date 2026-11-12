@@ -1,10 +1,25 @@
 ---
 tags: [meta, changelog]
-updated: 2026-11-08
+updated: 2026-11-12
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.18.0] - 2026-11-12
+
+### Fixed
+
+- **Windows**: Opening MeetMind after it sat in the tray or minimised for hours no longer shows a blank window. The window is now closed after 10 minutes in the tray and made fresh when you open the app, and each time it is shown MeetMind checks that it really painted, reloading or replacing it if not.
+- **Meetings**: Notes with an unexpected shape (for example a name written as a list) no longer empty the whole window; a page that can't be shown says so, with a "Try again" button, and the rest of the app keeps working.
+- **Recording**: A recording no longer depends on the app window, so closing, reloading or losing the window can't interrupt it, and a recording that failed to start can't keep the microphone open.
+- **Linux**: Settings › System › System audio shows the audio server again.
+
+### Changed
+
+- **Recording (macOS and Linux testers)**: Audio is now captured in a separate hidden window. Please check that recordings still include system audio and the microphone.
+- **Startup**: Started at login, MeetMind uses less memory until you open it, because the window is only created then.
+- **Logs**: Errors in the app's interface are written to the log file, the log file changes at midnight instead of when the app starts, and the Logs page stays smooth at 2,000 lines.
 
 ## [4.17.0] - 2026-11-08
 

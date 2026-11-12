@@ -1,5 +1,6 @@
 // Pure note-shaping helpers shared by every LLM provider (no Electron/SDK imports).
 const { parse: parsePartialJson } = require('partial-json');
+const { sanitizeNotes } = require('./notes-sanitize');
 
 function transcriptToText(transcript) {
   if (!Array.isArray(transcript) || transcript.length === 0) {
@@ -22,6 +23,9 @@ function formatTime(seconds) {
 
 function normalizeNotes(notes) {
   if (!notes || typeof notes !== 'object') return notes;
+
+  // An LLM can return any JSON type for any field; make each displayed one the type the UI expects.
+  sanitizeNotes(notes);
 
   // Title backward/forward compatibility
   const resolvedTitle = notes.title || notes.meeting_title || 'Meeting Notes';
@@ -74,7 +78,7 @@ function normalizeNotes(notes) {
         ? notes.key_points
         : [];
 
-  const normalizedSections = rawSections.map((s) => {
+  const normalizedSections = rawSections.filter((s) => s && typeof s === 'object').map((s) => {
     const heading = s.heading || 'Topic';
     const content = s.content || s.summary || '';
     const options = Array.isArray(s.options_discussed) ? s.options_discussed : [];

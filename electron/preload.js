@@ -48,6 +48,37 @@ ipcRenderer.invoke('window:isVisible')
   .then((visible) => { if (visible && !windowShown) markWindowShown(); })
   .catch(() => { /* cosmetic — the page falls back to a timer */ });
 
+// Health check (electron/window/main-window.js): main pings whenever the window is shown, to tell
+// a working window from one that is up but blank. Answered here, not in the app's code, so it
+// still answers when React has failed. Reports whether React has rendered into #root, whether the
+// startup splash still covers the page, and whether the page produced a frame.
+const FRAME_WAIT_MS = 2000;
+ipcRenderer.on('window:health-ping', (_event, id) => {
+  let answered = false;
+  const answer = (frame) => {
+    if (answered) return;
+    answered = true;
+    let mounted = false;
+    let splash = false;
+    try {
+      mounted = (document.getElementById('root')?.childElementCount || 0) > 0;
+      splash = !!document.getElementById('splash');
+    } catch { /* reported as not mounted */ }
+    ipcRenderer.send('window:health-pong', id, { mounted, splash, frame });
+  };
+  try {
+    window.requestAnimationFrame(() => answer(true));
+    // A busy page runs this timer late, together with the frame it was waiting for: give the
+    // frame one more turn before reporting that none came.
+    setTimeout(() => setTimeout(() => answer(false), 250), FRAME_WAIT_MS);
+  } catch {
+    answer(false);
+  }
+});
+
+// Live log lines are only sent while something listens for them (the Logs page).
+let logListeners = 0;
+
 contextBridge.exposeInMainWorld('meetmind', {
   // Effective theme ('light' | 'dark') at launch, for index.html's pre-paint script.
   startupTheme,
@@ -63,7 +94,17 @@ contextBridge.exposeInMainWorld('meetmind', {
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
     // True once the window has been on screen (see markWindowShown); used by the startup splash.
     wasShown:    () => windowShown,
+    // The app has mounted. Main waits for this after creating or reloading the window, and
+    // repairs a window that never sends it.
+    ready:       () => ipcRenderer.send('window:ready'),
+    // Unsaved edits on screen: a window hidden to the tray is then kept instead of closed.
+    setDirty:    (dirty) => ipcRenderer.send('window:dirty', !!dirty),
+    // The page being shown ({ view, sessionId }), so a new window reopens on it.
+    setViewState: (state) => ipcRenderer.send('window:view-state', state),
   },
+
+  // Sends a renderer error to the log file. See renderer/lib/errorReport.js.
+  reportError: (report) => ipcRenderer.send('renderer:error', report),
 
   // Shell — open URLs in the system default browser
   shell: {
@@ -158,16 +199,10 @@ contextBridge.exposeInMainWorld('meetmind', {
     retry: (sessionId, stage) => ipcRenderer.invoke('processing:retry', sessionId, stage),
   },
 
-  // System audio capture (main ↔ renderer)
+  // Recordings are captured in their own hidden window (electron/audio/capture-window.js), not
+  // here. This is only Settings' "Test system audio", which runs a short capture in this window.
   capture: {
-    // options: { requireSystemAudio } — fail rather than record the mic alone (main can fall back).
-    onStart: (callback) => { ipcRenderer.on('capture:start', (_e, options) => callback(options || {})); },
-    onStop: (callback) => { ipcRenderer.on('capture:stop', () => callback()); },
-    sendStarted: (sources) => ipcRenderer.send('capture:started', sources),
-    sendFailed: (error) => ipcRenderer.send('capture:failed', error),
-    sendChunk: (buffer) => ipcRenderer.send('capture:chunk', buffer),
-    sendAudioData: (buffer) => ipcRenderer.send('capture:audio-data', buffer),
-    // Settings' "Test system audio": switch the macOS capture strategy for one test capture.
+    // Switch the macOS capture strategy for one test capture.
     testBegin: (strategy) => ipcRenderer.invoke('capture:test-begin', strategy),
     testEnd: () => ipcRenderer.invoke('capture:test-end'),
   },
@@ -200,6 +235,9 @@ contextBridge.exposeInMainWorld('meetmind', {
 
   app: {
     getVersion: () => ipcRenderer.invoke('app:version'),
+    // { recording, processing, notesPreview, view }: what is going on in main right now, for a
+    // window that was just created or reloaded.
+    getState: () => ipcRenderer.invoke('app:state'),
   },
 
   // FFmpeg
@@ -219,6 +257,8 @@ contextBridge.exposeInMainWorld('meetmind', {
       'recording:started',
       'recording:stopped',
       'recording:error',
+      'recording:warning',
+      'recording:levels',
       'transcription:progress',
       'processing:progress',
       'processing:complete',
@@ -239,12 +279,15 @@ contextBridge.exposeInMainWorld('meetmind', {
     if (validChannels.includes(channel)) {
       const subscription = (_event, ...args) => callback(...args);
       ipcRenderer.on(channel, subscription);
-      return () => ipcRenderer.removeListener(channel, subscription);
+      if (channel === 'log:entry' && ++logListeners === 1) ipcRenderer.send('logs:subscribe');
+      let removed = false;
+      return () => {
+        if (removed) return;
+        removed = true;
+        ipcRenderer.removeListener(channel, subscription);
+        if (channel === 'log:entry' && --logListeners === 0) ipcRenderer.send('logs:unsubscribe');
+      };
     }
-  },
-
-  off: (channel, callback) => {
-    ipcRenderer.removeListener(channel, callback);
   },
 });
 

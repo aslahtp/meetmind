@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Mic,
   X,
-  Minus,
-  Square,
   LayoutDashboard,
   CalendarDays,
   Settings as SettingsIcon,
@@ -24,6 +22,8 @@ import RecordingBar from './components/RecordingBar.jsx';
 import { audioMeter } from './lib/audioMeter.js';
 import { isMac, isWindows } from './lib/os.js';
 import { StatusDot, useConfirmDialog } from './components/ui/index.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import WindowControls from './components/WindowControls.jsx';
 
 // ── Toast System ──────────────────────────────────────────────────────────────
 
@@ -134,6 +134,8 @@ export default function App() {
   const [notesPreview, setNotesPreview] = useState(null);  // { sessionId, attempt, provider, model, notes } | null
   const [updaterState, setUpdaterState] = useState(null);
   const [toasts, setToasts] = useState([]);
+  // True once the state main holds (recording, processing, last page) has been applied.
+  const [hydrated, setHydrated] = useState(false);
 
   const navGuardRef = useRef(null);
   const processingSessionRef = useRef(null);
@@ -153,8 +155,10 @@ export default function App() {
 
   // Views that hold unsaved state (Settings) register a guard; every navigation
   // goes through it so edits are never discarded silently.
+  // Main is told too: a window with unsaved edits is kept when hidden to the tray, not closed.
   const setNavGuard = useCallback((guard) => {
     navGuardRef.current = guard;
+    window.meetmind?.window?.setDirty?.(!!guard);
   }, []);
 
   const requestNavigate = useCallback(async (nextView) => {
@@ -192,175 +196,18 @@ export default function App() {
       .catch(() => { /* permission denied — user will see guidance in Settings */ });
   }, []);
 
-  // ── Renderer-based audio capture (system loopback + mic via Web Audio) ─────
-  // The AnalyserNodes tap each channel independently and a rAF loop pushes RMS
-  // levels into `audioLevels` state for the RecordingBar's live meters.
+  // Live audio levels for the RecordingBar's meters. Recordings are captured in a separate hidden
+  // window (electron/audio/capture-window.js), which measures them; main relays them here.
   useEffect(() => {
-    if (!window.meetmind?.capture) return;
-
-    let mediaRecorder = null;
-    let streams = [];
-    let ctx = null;
-    let meterRafId = null;
-    let sysAnalyser = null;
-    let micAnalyser = null;
-
-    // ── Level-metering loop ──────────────────────────────────────────────────
-    function startMeterLoop() {
-      const sysData = sysAnalyser ? new Float32Array(sysAnalyser.fftSize) : null;
-      const micData = micAnalyser ? new Float32Array(micAnalyser.fftSize) : null;
-
-      function rms(buf) {
-        let sum = 0;
-        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-        return Math.sqrt(sum / buf.length);
-      }
-
-      // Throttle to ~30 fps to avoid hammering React state.
-      let last = 0;
-      function tick(ts) {
-        meterRafId = requestAnimationFrame(tick);
-        if (ts - last < 33) return;
-        last = ts;
-
-        let sysLevel = 0;
-        let micLevel = 0;
-        if (sysAnalyser && sysData) {
-          sysAnalyser.getFloatTimeDomainData(sysData);
-          sysLevel = Math.min(1, rms(sysData) * 4); // ×4 gain for visual clarity
-        }
-        if (micAnalyser && micData) {
-          micAnalyser.getFloatTimeDomainData(micData);
-          micLevel = Math.min(1, rms(micData) * 4);
-        }
-        audioMeter.emit({ mic: micLevel, system: sysLevel });
-      }
-      meterRafId = requestAnimationFrame(tick);
-    }
-
-    function stopMeterLoop() {
-      if (meterRafId != null) {
-        cancelAnimationFrame(meterRafId);
-        meterRafId = null;
-      }
-      sysAnalyser = null;
-      micAnalyser = null;
+    if (!window.meetmind?.on) return undefined;
+    const unsub = window.meetmind.on('recording:levels', (levels) => {
+      if (levels) audioMeter.emit({ mic: Number(levels.mic) || 0, system: Number(levels.system) || 0 });
+    });
+    return () => {
+      unsub?.();
       audioMeter.reset();
-    }
-
-    // System audio via Electron loopback. getDisplayMedia must ask for video too; that track is
-    // stopped at once. Returns null when the OS gives no system audio (permission denied, or no
-    // audio track). When main can capture it with FFmpeg instead (`requireSystemAudio`: Windows
-    // WASAPI, Linux PulseAudio) we fail so it falls back; otherwise the caller records the mic alone.
-    async function openSystemStream(requireSystemAudio) {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
-        stream.getVideoTracks().forEach((t) => t.stop());
-        if (stream.getAudioTracks().length > 0) return stream;
-        stream.getTracks().forEach((t) => t.stop());
-        if (requireSystemAudio) throw new Error('System audio capture returned no audio track');
-      } catch (err) {
-        if (requireSystemAudio) throw err;
-        console.warn('System audio unavailable, recording microphone only:', err);
-      }
-      return null;
-    }
-
-    window.meetmind.capture.onStart(async ({ requireSystemAudio = isWindows } = {}) => {
-      try {
-        const sysStream = await openSystemStream(requireSystemAudio);
-
-        let micStream = null;
-        try {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch { /* mic unavailable — system audio only */ }
-
-        if (!sysStream && !micStream) throw new Error('No audio source available (microphone access denied?)');
-
-        streams = [sysStream, micStream].filter(Boolean);
-
-        ctx = new AudioContext();
-        const dest = ctx.createMediaStreamDestination();
-
-        // System audio — source → analyser → dest
-        if (sysStream) {
-          const sysSource = ctx.createMediaStreamSource(sysStream);
-          sysAnalyser = ctx.createAnalyser();
-          sysAnalyser.fftSize = 256;
-          sysSource.connect(sysAnalyser);
-          sysSource.connect(dest);
-        }
-
-        // Microphone — source → analyser → dest
-        if (micStream) {
-          const micSource = ctx.createMediaStreamSource(micStream);
-          micAnalyser = ctx.createAnalyser();
-          micAnalyser.fftSize = 256;
-          micSource.connect(micAnalyser);
-          micSource.connect(dest);
-        }
-
-        startMeterLoop();
-
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm';
-        mediaRecorder = new MediaRecorder(dest.stream, { mimeType });
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            e.data.arrayBuffer().then((buffer) => {
-              if (buffer.byteLength > 0) {
-                window.meetmind.capture.sendChunk(buffer);
-              }
-            }).catch((err) => {
-              console.error('Failed to send audio chunk:', err);
-            });
-          }
-        };
-        // Emit chunks every 1 second (1000ms) for real-time disk streaming
-        mediaRecorder.start(1000);
-
-        window.meetmind.capture.sendStarted({ systemAudio: !!sysStream, mic: !!micStream });
-        if (!sysStream) {
-          addToast(isMac
-            ? 'Recording your microphone only: system audio is unavailable. Check Screen & System Audio Recording permission.'
-            : 'Recording your microphone only: system audio is unavailable. Check that PulseAudio or PipeWire is running.', 'warning');
-        }
-      } catch (err) {
-        console.error('Renderer audio capture failed:', err);
-        stopMeterLoop();
-        window.meetmind.capture.sendFailed(err.message);
-      }
-    });
-
-    window.meetmind.capture.onStop(async () => {
-      stopMeterLoop();
-      try {
-        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-          window.meetmind.capture.sendAudioData(new ArrayBuffer(0));
-          return;
-        }
-
-        await new Promise((resolve) => {
-          mediaRecorder.onstop = resolve;
-          mediaRecorder.stop();
-        });
-
-        streams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
-        streams = [];
-        if (ctx) { ctx.close().catch(() => {}); ctx = null; }
-
-        // Short timeout to allow pending arrayBuffer microtasks to send
-        await new Promise((r) => setTimeout(r, 150));
-
-        // Send zero-length sentinel to signal "recording complete"
-        window.meetmind.capture.sendAudioData(new ArrayBuffer(0));
-      } catch (err) {
-        console.error('Renderer capture stop failed:', err);
-        window.meetmind.capture.sendAudioData(new ArrayBuffer(0));
-      }
-    });
-  }, [addToast]); // addToast is stable, so the listeners are registered once
+    };
+  }, []);
 
   // The database revision the current `sessions` list was read at (see sessions:revision).
   const sessionsRevisionRef = useRef(null);
@@ -378,7 +225,8 @@ export default function App() {
     try {
       const revision = await window.meetmind.sessions.revision?.();
       if (ifChanged && revision != null && revision === sessionsRevisionRef.current) return;
-      const list = await window.meetmind.sessions.list();
+      const result = await window.meetmind.sessions.list();
+      const list = Array.isArray(result) ? result : [];
       if (seq !== refreshSeqRef.current) return;
       sessionsRevisionRef.current = revision ?? null;
       setSessions(list);
@@ -405,8 +253,43 @@ export default function App() {
     // leaving placeholders on screen forever.
     const failsafe = setTimeout(() => setSessionsLoading(false), 5000);
 
+    // The recording and the processing pipeline run in main and outlive this window (it is closed
+    // after a while in the tray, and replaced if it fails), so start from what main reports.
+    async function hydrate() {
+      try {
+        const state = await window.meetmind.app?.getState?.();
+        if (state?.recording) {
+          setIsRecording(true);
+          setRecordingSessionId(state.recording.sessionId || null);
+          setRecordingStartedAt(state.recording.startedAt || Date.now());
+        }
+        if (state?.processing?.sessionId) {
+          processingSessionRef.current = state.processing.sessionId;
+          setProcessing(state.processing);
+        }
+        if (state?.notesPreview) setNotesPreview(state.notesPreview);
+        // Reopen on the page the previous window showed.
+        const last = state?.view;
+        if (last?.view === 'session' && last.sessionId) {
+          const session = await window.meetmind.sessions.get(last.sessionId);
+          if (session) {
+            setSelectedSession(session);
+            rawSetView('session');
+          }
+        } else if (['meetings', 'settings', 'logs'].includes(last?.view)) {
+          rawSetView(last.view);
+        }
+      } catch (err) {
+        console.error('App state load failed:', err);
+      }
+      setHydrated(true);
+      // Tells main the app is up; events it queued for this window ("open this meeting") follow.
+      window.meetmind.window?.ready?.();
+    }
+
     async function init() {
       if (!window.meetmind) return;
+      await hydrate();
       window.meetmind.providers?.list?.().then(setProviders).catch((err) => {
         console.error('Provider list load failed:', err);
       });
@@ -443,6 +326,14 @@ export default function App() {
       window.removeEventListener('focus', catchUp);
     };
   }, [refreshSessions]);
+
+  // Tell main which page is on screen, so a new window reopens on it. Not before the hydration
+  // above, or the first render's default page would overwrite what main remembers.
+  const selectedSessionId = selectedSession?.id || null;
+  useEffect(() => {
+    if (!hydrated) return;
+    window.meetmind?.window?.setViewState?.({ view, sessionId: view === 'session' ? selectedSessionId : null });
+  }, [hydrated, view, selectedSessionId]);
 
   // Follow OS theme changes when theme is set to 'system'
   useEffect(() => {
@@ -486,7 +377,13 @@ export default function App() {
     const unsubRecordingStopped = window.meetmind.on('recording:stopped', ({ sessionId } = {}) => {
       setIsRecording(false);
       setRecordingStartedAt(null);
+      audioMeter.reset();
       if (sessionId) trackProcessing(sessionId);
+    });
+
+    // e.g. recording the microphone only because system audio is unavailable.
+    const unsubRecordingWarning = window.meetmind.on('recording:warning', ({ message } = {}) => {
+      if (message) addToast(message, 'warning');
     });
 
     const unsubProgress = window.meetmind.on('processing:progress', ({ stage, percent }) => {
@@ -558,6 +455,7 @@ export default function App() {
     return () => {
       unsubRecordingStarted?.();
       unsubRecordingStopped?.();
+      unsubRecordingWarning?.();
       unsubProgress?.();
       unsubPreview?.();
       unsubComplete?.();
@@ -655,6 +553,7 @@ export default function App() {
     if (result?.success) {
       setIsRecording(false);
       setRecordingStartedAt(null);
+      audioMeter.reset();
     } else if (result?.error) {
       addToast(result.error, 'error');
     }
@@ -690,6 +589,9 @@ export default function App() {
         )}
 
         <main className="flex-1 min-h-0 overflow-hidden">
+          {/* A page that throws shows a recovery message here; the top bar keeps working, and
+              opening another page (or another meeting) starts clean. */}
+          <ErrorBoundary key={`${view}:${view === 'session' ? selectedSessionId : ''}`} name={view}>
           {view === 'dashboard' && (
             <Dashboard
               onOpenSession={openSession}
@@ -722,6 +624,7 @@ export default function App() {
           {view === 'logs' && (
             <LogsViewer />
           )}
+          </ErrorBoundary>
         </main>
       </div>
 
@@ -817,22 +720,5 @@ function TopBar() {
 
       {!isMac && <WindowControls />}
     </header>
-  );
-}
-
-function WindowControls() {
-  const base = 'h-64 w-48 flex items-center justify-center text-graphite transition-colors duration-150';
-  return (
-    <div className="titlebar-no-drag flex items-stretch h-full flex-shrink-0">
-      <button type="button" onClick={() => window.meetmind?.window?.minimize()} className={`${base} hover:text-ink hover:bg-ink/[0.06]`} aria-label="Minimize window">
-        <Minus size={14} strokeWidth={1.75} />
-      </button>
-      <button type="button" onClick={() => window.meetmind?.window?.maximize()} className={`${base} hover:text-ink hover:bg-ink/[0.06]`} aria-label="Maximize or restore window">
-        <Square size={12} strokeWidth={1.75} />
-      </button>
-      <button type="button" onClick={() => window.meetmind?.window?.close()} className={`${base} hover:text-paper hover:bg-signal`} aria-label="Close window">
-        <X size={14} strokeWidth={1.75} />
-      </button>
-    </div>
   );
 }

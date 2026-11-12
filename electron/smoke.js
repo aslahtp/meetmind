@@ -1,6 +1,6 @@
 // `MeetMind --smoke` (or `electron . --smoke`): a headless self-test of a packaged app, run by CI
 // on the Windows, macOS and Linux builds since there is no Mac or Linux machine to click through. Uses a throwaway
-// profile, opens no window but the meeting overlay for a moment, prints one line
+// profile, opens the meeting overlay, the main window and the capture window for a moment each, prints one line
 // `MEETMIND_SMOKE {json}` and exits 0 if every check passed, 1 otherwise.
 //
 // Checks: config + database open; ffmpeg/ffprobe are found and run; ffmpeg encodes a 1 s Opus
@@ -9,7 +9,8 @@
 // bundled ffmpeg records a second from the default output's monitor (the FFmpeg fallback); the
 // permissions API answers; the meeting-detection backend loads and returns lists, including the
 // WASAPI audio sessions (Windows) or PulseAudio recording streams (Linux) it reads the mic users
-// from; the meeting overlay window loads, shows a prompt and its renderer acknowledges it.
+// from; the meeting overlay window loads, shows a prompt and its renderer acknowledges it; the
+// main window loads the app and its renderer reports it mounted; the capture window loads.
 
 const { app } = require('electron');
 const fs = require('fs');
@@ -20,6 +21,8 @@ const { spawn } = require('child_process');
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'meetmind-smoke-'));
 app.setPath('userData', profile);
 app.dock?.hide();
+// Several windows are opened and closed in turn; Electron's default would quit after the first.
+app.on('window-all-closed', () => {});
 
 const checks = [];
 
@@ -162,6 +165,36 @@ app.whenReady().then(async () => {
     } finally {
       overlay.destroyOverlay();
     }
+  });
+
+  // The main window is created on demand and replaced when it fails, so creating one has to work
+  // every time: load the app in it and wait for the renderer to report that it mounted.
+  await check('main-window', async () => {
+    const mainWindow = require('./window/main-window');
+    mainWindow.registerMainWindowIpc();
+    const startedAt = Date.now();
+    mainWindow.openMainWindow();
+    try {
+      for (;;) {
+        const phase = mainWindow.getMainWindowPhase();
+        if (phase === 'ready') return { ms: Date.now() - startedAt };
+        if (phase === 'failed' || phase === 'none') throw new Error(`main window ${phase} (see log)`);
+        if (Date.now() - startedAt > 25000) throw new Error(`main window stuck in ${phase}`);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    } finally {
+      mainWindow.destroyMainWindow();
+    }
+  });
+
+  // Recordings run in a hidden capture window: check that it loads and its page answers. Opening
+  // the audio devices themselves is left to a real recording (CI runners have none to open).
+  await check('capture-window', async () => {
+    const capture = require('./audio/capture-window');
+    capture.registerCaptureIpc();
+    const startedAt = Date.now();
+    await capture.probeCaptureWindow();
+    return { ms: Date.now() - startedAt };
   });
 
   const ok = checks.every((c) => c.ok);

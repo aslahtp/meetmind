@@ -19,6 +19,7 @@ export default defineConfig({
       input: {
         main: path.resolve(__dirname, 'renderer/index.html'),
         overlay: path.resolve(__dirname, 'renderer/overlay.html'),
+        capture: path.resolve(__dirname, 'renderer/capture.html'),
       },
     },
   },
