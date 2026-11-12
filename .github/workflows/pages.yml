@@ -12,6 +12,7 @@ on:
       - 'docs/screenshots/**'
       - 'llms.txt'
       - 'scripts/build-site.sh'
+      - 'scripts/build-site-images.js'
       - '.github/workflows/pages.yml'
   workflow_call:
   workflow_dispatch:
@@ -35,6 +36,13 @@ jobs:
           # Full history: the sitemap's lastmod is the last commit that changed the page.
           fetch-depth: 0
           persist-credentials: false
+
+      # sharp makes the AVIF screenshots (scripts/build-site-images.js). No dependency cache: what
+      # this job builds is published, as with release builds.
+      - name: Setup pnpm and Node
+        uses: $/.github/actions/setup
+        with:
+          cache: 'false'
 
       # The site links the newest published release, not package.json's version, which reaches
       # main before release.yml has built and published it.
