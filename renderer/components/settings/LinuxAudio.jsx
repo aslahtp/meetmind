@@ -26,7 +26,7 @@ export default function LinuxAudio() {
   const [testing, setTesting] = useState(false);
 
   const refresh = useCallback(async () => {
-    try { setStatus(await window.meetmind.audio.linuxStatus()); } catch { /* keep the last status */ }
+    try { setStatus(await window.meetmind.recording.linuxStatus()); } catch { /* keep the last status */ }
   }, []);
 
   useEffect(() => {

@@ -235,7 +235,7 @@ async function launch() {
     app, page, errors,
     async size(w, hgt) {
       await app.evaluate(({ BrowserWindow }, [W, H]) => {
-        const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().includes('overlay.html'));
+        const win = BrowserWindow.getAllWindows().find((w) => /index.html/.test(w.webContents.getURL()));
         win.unmaximize(); win.setSize(W, H); win.center(); win.show();
       }, [w, hgt]);
       await page.waitForTimeout(300);
@@ -353,7 +353,7 @@ async function repl(h) {
       else if (cmd === 'send') {
         const [channel, ...json] = rest;
         await h.app.evaluate(({ BrowserWindow }, [ch, payload]) => {
-          const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().includes('overlay.html'));
+          const win = BrowserWindow.getAllWindows().find((w) => /index.html/.test(w.webContents.getURL()));
           win.webContents.send(ch, payload);
         }, [channel, JSON.parse(json.join(' '))]);
         await h.page.waitForTimeout(150);

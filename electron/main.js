@@ -5,7 +5,7 @@ if (process.argv.includes('--smoke')) {
   return;
 }
 
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme, Notification, powerMonitor } = require('electron');
+const { app, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme, Notification, powerMonitor, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Readable } = require('stream');
@@ -33,6 +33,11 @@ const { showOverlay, hideOverlay, destroyOverlay, recheckOverlay, setOverlayThem
 const { getPermissionStatus, requestPermission, openPermissionSettings } = require('./services/permissions');
 const { normalizeMacCaptureStrategy } = require('./audio/mac-capture');
 const { createAutoLaunch, HIDDEN_ARG } = require('./services/auto-launch');
+const {
+  registerMainWindowIpc, openMainWindow, getMainWindow, isMainWindowVisible, sendToMainWindow,
+  recheckMainWindow, getViewState,
+} = require('./window/main-window');
+const { registerCaptureIpc, startCapture, stopCapture, destroyCapture } = require('./audio/capture-window');
 
 const isDev = process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
@@ -42,6 +47,12 @@ const isLinux = process.platform === 'linux';
 // an app keep a window on top or place it, which the meeting overlay needs, nor read other apps'
 // window titles, which meeting detection needs. Must be set before the app is ready.
 if (isLinux && process.env.DISPLAY) app.commandLine.appendSwitch('ozone-platform', 'x11');
+
+// Windows: Chromium stops drawing a window it believes is covered or hidden ("native window
+// occlusion"), and a window shown again after a long time in the tray can stay blank. The main
+// window is also health-checked whenever it is shown (window/main-window.js); this removes one
+// known cause. Must be set before the app is ready.
+if (process.platform === 'win32') app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 
 // Launch at login (services/auto-launch.js). A login launch on Windows and Linux passes --hidden,
 // so the app starts in the tray and only meeting detection and the overlay show up. Only the
@@ -104,7 +115,8 @@ async function generateAndStampNotes(sessionId, transcript, config, sttInfo, mee
   const result = await generateNotes(transcript, config, {
     meetingTitle: meetingTitle || '',
     onPreview: (preview) => {
-      sendToRenderer('notes:preview', { sessionId, ...preview });
+      currentNotesPreview = { sessionId, ...preview };
+      sendToRenderer('notes:preview', currentNotesPreview);
       if (preview.progress != null) reportProgress?.(preview.progress);
     },
   });
@@ -170,7 +182,6 @@ protocol.registerSchemesAsPrivileged([{
   },
 }]);
 
-let mainWindow = null;
 let tray = null;
 let isRecording = false;
 
@@ -192,41 +203,21 @@ db.onChange(() => {
   }, SESSIONS_CHANGED_DELAY_MS);
 });
 
+// The main window is disposable (window/main-window.js): there may be none, or one still
+// loading. A message for a missing window is dropped, which is right for status events: a new
+// window reads the current state through app:state.
 function sendToRenderer(channel, ...args) {
-  try {
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-      mainWindow.webContents.send(channel, ...args);
-      return true;
-    }
-  } catch (err) {
-    logger.warn(`Failed to send ${channel} to renderer`, { error: err.message });
-  }
-  return false;
+  return sendToMainWindow(channel, args);
 }
 
-// Shows the window. When it was hidden (first launch, or reopened after × sent it to the tray),
-// tells the renderer, which plays the startup splash only once the window is actually on screen.
-function revealMainWindow() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  const wasHidden = !mainWindow.isVisible();
-  mainWindow.show();
-  if (wasHidden) sendToRenderer('window:shown');
+// For the few events that must survive the window not being up yet ("open this meeting", a
+// meeting starting): kept for a few minutes and delivered once the renderer is ready.
+function sendToRendererQueued(channel, ...args) {
+  return sendToMainWindow(channel, args, { queue: true });
 }
 
 function focusMainWindow() {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    // If the renderer process crashed while the window was hidden/minimized, the window is
-    // still alive but its webContents is gone or crashed — reload it before showing.
-    if (mainWindow.webContents && !mainWindow.webContents.isDestroyed() && mainWindow.webContents.isCrashed()) {
-      logger.warn('Renderer was crashed when focusing; reloading');
-      mainWindow.webContents.reload();
-    }
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    revealMainWindow();
-    mainWindow.focus();
-  } else {
-    createMainWindow();
-  }
+  openMainWindow();
 }
 
 // ── Window ──────────────────────────────────────────────────────────────────
@@ -244,131 +235,8 @@ function resolveStartupBackgroundColor(themeSetting) {
   return resolveEffectiveTheme(themeSetting) === 'light' ? '#f8f5ed' : '#1a1813';  // matches --color-paper
 }
 
-// `reveal: false` creates the window without showing it (a login launch); the tray opens it later.
-function createMainWindow({ reveal = true } = {}) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    revealMainWindow();
-    mainWindow.focus();
-    return mainWindow;
-  }
-
-  // Pass the saved theme into the renderer's argv so preload can apply it before
-  // first paint without any IPC round-trip (which would otherwise mean either a
-  // visible light→dark flash, or a blocking sendSync).
-  const savedTheme = getConfig().theme || 'light';
-  const backgroundColor = resolveStartupBackgroundColor(savedTheme);
-
-  mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 720,
-    minWidth: 800,
-    minHeight: 600,
-    backgroundColor,
-    // Custom titlebar in the renderer. macOS keeps its native traffic lights, inset into the
-    // renderer's top bar (which leaves room for them); Windows has no native frame at all.
-    ...(isMac
-      ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 24, y: 25 } }
-      : { frame: false, backgroundMaterial: 'none', icon: getAppIconPath() }),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-      backgroundThrottling: false,
-      additionalArguments: [`--meetmind-theme=${savedTheme}`],
-    },
-    show: false,
-  });
-
-  const rendererUrl = isDev
-    ? 'http://localhost:5173'
-    : `file://${path.join(__dirname, '../dist/renderer/index.html')}`;
-
-  mainWindow.loadURL(rendererUrl);
-  mainWindow.setTitle('MeetMind');
-  mainWindow.on('page-title-updated', (e) => e.preventDefault());
-
-  // Show quickly — don't wait forever for full renderer paint.
-  if (reveal) {
-    mainWindow.once('ready-to-show', revealMainWindow);
-    setTimeout(revealMainWindow, 400);
-  }
-
-  mainWindow.on('close', (event) => {
-    if (!app.isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
-    }
-  });
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-    logger.setLogEmitter(null);
-  });
-
-  // Forward live logs from main process to renderer
-  logger.setLogEmitter((entry) => {
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
-      mainWindow.webContents.send('log:entry', entry);
-    }
-  });
-
-  installDisplayMediaHandler();
-
-  // Intercept all _blank window.open() calls and route to OS system browser.
-  // Without this, Electron would open a new BrowserWindow for every outbound link.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      shell.openExternal(url).catch(() => {});
-    }
-    return { action: 'deny' };
-  });
-
-  // ── Renderer crash / freeze recovery ───────────────────────────────────────
-  // When the window sits minimized or hidden for a long time the Chromium renderer can crash
-  // (GPU process gone, OOM, OS resource reclamation). Without these handlers the user sees a
-  // blank white window on restore.
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    logger.error('Renderer process gone; reloading', { reason: details.reason, exitCode: details.exitCode });
-    if (!app.isQuitting && mainWindow && !mainWindow.isDestroyed()) {
-      // Small delay so Electron finishes cleaning up the dead renderer.
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
-      }, 500);
-    }
-  });
-
-  let unresponsiveTimer = null;
-  mainWindow.on('unresponsive', () => {
-    logger.warn('Renderer became unresponsive; will reload if it doesn\u2019t recover');
-    // Give it a few seconds — a heavy GC or disk flush can stall briefly.
-    if (unresponsiveTimer) clearTimeout(unresponsiveTimer);
-    unresponsiveTimer = setTimeout(() => {
-      unresponsiveTimer = null;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        logger.warn('Renderer still unresponsive after 8 s; reloading');
-        mainWindow.webContents.reload();
-      }
-    }, 8000);
-  });
-  mainWindow.on('responsive', () => {
-    if (unresponsiveTimer) {
-      clearTimeout(unresponsiveTimer);
-      unresponsiveTimer = null;
-      logger.info('Renderer became responsive again; reload cancelled');
-    }
-  });
-
-  if (isDev) {
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
-  }
-
-  return mainWindow;
-}
-
 // ── System audio (getDisplayMedia) ──────────────────────────────────────────
-// The renderer captures system audio with getDisplayMedia(); this handler approves it without a
+// The capture window records system audio with getDisplayMedia(); this handler approves it without a
 // picker and asks Electron for 'loopback' audio. On Windows that is Chromium's WASAPI loopback,
 // which captures all system audio (speakers, headphones, USB, Bluetooth). On macOS 14.2+ it is
 // the CoreAudio Tap API; how the required video source is supplied is configurable there (see
@@ -396,19 +264,20 @@ function currentMacCaptureStrategy() {
   return normalizeMacCaptureStrategy(testCaptureStrategy || getConfig().macCaptureStrategy);
 }
 
+// Installed on the default session, which the capture window (recordings) and the main window
+// (Settings' "Test system audio") share. Needs the app to be ready.
 function installDisplayMediaHandler() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  const session = mainWindow.webContents.session;
+  const ses = session.defaultSession;
   if (!isMac) {
-    session.setDisplayMediaRequestHandler(screenLoopbackHandler, { useSystemPicker: false });
+    ses.setDisplayMediaRequestHandler(screenLoopbackHandler, { useSystemPicker: false });
     return;
   }
   const strategy = currentMacCaptureStrategy();
   if (strategy === 'picker') {
     // macOS 15+ shows its own picker (the handler then isn't called); 14.x falls back to it.
-    session.setDisplayMediaRequestHandler(screenLoopbackHandler, { useSystemPicker: true });
+    ses.setDisplayMediaRequestHandler(screenLoopbackHandler, { useSystemPicker: true });
   } else {
-    session.setDisplayMediaRequestHandler(
+    ses.setDisplayMediaRequestHandler(
       strategy === 'frame' ? frameLoopbackHandler : screenLoopbackHandler,
       { useSystemPicker: false },
     );
@@ -479,7 +348,7 @@ function createAppMenu() {
         {
           label: 'Settings…',
           accelerator: 'Cmd+,',
-          click: () => { focusMainWindow(); sendToRenderer('app:navigate', 'settings'); },
+          click: () => { focusMainWindow(); sendToRendererQueued('app:navigate', 'settings'); },
         },
         { type: 'separator' },
         { role: 'hide' },
@@ -577,6 +446,7 @@ function updateTrayMenu() {
 // ── Recording helpers ────────────────────────────────────────────────────────
 
 let currentSessionId = null;
+let recordingStartedAt = null;   // ms; lets a newly opened window show the right elapsed time
 let captureMode = 'none'; // 'none' | 'renderer' | 'ffmpeg'
 let rendererWriteStream = null; // WriteStream for incremental renderer capture
 let rendererWebmPath = null;    // Path to the in-progress .webm file
@@ -604,64 +474,36 @@ async function canRecordSystemAudioWithFfmpeg() {
   }
 }
 
+// Starts the capture window (audio/capture-window.js). True once audio is flowing.
 async function requestRendererCaptureStart() {
   const requireSystemAudio = await canRecordSystemAudioWithFfmpeg();
-  return new Promise((resolve) => {
-    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
-      resolve(false);
-      return;
-    }
-
-    function onStarted(_e, sources) {
-      cleanup();
-      if (sources && !sources.systemAudio) logger.warn('Renderer capture started without system audio (microphone only)');
-      resolve(true);
-    }
-    function onFailed() { cleanup(); resolve(false); }
-    function cleanup() {
-      clearTimeout(timer);
-      ipcMain.removeListener('capture:started', onStarted);
-      ipcMain.removeListener('capture:failed', onFailed);
-    }
-
-    ipcMain.once('capture:started', onStarted);
-    ipcMain.once('capture:failed', onFailed);
-    sendToRenderer('capture:start', { requireSystemAudio });
-
-    // macOS may show permission prompts (screen & system audio, microphone) on the first
-    // recording, so give the user time to answer them.
-    const timer = setTimeout(() => { cleanup(); resolve(false); }, isMac ? 60000 : 6000);
-  });
+  // macOS may show permission prompts (screen & system audio, microphone) on the first
+  // recording, so give the user time to answer them.
+  const result = await startCapture({ requireSystemAudio, timeoutMs: isMac ? 60000 : 6000 });
+  if (!result.ok) {
+    logger.warn('Capture window could not start', { error: result.error });
+    return false;
+  }
+  if (!result.sources.systemAudio) {
+    logger.warn('Capture started without system audio (microphone only)');
+    sendToRenderer('recording:warning', {
+      message: isMac
+        ? 'Recording your microphone only: system audio is unavailable. Check Screen & System Audio Recording permission.'
+        : 'Recording your microphone only: system audio is unavailable. Check that PulseAudio or PipeWire is running.',
+    });
+  }
+  return true;
 }
 
-/**
- * Tell the renderer to stop recording. The renderer will flush any remaining
- * chunks via capture:chunk, then send a zero-length capture:audio-data as a
- * "done" sentinel. We wait for that sentinel here.
- */
-function requestRendererCaptureStop() {
-  return new Promise((resolve, reject) => {
-    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
-      reject(new Error('No window'));
-      return;
-    }
-
-    function onDone() {
-      clearTimeout(timer);
-      // Sentinel received — all chunks have been flushed to disk already
-      resolve();
-    }
-
-    ipcMain.once('capture:audio-data', onDone);
-    sendToRenderer('capture:stop');
-
-    const timer = setTimeout(() => {
-      ipcMain.removeListener('capture:audio-data', onDone);
-      // Even on timeout, the webm file on disk is still usable
-      logger.warn('Renderer capture stop timed out, proceeding with partial file');
-      resolve();
-    }, 15000);
+// The capture window died mid-recording (its renderer crashed). Everything it sent is already
+// on disk, so stop the recording there and process what was captured.
+function handleCaptureLost(reason) {
+  if (!isRecording || captureMode !== 'renderer') return;
+  logger.error('Recording stopped: the capture window was lost', { reason, sessionId: currentSessionId });
+  sendToRenderer('recording:warning', {
+    message: 'The recording stopped unexpectedly. What was captured so far is being processed.',
   });
+  handleStopRecording();
 }
 
 // ── Start / Stop recording ───────────────────────────────────────────────────
@@ -712,6 +554,7 @@ async function handleStartRecording(sessionId, rawUrl, rawTitle, rawPlatform) {
     if (rendererOk) {
       captureMode = 'renderer';
       isRecording = true;
+      recordingStartedAt = Date.now();
 
       // Open write stream so incoming chunks are appended to disk immediately
       const recordingsDir = getRecordingsDir();
@@ -742,6 +585,7 @@ async function handleStartRecording(sessionId, rawUrl, rawTitle, rawPlatform) {
     captureMode = 'ffmpeg';
     await startRecording(currentSessionId);
     isRecording = true;
+    recordingStartedAt = Date.now();
     updateTrayMenu();
     sendToRenderer('recording:started', { sessionId: currentSessionId });
     broadcastStatus({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
@@ -750,6 +594,7 @@ async function handleStartRecording(sessionId, rawUrl, rawTitle, rawPlatform) {
   } catch (err) {
     logger.error('Failed to start recording', { error: err.message });
     captureMode = 'none';
+    destroyCapture();
     db.updateSession(currentSessionId, { status: 'error', last_error: err.message });
     sendToRenderer('recording:error', { error: err.message });
     return { success: false, error: err.message };
@@ -766,8 +611,8 @@ async function handleStopRecording() {
     if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
 
     if (captureMode === 'renderer') {
-      // Signal the renderer to stop and flush remaining chunks
-      await requestRendererCaptureStop();
+      // The capture window flushes its remaining chunks, then is destroyed
+      await stopCapture();
 
       // Close the write stream that has been accumulating chunks
       if (rendererWriteStream) {
@@ -804,6 +649,7 @@ async function handleStopRecording() {
 
     captureMode = 'none';
     isRecording = false;
+    recordingStartedAt = null;
 
     let durationSeconds = null;
     try {
@@ -844,6 +690,8 @@ async function handleStopRecording() {
     rendererBytesWritten = 0;
     captureMode = 'none';
     isRecording = false;
+    recordingStartedAt = null;
+    destroyCapture();
     if (currentSessionId) {
       db.updateSession(currentSessionId, {
         status: 'error',
@@ -868,6 +716,14 @@ function hasReusableTranscript(session) {
 }
 
 let activePipelines = 0;   // processing runs in flight; an automatic update install waits for them
+// The latest progress and notes preview, so a window opened mid-run shows them (app:state).
+let currentProcessing = null;   // { sessionId, stage, percent } | null
+let currentNotesPreview = null; // the last notes:preview payload | null
+
+function clearProcessingState(sessionId) {
+  if (currentProcessing?.sessionId === sessionId) currentProcessing = null;
+  if (currentNotesPreview?.sessionId === sessionId) currentNotesPreview = null;
+}
 // Sessions being processed right now; Settings › Storage never deletes their audio.
 const processingSessionIds = new Map(); // sessionId → runs in flight
 
@@ -902,6 +758,7 @@ function runRetentionCleanup(reason) {
 
 async function processSession(sessionId, audioPath, options = {}) {
   const sendProgress = (stage, percent) => {
+    if (stage !== 'complete') currentProcessing = { sessionId, stage, percent };
     sendToRenderer('processing:progress', { stage, percent });
     broadcastStatus({ type: 'PROCESSING_PROGRESS', stage, percent, sessionId });
   };
@@ -993,6 +850,8 @@ async function processSession(sessionId, audioPath, options = {}) {
       sendProgress('complete', 100);
     }
 
+    clearProcessingState(sessionId);
+
     sendToRenderer('processing:complete', { sessionId, notionUrl });
     broadcastStatus({ type: 'PROCESSING_COMPLETE', notionUrl, sessionId });
     logger.info('Processing pipeline complete', { sessionId, notionUrl });
@@ -1002,12 +861,14 @@ async function processSession(sessionId, audioPath, options = {}) {
     if (err._cancelled || cancelledSessions.has(sessionId) || !db.getSession(sessionId)) {
       cancelledSessions.delete(sessionId);
       logger.info('Processing pipeline cancelled (session deleted)', { sessionId });
+      clearProcessingState(sessionId);
       sendToRenderer('processing:cancelled', { sessionId });
       syncOverlayWithStatus({ type: 'PROCESSING_CANCELLED', sessionId });
       return;
     }
     logger.error('Processing pipeline error', { sessionId, error: err.message });
     db.updateSession(sessionId, { status: 'error', last_error: err.message });
+    clearProcessingState(sessionId);
     sendToRenderer('processing:error', { sessionId, error: err.message });
     broadcastStatus({ type: 'PROCESSING_ERROR', error: err.message, sessionId });
   }
@@ -1172,31 +1033,85 @@ function applyMeetingDetection(enabled) {
   }
 }
 
+// ── Main window support ──────────────────────────────────────────────────────
+
+let logSubscribed = false;   // the Logs page is open and listening for log:entry
+
+// At most this many renderer errors are logged per minute: a render loop can throw thousands.
+const RENDERER_ERRORS_PER_MINUTE = 20;
+let rendererErrorWindowStart = 0;
+let rendererErrorCount = 0;
+
+function logRendererError(report) {
+  const now = Date.now();
+  if (now - rendererErrorWindowStart > 60000) {
+    rendererErrorWindowStart = now;
+    rendererErrorCount = 0;
+  }
+  rendererErrorCount += 1;
+  if (rendererErrorCount > RENDERER_ERRORS_PER_MINUTE) return;
+  const text = (value) => (typeof value === 'string' ? value.slice(0, 4000) : undefined);
+  const r = report && typeof report === 'object' ? report : {};
+  logger.error('Renderer error', {
+    kind: text(r.kind),
+    message: text(r.message),
+    boundary: text(r.boundary),
+    source: text(r.source),
+    stack: text(r.stack),
+    componentStack: text(r.componentStack),
+  });
+  if (rendererErrorCount === RENDERER_ERRORS_PER_MINUTE) {
+    logger.warn('Too many renderer errors; not logging more for a minute');
+  }
+}
+
+// The window could not be repaired by a reload or by replacing it. Say so instead of leaving a
+// blank window; a recording runs in its own window and is not affected.
+async function handleMainWindowGiveUp(reason) {
+  logger.error('Main window could not be repaired', { reason, recording: isRecording });
+  const canRestart = !isRecording && activePipelines === 0;
+  const { response } = await dialog.showMessageBox({
+    type: 'error',
+    title: 'MeetMind',
+    message: 'MeetMind couldn’t display its window',
+    detail: canRestart
+      ? 'Restarting MeetMind usually fixes this. Your meetings and recordings are safe.'
+      : 'Your recording and any notes being written continue in the background. Restart MeetMind once they are done.',
+    buttons: canRestart ? ['Restart MeetMind', 'Not now'] : ['OK'],
+    defaultId: 0,
+    cancelId: canRestart ? 1 : 0,
+  });
+  if (canRestart && response === 0) {
+    app.relaunch();
+    app.isQuitting = true;
+    app.quit();
+  }
+}
+
 // ── IPC Handlers ─────────────────────────────────────────────────────────────
 
 function registerIpcHandlers() {
-  // ── Custom window controls (frameless window) ──────────────────────────────
-  ipcMain.handle('window:minimize',  () => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
+  // ── Main window (window:* IPC lives in window/main-window.js) ─────────────
+  registerMainWindowIpc({
+    getTheme: () => getConfig().theme || 'light',
+    getBackgroundColor: resolveStartupBackgroundColor,
+    getIconPath: getAppIconPath,
+    onCreated: () => { logSubscribed = false; },
+    onGiveUp: handleMainWindowGiveUp,
   });
-  ipcMain.handle('window:maximize',  () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMaximized()) mainWindow.restore();
-      else mainWindow.maximize();
-    }
-  });
-  ipcMain.handle('window:close',     () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.close();
-    }
-  });
-  ipcMain.handle('window:isVisible', () => !!(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()));
-  ipcMain.handle('window:isMaximized', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      return mainWindow.isMaximized();
-    }
-    return false;
-  });
+
+  // What a newly created (or reloaded) window needs to pick up where things are: the recording
+  // and processing run in main, and the page it last showed.
+  ipcMain.handle('app:state', () => ({
+    recording: isRecording ? { sessionId: currentSessionId, startedAt: recordingStartedAt } : null,
+    processing: currentProcessing,
+    notesPreview: currentNotesPreview,
+    view: getViewState(),
+  }));
+
+  // Errors from the renderer (render errors caught by a boundary, uncaught errors, unhandled
+  // rejections) go to the log file; they used to be visible only in DevTools.
+  ipcMain.on('renderer:error', (_e, report) => logRendererError(report));
 
   // Open a URL in the OS default browser (safe: only http/https allowed)
   ipcMain.handle('shell:open-external', (_e, url) => {
@@ -1209,6 +1124,14 @@ function registerIpcHandlers() {
   ipcMain.handle('logs:get', (_e, { limit } = {}) => logger.readLogs(limit));
   ipcMain.handle('logs:clear', () => logger.clearLogs());
   ipcMain.handle('logs:openFolder', () => shell.openPath(logger.getLogsDir()));
+  // Live log lines are pushed only while the Logs page is listening for them.
+  ipcMain.on('logs:subscribe', (event) => {
+    if (event.sender === getMainWindow()?.webContents) logSubscribed = true;
+  });
+  ipcMain.on('logs:unsubscribe', () => { logSubscribed = false; });
+  logger.setLogEmitter((entry) => {
+    if (logSubscribed) sendToRenderer('log:entry', entry);
+  });
 
   // Calendar sources hold credentials (ICS links, OAuth secrets and tokens); the renderer reads
   // them redacted through calendar:list and changes them only through the calendar:* handlers.
@@ -1294,25 +1217,30 @@ function registerIpcHandlers() {
 
   ipcMain.handle('overlay:open-session', (_e, sessionId) => {
     focusMainWindow();
-    if (typeof sessionId === 'string' && sessionId) sendToRenderer('app:open-session', { sessionId });
+    if (typeof sessionId === 'string' && sessionId) sendToRendererQueued('app:open-session', { sessionId });
     setOverlay({ ...overlayState, mode: 'hidden' });
     return true;
   });
 
-  // Incremental audio chunk from renderer capture — append to disk
-  ipcMain.on('capture:chunk', (_e, buffer) => {
-    if (!rendererWriteStream) {
-      logger.warn('Received capture:chunk but no write stream is open');
-      return;
-    }
-    try {
-      const chunk = Buffer.from(buffer);
-      rendererWriteStream.write(chunk);
-      rendererChunkCount++;
-      rendererBytesWritten += chunk.length;
-    } catch (err) {
-      logger.error('Failed to write audio chunk to disk', { error: err.message });
-    }
+  // ── Capture window (audio/capture-window.js) ──────────────────────────────
+  registerCaptureIpc({
+    // Each chunk is appended to the in-progress .webm as it arrives.
+    onChunk: (buffer) => {
+      if (!rendererWriteStream) return;   // a chunk still in flight after the recording stopped
+      try {
+        const chunk = Buffer.from(buffer);
+        rendererWriteStream.write(chunk);
+        rendererChunkCount++;
+        rendererBytesWritten += chunk.length;
+      } catch (err) {
+        logger.error('Failed to write audio chunk to disk', { error: err.message });
+      }
+    },
+    // Live meters: only worth sending while someone can see them.
+    onLevels: (levels) => {
+      if (isMainWindowVisible()) sendToRenderer('recording:levels', levels);
+    },
+    onLost: handleCaptureLost,
   });
 
   // FFmpeg device capture (the recording fallback) uses Windows or Linux (PulseAudio) devices.
@@ -1338,7 +1266,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('audio:import-file', async () => {
-    const parentWin = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const parentWin = getMainWindow() || undefined;
     const { canceled, filePaths } = await dialog.showOpenDialog(parentWin, {
       title: 'Select audio file',
       properties: ['openFile'],
@@ -1551,7 +1479,7 @@ function registerIpcHandlers() {
 
   // ── Folder picker (shared) ─────────────────────────────────────────────────
   ipcMain.handle('dialog:choose-folder', async (_e, opts = {}) => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const result = await dialog.showOpenDialog(getMainWindow() || undefined, {
       title: typeof opts.title === 'string' ? opts.title : 'Choose a folder',
       defaultPath: typeof opts.defaultPath === 'string' ? opts.defaultPath : undefined,
       properties: ['openDirectory', 'createDirectory'],
@@ -1747,6 +1675,7 @@ function registerIpcHandlers() {
     // and the renderer can listen on processing:progress / processing:complete as usual.
     (async () => {
       const sendProgress = (stage, percent) => {
+        if (stage !== 'complete') currentProcessing = { sessionId, stage, percent };
         sendToRenderer('processing:progress', { stage, percent });
         broadcastToExtension({ type: 'PROCESSING_PROGRESS', stage, percent });
       };
@@ -1777,12 +1706,15 @@ function registerIpcHandlers() {
           sendProgress('complete', 100);
         }
 
+        clearProcessingState(sessionId);
+
         sendToRenderer('processing:complete', { sessionId, notionUrl });
         broadcastToExtension({ type: 'PROCESSING_COMPLETE', notionUrl, sessionId });
         logger.info('Paste-transcript pipeline complete', { sessionId });
       } catch (err) {
         logger.error('Paste-transcript pipeline error', { sessionId, error: err.message });
         db.updateSession(sessionId, { status: 'error', last_error: err.message });
+        clearProcessingState(sessionId);
         sendToRenderer('processing:error', { sessionId, error: err.message });
         broadcastToExtension({ type: 'PROCESSING_ERROR', error: err.message });
       }
@@ -1828,9 +1760,7 @@ function registerIpcHandlers() {
   ipcMain.handle('ffmpeg:install', () => {
     const { installFfmpeg } = require('./services/ffmpeg-installer');
     return installFfmpeg((stage, percent, message) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ffmpeg:install-progress', { stage, percent, message });
-      }
+      sendToRenderer('ffmpeg:install-progress', { stage, percent, message });
     });
   });
 
@@ -2082,7 +2012,9 @@ app.whenReady().then(async () => {
   const relaunchedAfterUpdate = takeHiddenRelaunch();
   if (launchedHidden) logger.info('Started at login; staying in the tray');
   else if (relaunchedAfterUpdate) logger.info('Restarted after an automatic update; staying in the tray');
-  createMainWindow({ reveal: !launchedHidden && !relaunchedAfterUpdate });
+  installDisplayMediaHandler();
+  // In the tray there is no window at all: one is made the first time the user opens the app.
+  if (!launchedHidden && !relaunchedAfterUpdate) openMainWindow();
   createTray();
 
   initializeAutoUpdater({
@@ -2098,7 +2030,7 @@ app.whenReady().then(async () => {
       activePipelines,
       activeMeeting: meetingDetector.activeMeeting(),
       overlayMode: overlayState.mode,
-      windowVisible: !!(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()),
+      windowVisible: isMainWindowVisible(),
     }),
   });
 
@@ -2157,9 +2089,11 @@ app.whenReady().then(async () => {
 
   if (config.meetingDetection !== false) applyMeetingDetection(true);
   // After sleep, poll at once so a call joined right after waking is caught without waiting.
+  // A window left on screen through sleep is checked too: it can wake up unpainted.
   powerMonitor.on('resume', () => {
     meetingDetector.handleResume();
     recheckOverlay();
+    recheckMainWindow();
   });
   nativeTheme.on('updated', () => setOverlayTheme(resolveEffectiveTheme(getConfig().theme || 'light')));
 
@@ -2173,6 +2107,8 @@ app.whenReady().then(async () => {
 app.on('child-process-gone', (_event, details) => {
   if (details.reason === 'clean-exit') return;
   logger.warn('Child process gone', { type: details.type, reason: details.reason, exitCode: details.exitCode, name: details.name });
+  // Chromium restarts the GPU process itself; make sure the window on screen came back with it.
+  if (details.type === 'GPU') setTimeout(recheckMainWindow, 1500);
 });
 
 app.on('window-all-closed', () => {
@@ -2186,6 +2122,7 @@ app.on('before-quit', () => {
   calendar.stopPoller();
   meetingDetector.stop();
   destroyOverlay();
+  destroyCapture();
   logger.info('MeetMind shutting down');
 });
 
@@ -2213,6 +2150,6 @@ function startCalendarPoller() {
     }
 
     // Notify the renderer so it can show an in-app prompt
-    sendToRenderer('calendar:meeting-starting', event);
+    sendToRendererQueued('calendar:meeting-starting', event);
   });
 }

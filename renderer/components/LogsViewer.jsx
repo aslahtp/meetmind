@@ -88,7 +88,16 @@ function isExtensionLog(entry) {
   return false;
 }
 
+// Each entry gets an id for its React key. Keys built from the list position changed for every
+// row once the list was full (the oldest entry drops off), remounting all of them per new line.
+let nextEntryId = 0;
+const withId = (entry) => (entry && typeof entry === 'object' && entry._id == null ? { ...entry, _id: ++nextEntryId } : entry);
+
 function normalizeEntry(item) {
+  return withId(parseEntry(item));
+}
+
+function parseEntry(item) {
   if (typeof item !== 'string') return item;
   const match = item.match(/^\[([^\]]+)\]\s+\[([A-Z]+)\](?:\s+\[([^\]]+)\])?\s+(.*?)(?:\s+(\{.*\}|\[.*\]))?$/);
   if (match) {
@@ -344,7 +353,7 @@ export default function LogsViewer() {
       const lvl = (entry.level || 'INFO').toUpperCase();
       return (
         <div
-          key={`${entry.timestamp}-${idx}`}
+          key={entry._id ?? `${entry.timestamp}-${idx}`}
           className="flex items-start gap-16 px-8 py-4 rounded-input hover:bg-ink/[0.04]"
         >
           <span className="tabular text-graphite flex-shrink-0 select-none">

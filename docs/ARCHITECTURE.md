@@ -52,7 +52,7 @@ Three build artifacts come out of this one repository:
         v                                            | RECORDING_STARTED,
  electron/main.js (recording state machine)          | PROCESSING_PROGRESS,
         |                                            | PROCESSING_COMPLETE
-        | renderer capture (primary) or               |
+        | capture window (primary) or                 |
         | ffmpeg dshow capture (Windows fallback)     |
         v                                            |
  electron/audio/recorder.js -> .webm/.wav on disk     |
@@ -106,15 +106,16 @@ Owns:
   macOS menu bar), the macOS application menu (`createAppMenu()`: About, Settings… ⌘, which sends
   `app:navigate`, Hide/Quit, Edit and Window menus), and `app.requestSingleInstanceLock()` to
   prevent duplicate windows/tray icons on relaunch (focuses the existing window on
-  `second-instance` instead). Closing the window only hides it on every platform. On Linux,
+  `second-instance` instead). Closing the window only hides it on every platform, and a window
+  left hidden is closed after 10 minutes and made again when next opened (section 3.5). On Linux,
   `main.js` runs Electron through XWayland (`--ozone-platform=x11`, set before `ready`) whenever
   `DISPLAY` is set, because a native Wayland window can't stay on top or be placed (the meeting
   overlay) and can't list other apps' windows (meeting detection); the window icon is a PNG, since
   Electron can't read `.ico` there.
 - Launch at login (`autoLaunch`, `electron/services/auto-launch.js`). On Windows the
   `HKCU\…\CurrentVersion\Run` entry is named `MeetMind` and passes `--hidden`, so a login launch
-  creates the window without showing it and the app starts in the tray, with meeting detection
-  running. Electron's `getLoginItemSettings().openAtLogin` only looks for a value named after the
+  creates no window and the app starts in the tray, with meeting detection running; the window
+  is made the first time the user opens the app. Electron's `getLoginItemSettings().openAtLogin` only looks for a value named after the
   AppUserModelId, never a custom name, so the state is read from `launchItems` (the entries that
   start this exe, with whether Task Manager has disabled them). At startup, once the entry
   exists Windows is the source of truth: a disabled entry stays disabled and the stored setting
@@ -183,20 +184,25 @@ grouped by feature:
 | `providers` | `providers:list`, `providers:test` | Provider descriptors (models, credential fields, guides) and generic connection test |
 | `gemini` | `gemini:default-system-prompt`, `gemini:default-md-system-prompt` | Default prompt text for Settings |
 | `processing` | `processing:run`, `processing:retry` | Manually (re)run the pipeline on a session |
-| `capture` | `capture:start/stop` (main -> renderer; `capture:start` carries `{ requireSystemAudio }`), `capture:started/failed/chunk/audio-data` (renderer -> main; `capture:started` carries `{ systemAudio, mic }`), `capture:test-begin/test-end` (invoke) | Renderer-side system audio capture handshake; the test pair switches the macOS capture strategy for Settings' "Test system audio" (on Linux it just wraps the one test capture) |
+| `capture` | `capture:test-begin/test-end` (invoke) | Settings' "Test system audio": switches the macOS capture strategy for one test capture in the main window (on Linux it just wraps the one test capture). Recordings are captured in the capture window, which has its own preload (section 4.1) |
+| `window` | `window:minimize/maximize/close/isVisible/isMaximized` (invoke), `window:ready`, `window:dirty`, `window:view-state` (send) | Frameless window buttons, plus what the main-window lifecycle needs from the renderer: that the app mounted, whether it holds unsaved edits, and which page is open (section 3.5) |
+| `reportError` | `renderer:error` (send) | Render errors caught by an error boundary, uncaught errors and unhandled rejections, written to the log file (rate-limited) |
 | `permissions` | `permissions:status`, `permissions:request`, `permissions:open-settings` | macOS microphone and Screen & System Audio Recording status, prompts, and System Settings deep links (`not-applicable` elsewhere) |
 | `calendar` | `calendar:list/add/update/remove/reconnect/cancel-auth/events` | Calendar sources (Google accounts and ICS links, up to 5; returned redacted), Google sign-in, merged upcoming events with per-calendar errors |
 | `updater` | `updater:check/download/install/get-status` | Auto-update control |
-| `app` | `app:version` | App version string |
+| `app` | `app:version`, `app:state` | App version string; the recording, processing progress, notes preview and last page held by main, read by a newly created or reloaded window |
 | `ffmpeg` | `ffmpeg:check`, `ffmpeg:install`, `ffmpeg:onProgress` | FFmpeg presence check (`source`: bundled, installed or system) and runtime download |
 
-Event subscriptions go through a single `on(channel, callback)` / `off(...)` pair with an
-explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
-`recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
+Event subscriptions go through a single `on(channel, callback)`, which returns an unsubscribe
+function, with an explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
+`recording:error`, `recording:warning`, `recording:levels` (live meter levels relayed from the
+capture window), `transcription:progress`, `processing:progress`, `processing:complete`,
 `processing:error`, `processing:cancelled`, `notes:preview`, `ws:extension-connected`, `ws:recording-requested`,
 `sessions:changed`, `updater:status`, `calendar:meeting-starting`, `calendar:changed`,
 `llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.
-Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
+Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel. `log:entry` is only
+sent while something is subscribed to it (the preload sends `logs:subscribe`/`logs:unsubscribe`).
+The preload also answers main's `window:health-ping` itself (section 3.5).
 
 The meeting overlay window uses its own, smaller preload (`electron/overlay-preload.js`, run
 sandboxed) exposing only `window.meetmindOverlay`: `overlay:ready`, `overlay:start`,
@@ -237,6 +243,10 @@ React 18 + Vite 6, no router: `renderer/app.jsx` is a single view-state switch b
   PipeWire server and default output (`audio:linux-status`), whether the FFmpeg fallback can
   record from it, and the same 3 s "Test system audio" capture.
 - `LogsViewer.jsx`: tails `electron/utils/logger.js` output live via the `log:entry` IPC event.
+- `ErrorBoundary.jsx`: catches render errors. One wraps the page area in `app.jsx` (keyed by page,
+  so the top bar keeps working and opening another page starts clean) and one wraps the whole app
+  in `main.jsx`, whose fallback draws its own window buttons. Both report to the log through
+  `lib/errorReport.js`, which also reports uncaught errors and unhandled rejections.
 
 Supporting pieces: `RecordingBar.jsx` (persistent recording control), `ProcessingIndicator.jsx`
 (pipeline progress), `SessionCard.jsx`, `UpcomingMeetings.jsx` (events from every calendar), `settings/calendars/` (the Calendars card, its rows and the add/edit dialogs),
@@ -363,49 +373,95 @@ main also logs any child process (e.g. the GPU process) that dies. For testing t
 unpackaged app run with `MEETMIND_DEBUG_OVERLAY_FAIL=1` never acknowledges the overlay. The
 `meetingDetection` setting (default on) turns detection and the overlay off.
 
+### 3.5 Main window lifecycle (`electron/window/`)
+
+The main window is disposable. It used to be created once and kept, hidden in the tray, for as
+long as the app ran, and a window hidden for hours could come back blank on Windows with its
+renderer still alive, which no crash handler detects. Now:
+
+- **Created on demand.** `openMainWindow()` (tray, second instance, deep link, notification)
+  creates it if there is none. A login launch or a restart into an automatic update creates none.
+- **Retired in the tray.** Ten minutes after × hides it, the window is destroyed, unless the
+  renderer reported unsaved edits (`window:dirty`, set with the navigation guard). A minimised
+  window is kept. Bounds and the maximised state carry over to the next window.
+- **Checked whenever it is shown**: on open, restore from minimise, wake from sleep, a display
+  change and a GPU process crash. Main forces a frame (`webContents.invalidate()`), pings the
+  preload (`window:health-ping` → `window:health-pong { mounted, splash, frame }`: React has
+  rendered into `#root`, the startup splash is still up, a frame was drawn) and captures the top
+  bar, which must not be one flat colour. A missing frame only counts for the focused window, and
+  a failed capture counts as painted, so the check never repairs a working window.
+- **Repaired in steps.** A failed check, a crashed or hung renderer (`render-process-gone`,
+  `unresponsive` for 8 s), a failed load, a preload error or no `window:ready` within 30 s is
+  answered with a reload, then a new window, then a dialog offering to restart (not while
+  recording or processing). At most 3 repairs in 5 minutes. A window that fails while hidden is
+  simply dropped.
+
+`main-window-lifecycle.js` is the pure, unit-tested state machine (`reduceMainWindow`,
+`healthVerdict`, `isBlankCapture`); `main-window.js` runs its actions and owns the `window:*`
+IPC. Every step is logged (`Main window created` / `failed` / `recovered` / `closed after
+sitting in the tray`), and a lost, unresponsive or unhealthy window is logged with a memory
+snapshot (free RAM, free commit, the renderer's working set), since a machine short of memory
+is a likely cause. A new or reloaded window reads `app:state` to show a recording or
+processing run in progress and reopen the page the last one showed; the few events that must not
+be lost while there is no window (`app:open-session`, `app:navigate`, `calendar:meeting-starting`)
+are queued for up to 10 minutes and delivered after `window:ready`. On Windows the app also
+disables Chromium's `CalculateNativeWinOcclusion`, a known cause of windows staying blank after
+being hidden. For testing, an unpackaged app honours `MEETMIND_UI_RETIRE_MS` (retire delay) and
+`MEETMIND_DEBUG_UI_FAIL` (`noack` ignores `window:ready`, `blank` fails every health check).
+
 ---
 
 ## 4. Audio capture pipeline
 
 MeetMind has two independent capture paths, tried in order (the second on Windows and Linux only).
 
-### 4.1 Primary path: renderer capture
+### 4.1 Primary path: the capture window
 
-The renderer captures system audio via Electron's display-media loopback API
-(`getDisplayMedia`) and the microphone via the Web Audio API, in-process, then streams encoded
-chunks to main over the `capture:chunk` IPC channel. Main appends each chunk to an
+A hidden window made for each recording (`electron/audio/capture-window.js`, page
+`renderer/capture.html` + `capture.js`, sandboxed preload `electron/capture-preload.js`) captures
+system audio via Electron's display-media loopback API (`getDisplayMedia`) and the microphone via
+the Web Audio API, then streams encoded chunks to main over the `capture:chunk` IPC channel. It
+is separate from the main window so that window can be closed, reloaded or replaced during a
+recording (section 3.5), and it is destroyed when the recording stops, fails to start or times
+out, so no stream outlives it. Main sends `capture:start { requireSystemAudio }` once the page
+reports `capture:ready`, and `capture:stop` at the end; the page answers `capture:started
+{ systemAudio, mic }` or `capture:failed`, sends `capture:levels` (~15 a second, relayed to a
+visible main window as `recording:levels` for the meters) and finishes with a zero-length
+`capture:audio-data`. If the capture window's renderer dies mid-recording, main stops the
+recording and processes what is on disk. Main appends each chunk to an
 in-progress `.webm` file on disk as it arrives, so a crash mid-recording still leaves a usable
 partial file. On stop, `convertWebmToWav()` (`electron/audio/recorder.js`, ffmpeg-backed)
 produces the final `.wav` used by the transcription stage.
 
-Main's display-media handler (`installDisplayMediaHandler()`) approves the request without a
-picker and answers with `audio: 'loopback'`:
+Main's display-media handler (`installDisplayMediaHandler()`, on the default session, which the
+capture window and the main window share) approves the request without a picker and answers
+with `audio: 'loopback'`:
 
 - **Windows**: Chromium's WASAPI loopback, capturing whatever the default output device plays.
-  The video source is a screen from `desktopCapturer`; the renderer stops that track at once.
+  The video source is a screen from `desktopCapturer`; the capture page stops that track at once.
 - **macOS 14.2+**: the CoreAudio Tap API (Electron 39+), which needs `NSAudioCaptureUsageDescription`
   in Info.plist (without it macOS returns a silent stream with no error) and the user's Screen &
   System Audio Recording permission. Electron's macOS loopback is new and behaves differently
   per video source, so the source is configurable as `config.macCaptureStrategy`
   (`electron/audio/mac-capture.js`): `screen` (default; a `desktopCapturer` screen), `frame`
-  (MeetMind's own frame, which may avoid the Screen Recording prompt) or `picker` (the macOS
+  (the requesting window's own frame, which may avoid the Screen Recording prompt) or `picker` (the macOS
   system picker). Settings › System › "Test system audio" runs a 3 s capture per strategy via
   `capture:test-begin`/`capture:test-end` and lets the user switch. On macOS `main.js` asks for
-  microphone access before a recording and allows 60 s for the renderer to start (permission
+  microphone access before a recording and allows 60 s for the capture window to start (permission
   prompts), versus 6 s elsewhere.
 - **Linux**: Chromium's loopback where it gives an audio track, through the same screen-source
   handler as Windows. When it doesn't, 4.2 records the default output's monitor instead.
 
-`capture:start` tells the renderer whether main can capture system audio itself
+`capture:start` tells the capture page whether main can capture system audio itself
 (`requireSystemAudio`, from `canRecordSystemAudioWithFfmpeg()`): always on Windows, on Linux when
 `pactl info` reports a default output and the located FFmpeg lists the `pulse` input device,
-never on macOS. If the renderer then gets no system audio (the request is refused, or the stream
+never on macOS. If the page then gets no system audio (the request is refused, or the stream
 has no audio track), it fails, so main falls back to 4.2; otherwise it records the microphone
-alone and shows a warning.
+alone and main shows a warning (`recording:warning`).
 
 ### 4.2 Fallback path: direct ffmpeg capture (Windows and Linux)
 
-If renderer capture fails to start, `handleStartRecording()` in `main.js` falls back to a direct
+If the capture window fails to start, `handleStartRecording()` in `main.js` falls back to a direct
 ffmpeg capture combining the microphone and system audio, using `electron/audio/mixer.js` (the
 `backend` option picks the inputs). On Linux it records two PulseAudio inputs (`-f pulse`, which
 PipeWire serves through pipewire-pulse): the default output's monitor (`<sink>.monitor`, what the
@@ -1194,6 +1250,10 @@ Current coverage is pure logic only:
 | `tests/ffmpeg-path.test.js` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.js`) and the per-OS silent-recording hints (`electron/audio/audio-hints.js`) |
 | `tests/macSupport.test.js` | macOS capture strategies (`electron/audio/mac-capture.js`), "Test system audio" verdicts (`renderer/lib/audioTest.js`), and the shape of every pinned FFmpeg download and how each archive is unpacked (`electron/audio/ffmpeg-sources.js`, `ffmpeg-fetch.js`) |
 | `tests/macPermissions.test.jsx` | Server-renders the macOS Permissions card (`renderer/components/settings/MacPermissions.jsx`), which can't be seen in the Windows dev app |
+| `tests/mainWindowLifecycle.test.js` | Main window lifecycle (`electron/window/main-window-lifecycle.js`): created on demand, retired in the tray (kept with unsaved edits), reload → new window → give up, the repair limit, stale events, and the health-check verdict and blank-capture test |
+| `tests/notesSanitize.test.js` | Type guards for notes and transcripts (`electron/services/notes-sanitize.js`), and that wrongly typed notes render as the notes page and as Markdown |
+| `tests/noiseGate.test.js` | The microphone meter's noise gate (`renderer/lib/noiseGate.js`): a steady background shows nothing, speech above it shows, also through long talking |
+| `tests/errorBoundary.test.jsx` | The error boundary's fallback state and both recovery screens (`renderer/components/ErrorBoundary.jsx`) |
 
 The packaged app is additionally checked by its `--smoke` self-test in CI (section 15). There is
 no maintainer Mac or Linux machine, so macOS and Linux behaviour beyond that (permission prompts,
