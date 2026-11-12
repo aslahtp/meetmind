@@ -3,6 +3,8 @@
 // recorded as WebM/Opus. Chunks go to main every second, which appends them to disk, so a crash
 // loses at most the last second. The window is destroyed after each recording.
 
+import { createNoiseGate } from './lib/noiseGate.js';
+
 const bridge = window.meetmindCapture;
 const LEVELS_INTERVAL_MS = 66;   // ~15 fps for the live meters; rAF doesn't run in a hidden window
 
@@ -20,6 +22,7 @@ function rms(buf) {
 function startLevels(sysAnalyser, micAnalyser) {
   const sysData = sysAnalyser ? new Float32Array(sysAnalyser.fftSize) : null;
   const micData = micAnalyser ? new Float32Array(micAnalyser.fftSize) : null;
+  const micGate = createNoiseGate();
   levelsTimer = setInterval(() => {
     let system = 0;
     let mic = 0;
@@ -29,7 +32,8 @@ function startLevels(sysAnalyser, micAnalyser) {
     }
     if (micAnalyser) {
       micAnalyser.getFloatTimeDomainData(micData);
-      mic = Math.min(1, rms(micData) * 4);
+      // Above the room's background only, or the meter moves while nobody speaks.
+      mic = Math.min(1, micGate(rms(micData)) * 4);
     }
     bridge.levels({ mic, system });
   }, LEVELS_INTERVAL_MS);

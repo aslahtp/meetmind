@@ -1252,6 +1252,7 @@ Current coverage is pure logic only:
 | `tests/macPermissions.test.jsx` | Server-renders the macOS Permissions card (`renderer/components/settings/MacPermissions.jsx`), which can't be seen in the Windows dev app |
 | `tests/mainWindowLifecycle.test.js` | Main window lifecycle (`electron/window/main-window-lifecycle.js`): created on demand, retired in the tray (kept with unsaved edits), reload → new window → give up, the repair limit, stale events, and the health-check verdict and blank-capture test |
 | `tests/notesSanitize.test.js` | Type guards for notes and transcripts (`electron/services/notes-sanitize.js`), and that wrongly typed notes render as the notes page and as Markdown |
+| `tests/noiseGate.test.js` | The microphone meter's noise gate (`renderer/lib/noiseGate.js`): a steady background shows nothing, speech above it shows, also through long talking |
 | `tests/errorBoundary.test.jsx` | The error boundary's fallback state and both recovery screens (`renderer/components/ErrorBoundary.jsx`) |
 
 The packaged app is additionally checked by its `--smoke` self-test in CI (section 15). There is

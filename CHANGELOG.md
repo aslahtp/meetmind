@@ -13,6 +13,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 - **Windows**: Opening MeetMind after it sat in the tray or minimised for hours no longer shows a blank window. The window is now closed after 10 minutes in the tray and made fresh when you open the app, and each time it is shown MeetMind checks that it really painted, reloading or replacing it if not.
 - **Meetings**: Notes with an unexpected shape (for example a name written as a list) no longer empty the whole window; a page that can't be shown says so, with a "Try again" button, and the rest of the app keeps working.
 - **Recording**: A recording no longer depends on the app window, so closing, reloading or losing the window can't interrupt it, and a recording that failed to start can't keep the microphone open.
+- **Recording**: The microphone meter no longer moves while nobody is speaking; it now shows only sound above the room's background noise.
 - **Linux**: Settings › System › System audio shows the audio server again.
 
 ### Changed
