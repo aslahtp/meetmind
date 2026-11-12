@@ -2,8 +2,12 @@
 # Assembles the GitHub Pages site into ${1:-_site} from site/, docs/ and brand assets.
 set -euo pipefail
 OUT="${1:-_site}"
-VERSION=$(node -p "require('./package.json').version")
-DATE=$(date -u +%Y-%m-%d)
+# pages.yml passes the newest published release; package.json can be ahead of it.
+VERSION="${SITE_VERSION:-$(node -p "require('./package.json').version")}"
+# The sitemap's lastmod: when the page last changed, or the linked release came out if later.
+DATE=$(git log -1 --format=%cs -- site/index.html 2>/dev/null || true)
+if [[ -n "${SITE_RELEASE_DATE:-}" && "$SITE_RELEASE_DATE" > "$DATE" ]]; then DATE="$SITE_RELEASE_DATE"; fi
+DATE="${DATE:-$(date -u +%Y-%m-%d)}"
 
 rm -rf "$OUT"
 mkdir -p "$OUT/brand" "$OUT/screenshots" "$OUT/fonts"

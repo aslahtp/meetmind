@@ -7,7 +7,8 @@ name: Build
 # job, which runs no dependency code or third-party actions, gets `contents: write`. FFmpeg (shipped inside the
 # Windows installer, the macOS apps and the Linux packages) comes from the SHA-256 pins in electron/audio/ffmpeg-sources.js.
 # Every downloadable file gets a signed build-provenance attestation (`gh attestation verify`),
-# made by a separate job that runs no project code.
+# made by a separate job that runs no project code. Once the release is published, the website
+# (pages.yml) is rebuilt so its download links point at the new version.
 
 on:
   push:
@@ -377,3 +378,14 @@ jobs:
             release-files-linux/*.deb \
             release-files-linux/latest-linux.yml \
             release-files/meetmind-extension.zip
+
+  # Rebuild the website now that this version's installers exist; pages.yml skips version bumps.
+  # A called workflow can't ask for more than this, or this whole workflow fails to start.
+  site:
+    name: Website
+    needs: publish
+    permissions:
+      contents: read
+      pages: write # pages.yml deploy: publish to GitHub Pages
+      id-token: write # pages.yml deploy: OIDC token deploy-pages uses to prove the deployment's origin
+    uses: $/.github/workflows/pages.yml

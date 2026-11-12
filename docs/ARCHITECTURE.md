@@ -1199,7 +1199,7 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   (`ubuntu-latest`, same rules) fetches the pinned Linux FFmpeg, runs `pnpm run build:linux`,
   checks that `latest-linux.yml` lists the AppImage, and smoke-tests the unpacked app the way
   `ci.yml` does. An `attest` job, the
-  only one with `id-token: write` and `attestations: write` and running no project code, signs
+  only one with `attestations: write` and running no project code, signs
   SLSA build provenance (`actions/attest`, Sigstore) for the installer, both DMGs, the mac update
   zips, the AppImage, the `.deb` and the extension, so anyone can check a download with
   `gh attestation verify <file> --repo aslahtp/meetmind`. A separate `publish` job, which waits
@@ -1207,7 +1207,9 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   `contents: write`, runs no dependency code and no third-party actions, and creates the GitHub
   release (Windows installer, both DMGs, the mac update zips, the AppImage and `.deb`,
   `latest.yml`, `latest-mac.yml`, `latest-linux.yml`, blockmaps and the extension) using the runner's own `gh` CLI. `pnpm run build` is always invoked with
-  `--publish never`, so electron-builder itself never needs a publish token.
+  `--publish never`, so electron-builder itself never needs a publish token. A last `site` job
+  calls `pages.yml` (granting it `pages: write` and `id-token: write` for the deploy) to rebuild
+  the website once the release exists.
 - **`pr-checks.yml`**: PR-only. Enforces that any PR changing code also bumps `package.json`'s
   `version` and adds a matching `## [X.Y.Z] - YYYY-MM-DD` heading to `CHANGELOG.md` (docs and
   `.github/` changes are exempt; a `skip-version-check` label overrides it for the rest). Also
@@ -1215,7 +1217,13 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   high-severity advisory.
 - **`codeql.yml`**: CodeQL security analysis of the JavaScript and of the workflows themselves
   (`actions` language, alongside zizmor) on PRs, pushes to `main`, and weekly on a schedule.
-- **`pages.yml`**: publishes `site/` to GitHub Pages.
+- **`pages.yml`**: builds the website with `scripts/build-site.sh` and publishes it to GitHub
+  Pages on pushes to `main` that touch `site/`, `llms.txt`, the brand assets or screenshots, and
+  when `release.yml` calls it after publishing a release. It never runs on a version bump: the
+  site links the newest published release (`SITE_VERSION`, read with `gh release view`), not
+  `package.json`'s version, so its download links never point at installers that don't exist
+  yet. The sitemap's `lastmod` is the last commit that changed `site/index.html`, or the
+  release date if later.
 - **`.github/dependabot.yml`**: grouped weekly minor/patch dependency update PRs and monthly
   GitHub Actions updates (the workflows and the composite `.github/actions/setup`), each with a
   7-day cooldown.
