@@ -7,10 +7,10 @@ import { EmptyState } from '../ui/index.jsx';
 import AudioPlayer from './AudioPlayer.jsx';
 
 // A meeting's Audio tab: the player when there's a recording, otherwise why there isn't one
-// (deleted from Settings › Storage, made from a pasted transcript, or missing).
+// (deleted here or from Settings › Storage, made from a pasted transcript, or missing).
 export default function SessionAudio({ session, title, durationLabel, showWaveform }) {
   const { setView } = useApp();
-  // null while checking; then { available, deletedAt, source }
+  // null while checking; then { available, deletedAt, source, bytes, format, busy }
   const [status, setStatus] = useState(null);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function SessionAudio({ session, title, durationLabel, showWavefo
       // If the check itself fails, let the player try (it reports its own errors).
       .catch(() => { if (!cancelled) setStatus({ available: true }); });
     return () => { cancelled = true; };
-  }, [session.id, session.audio_path, session.audio_deleted_at]);
+  }, [session.id, session.audio_path, session.audio_deleted_at, session.status]);
 
   if (!status) {
     return (
@@ -38,7 +38,15 @@ export default function SessionAudio({ session, title, durationLabel, showWavefo
 
   if (status.available) {
     return (
-      <AudioPlayer sessionId={session.id} title={title} durationLabel={durationLabel} showWaveform={showWaveform} />
+      <AudioPlayer
+        sessionId={session.id}
+        title={title}
+        durationLabel={durationLabel}
+        showWaveform={showWaveform}
+        file={{ bytes: status.bytes, format: status.format }}
+        busy={!!status.busy}
+        onDeleted={() => setStatus({ available: false, deletedAt: new Date().toISOString(), source: status.source })}
+      />
     );
   }
 
@@ -52,7 +60,7 @@ export default function SessionAudio({ session, title, durationLabel, showWavefo
         compact
         icon={<VolumeX size={24} strokeWidth={1.75} />}
         title="Recording deleted"
-        message={`This recording was deleted on ${formatDate(status.deletedAt)} to free up space. The notes and transcript are kept.`}
+        message={`This recording was deleted on ${formatDate(status.deletedAt)}. The notes and transcript are kept.`}
         action={
           <button type="button" onClick={openStorage} className="btn-ghost">
             <HardDrive size={16} strokeWidth={1.75} />

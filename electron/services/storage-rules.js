@@ -43,6 +43,14 @@ function groupRecordingFiles(entries) {
 }
 
 /**
+ * Whether a meeting id from the renderer can name files in the recordings folder: no path
+ * separators or dot segments, so it can't reach outside it.
+ */
+function isRecordingId(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id);
+}
+
+/**
  * When a recording was made: its meeting's start, or for a file with no meeting, the file's
  * modified time.
  */
@@ -104,6 +112,8 @@ module.exports = {
   RETENTION_DAYS,
   DEFAULT_RETENTION_DAYS,
   normalizeRetentionDays,
+  AUDIO_EXTENSIONS,
+  isRecordingId,
   groupRecordingFiles,
   recordingTime,
   planCleanup,

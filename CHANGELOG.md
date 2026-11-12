@@ -6,6 +6,16 @@ updated: 2026-11-12
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.19.0] - 2026-11-13
+
+### Added
+
+- **Meetings**: A meeting's Audio tab shows the recording file's format and size, with buttons to show the file in its folder or delete just that recording; the notes and transcript are kept.
+
+### Changed
+
+- **Meetings**: The Audio tab's playback speed now sits between the elapsed and total time.
+
 ## [4.18.0] - 2026-11-12
 
 ### Fixed

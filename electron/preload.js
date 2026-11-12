@@ -149,8 +149,11 @@ contextBridge.exposeInMainWorld('meetmind', {
     rename: (id, title) => ipcRenderer.invoke('session:rename', id, title),
     openRecording: (id) => ipcRenderer.invoke('session:open-recording', id),
     waveform: (id) => ipcRenderer.invoke('session:waveform', id),
-    // { available, deletedAt, source }: whether the Audio tab has a recording to play, and if not, why.
+    // { available, deletedAt, source, bytes, format, busy }: whether the Audio tab has a recording
+    // to play (and its size), and if not, why.
     audioStatus: (id) => ipcRenderer.invoke('session:audio-status', id),
+    // Deletes the meeting's audio only; { success, bytes } or { success: false, error }.
+    deleteRecording: (id) => ipcRenderer.invoke('session:delete-recording', id),
     createFromTranscript: (opts) => ipcRenderer.invoke('session:create-from-transcript', opts),
   },
 

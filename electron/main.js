@@ -1431,14 +1431,37 @@ function registerIpcHandlers() {
   });
 
   // Whether a meeting's Audio tab can play something, and if not, why.
+  // bytes/format describe the file that plays; busy is true while it's being recorded or processed.
   ipcMain.handle('session:audio-status', (_e, sessionId) => {
     const session = db.getSession(sessionId);
-    if (!session) return { available: false, deletedAt: null, source: null };
+    if (!session) return { available: false, deletedAt: null, source: null, bytes: null, format: null, busy: false };
+    const audioPath = resolveSessionAudioPath(sessionId);
+    let bytes = null;
+    if (audioPath) {
+      try {
+        bytes = fs.statSync(audioPath).size;
+      } catch {
+        // Gone since it was resolved.
+      }
+    }
     return {
-      available: !!resolveSessionAudioPath(sessionId),
+      available: !!audioPath,
       deletedAt: session.audio_deleted_at || null,
       source: session.source || null,
+      bytes,
+      format: audioPath ? path.extname(audioPath).slice(1).toUpperCase() || null : null,
+      busy: busySessionIds().has(sessionId),
     };
+  });
+
+  // Deletes one meeting's recording from its Audio tab, keeping its notes and transcript.
+  ipcMain.handle('session:delete-recording', (_e, sessionId) => {
+    try {
+      return recordingsStorage.deleteOne({ id: sessionId, busyIds: busySessionIds() });
+    } catch (err) {
+      logger.error('Deleting a recording failed', { sessionId, error: err.message });
+      return { success: false, error: err.message || 'Couldn’t delete the recording.' };
+    }
   });
 
   // ── Recording storage (Settings › Storage) ─────────────────────────────────
