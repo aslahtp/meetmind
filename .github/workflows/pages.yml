@@ -1,5 +1,7 @@
 name: Website
 
+# A version bump (package.json) doesn't trigger this: release.yml calls it once that version's
+# release is published, so the site never links installers that don't exist yet.
 on:
   push:
     branches:
@@ -9,9 +11,10 @@ on:
       - 'docs/brand/**'
       - 'docs/screenshots/**'
       - 'llms.txt'
-      - 'package.json'
       - 'scripts/build-site.sh'
+      - 'scripts/build-site-images.js'
       - '.github/workflows/pages.yml'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -30,9 +33,31 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Full history: the sitemap's lastmod is the last commit that changed the page.
+          fetch-depth: 0
           persist-credentials: false
 
+      # sharp makes the AVIF screenshots (scripts/build-site-images.js). No dependency cache: what
+      # this job builds is published, as with release builds.
+      - name: Setup pnpm and Node
+        uses: $/.github/actions/setup
+        with:
+          cache: 'false'
+
+      # The site links the newest published release, not package.json's version, which reaches
+      # main before release.yml has built and published it.
+      - name: Find the latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view --repo "$GITHUB_REPOSITORY" --json tagName,publishedAt \
+            --jq '"version=\(.tagName | ltrimstr("v"))\ndate=\(.publishedAt[:10])"' >> "$GITHUB_OUTPUT"
+
       - name: Assemble site
+        env:
+          SITE_VERSION: ${{ steps.release.outputs.version }}
+          SITE_RELEASE_DATE: ${{ steps.release.outputs.date }}
         run: bash scripts/build-site.sh _site
 
       - name: Upload Pages artifact

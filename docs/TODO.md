@@ -9,3 +9,4 @@
 - Add scratchpad for the meeetings to note down anything and passes as context to summary generation
 - implement meeting detection in macOS
 - sign for windows, macOS and linux
+- add templates for each meeting types with different type of prompts

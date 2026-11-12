@@ -6,9 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MeetMind — Free open-source AI meeting notes app for Windows, macOS and Linux</title>
   <meta name="description"
-    content="MeetMind records Google Meet, Zoom and any call on Windows, macOS or Linux, transcribes it with AssemblyAI, Google STT, Sarvam AI or Groq, and writes meeting minutes with Gemini, Groq or Claude. Free, open source, no meeting bot, syncs to Notion.">
-  <meta name="keywords"
-    content="AI meeting notes, meeting transcription, meeting minutes, AI note taker, Windows, macOS, Linux, Google Meet, Zoom, Notion, Gemini, Groq, Claude, Anthropic, AssemblyAI, Sarvam AI, Indic languages, open source, Otter alternative">
+    content="Free, open-source AI meeting notes for Windows, macOS and Linux. Records any call with no meeting bot, then transcribes and summarizes it with your own AI keys.">
   <meta name="author" content="Aslah">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="color-scheme" content="light dark">
@@ -41,8 +39,35 @@
     "@context": "https://schema.org",
     "@graph": [
       {
+        "@type": "WebSite",
+        "@id": "https://aslahtp.github.io/meetmind/#website",
+        "url": "https://aslahtp.github.io/meetmind/",
+        "name": "MeetMind",
+        "inLanguage": "en",
+        "publisher": { "@id": "https://aslahtp.github.io/meetmind/#author" }
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://aslahtp.github.io/meetmind/#webpage",
+        "url": "https://aslahtp.github.io/meetmind/",
+        "name": "MeetMind — Free open-source AI meeting notes app for Windows, macOS and Linux",
+        "inLanguage": "en",
+        "isPartOf": { "@id": "https://aslahtp.github.io/meetmind/#website" },
+        "about": { "@id": "https://aslahtp.github.io/meetmind/#app" },
+        "primaryImageOfPage": { "@type": "ImageObject", "url": "https://aslahtp.github.io/meetmind/og-image.png" },
+        "dateModified": "__DATE__"
+      },
+      {
+        "@type": "Person",
+        "@id": "https://aslahtp.github.io/meetmind/#author",
+        "name": "Aslah",
+        "url": "https://github.com/aslahtp",
+        "sameAs": ["https://github.com/aslahtp"]
+      },
+      {
         "@type": "SoftwareApplication",
         "@id": "https://aslahtp.github.io/meetmind/#app",
+        "mainEntityOfPage": { "@id": "https://aslahtp.github.io/meetmind/#webpage" },
         "name": "MeetMind",
         "description": "Open-source AI meeting notes app for Windows, macOS and Linux. Records system audio and microphone, transcribes with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, generates meeting minutes with Google Gemini, Groq or Anthropic Claude, and syncs them to Notion. A Chrome extension adds one-click recording to Google Meet and Zoom.",
         "url": "https://aslahtp.github.io/meetmind/",
@@ -58,11 +83,11 @@
         "license": "https://www.gnu.org/licenses/gpl-3.0.html",
         "isAccessibleForFree": true,
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-        "author": { "@type": "Person", "name": "Aslah", "url": "https://github.com/aslahtp" },
+        "author": { "@id": "https://aslahtp.github.io/meetmind/#author" },
         "featureList": [
           "Records system audio and microphone together on Windows, macOS and Linux",
           "Transcription with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq",
-          "Speaker diarization",
+          "Speaker diarization with every speech-to-text engine except Groq",
           "English and Indic language code-switching with Sarvam AI saaras:v3",
           "AI meeting minutes with Google Gemini, Groq or Anthropic Claude: summary, decisions and action items",
           "Selectable model for every speech-to-text and note-generation engine, with cross-provider fallback",
@@ -80,14 +105,16 @@
         "@id": "https://aslahtp.github.io/meetmind/#source",
         "name": "MeetMind source code",
         "codeRepository": "https://github.com/aslahtp/meetmind",
-        "programmingLanguage": ["JavaScript", "React"],
+        "programmingLanguage": "JavaScript",
         "runtimePlatform": "Electron",
         "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+        "author": { "@id": "https://aslahtp.github.io/meetmind/#author" },
         "targetProduct": { "@id": "https://aslahtp.github.io/meetmind/#app" }
       },
       {
         "@type": "FAQPage",
         "@id": "https://aslahtp.github.io/meetmind/#faq",
+        "isPartOf": { "@id": "https://aslahtp.github.io/meetmind/#webpage" },
         "mainEntity": [
           { "@type": "Question", "name": "Is MeetMind free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. MeetMind is free and open source under the GPL-3.0 license. You pay only for the AI services you connect, and Gemini and Groq (free tiers) and AssemblyAI (signup credit) can be used at no cost for moderate use." } },
           { "@type": "Question", "name": "Does a bot join my meeting?", "acceptedAnswer": { "@type": "Answer", "text": "No. MeetMind records the audio playing on your own computer plus your microphone, so no extra participant appears in Google Meet, Zoom or Teams." } },
@@ -413,7 +440,7 @@
 
     @media (max-width: 479px) {
       .top-nav .nav-github {
-        padding: 8px 10px;
+        padding: 10px;
       }
 
       .top-nav .nav-github .label {
@@ -483,8 +510,8 @@
     .theme-toggle {
       display: inline-grid;
       place-items: center;
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       margin-left: 8px;
       border: 1px solid var(--ink);
       border-radius: var(--radius-tags);
@@ -776,6 +803,66 @@
 
     .hero-shot {
       margin: 48px auto 0;
+    }
+
+    @media (max-width: 480px) {
+      .hero-shot {
+        margin-top: 32px;
+      }
+    }
+
+    /* What a first-time user needs, under the hero buttons. */
+    .needs {
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px 24px;
+      margin-top: 24px;
+    }
+
+    .needs li {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    /* Level with the first line when an item wraps on narrow phones. */
+    .needs .icon {
+      width: 16px;
+      height: 16px;
+      margin-top: 3px;
+      color: var(--ink);
+    }
+
+    /* The hero is the first paint, so it never starts invisible: it only rises into place.
+       (An opacity reveal here held back the largest contentful paint by almost a second.) */
+    @media (prefers-reduced-motion: no-preference) {
+      .hero .wrap>* {
+        animation: hero-rise .9s var(--ease-out) both;
+      }
+
+      .hero .wrap>:nth-child(2) {
+        animation-delay: 60ms;
+      }
+
+      .hero .wrap>:nth-child(3) {
+        animation-delay: 120ms;
+      }
+
+      .hero .wrap>:nth-child(4) {
+        animation-delay: 180ms;
+      }
+
+      .hero .wrap>:nth-child(n+5) {
+        animation-delay: 240ms;
+      }
+    }
+
+    @keyframes hero-rise {
+      from {
+        translate: 0 24px;
+      }
     }
 
     .hero-shot .frame {
@@ -1605,7 +1692,7 @@
       justify-content: center;
       gap: 8px;
       min-width: 0;
-      padding: 10px 22px;
+      padding: 12px 22px;
       border: 0;
       border-radius: var(--radius-tags);
       background: transparent;
@@ -1795,7 +1882,7 @@
 
     @media (max-width: 480px) {
       .dl-tab {
-        padding: 10px 14px;
+        padding: 12px 14px;
       }
 
       .dl-row {
@@ -1827,7 +1914,7 @@
       }
 
       .dl-tab {
-        padding: 10px 18px;
+        padding: 12px 18px;
       }
     }
 
@@ -1912,17 +1999,19 @@
     footer nav {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px 24px;
+      gap: 0 24px;
     }
 
     footer a {
       text-decoration: none;
     }
 
+    /* 44px tall so each link is a comfortable tap target. */
     footer nav a {
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      min-height: 44px;
     }
 
     footer nav .logo {
@@ -2201,14 +2290,14 @@
     <!-- Hero -->
     <section class="hero center" style="padding-top: 24px;">
       <div class="wrap">
-        <span class="badge" data-reveal="sm"><span class="dot" aria-hidden="true"></span><span class="label">Open
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Open
             source<span class="hide-xs"> · Windows, macOS &amp; Linux</span></span></span>
-        <h1 class="display" data-reveal="lg">AI meeting notes for Windows, Mac and Linux, <span class="mark">without a
+        <h1 class="display">AI meeting notes for Windows, Mac and Linux, <span class="mark">without a
             meeting bot</span></h1>
-        <p class="sub" data-reveal>MeetMind records Google Meet, Zoom or any call on your computer,
+        <p class="sub">MeetMind records Google Meet, Zoom or any call on your computer,
           transcribes it with AssemblyAI, Google Speech-to-Text, Sarvam AI or Groq, and writes clear meeting minutes with
           Gemini, Groq or Claude — then syncs them to Notion.</p>
-        <div class="actions" id="hero-actions" data-reveal>
+        <div class="actions" id="hero-actions">
           <a class="btn btn-primary" href="#download"><svg class="icon"
               aria-hidden="true">
               <use href="#i-download" />
@@ -2217,7 +2306,18 @@
               <use href="#l-github" />
             </svg>View source on GitHub</a>
         </div>
-        <p class="caption platforms" data-reveal="sm">
+        <ul class="caption needs" aria-label="What you need">
+          <li><svg class="icon" aria-hidden="true">
+              <use href="#i-check" />
+            </svg>One free Groq key covers transcription and notes</li>
+          <li><svg class="icon" aria-hidden="true">
+              <use href="#i-check" />
+            </svg>Free AI tiers cover moderate use</li>
+          <li><svg class="icon" aria-hidden="true">
+              <use href="#i-check" />
+            </svg>No account or sign-up</li>
+        </ul>
+        <p class="caption platforms">
           <span><svg class="logo" aria-hidden="true">
               <use href="#l-windows" />
             </svg>Windows 10 &amp; 11</span>
@@ -2227,12 +2327,18 @@
           <span><svg class="logo" aria-hidden="true">
               <use href="#l-linux" />
             </svg>Linux x64 (beta)</span>
-          <span>v__VERSION__ · GPL-3.0 license</span>
+          <span>v__VERSION__, released <time datetime="__RELEASE_DATE__">__RELEASE_LABEL__</time> · GPL-3.0 license</span>
         </p>
-        <div class="hero-shot" data-reveal="img">
+        <div class="hero-shot">
           <div class="frame" data-parallax>
             <picture>
+              <source data-dark-source media="(prefers-color-scheme: dark)" type="image/avif"
+                srcset="screenshots/dashboard-dark-750.avif 750w, screenshots/dashboard-dark-1100.avif 1100w, screenshots/dashboard-dark-1500.avif 1500w"
+                sizes="(min-width: 1200px) 1136px, (min-width: 720px) calc(100vw - 64px), calc(100vw - 32px)">
               <source data-dark-source media="(prefers-color-scheme: dark)" srcset="screenshots/dashboard-dark.png">
+              <source type="image/avif"
+                srcset="screenshots/dashboard-750.avif 750w, screenshots/dashboard-1100.avif 1100w, screenshots/dashboard-1500.avif 1500w"
+                sizes="(min-width: 1200px) 1136px, (min-width: 720px) calc(100vw - 64px), calc(100vw - 32px)">
               <img src="screenshots/dashboard.png"
                 alt="MeetMind dashboard with meeting stats and a list of recent recorded meetings" width="1500"
                 height="1000" fetchpriority="high">
@@ -2322,7 +2428,7 @@
         <div class="dl" data-reveal>
           <div class="dl-tabs" role="tablist" aria-label="Operating system">
             <button class="dl-tab" type="button" role="tab" id="dl-tab-windows" aria-controls="dl-windows"
-              aria-selected="false" tabindex="-1"><svg class="logo" aria-hidden="true">
+              aria-selected="true" tabindex="0"><svg class="logo" aria-hidden="true">
                 <use href="#l-windows" />
               </svg><span class="label">Windows</span></button>
             <button class="dl-tab" type="button" role="tab" id="dl-tab-macos" aria-controls="dl-macos"
@@ -2534,7 +2640,7 @@
     <section id="features" aria-labelledby="features-h">
       <div class="wrap center">
         <span class="badge" data-reveal="sm"><span class="num">4</span><span class="label">Features</span></span>
-        <h2 class="display" id="features-h" data-reveal="lg">Everything a meeting note taker needs</h2>
+        <h2 class="display" id="features-h" data-reveal="lg">Meeting transcription and AI notes in one app</h2>
         <div class="grid grid-2">
           <div class="card" data-reveal>
             <div class="tile" aria-hidden="true"><svg class="icon">
@@ -2662,8 +2768,9 @@
             <div class="tile" aria-hidden="true"><svg class="icon">
                 <use href="#i-lock" />
               </svg></div>
-            <h3>Local-first and private</h3>
-            <p>No account and no MeetMind server. Recordings, transcripts and notes stay in a local SQLite database.</p>
+            <h3>Local storage, AI of your choice</h3>
+            <p>No account and no MeetMind server. Recordings, transcripts and notes stay in a local SQLite database;
+              audio and transcripts go only to the AI services you pick, with your own keys.</p>
             <div class="chips">
               <span class="chip"><svg class="icon" aria-hidden="true">
                   <use href="#i-hard-drive" />
@@ -2743,8 +2850,14 @@
         <figure class="shot-feature" data-reveal="img">
           <div class="frame">
             <picture>
+              <source data-dark-source media="(prefers-color-scheme: dark)" type="image/avif"
+                srcset="screenshots/markdown-notes-dark-750.avif 750w, screenshots/markdown-notes-dark-1100.avif 1100w, screenshots/markdown-notes-dark-1500.avif 1500w"
+                sizes="(min-width: 1200px) 1136px, (min-width: 720px) calc(100vw - 64px), calc(100vw - 32px)">
               <source data-dark-source media="(prefers-color-scheme: dark)"
                 srcset="screenshots/markdown-notes-dark.png">
+              <source type="image/avif"
+                srcset="screenshots/markdown-notes-750.avif 750w, screenshots/markdown-notes-1100.avif 1100w, screenshots/markdown-notes-1500.avif 1500w"
+                sizes="(min-width: 1200px) 1136px, (min-width: 720px) calc(100vw - 64px), calc(100vw - 32px)">
               <img src="screenshots/markdown-notes.png"
                 alt="Markdown meeting minutes with a header, executive summary and agenda" width="1500" height="1000"
                 loading="lazy">
@@ -2754,26 +2867,46 @@
         </figure>
         <div class="grid grid-2">
           <figure data-reveal="img">
-            <div class="frame"><img src="screenshots/markdown-action-items.png"
-                alt="Key decisions and an action items table with owners, deadlines and status" width="1500"
-                height="1000" loading="lazy"></div>
+            <div class="frame"><picture>
+                <source type="image/avif"
+                  srcset="screenshots/markdown-action-items-750.avif 750w, screenshots/markdown-action-items-1100.avif 1100w, screenshots/markdown-action-items-1500.avif 1500w"
+                  sizes="(min-width: 1200px) 552px, (min-width: 720px) calc(50vw - 48px), calc(100vw - 32px)">
+                <img src="screenshots/markdown-action-items.png"
+                  alt="Key decisions and an action items table with owners, deadlines and status" width="1500"
+                  height="1000" loading="lazy">
+              </picture></div>
             <figcaption>Numbered decisions and an action items table.</figcaption>
           </figure>
           <figure data-reveal="img">
-            <div class="frame"><img src="screenshots/transcript.png"
-                alt="Searchable, speaker-labelled meeting transcript" width="1500" height="1000" loading="lazy"></div>
+            <div class="frame"><picture>
+                <source type="image/avif"
+                  srcset="screenshots/transcript-750.avif 750w, screenshots/transcript-1100.avif 1100w, screenshots/transcript-1500.avif 1500w"
+                  sizes="(min-width: 1200px) 552px, (min-width: 720px) calc(50vw - 48px), calc(100vw - 32px)">
+                <img src="screenshots/transcript.png" alt="Searchable, speaker-labelled meeting transcript" width="1500"
+                  height="1000" loading="lazy">
+              </picture></div>
             <figcaption>Speaker-labelled transcript you can search and filter.</figcaption>
           </figure>
           <figure data-reveal="img">
-            <div class="frame"><img src="screenshots/json-notes.png"
-                alt="Structured JSON notes with identified speakers and prioritised action items" width="1500"
-                height="1000" loading="lazy"></div>
+            <div class="frame"><picture>
+                <source type="image/avif"
+                  srcset="screenshots/json-notes-750.avif 750w, screenshots/json-notes-1100.avif 1100w, screenshots/json-notes-1500.avif 1500w"
+                  sizes="(min-width: 1200px) 552px, (min-width: 720px) calc(50vw - 48px), calc(100vw - 32px)">
+                <img src="screenshots/json-notes.png"
+                  alt="Structured JSON notes with identified speakers and prioritised action items" width="1500"
+                  height="1000" loading="lazy">
+              </picture></div>
             <figcaption>Structured notes with speakers and prioritised action items.</figcaption>
           </figure>
           <figure data-reveal="img">
-            <div class="frame"><img src="screenshots/output-format.png"
-                alt="Settings for choosing Markdown or JSON output and editing the notes system prompt" width="1500"
-                height="1000" loading="lazy"></div>
+            <div class="frame"><picture>
+                <source type="image/avif"
+                  srcset="screenshots/output-format-750.avif 750w, screenshots/output-format-1100.avif 1100w, screenshots/output-format-1500.avif 1500w"
+                  sizes="(min-width: 1200px) 552px, (min-width: 720px) calc(50vw - 48px), calc(100vw - 32px)">
+                <img src="screenshots/output-format.png"
+                  alt="Settings for choosing Markdown or JSON output and editing the notes system prompt" width="1500"
+                  height="1000" loading="lazy">
+              </picture></div>
             <figcaption>Pick Markdown or JSON and edit the prompt the notes model uses.</figcaption>
           </figure>
         </div>
@@ -2784,9 +2917,9 @@
     <section id="compare-section" aria-labelledby="compare">
       <div class="wrap center">
         <span class="badge" data-reveal="sm"><span class="num">7</span><span class="label">Compare</span></span>
-        <h2 class="display" id="compare" data-reveal="lg">MeetMind vs. hosted AI note takers</h2>
-        <p class="sub" data-reveal>An open-source alternative to subscription tools such as Otter.ai and Fireflies.ai.
-        </p>
+        <h2 class="display" id="compare" data-reveal="lg">Is there an open-source alternative to Otter.ai?</h2>
+        <p class="sub" data-reveal>Yes. MeetMind is a free, open-source alternative to subscription note takers such
+          as Otter.ai and Fireflies.ai, which usually join calls as a bot and keep recordings on their servers.</p>
         <div class="table-wrap" data-reveal role="region" aria-labelledby="compare">
           <table>
             <thead>
@@ -2813,7 +2946,7 @@
                     </svg>Local system audio + mic, no bot</span></td>
                 <td data-label="Hosted"><span class="cell"><svg class="icon" aria-hidden="true">
                       <use href="#i-minus" />
-                    </svg>A bot joins the call as a participant</span></td>
+                    </svg>Usually a bot joins the call as a participant</span></td>
               </tr>
               <tr data-reveal="row">
                 <th scope="row">Where data lives</th>
