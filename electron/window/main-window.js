@@ -53,6 +53,34 @@ function isAlive() {
   return !!win && !win.isDestroyed() && !!win.webContents && !win.webContents.isDestroyed();
 }
 
+// How much memory the machine has left, logged with every window failure. A machine short of
+// RAM pages out idle processes and Chromium drops the surfaces of windows it isn't showing, so
+// this tells a starved machine from a real fault. `commitFreeMb` is what is left of RAM plus
+// the page file (Windows' commit limit): near zero there, allocations start failing.
+function memorySnapshot() {
+  try {
+    const mb = (kb) => Math.round(kb / 1024);
+    const sys = process.getSystemMemoryInfo();   // kilobytes
+    const snapshot = {
+      freeMb: mb(sys.free),
+      totalMb: mb(sys.total),
+      freePct: Math.round((sys.free / sys.total) * 100),
+    };
+    if (sys.swapTotal) {
+      snapshot.commitFreeMb = mb(sys.swapFree);
+      snapshot.commitTotalMb = mb(sys.swapTotal);
+    }
+    if (isAlive()) {
+      const pid = win.webContents.getOSProcessId();
+      const metric = app.getAppMetrics().find((m) => m.pid === pid);
+      if (metric?.memory) snapshot.rendererMb = mb(metric.memory.workingSetSize);
+    }
+    return snapshot;
+  } catch {
+    return undefined;
+  }
+}
+
 function clearWindowTimers() {
   clearTimeout(loadTimer);
   clearTimeout(unresponsiveTimer);
@@ -150,7 +178,7 @@ function createWindow(gen, reveal) {
 
   const gone = (reason, detail) => {
     if (w !== win || app.isQuitting) return;
-    logger.warn('Main window lost', { reason, ...detail });
+    logger.warn('Main window lost', { reason, ...detail, memory: memorySnapshot() });
     dispatch({ type: 'gone', gen: life.gen, reason, now: Date.now() });
   };
   w.webContents.on('render-process-gone', (_e, details) =>
@@ -162,7 +190,7 @@ function createWindow(gen, reveal) {
     gone('preload-error', { preloadPath, error: error?.message }));
   w.on('unresponsive', () => {
     if (w !== win) return;
-    logger.warn('Main window unresponsive; will repair it if it doesn’t recover');
+    logger.warn('Main window unresponsive; will repair it if it doesn’t recover', { memory: memorySnapshot() });
     clearTimeout(unresponsiveTimer);
     unresponsiveTimer = setTimeout(() => gone('unresponsive'), UNRESPONSIVE_GRACE_MS);
   });
@@ -268,7 +296,11 @@ async function runHealthCheck(gen) {
       recheckTimer = setTimeout(() => dispatch({ type: 'recheck' }), SPLASH_RECHECK_MS);
       return;
     }
-    if (!verdict.ok) logger.warn('Main window health check failed', { reason: verdict.reason, pong, blank, focused: win.isFocused() });
+    if (!verdict.ok) {
+      logger.warn('Main window health check failed', {
+        reason: verdict.reason, pong, blank, focused: win.isFocused(), memory: memorySnapshot(),
+      });
+    }
     dispatch({ type: 'health', gen, ok: verdict.ok, reason: verdict.reason, now: Date.now() });
   } finally {
     checking = false;

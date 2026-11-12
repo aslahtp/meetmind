@@ -399,7 +399,9 @@ renderer still alive, which no crash handler detects. Now:
 `main-window-lifecycle.js` is the pure, unit-tested state machine (`reduceMainWindow`,
 `healthVerdict`, `isBlankCapture`); `main-window.js` runs its actions and owns the `window:*`
 IPC. Every step is logged (`Main window created` / `failed` / `recovered` / `closed after
-sitting in the tray`). A new or reloaded window reads `app:state` to show a recording or
+sitting in the tray`), and a lost, unresponsive or unhealthy window is logged with a memory
+snapshot (free RAM, free commit, the renderer's working set), since a machine short of memory
+is a likely cause. A new or reloaded window reads `app:state` to show a recording or
 processing run in progress and reopen the page the last one showed; the few events that must not
 be lost while there is no window (`app:open-session`, `app:navigate`, `calendar:meeting-starting`)
 are queued for up to 10 minutes and delivered after `window:ready`. On Windows the app also

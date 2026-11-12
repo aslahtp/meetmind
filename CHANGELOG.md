@@ -19,7 +19,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 - **Recording (macOS and Linux testers)**: Audio is now captured in a separate hidden window. Please check that recordings still include system audio and the microphone.
 - **Startup**: Started at login, MeetMind uses less memory until you open it, because the window is only created then.
-- **Logs**: Errors in the app's interface are written to the log file, the log file changes at midnight instead of when the app starts, and the Logs page stays smooth at 2,000 lines.
+- **Logs**: Errors in the app's interface are written to the log file (a window that fails to show is logged with how much memory the computer had free), the log file changes at midnight instead of when the app starts, and the Logs page stays smooth at 2,000 lines.
 
 ## [4.17.0] - 2026-11-08
 
