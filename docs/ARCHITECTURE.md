@@ -1189,7 +1189,9 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   already did: a PR can only fake a pass by changing `ci.yml`, which then reaches `main` with the
   identical tree it was tested with, after maintainer review (CODEOWNERS).
 - **`release.yml`**: triggers on a push to `main` that touches `package.json` (i.e. a version
-  bump). Calls `ci.yml` as a gate first. The `build` job then builds the Windows installer with a
+  bump). Calls `ci.yml` as a gate (`checks`); the three build jobs start alongside it, since
+  they hold only a read-only token and no secrets, while `attest` and `publish` wait for it, so
+  nothing is signed or released until CI passes. The `build` job builds the Windows installer with a
   read-only token and no dependency cache, bundling the pinned, checksum-verified FFmpeg
   (`scripts/fetch-ffmpeg.js`), then smoke-tests the unpacked app. The `build-mac`
   job (`macos-latest`, same read-only/no-cache rules) fetches the pinned macOS FFmpeg for arm64
@@ -1202,9 +1204,11 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   only one with `attestations: write` and running no project code, signs
   SLSA build provenance (`actions/attest`, Sigstore) for the installer, both DMGs, the mac update
   zips, the AppImage, the `.deb` and the extension, so anyone can check a download with
-  `gh attestation verify <file> --repo aslahtp/meetmind`. A separate `publish` job, which waits
-  for the attestations, the only one granted
-  `contents: write`, runs no dependency code and no third-party actions, and creates the GitHub
+  `gh attestation verify <file> --repo aslahtp/meetmind`. It signs the SHA-256 checksums each
+  build job reports for the files it uploaded (`subject-checksums`), so it downloads nothing.
+  A separate `publish` job, which waits for the attestations, the only one granted
+  `contents: write`, runs no dependency code and no third-party actions, checks that every
+  downloaded file matches an attested checksum and that no unattested one is present, and creates the GitHub
   release (Windows installer, both DMGs, the mac update zips, the AppImage and `.deb`,
   `latest.yml`, `latest-mac.yml`, `latest-linux.yml`, blockmaps and the extension) using the runner's own `gh` CLI. `pnpm run build` is always invoked with
   `--publish never`, so electron-builder itself never needs a publish token. A last `site` job
