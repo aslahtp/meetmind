@@ -37,8 +37,16 @@ fs.cpSync(EXTENSION_SRC, BUILD_DIR, {
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const manifestPath = path.join(BUILD_DIR, 'manifest.json');
-if (fs.existsSync(manifestPath)) {
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+// Read it directly and skip a missing file, rather than checking for it first: a check followed by a
+// read is a file-system race (CodeQL js/file-system-race).
+let manifestText: string | null = null;
+try {
+  manifestText = fs.readFileSync(manifestPath, 'utf8');
+} catch (err: any) {
+  if (err.code !== 'ENOENT') throw err;
+}
+if (manifestText !== null) {
+  const manifest = JSON.parse(manifestText);
   manifest.version = pkg.version;
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
 }
