@@ -1,0 +1,664 @@
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { FileText, Mic, Volume2, MicOff, Loader2, Eye, Code, AudioLines } from 'lucide-react';
+import { useApp } from '../lib/app-context';
+import TranscriptViewer from './TranscriptViewer';
+import { NoteToolbar, NoteTitleBlock } from './note/NoteHeader';
+import SummaryJson from './note/SummaryJson';
+import SessionAudio from './note/SessionAudio';
+import { MarkdownNoteView } from './note/markdown';
+import { buildNotesMarkdown, parseNotesMarkdown, notesTitle } from './note/copyMarkdown';
+import { EmptyState, StepBadge, ProgressBar, SaveBar, SegmentedControl } from './ui/index';
+import { useNotesProviderIcon } from './settings/providers/providerIcons';
+import { formatDurationSeconds } from '../lib/format';
+import { useSessionActions } from '../lib/hooks';
+import { isProcessing, PIPELINE_STAGES, STAGE_LABELS, stageIndex } from '../lib/status';
+
+// ── Processing state ─────────────────────────────────────────────────────────
+
+function ProcessingCard({ stage, percent, includeNotion, onRestart, previewing, retryingWith }: { stage?: any; percent?: any; includeNotion?: any; onRestart?: any; previewing?: any; retryingWith?: any }) {
+  const stages = includeNotion ? PIPELINE_STAGES : PIPELINE_STAGES.filter((s) => s.key !== 'uploading');
+  const current = Math.max(0, stageIndex(stage));
+  const pct = percent != null ? Math.round(percent) : null;
+
+  return (
+    <section className="card fade-in" aria-busy="true" aria-live="polite">
+      <div className="flex items-center justify-between gap-16">
+        <p className="eyebrow">Processing</p>
+        {pct != null && <span className="text-caption text-graphite tabular">{pct}%</span>}
+      </div>
+      <h2 className="flex items-center gap-8 text-heading-sm font-medium text-ink mt-8">
+        <Loader2 size={20} strokeWidth={1.75} className="spinner text-graphite" aria-hidden="true" />
+        {(STAGE_LABELS as any)[stage] || 'Processing'}…
+      </h2>
+      {previewing ? (
+        <p className="flex items-center gap-8 text-body-sm text-graphite mt-8">
+          <span className="dot dot-mint dot-live" aria-hidden="true" />
+          Live preview. The notes below are still being written.
+        </p>
+      ) : (
+        <p className="text-body-sm text-graphite mt-8">
+          You can keep using MeetMind. This page updates when the notes are ready.
+        </p>
+      )}
+      {retryingWith && (
+        <p className="text-caption text-graphite mt-8">
+          The first model failed, so {retryingWith} is writing the notes instead.
+        </p>
+      )}
+      <ol className="flex flex-wrap gap-8 mt-24">
+        {stages.map((s, i) => (
+          <li key={s.key} className={i > current ? 'opacity-40' : ''}>
+            <StepBadge n={i + 1} done={i < current}>{s.label}</StepBadge>
+          </li>
+        ))}
+      </ol>
+      {pct != null && (
+        <div className="mt-24">
+          <ProgressBar value={pct} label="Processing progress" />
+        </div>
+      )}
+      {onRestart && (
+        <p className="text-caption text-graphite mt-24">
+          No progress for a while?{' '}
+          <button type="button" onClick={onRestart} className="font-medium text-ink underline underline-offset-4">
+            Start processing again
+          </button>
+        </p>
+      )}
+    </section>
+  );
+}
+
+// ── Summary tab ──────────────────────────────────────────────────────────────
+
+function SummaryTab({ notes, title, noSpeech, transcriptionFailed, failureMessage, isError, busy, streaming, onGenerate, onRetry }: { notes?: any; title?: any; noSpeech?: any; transcriptionFailed?: any; failureMessage?: any; isError?: any; busy?: any; streaming?: any; onGenerate?: any; onRetry?: any }) {
+  const NotesIcon = useNotesProviderIcon();
+  if (notes) {
+    return notes._rawMarkdown
+      ? <MarkdownNoteView markdown={notes._rawMarkdown} omitTitle={title} streaming={streaming} />
+      : <SummaryJson notes={notes} streaming={streaming} />;
+  }
+  if (busy) return null;
+
+  if (noSpeech) {
+    return (
+      <EmptyState
+        compact
+        icon={<MicOff size={24} strokeWidth={1.75} />}
+        title="No speech detected"
+        message="The recording was saved but contained no audible speech."
+        action={
+          <button type="button" onClick={onRetry} className="btn-sunshine">
+            Retry processing
+          </button>
+        }
+      />
+    );
+  }
+
+  if (transcriptionFailed) {
+    return (
+      <EmptyState
+        compact
+        icon={<MicOff size={24} strokeWidth={1.75} />}
+        title="Transcription failed"
+        message={failureMessage || 'The recording was saved, but it could not be transcribed. Check your speech-to-text settings and retry.'}
+        action={
+          <button type="button" onClick={onRetry} className="btn-sunshine">
+            Retry processing
+          </button>
+        }
+      />
+    );
+  }
+
+  return (
+    <EmptyState
+      compact
+      icon={<NotesIcon size={24} />}
+      title={isError ? 'Processing failed' : 'Notes not ready yet'}
+      message={
+        isError
+          ? (failureMessage || 'Something went wrong while generating notes for this meeting.')
+          : 'Generate an AI summary, action items and key topics from the transcript.'
+      }
+      action={
+        <button type="button" onClick={onGenerate} className="btn-sunshine">
+          Generate notes
+        </button>
+      }
+    />
+  );
+}
+
+// ── Markdown editor ──────────────────────────────────────────────────────────
+
+const EDIT_MODES = [
+  { value: 'preview', label: 'Preview', icon: Eye },
+  { value: 'markdown', label: 'Markdown', icon: Code },
+];
+
+// Grows with its content so the page scrolls, not the textarea.
+function MarkdownEditor({ value, onChange, structured }: { value?: any; onChange?: any; structured?: any }) {
+  const ref = useRef<any>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Collapsing to measure would clamp the page's scroll position; keep it.
+    const scroller = el.closest('.overflow-y-auto');
+    const top = scroller?.scrollTop;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + 2}px`;
+    if (scroller) scroller.scrollTop = top;
+  }, [value]);
+
+  return (
+    <div className="fade-in">
+      <label htmlFor="notes-markdown" className="label">Notes (Markdown)</label>
+      {structured && (
+        <p id="notes-markdown-hint" className="hint mb-8">
+          Keep the ## section headings (Participants, Action Items, Key Topics…) so the notes keep their card layout.
+        </p>
+      )}
+      <textarea
+        id="notes-markdown"
+        ref={ref}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-describedby={structured ? 'notes-markdown-hint' : undefined}
+        rows={12}
+        className="input font-mono text-caption leading-relaxed resize-none overflow-hidden"
+      />
+    </div>
+  );
+}
+
+// ── Main NoteViewer ──────────────────────────────────────────────────────────
+
+export default function NoteViewer({ session, onBack, onRefresh }: { session?: any; onBack?: any; onRefresh?: any }) {
+  const { processing, trackProcessing, notesPreview, providers, addToast, confirm, config, setNavGuard } = useApp();
+  const NotesIcon = useNotesProviderIcon();
+  const [activeTab, setActiveTab] = useState('summary');
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [titleHidden, setTitleHidden] = useState(false);
+  const [editMode, setEditMode] = useState('preview');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const { handleDelete, deletingIds } = useSessionActions();
+  const scrollRef = useRef<any>(null);
+  const titleRef = useRef<any>(null);
+
+  // Show the title in the toolbar once the in-page title scrolls out of view.
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el || !scrollRef.current) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => setTitleHidden(!entry.isIntersecting),
+      { root: scrollRef.current, threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const savedNotes = session.notes;
+  const rawTranscript = session.transcript;
+
+  // ── Editing: the draft is the notes as one Markdown document ──
+  const savedMarkdown = useMemo(
+    () => (savedNotes ? buildNotesMarkdown(savedNotes, session) : ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [savedNotes, session.title],
+  );
+  const [draft, setDraft] = useState(savedMarkdown);
+  const lastSavedRef = useRef(savedMarkdown);
+  // Follow the saved notes (save, regenerate, background refresh) unless mid-edit.
+  useEffect(() => {
+    const previous = lastSavedRef.current;
+    lastSavedRef.current = savedMarkdown;
+    setDraft((d: any) => (d === previous ? savedMarkdown : d));
+  }, [savedMarkdown]);
+
+  const dirty = !!savedNotes && draft !== savedMarkdown;
+  // Preview shows unsaved edits, parsed back into the same shape as saved notes.
+  const notes = useMemo(
+    () => (dirty ? parseNotesMarkdown(draft, savedNotes) : savedNotes),
+    [dirty, draft, savedNotes],
+  );
+
+  const normalizedTranscript = useMemo(() => {
+    if (!rawTranscript) return [];
+    if (Array.isArray(rawTranscript)) return rawTranscript;
+    if (typeof rawTranscript === 'string') {
+      try {
+        const parsed = JSON.parse(rawTranscript);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        if (rawTranscript.trim()) {
+          return [{ speaker: 'Speaker 1', text: rawTranscript.trim(), startTime: 0 }];
+        }
+      }
+    }
+    return [];
+  }, [rawTranscript]);
+
+  const durationLabel = session.duration_seconds > 0 ? formatDurationSeconds(session.duration_seconds) : null;
+  const isError = session.status === 'error';
+  const processingError = session._processingError || null;
+  // Only claim "no speech" when the failure actually said so; other failures (bad key, API error)
+  // must show their real message even though there is no transcript.
+  const failureMessage = processingError || session.last_error || '';
+  const noSpeech = isError && !normalizedTranscript.length && /no speech detected|completely silent/i.test(failureMessage);
+  const transcriptionFailed = isError && !normalizedTranscript.length && !noSpeech;
+  const notionUrl = uploadResult || session.notion_page_url;
+
+  // Pipeline state: live progress from the app when it's for this session,
+  // otherwise fall back to the stored status.
+  const liveProcessing = processing?.sessionId === session.id ? processing : null;
+  const busy = !!liveProcessing || isProcessing(session.status) || starting;
+  const stage = liveProcessing?.stage || (isProcessing(session.status) ? session.status : 'transcribing');
+  // Notes the LLM has streamed so far; while generating they replace any old notes on screen.
+  const preview = busy && notesPreview?.sessionId === session.id ? notesPreview : null;
+  const retryingWith = preview?.attempt > 0
+    ? providers?.llm?.find((p: any) => p.id === preview.provider)?.name || preview.provider
+    : null;
+  const includeNotion = stage === 'uploading'
+    || !!(config?.notionToken?.trim?.() && config?.notionDatabaseId?.trim?.());
+
+  const title = notesTitle(notes, session);
+  const showEditor = editMode === 'markdown' && !!savedNotes && !busy;
+  const showModeToggle = activeTab === 'summary' && !!savedNotes;
+  const pinModeToggle = showModeToggle && config?.pinNotesViewToggle !== false;
+  const modeToggle = {
+    label: 'Notes view',
+    role: 'radiogroup',
+    options: EDIT_MODES,
+    value: showEditor ? 'markdown' : 'preview',
+    onChange: setEditMode,
+    size: 'sm',
+    disabled: busy,
+  };
+
+  // Starts a pipeline run and hands progress tracking to the app shell.
+  const startPipeline = async (run: any) => {
+    setStarting(true);
+    try {
+      const result = await run();
+      if (result?.success === false) {
+        addToast(result.error || 'Could not start processing.', 'error');
+        return;
+      }
+      trackProcessing(session.id);
+      await onRefresh?.();
+    } catch (err: any) {
+      addToast(err.message || 'Could not start processing.', 'error');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const handleGenerate = () => startPipeline(() => window.meetmind.processing.run(session.id));
+  const handleRetry = () => startPipeline(() => window.meetmind.processing.retry(session.id, 'all'));
+
+  const handleRegenerate = async () => {
+    const ok = await confirm({
+      title: 'Regenerate notes?',
+      message: savedNotes?._editedAt
+        ? 'The current notes will be replaced with a new version generated from the transcript. Your edits will be lost.'
+        : 'The current notes will be replaced with a new version generated from the transcript.',
+      confirmLabel: 'Regenerate',
+    });
+    if (!ok) return;
+    setRegenerating(true);
+    try {
+      await startPipeline(() => window.meetmind.processing.retry(session.id, 'notes'));
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  // Re-runs the whole pipeline from the recording: speech-to-text, then notes (and Notion).
+  const handleRetranscribe = async () => {
+    const ok = await confirm({
+      title: 'Regenerate transcript?',
+      message: savedNotes?._editedAt
+        ? 'MeetMind will transcribe the recording again, then regenerate the notes from the new transcript. The current transcript and notes will be replaced, and your edits will be lost.'
+        : 'MeetMind will transcribe the recording again, then regenerate the notes from the new transcript. The current transcript and notes will be replaced.',
+      confirmLabel: 'Regenerate',
+    });
+    if (!ok) return;
+    setRegenerating(true);
+    try {
+      await startPipeline(() => window.meetmind.processing.retry(session.id, 'transcription'));
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const onTranscriptTab = activeTab === 'transcript';
+  const regenerate = onTranscriptTab
+    ? {
+      label: 'Regenerate',
+      title: 'Regenerate transcript',
+      icon: AudioLines,
+      onClick: handleRetranscribe,
+      // Pasted transcripts have no recording to transcribe again.
+      unavailable: session.audio_path ? null : 'No recording to transcribe again',
+    }
+    : { label: 'Regenerate', title: 'Regenerate notes', icon: NotesIcon, onClick: handleRegenerate, unavailable: null };
+
+  // First sync creates the Notion page. Updating replaces it: the main process creates a fresh
+  // page from the current notes, then moves the old one to Notion's trash (no duplicates).
+  const handleSyncNotion = async () => {
+    const updating = !!notionUrl;
+    if (updating) {
+      const ok = await confirm({
+        title: 'Update the Notion page?',
+        message: 'MeetMind creates a fresh page with the current notes and moves the old one to Notion’s trash, where you can restore it for 30 days. Edits made directly in Notion won’t carry over.',
+        confirmLabel: 'Update page',
+      });
+      if (!ok) return;
+    }
+    setUploading(true);
+    try {
+      const result = await window.meetmind.notion.upload(session.id);
+      if (result?.success) {
+        setUploadResult(result.url);
+        addToast(updating ? 'Notion page updated.' : 'Notes synced to Notion.', 'success', {
+          label: 'Open',
+          onClick: () => window.meetmind.shell.openExternal(result.url),
+        });
+        onRefresh?.();
+      } else {
+        addToast(result?.error || 'Notion upload failed.', 'error');
+      }
+    } catch (err: any) {
+      addToast(err.message || 'Notion upload failed.', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Builds the PDF here (same Markdown rendering as the app) and lets the main process save it
+  // to the configured folder (Downloads by default) as date-time-title.pdf.
+  const handleExportPdf = async () => {
+    if (!notes || exporting) return;
+    setExporting(true);
+    try {
+      // Loaded on demand: it pulls in react-dom/server and the embedded font.
+      const { buildPdfHtml } = await import('./note/pdfDocument');
+      const html = buildPdfHtml(session, notes, normalizedTranscript, {
+        includeTranscript: !!config?.pdfIncludeTranscript,
+      });
+      const result = await window.meetmind.pdf.export(session.id, html);
+      if (result?.success) {
+        const fileName = result.path.split(/[\\/]/).pop();
+        addToast(`Saved ${fileName}`, 'success', {
+          label: 'Show in folder',
+          onClick: () => window.meetmind.pdf.reveal(result.path),
+        });
+      } else {
+        addToast(result?.error || 'PDF export failed.', 'error');
+      }
+    } catch (err: any) {
+      addToast(`PDF export failed: ${err.message}`, 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDeleteMeeting = async () => {
+    if (!(await handleDelete(session, { animate: false }))) return;
+    // The meeting is gone, so unsaved edits no longer matter: leave without the discard prompt.
+    setNavGuard(null);
+    await onBack();
+  };
+
+  const handleCopy = async () => {
+    if (!notes) return;
+    try {
+      await navigator.clipboard.writeText(buildNotesMarkdown(notes, session));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err: any) {
+      addToast(`Couldn't copy notes: ${err.message}`, 'error');
+    }
+  };
+
+  // Toast actions outlive this render, so they call the latest handler.
+  const handleSyncNotionRef = useRef<any>(null);
+  handleSyncNotionRef.current = handleSyncNotion;
+
+  const handleSaveEdits = useCallback(async () => {
+    if (!dirty || saving) return;
+    setSaving(true);
+    try {
+      const next = { ...parseNotesMarkdown(draft, savedNotes), _editedAt: new Date().toISOString() };
+      const result = await window.meetmind.sessions.updateNotes(session.id, next);
+      if (!result?.success) {
+        addToast(result?.error || 'Couldn’t save the notes.', 'error');
+        return;
+      }
+      // What was saved, normalised, so the draft is clean once the session reloads.
+      setDraft(buildNotesMarkdown(next, session));
+      await onRefresh?.();
+      setSaved(true);
+      if (notionUrl) {
+        addToast('Notes saved. The Notion page still has the previous version.', 'success', {
+          label: 'Update Notion',
+          onClick: () => handleSyncNotionRef.current?.(),
+        });
+      }
+    } catch (err: any) {
+      addToast(`Couldn’t save the notes: ${err.message}`, 'error');
+    } finally {
+      setSaving(false);
+    }
+  }, [dirty, saving, draft, savedNotes, session, notionUrl, addToast, onRefresh]);
+
+  const handleDiscardEdits = () => setDraft(savedMarkdown);
+
+  // Renames the meeting (and its notes). Resolves true once saved, so the title field can close.
+  const handleRename = async (nextTitle: any) => {
+    try {
+      const result = await window.meetmind.sessions.rename(session.id, nextTitle);
+      if (!result?.success) {
+        addToast(result?.error || 'Couldn’t rename the meeting.', 'error');
+        return false;
+      }
+      await onRefresh?.();
+      if (notionUrl) {
+        addToast('Title saved. The Notion page still has the previous title.', 'success', {
+          label: 'Update Notion',
+          onClick: () => handleSyncNotionRef.current?.(),
+        });
+      }
+      return true;
+    } catch (err: any) {
+      addToast(`Couldn’t rename the meeting: ${err.message}`, 'error');
+      return false;
+    }
+  };
+  // The draft repeats the title as its first heading, so a rename mid-edit would be undone by saving it.
+  const renameDisabledReason = dirty ? 'Save or discard your edits first' : null;
+
+  useEffect(() => {
+    if (!saved) return undefined;
+    const t = setTimeout(() => setSaved(false), 2500);
+    return () => clearTimeout(t);
+  }, [saved]);
+
+  // Ctrl/Cmd+S saves while there are edits.
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const onKey = (e: any) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveEdits();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dirty, handleSaveEdits]);
+
+  // Guard navigation away from the meeting while there are unsaved edits.
+  useEffect(() => {
+    if (dirty) {
+      setNavGuard(() => confirm({
+        title: 'Discard unsaved edits?',
+        message: 'Your edits to these notes haven’t been saved.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        destructive: true,
+      }));
+    } else {
+      setNavGuard(null);
+    }
+  }, [dirty, setNavGuard, confirm]);
+
+  useEffect(() => () => setNavGuard(null), [setNavGuard]);
+
+  const changeTab = (tab: any) => {
+    setActiveTab(tab);
+    scrollRef.current?.scrollTo({ top: 0 });
+  };
+
+  const tabs = [
+    { value: 'summary', label: 'Summary', icon: FileText },
+    {
+      value: 'transcript',
+      label: 'Transcript',
+      icon: Mic,
+      count: normalizedTranscript.length > 0 ? normalizedTranscript.length : null,
+    },
+    { value: 'audio', label: 'Audio', icon: Volume2 },
+  ];
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden fade-in">
+      <NoteToolbar
+        title={title}
+        showTitle={titleHidden}
+        notes={notes}
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={changeTab}
+        onBack={onBack}
+        busy={busy}
+        copied={copied}
+        onCopy={handleCopy}
+        regenerating={regenerating}
+        regenerate={regenerate}
+        notionUrl={notionUrl}
+        uploading={uploading}
+        onSyncNotion={handleSyncNotion}
+        exporting={exporting}
+        onExportPdf={handleExportPdf}
+        editing={dirty}
+        onDelete={handleDeleteMeeting}
+        deleting={deletingIds.has(session.id)}
+      />
+
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
+        {/* Once the title (and the toggle beside it) scrolls away, an icon-only copy
+            stays pinned to the top-right corner (Settings → General can turn this off).
+            Zero height, so it takes no space. */}
+        {pinModeToggle && (
+          <div className="sticky top-16 z-10 h-0 flex justify-end px-24 pointer-events-none">
+            <div
+              aria-hidden={!titleHidden}
+              inert={titleHidden ? undefined : ''}
+              className={`transition-[opacity,transform] duration-200 ease-out ${titleHidden ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-8'
+                }`}
+            >
+              <SegmentedControl {...modeToggle} iconOnly className="bg-paper" />
+            </div>
+          </div>
+        )}
+        <div className="mx-auto w-full max-w-[880px] px-32 pb-64">
+          <NoteTitleBlock
+            ref={titleRef}
+            session={session}
+            notes={notes}
+            title={title}
+            durationLabel={durationLabel}
+            processingError={processingError}
+            onRename={handleRename}
+            renameDisabledReason={renameDisabledReason}
+            aside={showModeToggle && <SegmentedControl {...modeToggle} revealIcon />}
+          />
+          {activeTab === 'summary' && (
+            <div className="space-y-48 pt-24">
+              {busy && (
+                <ProcessingCard
+                  stage={stage}
+                  percent={liveProcessing?.percent}
+                  includeNotion={includeNotion}
+                  onRestart={!liveProcessing && !starting && !preview ? handleRetry : undefined}
+                  previewing={!!preview?.notes}
+                  retryingWith={retryingWith}
+                />
+              )}
+              {showEditor ? (
+                <MarkdownEditor value={draft} onChange={setDraft} structured={!savedNotes._rawMarkdown} />
+              ) : (
+                <SummaryTab
+                  notes={preview ? preview.notes : notes}
+                  streaming={!!preview}
+                  title={title}
+                  noSpeech={noSpeech}
+                  transcriptionFailed={transcriptionFailed}
+                  failureMessage={failureMessage}
+                  isError={isError}
+                  busy={busy}
+                  onGenerate={handleGenerate}
+                  onRetry={handleRetry}
+                />
+              )}
+            </div>
+          )}
+          {(dirty || saving || saved) && (
+            <SaveBar
+              className="mt-32"
+              dirty={dirty}
+              saving={saving}
+              saved={saved}
+              onSave={handleSaveEdits}
+              onDiscard={handleDiscardEdits}
+            />
+          )}
+          {onTranscriptTab && (
+            <>
+              {busy && (
+                <div className="pt-24">
+                  <ProcessingCard
+                    stage={stage}
+                    percent={liveProcessing?.percent}
+                    includeNotion={includeNotion}
+                    onRestart={!liveProcessing && !starting ? handleRetry : undefined}
+                  />
+                </div>
+              )}
+              <TranscriptViewer transcript={normalizedTranscript} />
+            </>
+          )}
+          {activeTab === 'audio' && (
+            <div className="pt-24">
+              <SessionAudio
+                session={session}
+                title={title}
+                durationLabel={durationLabel}
+                showWaveform={config?.showAudioWaveform !== false}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

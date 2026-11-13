@@ -4,7 +4,7 @@
 
 Key facts:
 
-- Platform: desktop app (Electron, React) for Windows 10/11 and, as betas, macOS 14.2+ on Apple silicon and Intel (unsigned for now) and Linux x64 (AppImage and .deb).
+- Platform: desktop app (Electron, React, TypeScript) for Windows 10/11 and, as betas, macOS 14.2+ on Apple silicon and Intel (unsigned for now) and Linux x64 (AppImage and .deb).
 - Price: free; users bring their own API keys (the Gemini and Groq free tiers and the AssemblyAI signup credit are enough for moderate use).
 - Recording: local capture of system audio (WASAPI loopback on Windows, Core Audio on macOS, PulseAudio or PipeWire on Linux) plus microphone, so it works with Google Meet, Zoom, Microsoft Teams, Slack, Discord and any app that plays audio.
 - Transcription: AssemblyAI, Google Cloud Speech-to-Text v1/v2, Sarvam AI `saaras:v3` or Groq Whisper (large-v3, large-v3-turbo), each with a model picker. All but Groq label speakers (diarization). Sarvam AI supports English–Indic code-switching.

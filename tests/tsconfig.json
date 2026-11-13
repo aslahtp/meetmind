@@ -2,11 +2,11 @@
   // Vitest suite (ESM on Node). Imports the sources under electron/ and renderer/ directly.
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "module": "ESNext",
+    "module": "Preserve",
     "moduleResolution": "bundler",
     "lib": ["ES2023", "DOM"],
     "jsx": "react-jsx",
     "types": ["node", "vite/client"]
   },
-  "include": ["./**/*"]
+  "include": ["./**/*", "../renderer/global.d.ts"]
 }

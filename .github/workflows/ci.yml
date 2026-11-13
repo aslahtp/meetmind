@@ -213,7 +213,7 @@ jobs:
 
       - name: Fetch FFmpeg (checksum-verified)
         shell: bash
-        run: node scripts/fetch-ffmpeg.js --platform win32
+        run: pnpm exec tsx scripts/fetch-ffmpeg.ts --platform win32
 
       # bash: under the default pwsh the runner's pnpm shim exits 0 without running the script.
       - name: Build unpacked app
@@ -225,10 +225,10 @@ jobs:
         timeout-minutes: 3
         run: |
           dist/desktop/win-unpacked/MeetMind.exe --smoke > smoke.txt || true
-          node scripts/check-smoke.js smoke.txt "Windows x64"
+          pnpm exec tsx scripts/check-smoke.ts smoke.txt "Windows x64"
 
   # macOS has no maintainer hardware, so every PR builds the unsigned Apple Silicon app, checks
-  # it, and runs its headless self-test (electron/smoke.js): config + DB, the bundled FFmpeg,
+  # it, and runs its headless self-test (electron/smoke.ts): config + DB, the bundled FFmpeg,
   # WebM→WAV, koffi and the permissions API. The zipped .app is kept for testers.
   mac-build:
     name: macOS build & smoke test
@@ -249,7 +249,7 @@ jobs:
         run: pnpm run test
 
       - name: Fetch FFmpeg (checksum-verified)
-        run: node scripts/fetch-ffmpeg.js --platform darwin --arch arm64
+        run: pnpm exec tsx scripts/fetch-ffmpeg.ts --platform darwin --arch arm64
 
       # electron-builder skips all macOS signing on pull-request builds (it checks GITHUB_BASE_REF)
       # unless CSC_FOR_PULL_REQUEST is set, leaving Electron's original signature on a modified
@@ -276,7 +276,7 @@ jobs:
         timeout-minutes: 3
         run: |
           dist/desktop/mac-arm64/MeetMind.app/Contents/MacOS/MeetMind --smoke > smoke.txt || true
-          node scripts/check-smoke.js smoke.txt "macOS arm64"
+          pnpm exec tsx scripts/check-smoke.ts smoke.txt "macOS arm64"
 
       # ditto keeps the bundle's symlinks and permissions; fastest compression level, since this is
       # a 7-day test artifact, not a release download.
@@ -316,7 +316,7 @@ jobs:
         run: pnpm run test
 
       - name: Fetch FFmpeg (checksum-verified)
-        run: node scripts/fetch-ffmpeg.js --platform linux
+        run: pnpm exec tsx scripts/fetch-ffmpeg.ts --platform linux
 
       - name: Build AppImage and .deb
         run: pnpm run build:linux
@@ -347,7 +347,7 @@ jobs:
         timeout-minutes: 3
         run: |
           xvfb-run -a dist/desktop/linux-unpacked/meetmind --smoke > smoke.txt || true
-          node scripts/check-smoke.js smoke.txt "Linux x64"
+          pnpm exec tsx scripts/check-smoke.ts smoke.txt "Linux x64"
 
       # Already compressed (squashfs): compressing it again only costs time.
       - name: Upload AppImage

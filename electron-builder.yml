@@ -52,7 +52,7 @@ mac:
     NSMicrophoneUsageDescription: MeetMind records your microphone during meetings you choose to record.
     # Without this, macOS 14.2+ hands back a silent system-audio stream with no error.
     NSAudioCaptureUsageDescription: MeetMind records the meeting audio playing on your Mac so other participants are included in your notes.
-  # Pinned FFmpeg for this arch, fetched by scripts/fetch-ffmpeg.js.
+  # Pinned FFmpeg for this arch, fetched by scripts/fetch-ffmpeg.ts.
   extraResources:
     - from: assets/ffmpeg/mac-${arch}/
       to: ffmpeg/
@@ -83,7 +83,7 @@ linux:
   maintainer: Aslah <87909460+aslahtp@users.noreply.github.com>
   # Keep ${arch} in the name: electron-updater picks the file by it (x86_64 AppImage, amd64 .deb).
   artifactName: "${productName}-${version}-${arch}.${ext}"
-  # Pinned FFmpeg (with PulseAudio input), fetched by scripts/fetch-ffmpeg.js.
+  # Pinned FFmpeg (with PulseAudio input), fetched by scripts/fetch-ffmpeg.ts.
   extraResources:
     - from: assets/ffmpeg/linux-${arch}/
       to: ffmpeg/

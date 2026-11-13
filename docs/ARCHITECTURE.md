@@ -42,32 +42,32 @@ Three build artifacts come out of this one repository:
         |
         | content script injects overlay, relays clicks
         v
- extension/background.js (MV3 service worker)
+ extension/background.ts (MV3 service worker)
         |
         | WebSocket (ws://127.0.0.1:39842-39852), origin-checked
         v
- electron/websocket-server.js  <---------------------+
+ electron/websocket-server.ts  <---------------------+
         |                                            |
         | START_RECORDING / STOP_RECORDING           | APP_STATUS,
         v                                            | RECORDING_STARTED,
- electron/main.js (recording state machine)          | PROCESSING_PROGRESS,
+ electron/main.ts (recording state machine)          | PROCESSING_PROGRESS,
         |                                            | PROCESSING_COMPLETE
         | renderer capture (primary) or               |
         | ffmpeg dshow capture (Windows fallback)     |
         v                                            |
- electron/audio/recorder.js -> .webm/.wav on disk     |
+ electron/audio/recorder.ts -> .webm/.wav on disk     |
         |                                            |
         v                                            |
- runProcessingPipeline() in main.js  ------------------+
-   Stage 1: electron/services/transcription.js  -> electron/providers/stt/* (Google / AssemblyAI / Sarvam / Groq)
-   Stage 2: electron/services/notes.js          -> electron/providers/llm/* (Gemini / Groq / Claude; JSON or Markdown notes)
-   Stage 3: electron/services/notion.js         (optional, if configured)
+ runProcessingPipeline() in main.ts  ------------------+
+   Stage 1: electron/services/transcription.ts  -> electron/providers/stt/* (Google / AssemblyAI / Sarvam / Groq)
+   Stage 2: electron/services/notes.ts          -> electron/providers/llm/* (Gemini / Groq / Claude; JSON or Markdown notes)
+   Stage 3: electron/services/notion.ts         (optional, if configured)
         |
         v
- electron/db/sessions.js (sql.js, persisted to meetmind.db)
+ electron/db/sessions.ts (sql.js, persisted to meetmind.db)
         |
         v
- renderer/app.jsx (Dashboard, NoteViewer, TranscriptViewer, Settings, LogsViewer)
+ renderer/app.tsx (Dashboard, NoteViewer, TranscriptViewer, Settings, LogsViewer)
 ```
 
 ---
@@ -85,8 +85,9 @@ docs/            This file, GCS setup guide, known issues, new-features notes, b
 site/            Static marketing site published to GitHub Pages
 .github/         Workflows, reusable actions, CODEOWNERS, Dependabot config
 electron-builder.yml   Packaging config: Windows NSIS installer, macOS DMGs + update zips, Linux AppImage + .deb
-vite.config.js         Renderer build config
-vitest.config.mjs      Test runner config (separate root from vite.config.js)
+vite.config.ts         Renderer build config
+vitest.config.ts      Test runner config (separate root from vite.config.ts)
+tsconfig.base.json     Shared TypeScript options (and the strictness ratchet); each folder has its own tsconfig.json
 eslint.config.mjs      Flat ESLint config, scoped per directory
 pnpm-workspace.yaml    pnpm settings (hoisted node_modules, supportedArchitectures, allowBuilds, minimumReleaseAge)
 ```
@@ -95,7 +96,7 @@ pnpm-workspace.yaml    pnpm settings (hoisted node_modules, supportedArchitectur
 
 ## 3. Electron process architecture
 
-### 3.1 Main process (`electron/main.js`, ~1700 lines)
+### 3.1 Main process (`electron/main.ts`, ~1700 lines)
 
 Owns:
 
@@ -107,11 +108,11 @@ Owns:
   `app:navigate`, Hide/Quit, Edit and Window menus), and `app.requestSingleInstanceLock()` to
   prevent duplicate windows/tray icons on relaunch (focuses the existing window on
   `second-instance` instead). Closing the window only hides it on every platform. On Linux,
-  `main.js` runs Electron through XWayland (`--ozone-platform=x11`, set before `ready`) whenever
+  `main.ts` runs Electron through XWayland (`--ozone-platform=x11`, set before `ready`) whenever
   `DISPLAY` is set, because a native Wayland window can't stay on top or be placed (the meeting
   overlay) and can't list other apps' windows (meeting detection); the window icon is a PNG, since
   Electron can't read `.ico` there.
-- Launch at login (`autoLaunch`, `electron/services/auto-launch.js`). On Windows the
+- Launch at login (`autoLaunch`, `electron/services/auto-launch.ts`). On Windows the
   `HKCU\…\CurrentVersion\Run` entry is named `MeetMind` and passes `--hidden`, so a login launch
   creates the window without showing it and the app starts in the tray, with meeting detection
   running. Electron's `getLoginItemSettings().openAtLogin` only looks for a value named after the
@@ -134,8 +135,8 @@ Owns:
   cold start; on Linux the `.deb`'s desktop entry declares `x-scheme-handler/meetmind` from
   electron-builder's `protocols`, and an AppImage needs desktop integration); macOS delivers them through `open-url`, registered before `ready` so the link that
   launched the app isn't lost, and gets the scheme from electron-builder's `protocols`.
-- `--smoke` (checked on the first line of `main.js`, before anything else loads): hands over to
-  `electron/smoke.js`, a headless self-test of the packaged app run by CI (section 16).
+- `--smoke` (checked on the first line of `main.ts`, before anything else loads): hands over to
+  `electron/smoke.ts`, a headless self-test of the packaged app run by CI (section 16).
 - Registration of a second custom protocol, `meetmind-audio://`, as a privileged, streaming
   scheme (`protocol.registerSchemesAsPrivileged`, called before `app.whenReady()`). This is how
   the renderer's `<audio>` player streams a session's recording straight off disk, with HTTP
@@ -153,14 +154,14 @@ Owns:
 - Top level crash guards: `process.on('uncaughtException'/'unhandledRejection')` log rather
   than crash the app, since a main-process crash takes the whole app down.
 
-Recording is orchestrated from `main.js` but the actual capture mechanics live in
-`electron/audio/recorder.js` and `electron/audio/mixer.js` (section 4).
+Recording is orchestrated from `main.ts` but the actual capture mechanics live in
+`electron/audio/recorder.ts` and `electron/audio/mixer.ts` (section 4).
 
 Notion re-sync safety: `uploadSessionToNotion()` always creates the new Notion page **before**
 deleting the old one, so a failed upload never destroys a working page; the previous page is
 only moved to Notion's trash after the new one succeeds.
 
-### 3.2 Preload (`electron/preload.js`)
+### 3.2 Preload (`electron/preload.ts`)
 
 Exposes a single `window.meetmind` object via `contextBridge.exposeInMainWorld`, with
 `contextIsolation: true` and `nodeIntegration: false`. The renderer has no direct Node or
@@ -169,13 +170,13 @@ grouped by feature:
 
 | Namespace | Channels | Purpose |
 | --- | --- | --- |
-| `platform` | (value, not a channel) | `process.platform`, read by the renderer through `renderer/lib/os.js` (`isMac`, `isWindows`, `isLinux`) |
+| `platform` | (value, not a channel) | `process.platform`, read by the renderer through `renderer/lib/os.ts` (`isMac`, `isWindows`, `isLinux`) |
 | `window` | `window:minimize/maximize/close/isMaximized` | Custom titlebar controls (frameless window on Windows and Linux; macOS uses its traffic lights) |
 | `shell` | `shell:open-external` | Open a URL in the system default browser |
 | `logs` | `logs:get`, `logs:clear`, `logs:openFolder` | Backing store for the Logs viewer |
 | `config` | `config:get`, `config:set`, `config:set-multiple` | Settings read/write |
 | `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:linux-status`, `audio:import-file` | Recording control and device enumeration (FFmpeg devices: DirectShow/WASAPI on Windows, PulseAudio sources on Linux; macOS returns an error). `audio:linux-status` returns the PulseAudio/PipeWire server, default output and input, and whether FFmpeg can record from it, for Settings › System › System audio |
-| `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/waveform/audio-status/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `audio-status` returns `{ available, deletedAt, source }`, so the Audio tab shows the player, "Recording deleted" or "No recording" (a pasted transcript has `source: 'transcript'`). `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed. Every write also sends `sessions:changed` (writes within 30 ms are sent once; `db.onChange` in `sessions.js`), and the renderer re-reads the list and the open meeting, so each status change shows at once on every screen; showing or focusing the window re-checks the revision too |
+| `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/waveform/audio-status/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `audio-status` returns `{ available, deletedAt, source }`, so the Audio tab shows the player, "Recording deleted" or "No recording" (a pasted transcript has `source: 'transcript'`). `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed. Every write also sends `sessions:changed` (writes within 30 ms are sent once; `db.onChange` in `sessions.ts`), and the renderer re-reads the list and the open meeting, so each status change shows at once on every screen; showing or focusing the window re-checks the revision too |
 | `storage` | `storage:summary`, `storage:cleanup`, `storage:delete-all`, `storage:open-folder` | Settings › Storage (section 6.3): the recordings' count and size, plus what a "Keep recordings" period (saved, or passed in to preview) would delete; deleting old or all recordings' audio; opening the recordings folder |
 | `dialog` | `dialog:choose-folder` | Native folder picker |
 | `pdf` | `pdf:export`, `pdf:reveal`, `pdf:default-dir` | PDF export |
@@ -198,13 +199,13 @@ explicit allowlist of valid channel names (`recording:started`, `recording:stopp
 `llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.
 Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
 
-The meeting overlay window uses its own, smaller preload (`electron/overlay-preload.js`, run
+The meeting overlay window uses its own, smaller preload (`electron/overlay-preload.ts`, run
 sandboxed) exposing only `window.meetmindOverlay`: `overlay:ready`, `overlay:start`,
 `overlay:stop`, `overlay:dismiss`, `overlay:keep-recording`, `overlay:open-session` (invoke),
 `overlay:shown`, `overlay:resize`, `overlay:move` and `overlay:closed` (send), and the
 `overlay:state` / `overlay:theme` push events. `overlay:ready`, `overlay:shown`,
 `overlay:resize`, `overlay:move` and `overlay:closed` are registered by
-`overlay/overlay-window.js` itself (`registerOverlayIpc()`); the actions are in `main.js`.
+`overlay/overlay-window.ts` itself (`registerOverlayIpc()`); the actions are in `main.ts`.
 
 Preload also injects the startup theme class (`light`/`dark`) onto `<html>` synchronously, by
 reading a `--meetmind-theme=` argument that main passes via
@@ -215,42 +216,42 @@ it.
 
 ### 3.3 Renderer (`renderer/`)
 
-React 18 + Vite 6, no router: `renderer/app.jsx` is a single view-state switch between:
+React 18 + Vite 6, no router: `renderer/app.tsx` is a single view-state switch between:
 
-- `Dashboard.jsx`: stats and a recent-sessions list; its search button opens Meetings with the
-  search field focused (`requestFocus`/`consumeFocus` in `lib/scrollMemory.js`).
-- `Meetings.jsx`: full session list with search, status chips, a sort menu and a Filters panel
+- `Dashboard.tsx`: stats and a recent-sessions list; its search button opens Meetings with the
+  search field focused (`requestFocus`/`consumeFocus` in `lib/scrollMemory.ts`).
+- `Meetings.tsx`: full session list with search, status chips, a sort menu and a Filters panel
   (date preset or range, length, platform, content); the filter/sort logic is pure, in
-  `lib/meetingFilters.js`. Search is `lib/meetingSearch.js`, run in the renderer over the notes
+  `lib/meetingFilters.ts`. Search is `lib/meetingSearch.ts`, run in the renderer over the notes
   and transcripts `sessions:list` already returns: stemming, a curated meeting-vocabulary
   concept map, BM25 ranking over weighted fields (title > headings/decisions/action items >
   people > notes > transcript), typo and prefix matching against the corpus vocabulary, and
   verbatim "quoted phrases", with the best-matching passage returned as a highlighted snippet.
   No embeddings or network calls.
-- `NoteViewer.jsx` / `TranscriptViewer.jsx`: a completed session's notes or raw transcript.
-- `Settings.jsx`, composed of `settings/GeneralSection.jsx`, `TranscriptionSection.jsx`,
-  `NotesSection.jsx`, `IntegrationsSection.jsx`, `SystemSection.jsx`: API keys, service
+- `NoteViewer.tsx` / `TranscriptViewer.tsx`: a completed session's notes or raw transcript.
+- `Settings.tsx`, composed of `settings/GeneralSection.tsx`, `TranscriptionSection.tsx`,
+  `NotesSection.tsx`, `IntegrationsSection.tsx`, `SystemSection.tsx`: API keys, service
   selection, FFmpeg install flow, onboarding. On macOS, `SystemSection` also shows
-  `settings/MacPermissions.jsx`: permission statuses and the "Test system audio" check, which
+  `settings/MacPermissions.tsx`: permission statuses and the "Test system audio" check, which
   records 3 s with each capture strategy and offers to switch to one that heard audio
-  (`lib/audioTest.js`). On Linux it shows `settings/LinuxAudio.jsx` instead: the PulseAudio or
+  (`lib/audioTest.ts`). On Linux it shows `settings/LinuxAudio.tsx` instead: the PulseAudio or
   PipeWire server and default output (`audio:linux-status`), whether the FFmpeg fallback can
   record from it, and the same 3 s "Test system audio" capture.
-- `LogsViewer.jsx`: tails `electron/utils/logger.js` output live via the `log:entry` IPC event.
+- `LogsViewer.tsx`: tails `electron/utils/logger.ts` output live via the `log:entry` IPC event.
 
-Supporting pieces: `RecordingBar.jsx` (persistent recording control), `ProcessingIndicator.jsx`
-(pipeline progress), `SessionCard.jsx`, `UpcomingMeetings.jsx` (events from every calendar), `settings/calendars/` (the Calendars card, its rows and the add/edit dialogs),
-`PasteTranscriptModal.jsx` (manual transcript import), `note/` (Markdown rendering,
-`copyMarkdown.js` for JSON<->Markdown conversion, `pdfDocument.jsx` for the PDF export
-template, `AudioPlayer.jsx` streaming from `meetmind-audio://`), `ui/` (Dialog, ConfirmDialog,
-`Menu.jsx` for keyboard-navigable dropdown menus).
+Supporting pieces: `RecordingBar.tsx` (persistent recording control), `ProcessingIndicator.tsx`
+(pipeline progress), `SessionCard.tsx`, `UpcomingMeetings.tsx` (events from every calendar), `settings/calendars/` (the Calendars card, its rows and the add/edit dialogs),
+`PasteTranscriptModal.tsx` (manual transcript import), `note/` (Markdown rendering,
+`copyMarkdown.ts` for JSON<->Markdown conversion, `pdfDocument.tsx` for the PDF export
+template, `AudioPlayer.tsx` streaming from `meetmind-audio://`), `ui/` (Dialog, ConfirmDialog,
+`Menu.tsx` for keyboard-navigable dropdown menus).
 
-State/plumbing: `lib/app-context.js`, `lib/hooks.js`, `lib/status.js`, `lib/format.js`,
-`lib/platform.js` (meeting platforms), `lib/os.js` (host OS), `lib/meetingFilters.js`, `lib/meetingSearch.js`, `lib/scrollMemory.js`,
-`lib/audioMeter.js`, `lib/audioTest.js`, `lib/greeting.js`.
+State/plumbing: `lib/app-context.tsx`, `lib/hooks.ts`, `lib/status.ts`, `lib/format.ts`,
+`lib/platform.ts` (meeting platforms), `lib/os.ts` (host OS), `lib/meetingFilters.ts`, `lib/meetingSearch.ts`, `lib/scrollMemory.ts`,
+`lib/audioMeter.ts`, `lib/audioTest.ts`, `lib/greeting.ts`.
 
-A second Vite entry, `renderer/overlay.html` -> `overlay.jsx` ->
-`components/overlay/MeetingOverlay.jsx`, renders the floating meeting overlay (section 3.4)
+A second Vite entry, `renderer/overlay.html` -> `overlay.tsx` ->
+`components/overlay/MeetingOverlay.tsx`, renders the floating meeting overlay (section 3.4)
 with the same `globals.css` design-system classes.
 
 Styling: Tailwind CSS (`darkMode: 'class'`, with `<html class="dark">` toggled by preload/React
@@ -268,9 +269,9 @@ preview of notes still being written runs the Markdown through `remend` first.
 The desktop app notices calls by itself, without the extension, the way Notion's and Granola's
 desktop apps do. It works on Windows and Linux; on macOS there is no backend yet, so the
 detector logs that and stays off, and Settings shows "Not available on macOS yet" instead of the
-switch. `detection/meeting-detector.js` polls every 1.5 s through a per-OS backend with the same
+switch. `detection/meeting-detector.ts` polls every 1.5 s through a per-OS backend with the same
 readers (`isAvailable`, `getLoadError`, `readMicUsers`, `listVisibleWindows`). On Windows that is
-two Win32 reads made through `koffi` FFI in `detection/win32.js` (loaded lazily, so a load failure
+two Win32 reads made through `koffi` FFI in `detection/win32.ts` (loaded lazily, so a load failure
 only disables detection):
 
 - **Who holds the mic**, from two sources merged by `mergeMicUsers()`:
@@ -289,10 +290,10 @@ only disables detection):
 - **Window titles**: `EnumWindows` + `GetWindowTextW`, with the owning exe resolved via
   `QueryFullProcessImageNameW`.
 
-On Linux, `detection/linux.js` (no koffi):
+On Linux, `detection/linux.ts` (no koffi):
 
 - **Who holds the mic**: the PulseAudio/PipeWire streams recording from a source
-  (`pactl list source-outputs`, parsed by `audio/pulse-parse.js`), as each stream's
+  (`pactl list source-outputs`, parsed by `audio/pulse-parse.ts`), as each stream's
   `application.process.binary`, folded onto one id per app by `linuxAppId()` (`google-chrome` and
   `chrome` are both `chrome`, `zoom.real` is `zoom`). Needs `pactl` (`pulseaudio-utils`); without
   it the backend reports itself unavailable.
@@ -305,7 +306,7 @@ On Linux, `detection/linux.js` (no koffi):
   Both reads are asynchronous: each poll returns the previous refresh's result and starts the
   next, so the main process never waits on `pactl`, and the two-poll debounce absorbs the lag.
 
-The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) decide:
+The pure rules and state machine in `detection/meeting-rules.ts` (unit-tested) decide:
 
 - A browser (Chrome, Chromium, Edge, Brave, Firefox, Opera, Vivaldi, Arc) holding the mic counts as a
   meeting only if it showed a Google Meet, Zoom web or Teams web title in the last 2 minutes, so
@@ -319,10 +320,10 @@ The pure rules and state machine in `detection/meeting-rules.js` (unit-tested) d
   (`https://meet.google.com/abc-defg-hij`). Recording from the prompt or its notification fallback
   saves both (`meeting_platform`, `meeting_url`), and so does any other start without a link or
   platform (the app's Record button, the tray) while a meeting is detected
-  (`resolveMeetingSource()` in `services/meeting-title.js`; a calendar event's title is kept),
+  (`resolveMeetingSource()` in `services/meeting-title.ts`; a calendar event's title is kept),
   unless the beta setting `recordUsesDetectedMeeting` (default `true`) is off. The
   meeting then shows its source like an extension recording: the card, the meeting page chip (a link only when there is a URL), the Meetings
-  platform filter, search and the PDF all use `sessionPlatform()` in `renderer/lib/platform.js`.
+  platform filter, search and the PDF all use `sessionPlatform()` in `renderer/lib/platform.ts`.
 
 Detection runs in the main process, so it keeps working while the window is minimised or hidden
 in the tray. The detector logs which mic source works when it starts, a warning if the audio
@@ -332,12 +333,12 @@ ticks, the longest gap between ticks, the apps seen on the mic). The registry no
 On Linux a failing `pactl` is logged as the audio server being unreadable. After sleep (`powerMonitor`
 `resume`) it polls at once rather than waiting for the next tick.
 
-`main.js` turns those events into overlay states, each a single compact row: `prompt` (Record / ×;
+`main.ts` turns those events into overlay states, each a single compact row: `prompt` (Record / ×;
 left unanswered for 2 minutes it closes and counts as "Not now"),
 `recording` (timer + Stop), `ended` ("Meeting ended?": it asks, never stops on its own),
 `processing`, `complete` (Open) and `error`. Recordings started from the app, tray or
 extension show the overlay too, and processing updates apply only to the session the overlay is
-following. `overlay/overlay-window.js` owns the window: frameless, transparent, always on top,
+following. `overlay/overlay-window.ts` owns the window: frameless, transparent, always on top,
 `focusable: false` and shown with `showInactive()` so it never takes focus from the call (on
 macOS a `type: 'panel'` window, which also floats over full-screen apps and every Space without
 the Dock flicker `setVisibleOnAllWorkspaces` causes there),
@@ -351,7 +352,7 @@ animation, with a 1.2 s fallback.
 The overlay window is created for each show and destroyed once it has closed, never kept hidden
 between meetings: a long-lived hidden, transparent window can stop painting (renderer or GPU
 process gone after sleep) and then "shows" as nothing. The pure lifecycle in
-`overlay/overlay-lifecycle.js` (unit-tested) drives it. The window is shown when its renderer
+`overlay/overlay-lifecycle.ts` (unit-tested) drives it. The window is shown when its renderer
 invokes `overlay:ready`; the renderer then sends `overlay:shown` once a visible state is on
 screen, and a `capturePage()` check confirms something was painted (again after `resume` and
 display changes). A window that crashes (`render-process-gone`), fails to load, hangs, isn't
@@ -375,7 +376,7 @@ The renderer captures system audio via Electron's display-media loopback API
 (`getDisplayMedia`) and the microphone via the Web Audio API, in-process, then streams encoded
 chunks to main over the `capture:chunk` IPC channel. Main appends each chunk to an
 in-progress `.webm` file on disk as it arrives, so a crash mid-recording still leaves a usable
-partial file. On stop, `convertWebmToWav()` (`electron/audio/recorder.js`, ffmpeg-backed)
+partial file. On stop, `convertWebmToWav()` (`electron/audio/recorder.ts`, ffmpeg-backed)
 produces the final `.wav` used by the transcription stage.
 
 Main's display-media handler (`installDisplayMediaHandler()`) approves the request without a
@@ -387,10 +388,10 @@ picker and answers with `audio: 'loopback'`:
   in Info.plist (without it macOS returns a silent stream with no error) and the user's Screen &
   System Audio Recording permission. Electron's macOS loopback is new and behaves differently
   per video source, so the source is configurable as `config.macCaptureStrategy`
-  (`electron/audio/mac-capture.js`): `screen` (default; a `desktopCapturer` screen), `frame`
+  (`electron/audio/mac-capture.ts`): `screen` (default; a `desktopCapturer` screen), `frame`
   (MeetMind's own frame, which may avoid the Screen Recording prompt) or `picker` (the macOS
   system picker). Settings › System › "Test system audio" runs a 3 s capture per strategy via
-  `capture:test-begin`/`capture:test-end` and lets the user switch. On macOS `main.js` asks for
+  `capture:test-begin`/`capture:test-end` and lets the user switch. On macOS `main.ts` asks for
   microphone access before a recording and allows 60 s for the renderer to start (permission
   prompts), versus 6 s elsewhere.
 - **Linux**: Chromium's loopback where it gives an audio track, through the same screen-source
@@ -405,12 +406,12 @@ alone and shows a warning.
 
 ### 4.2 Fallback path: direct ffmpeg capture (Windows and Linux)
 
-If renderer capture fails to start, `handleStartRecording()` in `main.js` falls back to a direct
-ffmpeg capture combining the microphone and system audio, using `electron/audio/mixer.js` (the
+If renderer capture fails to start, `handleStartRecording()` in `main.ts` falls back to a direct
+ffmpeg capture combining the microphone and system audio, using `electron/audio/mixer.ts` (the
 `backend` option picks the inputs). On Linux it records two PulseAudio inputs (`-f pulse`, which
 PipeWire serves through pipewire-pulse): the default output's monitor (`<sink>.monitor`, what the
 speakers or headphones play) and the default input, read from `pactl info` and
-`pactl list short sources` (`electron/audio/pulse.js`, parsed by the pure `pulse-parse.js`), so
+`pactl list short sources` (`electron/audio/pulse.ts`, parsed by the pure `pulse-parse.ts`), so
 it follows whatever the user picked in their sound settings. It needs an FFmpeg built with
 PulseAudio input (`ffmpegSupportsPulse()` runs `ffmpeg -devices` once per binary); the bundled
 Linux build has it. On Windows it is a DirectShow (`dshow`) / WASAPI capture:
@@ -431,23 +432,23 @@ pointing at the Privacy & Security permissions.
 
 ### 4.3 FFmpeg resolution
 
-`electron/audio/ffmpeg-path.js` resolves the ffmpeg/ffprobe binary path (`ffmpeg.exe` on
+`electron/audio/ffmpeg-path.ts` resolves the ffmpeg/ffprobe binary path (`ffmpeg.exe` on
 Windows, `ffmpeg` elsewhere) in this order: a bundled copy under Electron's `extraResources`
 (production installs) or a local copy at `assets/ffmpeg/` (dev machines that downloaded it
 manually; per-arch `assets/ffmpeg/mac-<arch>/` on macOS and `assets/ffmpeg/linux-<arch>/` on
 Linux), then on macOS and Linux the in-app install in `userData/ffmpeg/`, on macOS Homebrew's
 `/opt/homebrew/bin` and `/usr/local/bin` (Finder-launched apps don't inherit the shell PATH), and
 finally the bare command on PATH (where Linux finds a distro `ffmpeg`). The candidate list is built
-by the pure `ffmpegCandidates()` (unit-tested in `tests/ffmpeg-path.test.js`). If nothing is
+by the pure `ffmpegCandidates()` (unit-tested in `tests/ffmpeg-path.test.ts`). If nothing is
 found, Settings → System offers a runtime download via the `ffmpeg:install` IPC handler
-(`electron/services/ffmpeg-installer.js`).
+(`electron/services/ffmpeg-installer.ts`).
 
 Every FFmpeg MeetMind ships or installs comes from one table of pinned downloads,
-`electron/audio/ffmpeg-sources.js`, and goes through `electron/audio/ffmpeg-fetch.js`: each
-archive is checked against its pinned SHA-256 (`electron/utils/download.js`) before it is
+`electron/audio/ffmpeg-sources.ts`, and goes through `electron/audio/ffmpeg-fetch.ts`: each
+archive is checked against its pinned SHA-256 (`electron/utils/download.ts`) before it is
 unpacked (a zip with PowerShell `Expand-Archive` on Windows, `ditto` on macOS, `unzip` elsewhere;
 a `.tar.xz` with `tar`, System32's bsdtar on Windows). The same code serves the in-app
-installer and `scripts/fetch-ffmpeg.js`, which stages the binaries for CI and release builds.
+installer and `scripts/fetch-ffmpeg.ts`, which stages the binaries for CI and release builds.
 
 - **Windows**: the essentials build from [GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg)
   on GitHub (the same builds [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) serves), one zip with
@@ -472,7 +473,7 @@ repo-hygiene job actively rejects any `.exe`/`.dll`/`.msi`/`.dylib`/`.so`/`.AppI
 
 ## 5. Processing pipeline
 
-`runProcessingPipeline()` in `main.js` drives three stages in sequence. Progress is pushed to
+`runProcessingPipeline()` in `main.ts` drives three stages in sequence. Progress is pushed to
 the renderer via `processing:progress` and, via the WebSocket bridge, to the extension's overlay
 (`PROCESSING_PROGRESS` / `PROCESSING_COMPLETE`) at each stage boundary: transcription fills
 0–60%, notes 60–85% and Notion 85–100%. Within the notes stage the bar keeps moving as the
@@ -483,24 +484,24 @@ Stage 1 does not force re-transcription to be repeated once Stage 2 later fails)
 ### 5.0 Provider layer (`electron/providers/`)
 
 Every speech-to-text and LLM engine is a self-describing module registered in
-`electron/providers/index.js` (two registries built by `providers/registry.js`). A module
+`electron/providers/index.ts` (two registries built by `providers/registry.ts`). A module
 exports its metadata (`id`, `name`, `credentials[]`, curated `models[]`, `defaultModel`,
 `allowCustomModel`, `guide[]`, `capabilities`) plus `transcribe()` (STT) or `generate()` (LLM)
 and `test()`. Consequences:
 
 - The renderer gets serializable descriptors from `providers:list` and renders Settings, the
-  "key set" pills, model pickers and connection tests generically (`ProviderSection.jsx`); the
+  "key set" pills, model pickers and connection tests generically (`ProviderSection.tsx`); the
   generic `providers:test` IPC replaces the old per-vendor `api:test-*` handlers.
 - Config keys (API keys, project IDs, ...) are derived from each module's `credentials`, so
-  `config.js` needs no edit for a new provider.
-- The controllers stay provider-agnostic: `services/transcription.js` (silence check, dispatch)
-  and `services/notes.js` (prompt/mode resolution, JSON parsing, primary -> fallback).
-- Shared helpers live in `providers/shared/` (`http.js`, `wav.js`, `log.js`). Provider modules
+  `config.ts` needs no edit for a new provider.
+- The controllers stay provider-agnostic: `services/transcription.ts` (silence check, dispatch)
+  and `services/notes.ts` (prompt/mode resolution, JSON parsing, primary -> fallback).
+- Shared helpers live in `providers/shared/` (`http.ts`, `wav.ts`, `log.ts`). Provider modules
   must not import `electron` at load time, so they are unit-testable.
 
 To add an engine see [`ADDING_PROVIDERS.md`](ADDING_PROVIDERS.md).
 
-### 5.1 Stage 1: Transcription (`electron/services/transcription.js` + `electron/providers/stt/*`)
+### 5.1 Stage 1: Transcription (`electron/services/transcription.ts` + `electron/providers/stt/*`)
 
 The engine is selected by the `sttService` setting: `google` (default), `assemblyai`, `sarvam`
 or `groq`. The model comes from `sttModels[<engine>]` (curated list per engine, validated on
@@ -555,15 +556,15 @@ read). The controller checks that the recording is not silent and then calls the
   is labelled `Speaker 1` (`capabilities.diarization: false`), and it is weaker than Sarvam on
   English/Indic code-switching. The same `groqApiKey` is used by the Groq LLM provider.
 
-### 5.2 Stage 2: Notes generation (`electron/services/notes.js` + `electron/providers/llm/*`)
+### 5.2 Stage 2: Notes generation (`electron/services/notes.ts` + `electron/providers/llm/*`)
 
 `generateNotes(transcript, config, { meetingTitle, onPreview })` resolves the primary target from
 `llmProvider` and `llmModels[<provider>]`, builds the prompt for the output mode, calls
-`provider.generate()` and parses the result (`services/notes-normalize.js`: fence stripping,
+`provider.generate()` and parses the result (`services/notes-normalize.ts`: fence stripping,
 `normalizeNotes`, JSON fallback). Providers only return raw text.
 
 All three providers stream their answer, passing each text delta to `generate()`'s `onText`
-callback (Claude and Groq read server-sent events with `providers/shared/sse.js`, Gemini uses
+callback (Claude and Groq read server-sent events with `providers/shared/sse.ts`, Gemini uses
 `generateContentStream`). While the notes are being written, `generateNotes` rebuilds a preview
 from the text so far at most every 100 ms (`buildNotesPreview`: incomplete JSON is completed by
 `partial-json` and run through `normalizeNotes`; Markdown is passed through) and
@@ -574,31 +575,31 @@ any old notes, rendering the same cards or Markdown as the final notes; Markdown
 `remend` first, which closes half-written bold, code and links. Previews are never saved: the
 DB is only written once the final text parses, and on failure the old notes are shown again.
 
-`progress` is `estimateNotesProgress()` (`notes-normalize.js`): the notes are expected to run to
+`progress` is `estimateNotesProgress()` (`notes-normalize.ts`): the notes are expected to run to
 about 12% of the transcript plus 1,200 characters (between 1,500 and 12,000), progress is linear
-to 90% at that length and then creeps towards 100% without reaching it. `main.js` maps it onto
+to 90% at that length and then creeps towards 100% without reaching it. `main.ts` maps it onto
 60–84% of the bar and sends `processing:progress` (`generating`) whenever the whole percentage
 goes up, never down, so a fallback that starts over doesn't move the bar backwards.
 
 The session's `meeting_title` column holds the meeting's own title: the detected tab or window
 title, the extension's tab title, a calendar event's title, a pasted transcript's title, or a
 name the user gave it on the meeting page (`session:rename`; the pipeline re-reads it, so a
-rename during processing sticks). Source titles are filtered by `sourceMeetingTitle()` (`services/meeting-title.js`), which drops placeholders,
+rename during processing sticks). Source titles are filtered by `sourceMeetingTitle()` (`services/meeting-title.ts`), which drops placeholders,
 app names (`Google Meet`, `Zoom Meeting`, `Microsoft Teams`…) and ad-hoc Meet codes
 (`abc-defg-hij`). When it is set, the user prompt names it as the title and context, and
 `applyMeetingTitle()` makes it the notes title (and the Markdown `#` heading) whatever the model
 wrote. Without one, the session takes the LLM's title.
 
-- **Gemini** (`llm/gemini.js`, `@google/generative-ai`): `gemini-3.8-flash` (default),
+- **Gemini** (`llm/gemini.ts`, `@google/generative-ai`): `gemini-3.8-flash` (default),
   `gemini-3.7-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`, plus Google's auto-updating
   `latestModels` (`gemini-flash-latest`, `gemini-flash-lite-latest`, `gemini-pro-latest`), which
   Settings offers under a Latest / Pinned / Custom toggle. Retired model IDs saved
   by older versions are remapped through the provider's `_deprecatedModels` table.
-- **Groq** (`llm/groq.js`, OpenAI-compatible `chat/completions`): `llama-3.3-70b-versatile`
+- **Groq** (`llm/groq.ts`, OpenAI-compatible `chat/completions`): `llama-3.3-70b-versatile`
   (default), `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `llama-3.1-8b-instant`. JSON mode sends
   `response_format: {type: "json_object"}`, and asks again without streaming if a model refuses to stream in JSON mode. Free-tier tokens-per-minute limits can reject long
   transcripts (HTTP 413/429); the error says so and the fallback below covers it.
-- **Claude** (`llm/claude.js`, Anthropic Messages API `POST /v1/messages` via `fetch`, no SDK):
+- **Claude** (`llm/claude.ts`, Anthropic Messages API `POST /v1/messages` via `fetch`, no SDK):
   `claude-sonnet-5-5` (default), `claude-fable-5-1`, `claude-opus-5-5`, `claude-haiku-5-5`.
   Authenticated with `claudeApiKey` (`x-api-key` + `anthropic-version` headers).
 - All three allow a custom model ID.
@@ -608,7 +609,7 @@ Two output modes, controlled by `noteOutputMode` (the model is asked for JSON or
 - **`json`** (default): the model is asked for structured JSON (executive summary, agenda, key
   decisions, an action items array with owner/deadline/priority per item, participants, notable
   mentions, and per-topic sections with options discussed / open questions). This structured
-  form is what is rendered as cards in the Summary tab and is what the `copyMarkdown.js`
+  form is what is rendered as cards in the Summary tab and is what the `copyMarkdown.ts`
   converter round-trips to/from Markdown for editing.
 - **`markdown`**: the model is asked to write executive-style Markdown directly (`DEFAULT_MD_SYSTEM_PROMPT`), and that Markdown is stored and rendered as-is, with no structured
   round trip.
@@ -619,7 +620,7 @@ primary call fails (or the primary has no key). It is surfaced to the renderer v
 Notes record `_llmProvider`, `_llmModel`, `_sttService` and `_sttModel` (plus the legacy
 `_geminiModel`) for the note header.
 
-### 5.3 Stage 3: Notion upload (`electron/services/notion.js`, ~730 lines, optional)
+### 5.3 Stage 3: Notion upload (`electron/services/notion.ts`, ~730 lines, optional)
 
 Only runs if a Notion integration token and a target page ID are both configured. Uses the
 official `@notionhq/client` SDK. Notes are hand-converted into Notion blocks by a small custom
@@ -633,7 +634,7 @@ Whether the transcript is included alongside the notes is controlled by
 
 ## 6. Persistence
 
-### 6.1 Sessions database (`electron/db/sessions.js`)
+### 6.1 Sessions database (`electron/db/sessions.ts`)
 
 Uses `sql.js` (SQLite compiled to WebAssembly), held entirely in memory while the app runs, and
 rewritten to a single file, `<userData>/meetmind.db`, on every mutation (`db.export()` to a
@@ -666,7 +667,7 @@ startup and flips any session still marked `recording` after more than 2 hours (
 crashed mid-recording, or stop failed) to `error`, so the Dashboard never shows a phantom
 in-progress recording indefinitely.
 
-### 6.2 Settings (`electron/utils/config.js`)
+### 6.2 Settings (`electron/utils/config.ts`)
 
 Wraps `electron-store` (itself backed by a JSON file in `userData`) with a typed schema covering:
 API keys (`googleApiKey`, `geminiApiKey`, `claudeApiKey`, `assemblyAiApiKey`, `sarvamApiKey`, `groqApiKey`,
@@ -688,12 +689,12 @@ compatibility with older releases' field names: `notionToken`/`notionApiKey`,
 `notionDatabaseId`/`notionPageId`,
 `systemPrompt`/`geminiSystemPrompt`, `promptOutputMode`/`noteOutputMode`. The pre-4.0 keys `selectedModel`/`geminiModel` and
 `secondaryGeminiModel` are migrated once into `llmModels.gemini` and `llmFallback`
-(`utils/configMigration.js`).
+(`utils/configMigration.ts`).
 
-### 6.3 Recording storage (`electron/services/recordings-storage.js`, `storage-rules.js`)
+### 6.3 Recording storage (`electron/services/recordings-storage.ts`, `storage-rules.ts`)
 
 Each meeting's audio is `userData/recordings/<sessionId>.wav` (`.webm` while recording, or left
-by a crash; `getRecordingsDir()` in `main.js`). Settings › Storage (`StorageSection.jsx`) shows
+by a crash; `getRecordingsDir()` in `main.ts`). Settings › Storage (`StorageSection.tsx`) shows
 how many recordings there are and their total size, sets how long they are kept
 (`recordingRetentionDays`), and can delete old ones now, delete them all, or open the folder.
 
@@ -708,14 +709,14 @@ how many recordings there are and their total size, sets how long they are kept
   Saving a new period in Settings first asks to confirm if it would delete anything, then runs it
   at once. Like every database write, a deletion reaches the renderer as `sessions:changed`.
 - The pure rules (grouping the folder's files, what a period deletes, totals) are in
-  `storage-rules.js`; the renderer's period choices (`renderer/lib/storage.js`) must match
-  `RETENTION_DAYS`, which `tests/storageRules.test.js` checks.
+  `storage-rules.ts`; the renderer's period choices (`renderer/lib/storage.ts`) must match
+  `RETENTION_DAYS`, which `tests/storageRules.test.ts` checks.
 
 ---
 
 ## 7. Desktop <-> extension bridge
 
-### 7.1 WebSocket server (`electron/websocket-server.js`)
+### 7.1 WebSocket server (`electron/websocket-server.ts`)
 
 A plain Node `http` server plus a `ws` `WebSocketServer` attached to it, bound to
 `127.0.0.1` only. On startup it scans ports `39842` through `39852` (`PORT_RANGE = 11`,
@@ -753,22 +754,22 @@ Manifest V3. Permissions: `tabs`, `activeTab`, `storage`, `scripting`. Host perm
 `https://meet.google.com/*`, `https://*.zoom.us/*`, `http://127.0.0.1/*` (needed to reach the
 loopback WebSocket/HTTP server from the service worker and content script).
 
-- `background.js` (service worker): probes the same port range as the main process to find the
+- `background.ts` (service worker): probes the same port range as the main process to find the
   running app, opens the WebSocket, sends `START_RECORDING`/`STOP_RECORDING`/`APP_STATUS`, and
   relays `RECORDING_STARTED`/`PROCESSING_PROGRESS`/`PROCESSING_COMPLETE` broadcasts onward to
   whichever tab has the overlay open.
-- `content.js`: injected into Meet (`https://meet.google.com/*`) and Zoom's web client
+- `content.ts`: injected into Meet (`https://meet.google.com/*`) and Zoom's web client
   (`https://*.zoom.us/wc/*`, `https://*.zoom.us/j/*`) at `document_idle`. Injects the floating
   overlay UI.
-- `overlay/` (`overlay.html`/`.css`/`.js`): the floating record button and progress overlay,
+- `overlay/` (`overlay.html`/`.css`/`.ts`): the floating record button and progress overlay,
   served as a `web_accessible_resource` (along with its font and icons) so it can be embedded
   into the Meet/Zoom page's own DOM context.
-- `popup.html`/`popup.js`: the toolbar popup shown when the extension icon is clicked.
-- `open-app.html`/`open-app.js`: a small page used to hand off to the `meetmind://` protocol or
+- `popup.html`/`popup.ts`: the toolbar popup shown when the extension icon is clicked.
+- `open-app.html`/`open-app.ts`: a small page used to hand off to the `meetmind://` protocol or
   the `/open` HTTP endpoint when the desktop app needs to be brought to the foreground from a
   context the content script cannot reach directly.
 
-The extension is built from source, not committed as a zip: `scripts/build-extension.js` zips
+The extension is built from source, not committed as a zip: `scripts/build-extension.ts` zips
 `extension/` into `dist/meetmind-extension.zip`, run via `pnpm run build:ext`, and as part of
 `predev`/`prebuild` so it is always in sync with the current source.
 
@@ -782,13 +783,13 @@ Settings › Integrations › Calendars. They are saved in config as `calendars`
 
 - **ICS link** (`type: 'ics'`, `url`): a calendar's subscription (iCal / webcal) address, which
   Google, Outlook / Microsoft 365, Apple iCloud, Proton, Fastmail and most others hand out. It
-  needs no account or API key. `ics.js` downloads it (`webcal://` becomes `https://`, 20 s
+  needs no account or API key. `ics.ts` downloads it (`webcal://` becomes `https://`, 20 s
   timeout, 15 MB cap, `If-None-Match` / `If-Modified-Since` so an unchanged feed answers 304) and
-  `ics-parse.js` reads it with `ical.js`: the feed's own VTIMEZONEs (Outlook's Windows zone names
+  `ics-parse.ts` reads it with `ical.js`: the feed's own VTIMEZONEs (Outlook's Windows zone names
   included), recurring events expanded inside the window with their moved and cancelled
   occurrences, an undefined IANA `TZID` resolved through `Intl`, floating times as local time.
 - **Google account** (`type: 'google'`, `clientId`, `clientSecret`, `refreshToken`, `email`): the
-  Calendar API's primary calendar through `googleapis` (`google.js`), with an OAuth client the
+  Calendar API's primary calendar through `googleapis` (`google.ts`), with an OAuth client the
   user creates in their own Google Cloud project (MeetMind ships no client secret). Scopes are
   read-only: `calendar.readonly` and `userinfo.email`. Sign-in runs one at a time on a
   short-lived loopback server on a port in `39880`-`39890` (separate from the WebSocket bridge's
@@ -798,10 +799,10 @@ Settings › Integrations › Calendars. They are saved in config as `calendars`
   If Google rejects a refresh token, that token fails fast locally for 24 hours
   (`AUTH_RETRY_INTERVAL_MS`) instead of hitting Google every minute; signing in again clears it.
 
-The manager (`index.js`) fetches every enabled source in parallel, caching each one for the
+The manager (`index.ts`) fetches every enabled source in parallel, caching each one for the
 user's sync interval (`calendarSyncMinutes`: 1, 5, 10, 15, 30 or 60 minutes, default 5) and
 sharing in-flight requests, and merges them with
-`calendar-events.js`: events that already ended are dropped (meetings in progress stay), a
+`calendar-events.ts`: events that already ended are dropped (meetings in progress stay), a
 meeting found in several calendars (same iCalendar UID and start) shows once, and the meeting
 link comes from the conference fields or a known video host in the URL, description or location.
 `calendar:events` returns `{ events, errors }`, so a failing calendar is reported by name without
@@ -815,12 +816,12 @@ Sources hold credentials (an ICS URL is itself one), so `config:get` leaves `cal
 `config:set` ignores it: the renderer only sees `calendar:list`'s redacted rows (an ICS link's
 host, a Google account's email and client ID) and changes them through the `calendar:*` handlers.
 Pre-4.15 configs kept one Google account in `googleCalendar*` keys; `migrateLegacyCalendar()`
-(`calendar-sources.js`) moves it into the list on first read and deletes them. The pure modules
-(`calendar-sources.js`, `calendar-events.js`, `ics-parse.js`) are unit-tested.
+(`calendar-sources.ts`) moves it into the list on first read and deletes them. The pure modules
+(`calendar-sources.ts`, `calendar-events.ts`, `ics-parse.ts`) are unit-tested.
 
 ---
 
-## 9. Auto update (`electron/services/updater.js`)
+## 9. Auto update (`electron/services/updater.ts`)
 
 Uses `electron-updater` against the `github` publish provider configured in
 `electron-builder.yml` (owner `aslahtp`, repo `meetmind`, release type `release`). While
@@ -829,7 +830,7 @@ Uses `electron-updater` against the `github` publish provider configured in
 waking) is retried after 2, 10, 30 and then every 60 minutes (`RETRY_DELAYS_MS`) and never
 stops for good; waking from sleep also checks again after 30 s if the last good check is over an
 hour old. The timing and the rules below live in the pure, unit-tested
-`electron/services/update-policy.js`.
+`electron/services/update-policy.ts`.
 
 With `autoInstallUpdates` also on (default off; Settings › General › "Download and install
 updates automatically"), an update found downloads by itself through `downloadUpdate()` (which
@@ -846,7 +847,7 @@ State (`idle`/`checking`/`available`/`not-available`/`downloading`/`downloaded`/
 `errorPhase` `check` or `download`, download progress, last check time, error message, failure
 count, `autoInstall` and the release page URL) is exposed via `updater:get-status` and pushed
 live over the `updater:status` event. The renderer shows it in the top bar
-(`renderer/components/UpdateIndicator.jsx`): a pill that appears while an update is available,
+(`renderer/components/UpdateIndicator.tsx`): a pill that appears while an update is available,
 downloading (filling with progress), ready, or failed to download (not for a failed check), and
 opens a panel with the version, progress and actions (Download, Restart now, Later, Retry,
 What's new). Settings › System › Application updates has the full controls, and the tray menu
@@ -857,7 +858,7 @@ update into an app without a stable signature. So on macOS `CAN_SELF_UPDATE` is 
 as `canSelfUpdate` in the state): the app still checks `latest-mac.yml`, but "Download" opens
 the GitHub release page instead of downloading, and the UI says "Download from GitHub". Once
 mac builds are Developer ID signed and notarized, changing `canSelfUpdate()` in
-`update-policy.js` enables in-app updates there too. On Linux only the AppImage replaces itself
+`update-policy.ts` enables in-app updates there too. On Linux only the AppImage replaces itself
 (`$APPIMAGE` is set when one runs); a `.deb` install checks `latest-linux.yml` the same way and
 links to the new package, and Settings › General explains that instead of showing the
 auto-install switch.
@@ -872,10 +873,10 @@ silently breaking the next recording.
 ## 10. PDF export
 
 The renderer builds a self-contained HTML document
-(`renderer/components/note/pdfDocument.jsx`, loaded on demand), reusing the same
+(`renderer/components/note/pdfDocument.tsx`, loaded on demand), reusing the same
 `react-markdown` + `remark-gfm` rendering pipeline as the in-app notes view so the PDF matches
-what the user sees on screen. `pdf:export` in `main.js` hands that HTML to
-`electron/services/pdf-export.js`, which prints it via a hidden, sandboxed `BrowserWindow` to a
+what the user sees on screen. `pdf:export` in `main.ts` hands that HTML to
+`electron/services/pdf-export.ts`, which prints it via a hidden, sandboxed `BrowserWindow` to a
 file named `YYYY-MM-DD-HHmm-Title.pdf`. Output goes to `config.pdfExportDir`, or the user's
 Downloads folder when that setting is empty, and an existing file at that name is never
 overwritten (a fresh timestamp/name is used instead). Whether the transcript is appended to the
@@ -887,21 +888,21 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 
 | Service | Used for | Auth | Called from |
 | --- | --- | --- | --- |
-| Google Cloud Speech-to-Text v1 | Transcription (fallback, no project ID configured) | API key | `electron/providers/stt/google.js` |
-| Google Cloud Speech-to-Text v2 | Transcription (`chirp_3` sync, or BatchRecognize for long audio) | Service account Bearer token (no API-key auth) | `electron/providers/stt/google.js` |
-| Google Cloud Storage | Staging WAV files for v2 BatchRecognize | Service account key file | `electron/providers/stt/google.js` (`@google-cloud/storage`) |
-| Google Gemini API | Meeting notes generation (Stage 2) | API key | `electron/providers/llm/gemini.js` (`@google/generative-ai`) |
-| Anthropic Claude API | Notes generation (Sonnet, Fable, Opus, Haiku) | API key | `electron/providers/llm/claude.js` (REST via `fetch`) |
-| Groq | Notes generation (Llama, GPT-OSS) and Whisper transcription | API key (one key for both) | `electron/providers/llm/groq.js`, `electron/providers/stt/groq.js` (REST via `fetch`) |
-| AssemblyAI | Transcription (alternative engine) | API key | `electron/providers/stt/assemblyai.js` (`assemblyai` SDK + REST) |
-| Sarvam AI | Transcription, `saaras:v3` model for English/Indic code-switching | API key | `electron/providers/stt/sarvam.js` (REST) |
-| Notion API | Optional notes sync (Stage 3) | Internal integration token | `electron/services/notion.js` (`@notionhq/client`) |
-| Google Calendar API | Optional upcoming meetings and reminders (Google accounts) | OAuth2 (user-supplied client ID/secret) | `electron/calendar/google.js` (`googleapis`) |
-| ICS calendar feeds | Optional upcoming meetings and reminders (Google, Outlook, Apple, Proton…) | The private subscription URL itself | `electron/calendar/ics.js` (`fetch`), parsed by `ical.js` |
+| Google Cloud Speech-to-Text v1 | Transcription (fallback, no project ID configured) | API key | `electron/providers/stt/google.ts` |
+| Google Cloud Speech-to-Text v2 | Transcription (`chirp_3` sync, or BatchRecognize for long audio) | Service account Bearer token (no API-key auth) | `electron/providers/stt/google.ts` |
+| Google Cloud Storage | Staging WAV files for v2 BatchRecognize | Service account key file | `electron/providers/stt/google.ts` (`@google-cloud/storage`) |
+| Google Gemini API | Meeting notes generation (Stage 2) | API key | `electron/providers/llm/gemini.ts` (`@google/generative-ai`) |
+| Anthropic Claude API | Notes generation (Sonnet, Fable, Opus, Haiku) | API key | `electron/providers/llm/claude.ts` (REST via `fetch`) |
+| Groq | Notes generation (Llama, GPT-OSS) and Whisper transcription | API key (one key for both) | `electron/providers/llm/groq.ts`, `electron/providers/stt/groq.ts` (REST via `fetch`) |
+| AssemblyAI | Transcription (alternative engine) | API key | `electron/providers/stt/assemblyai.ts` (`assemblyai` SDK + REST) |
+| Sarvam AI | Transcription, `saaras:v3` model for English/Indic code-switching | API key | `electron/providers/stt/sarvam.ts` (REST) |
+| Notion API | Optional notes sync (Stage 3) | Internal integration token | `electron/services/notion.ts` (`@notionhq/client`) |
+| Google Calendar API | Optional upcoming meetings and reminders (Google accounts) | OAuth2 (user-supplied client ID/secret) | `electron/calendar/google.ts` (`googleapis`) |
+| ICS calendar feeds | Optional upcoming meetings and reminders (Google, Outlook, Apple, Proton…) | The private subscription URL itself | `electron/calendar/ics.ts` (`fetch`), parsed by `ical.js` |
 | GitHub Releases | Auto-update distribution | none (public releases) | `electron-updater`, configured in `electron-builder.yml` |
-| GyanD/codexffmpeg (gyan.dev builds) | Windows FFmpeg binaries | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
-| ffmpeg.martin-riedl.de | macOS FFmpeg binaries (arm64 + x64) | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
-| BtbN/FFmpeg-Builds (GitHub releases) | Linux x64 FFmpeg binaries (GPL static build with PulseAudio input) | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.js`, used by `scripts/fetch-ffmpeg.js` (bundled build) and `ffmpeg:install` |
+| GyanD/codexffmpeg (gyan.dev builds) | Windows FFmpeg binaries | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.ts`, used by `scripts/fetch-ffmpeg.ts` (bundled build) and `ffmpeg:install` |
+| ffmpeg.martin-riedl.de | macOS FFmpeg binaries (arm64 + x64) | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.ts`, used by `scripts/fetch-ffmpeg.ts` (bundled build) and `ffmpeg:install` |
+| BtbN/FFmpeg-Builds (GitHub releases) | Linux x64 FFmpeg binaries (GPL static build with PulseAudio input) | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.ts`, used by `scripts/fetch-ffmpeg.ts` (bundled build) and `ffmpeg:install` |
 | Sigstore (via `actions/attest`) | Signed build-provenance attestations for release files | GitHub OIDC (release workflow only) | `attest` job in `release.yml` |
 
 All of the above except GitHub Releases and FFmpeg distribution are bring-your-own-credentials:
@@ -946,12 +947,13 @@ From `package.json` (pnpm, Node 22.12+, Windows, macOS or Linux).
 | `electron-builder` | ^26.17.0 | Packaging the Windows NSIS installer, the macOS DMGs and the Linux AppImage and `.deb` (26.0.13+ is needed for ad-hoc `identity: "-"` signing) |
 | `react`, `react-dom` | ^18.3.1 | Renderer UI framework |
 | `vite`, `@vitejs/plugin-react` | ^6.4.3 / ^4.7.0 | Renderer dev server and build |
-| `vitest` | ^5.0.1 | Test runner (`tests/**/*.test.{js,jsx}`, Node environment) |
+| `vitest` | ^5.0.1 | Test runner (`tests/**/*.test.{ts,tsx}`, Node environment) |
+| `typescript`, `typescript-eslint`, `tsx`, `@types/*` | | The whole codebase is TypeScript: `tsc` type-checks every folder (`pnpm run typecheck`) and compiles `electron/` to `dist/electron/` and `extension/` to `dist/extension/`; Vite/esbuild compiles the renderer and tests; `tsx` runs the build scripts. `typescript` stays on 6.0.x until typescript-eslint supports TypeScript 7 |
 | `tailwindcss`, `autoprefixer`, `postcss`, `@tailwindcss/typography` | | Styling pipeline |
 | `eslint`, `@eslint/js`, `eslint-plugin-react`, `eslint-plugin-react-hooks`, `globals` | | Linting (flat config, scoped per directory: `electron/`, `renderer/`, `extension/`, `scripts/`, `tests/`) |
 | `concurrently` | ^9.2.4 | Runs Vite + Electron together in `pnpm run dev` |
 | `cross-env` | ^7.0.3 | Cross-platform env var setting in npm scripts |
-| `sharp` | ^0.35.4 | Icon raster generation (`generate-icons.js`) |
+| `sharp` | ^0.35.4 | Icon raster generation (`generate-icons.ts`) |
 | `png-to-ico` | ^3.0.2 | `.ico` generation for the Windows installer/app icon |
 | `rcedit` | ^5.0.2 | Editing the packaged `.exe`'s resources (icon, version info) |
 
@@ -973,8 +975,8 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
 
 | Path | Contents |
 | --- | --- |
-| `assets/icons/` | Source SVG/PNG icon plus every generated resolution (16 through 1024px; the 1024px `icon.png` is what electron-builder turns into the macOS `.icns`), the Windows `.ico`, and the macOS menu-bar `trayTemplate.png`/`@2x` (from `tray-template.svg`), regenerated by `pnpm run generate-icons` (`scripts/generate-icons.js`, via `sharp` + `png-to-ico`); also holds third-party service icons (Google Calendar, Google Meet, Notion) used in the UI, and an `icons/services` subfolder |
-| `assets/ffmpeg/` | Empty at rest (only a `README.md`); FFmpeg binaries are never committed (over GitHub's 100 MB limit and actively rejected by CI's repo-hygiene check). Windows: `ffmpeg.exe`/`ffprobe.exe` at the root, placed manually or by `release.yml`. macOS: `mac-arm64/` and `mac-x64/`; Linux: `linux-x64/`; both filled by `scripts/fetch-ffmpeg.js` |
+| `assets/icons/` | Source SVG/PNG icon plus every generated resolution (16 through 1024px; the 1024px `icon.png` is what electron-builder turns into the macOS `.icns`), the Windows `.ico`, and the macOS menu-bar `trayTemplate.png`/`@2x` (from `tray-template.svg`), regenerated by `pnpm run generate-icons` (`scripts/generate-icons.ts`, via `sharp` + `png-to-ico`); also holds third-party service icons (Google Calendar, Google Meet, Notion) used in the UI, and an `icons/services` subfolder |
+| `assets/ffmpeg/` | Empty at rest (only a `README.md`); FFmpeg binaries are never committed (over GitHub's 100 MB limit and actively rejected by CI's repo-hygiene check). Windows: `ffmpeg.exe`/`ffprobe.exe` at the root, placed manually or by `release.yml`. macOS: `mac-arm64/` and `mac-x64/`; Linux: `linux-x64/`; both filled by `scripts/fetch-ffmpeg.ts` |
 | `assets/installer.nsh` | Custom NSIS installer script logic (referenced by `electron-builder.yml`'s `nsis.include`) |
 | `assets/entitlements.mac.plist` | macOS entitlements (JIT, library validation, audio input), applied once the hardened runtime is turned on with Developer ID signing |
 | `renderer/assets/fonts/` and `extension/fonts/` | `DMSans-Variable.woff2` (OFL licensed, see accompanying `OFL.txt`), used identically in the app UI and the injected extension overlay so both match the design system in `DESIGN.md` |
@@ -1031,12 +1033,13 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
 
 ## 15. Build and packaging
 
-- **Renderer**: Vite (`vite.config.js`, `root: 'renderer'`) builds to `dist/renderer/`. The app
+- **Renderer**: Vite (`vite.config.ts`, `root: 'renderer'`) builds to `dist/renderer/`. The app
   version is injected into the renderer bundle at build time as a `__APP_VERSION__` global,
   read straight from `package.json` so the UI's displayed version can never drift from the
   packaged app's actual version. There are two HTML entries: `index.html` (the app) and
   `overlay.html` (the meeting overlay window).
-- **Extension**: `scripts/build-extension.js` zips `extension/` into
+- **Main process**: `pnpm run compile:electron` (`scripts/compile-electron.ts`) compiles `electron/` with `tsc` (`electron/tsconfig.build.json`, CommonJS, no bundler) into `dist/electron/`, which `package.json`'s `main` (`dist/electron/entry.js`) and electron-builder use; every dev and build script runs it first. `electron/utils/paths.ts` finds `dist/renderer` and `assets` from wherever the code runs (sources, `dist/electron`, inside the asar).
+- **Extension**: `scripts/build-extension.ts` compiles the extension's scripts (`extension/tsconfig.build.json`; classic scripts, so no file imports or exports) into `dist/extension/`, copies the static files next to them, stamps the version into that copy of `manifest.json` and zips it into
   `dist/meetmind-extension.zip` (`pnpm run build:ext`).
 - **Electron packaging** (`electron-builder.yml`): `appId: com.meetmind.app` (also the Windows
   AppUserModelId of the packaged app; unpackaged runs use `com.meetmind.app.dev` so their
@@ -1084,7 +1087,7 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
 - **`pnpm run build:dir`** / **`pnpm run build:mac:dir`** / **`pnpm run build:linux:dir`**: production renderer build + an
   unpacked Electron app under `dist/desktop/`, for fast local iteration without building the full
   installer.
-- **Smoke test**: a packaged app started with `--smoke` (`electron/smoke.js`) uses a throwaway
+- **Smoke test**: a packaged app started with `--smoke` (`electron/smoke.ts`) uses a throwaway
   profile, opens no window, checks config + DB, finds and runs ffmpeg/ffprobe, encodes a 1 s Opus
   WebM and converts it with `convertWebmToWav`, loads koffi (not on Linux), on Linux reaches the
   audio server with `pactl` and records a second from the default output's monitor with the bundled
@@ -1092,7 +1095,7 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
   API and the meeting-detection backend (including the WASAPI audio sessions or PulseAudio
   streams, whose status it reports without failing, since a CI runner may have no audio service),
   shows the meeting overlay until its renderer acknowledges it, prints `MEETMIND_SMOKE {json}` and exits non-zero on any failure.
-  `scripts/check-smoke.js` reads that output in CI, fails the step unless every check passed,
+  `scripts/check-smoke.ts` reads that output in CI, fails the step unless every check passed,
   and writes a table of the checks to the job summary.
 
 ---
@@ -1132,7 +1135,7 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
 - **`release.yml`**: triggers on a push to `main` that touches `package.json` (i.e. a version
   bump). Calls `ci.yml` as a gate first. The `build` job then builds the Windows installer with a
   read-only token and no dependency cache, bundling the pinned, checksum-verified FFmpeg
-  (`scripts/fetch-ffmpeg.js`), then smoke-tests the unpacked app. The `build-mac`
+  (`scripts/fetch-ffmpeg.ts`), then smoke-tests the unpacked app. The `build-mac`
   job (`macos-latest`, same read-only/no-cache rules) fetches the pinned macOS FFmpeg for arm64
   and x64, runs `pnpm run build:mac`, verifies both apps' signatures and bundled FFmpeg and that
   `latest-mac.yml` lists both update zips, and smoke-tests the arm64 app; signing secrets would
@@ -1169,31 +1172,31 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
 
 ## 17. Testing
 
-`pnpm run test` runs Vitest (`vitest.config.mjs`, Node environment) over `tests/**/*.test.{js,jsx}`. Tests live in a separate `tests/` directory rather than beside the code they cover, specifically so electron-builder's packaged `files` list (which does not reference `tests/`)
+`pnpm run test` runs Vitest (`vitest.config.ts`, Node environment) over `tests/**/*.test.{ts,tsx}`. Tests live in a separate `tests/` directory rather than beside the code they cover, specifically so electron-builder's packaged `files` list (which does not reference `tests/`)
 never ships them in the installed app.
 
 Current coverage is pure logic only:
 
 | Test file | Covers |
 | --- | --- |
-| `tests/copyMarkdown.test.js` | Notes JSON <-> Markdown round-tripping (`renderer/components/note/copyMarkdown.js`) |
-| `tests/platform.test.js` | A meeting's platform from detection or its link, and finding detected meetings by platform in search (`renderer/lib/platform.js`) |
-| `tests/format.test.js` | Formatting helpers (`renderer/lib/format.js`), including file sizes |
-| `tests/storageRules.test.js` | Recording retention: periods, grouping the recordings folder, what cleanup and "Delete all" delete (meeting date vs file date, busy meetings kept) and the Settings › Storage copy (`electron/services/storage-rules.js`, `renderer/lib/storage.js`) |
-| `tests/markdown.test.jsx` | Markdown rendering (`renderer/components/note/markdown.jsx`) |
-| `tests/pdf-export.test.js` | PDF file naming (`electron/services/pdf-export.js`) |
-| `tests/meetingFilters.test.js` | Meetings filters and sorting (`renderer/lib/meetingFilters.js`) |
-| `tests/meetingSearch.test.js` | Meeting search: stemming, concept map, typos, prefixes, phrases, ranking and snippets (`renderer/lib/meetingSearch.js`) |
-| `tests/meetingDetection.test.js` | Meeting-detection rules: consent-key parsing, merging the two mic sources, meeting window titles (and Google Meet links rebuilt from a meeting code), Linux app ids and title-based app names, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.js`) |
-| `tests/autoLaunch.test.js` | Launch at login on Windows, macOS and Linux: reading the state from `launchItems`, `--hidden`, respecting an entry disabled in Task Manager, removing leftover entries, dev mode, and the Linux XDG autostart entry (AppImage path, quoting, entries disabled in the desktop's settings) (`electron/services/auto-launch.js`) |
-| `tests/pulseParse.test.js` | `pactl` output parsing (server and defaults, sources, recording streams), picking the monitor and microphone, and the PulseAudio FFmpeg arguments (`electron/audio/pulse-parse.js`, `electron/audio/mixer.js`) |
-| `tests/updatePolicy.test.js` | Update rules: check scheduling and retries, which installs can update themselves (`canSelfUpdate`), auto-install, idle detection and hidden relaunch (`electron/services/update-policy.js`) |
-| `tests/settingsForm.test.js` | Settings dirty checks and saving only the changed fields (`renderer/lib/settingsForm.js`) |
-| `tests/notesPreview.test.js` | Live notes preview: partial Markdown and JSON (`buildNotesPreview` in `electron/services/notes-normalize.js`) and the throttled `onPreview` snapshots of `generateNotes`, including a fallback |
-| `tests/meetingTitle.test.js` | Which source titles name the meeting, how one replaces the LLM's title and prompts it, and how a recording's link, title and platform are filled from the detected meeting (`electron/services/meeting-title.js`, `buildUserPrompt`) |
-| `tests/ffmpeg-path.test.js` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.js`) and the per-OS silent-recording hints (`electron/audio/audio-hints.js`) |
-| `tests/macSupport.test.js` | macOS capture strategies (`electron/audio/mac-capture.js`), "Test system audio" verdicts (`renderer/lib/audioTest.js`), and the shape of every pinned FFmpeg download and how each archive is unpacked (`electron/audio/ffmpeg-sources.js`, `ffmpeg-fetch.js`) |
-| `tests/macPermissions.test.jsx` | Server-renders the macOS Permissions card (`renderer/components/settings/MacPermissions.jsx`), which can't be seen in the Windows dev app |
+| `tests/copyMarkdown.test.ts` | Notes JSON <-> Markdown round-tripping (`renderer/components/note/copyMarkdown.ts`) |
+| `tests/platform.test.ts` | A meeting's platform from detection or its link, and finding detected meetings by platform in search (`renderer/lib/platform.ts`) |
+| `tests/format.test.ts` | Formatting helpers (`renderer/lib/format.ts`), including file sizes |
+| `tests/storageRules.test.ts` | Recording retention: periods, grouping the recordings folder, what cleanup and "Delete all" delete (meeting date vs file date, busy meetings kept) and the Settings › Storage copy (`electron/services/storage-rules.ts`, `renderer/lib/storage.ts`) |
+| `tests/markdown.test.tsx` | Markdown rendering (`renderer/components/note/markdown.tsx`) |
+| `tests/pdf-export.test.ts` | PDF file naming (`electron/services/pdf-export.ts`) |
+| `tests/meetingFilters.test.ts` | Meetings filters and sorting (`renderer/lib/meetingFilters.ts`) |
+| `tests/meetingSearch.test.ts` | Meeting search: stemming, concept map, typos, prefixes, phrases, ranking and snippets (`renderer/lib/meetingSearch.ts`) |
+| `tests/meetingDetection.test.ts` | Meeting-detection rules: consent-key parsing, merging the two mic sources, meeting window titles (and Google Meet links rebuilt from a meeting code), Linux app ids and title-based app names, and the detect/end/dismiss state machine (`electron/detection/meeting-rules.ts`) |
+| `tests/autoLaunch.test.ts` | Launch at login on Windows, macOS and Linux: reading the state from `launchItems`, `--hidden`, respecting an entry disabled in Task Manager, removing leftover entries, dev mode, and the Linux XDG autostart entry (AppImage path, quoting, entries disabled in the desktop's settings) (`electron/services/auto-launch.ts`) |
+| `tests/pulseParse.test.ts` | `pactl` output parsing (server and defaults, sources, recording streams), picking the monitor and microphone, and the PulseAudio FFmpeg arguments (`electron/audio/pulse-parse.ts`, `electron/audio/mixer.ts`) |
+| `tests/updatePolicy.test.ts` | Update rules: check scheduling and retries, which installs can update themselves (`canSelfUpdate`), auto-install, idle detection and hidden relaunch (`electron/services/update-policy.ts`) |
+| `tests/settingsForm.test.ts` | Settings dirty checks and saving only the changed fields (`renderer/lib/settingsForm.ts`) |
+| `tests/notesPreview.test.ts` | Live notes preview: partial Markdown and JSON (`buildNotesPreview` in `electron/services/notes-normalize.ts`) and the throttled `onPreview` snapshots of `generateNotes`, including a fallback |
+| `tests/meetingTitle.test.ts` | Which source titles name the meeting, how one replaces the LLM's title and prompts it, and how a recording's link, title and platform are filled from the detected meeting (`electron/services/meeting-title.ts`, `buildUserPrompt`) |
+| `tests/ffmpeg-path.test.ts` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.ts`) and the per-OS silent-recording hints (`electron/audio/audio-hints.ts`) |
+| `tests/macSupport.test.ts` | macOS capture strategies (`electron/audio/mac-capture.ts`), "Test system audio" verdicts (`renderer/lib/audioTest.ts`), and the shape of every pinned FFmpeg download and how each archive is unpacked (`electron/audio/ffmpeg-sources.ts`, `ffmpeg-fetch.ts`) |
+| `tests/macPermissions.test.tsx` | Server-renders the macOS Permissions card (`renderer/components/settings/MacPermissions.tsx`), which can't be seen in the Windows dev app |
 
 The packaged app is additionally checked by its `--smoke` self-test in CI (section 15). There is
 no maintainer Mac or Linux machine, so macOS and Linux behaviour beyond that (permission prompts,
@@ -1213,7 +1216,7 @@ Tracked in detail in [`docs/KNOWN_ISSUES.md`](KNOWN_ISSUES.md); at the time of w
 includes a Markdown round-trip bug where a fenced code block inside a list-based notes section
 (Action Items, Participants, Notable Mentions, or a topic's Options Discussed/Open Questions)
 gets flattened into extra list items on save, because the list-line parser in
-`copyMarkdown.js` does not track code-fence state independently of the section splitter that
+`copyMarkdown.ts` does not track code-fence state independently of the section splitter that
 does track it, and the pinned Intel Mac FFmpeg downloads, whose host stops publishing Intel builds
 in January 2027 and which need mirroring before a removal breaks releases.
 

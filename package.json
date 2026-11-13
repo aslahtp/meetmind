@@ -1,6 +1,6 @@
 {
   "name": "meetmind",
-  "version": "4.17.0",
+  "version": "4.17.1",
   "description": "Open-source AI meeting notes app for Windows, macOS and Linux: record Google Meet and Zoom calls, transcribe with AssemblyAI, Google STT, Sarvam AI or Groq, summarize with Gemini, Groq or Claude, and sync to Notion.",
   "keywords": [
     "ai-meeting-notes",
@@ -42,7 +42,7 @@
     "predev": "pnpm run generate-icons && pnpm run build:ext",
     "dev": "concurrently \"vite\" \"pnpm run dev:electron\"",
     "dev:renderer": "vite",
-    "compile:electron": "node scripts/compile-electron.js",
+    "compile:electron": "tsx scripts/compile-electron.ts",
     "dev:electron": "pnpm run compile:electron && cross-env NODE_ENV=development electron .",
     "prebuild": "pnpm run generate-icons && pnpm run build:ext",
     "build": "vite build && pnpm run compile:electron && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --config electron-builder.yml --publish never",
@@ -55,12 +55,12 @@
     "prebuild:linux": "pnpm run generate-icons && pnpm run build:ext",
     "build:linux": "vite build && pnpm run compile:electron && electron-builder --linux --x64 --config electron-builder.yml --publish never",
     "build:linux:dir": "vite build && pnpm run compile:electron && electron-builder --linux --x64 --dir --config electron-builder.yml",
-    "fetch-ffmpeg": "node scripts/fetch-ffmpeg.js",
-    "build:ext": "node scripts/build-extension.js",
+    "fetch-ffmpeg": "tsx scripts/fetch-ffmpeg.ts",
+    "build:ext": "tsx scripts/build-extension.ts",
     "preview": "vite preview",
-    "generate-icons": "node scripts/generate-icons.js",
+    "generate-icons": "tsx scripts/generate-icons.ts",
     "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json && tsc -p electron/tsconfig.json && tsc -p renderer/tsconfig.json && tsc -p tests/tsconfig.json && tsc -p scripts/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p electron/tsconfig.json && tsc -p renderer/tsconfig.json && tsc -p tests/tsconfig.json && tsc -p scripts/tsconfig.json && tsc -p extension/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest"
   },

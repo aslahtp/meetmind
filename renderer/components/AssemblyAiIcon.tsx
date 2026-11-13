@@ -1,0 +1,16 @@
+import React from 'react';
+import assemblyAiSvg from '@assets/icons/services/assemblyai-color.svg';
+
+export default function AssemblyAiIcon({ size = 16, className = '' }: { size?: any; className?: any }) {
+  return (
+    <img
+      src={assemblyAiSvg}
+      alt=""
+      width={size}
+      height={size}
+      className={`inline-block shrink-0 object-contain logo-mono ${className}`.trim()}
+      draggable={false}
+      aria-hidden="true"
+    />
+  );
+}

@@ -14,7 +14,7 @@
     } catch (e) { /* theme is cosmetic */ }
   </script>
   <!-- Startup splash: inline so it paints on the first frame, before the bundle loads.
-       The app icon draws itself in hairlines, then main.jsx fades it out once React has mounted.
+       The app icon draws itself in hairlines, then main.tsx fades it out once React has mounted.
        Colours are local copies of --color-paper / --color-ink; the preload sets <html class="dark|light">. -->
   <style>
     #splash {
@@ -28,7 +28,7 @@
       transition: opacity 280ms ease-out;
     }
     html.dark #splash { --splash-paper: #1a1813; --splash-ink: #f8f5ed; }
-    /* Held on its first (empty) frame until main.jsx adds .splash-play, which it does once the window
+    /* Held on its first (empty) frame until main.tsx adds .splash-play, which it does once the window
        is actually on screen: the window is created hidden, so the draw would otherwise run unseen. */
     #splash:not(.splash-play), #splash:not(.splash-play) * { animation-play-state: paused !important; }
     #splash.splash-out { opacity: 0; pointer-events: none; }
@@ -83,6 +83,6 @@
     <p class="splash-word">MeetMind</p>
   </div>
   <div id="root"></div>
-  <script type="module" src="/main.jsx"></script>
+  <script type="module" src="/main.tsx"></script>
 </body>
 </html>

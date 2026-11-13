@@ -1,0 +1,11 @@
+{
+  // Emits the extension's scripts to dist/extension/ (run through `pnpm run build:ext`, which also
+  // copies the manifest, HTML, CSS, fonts and icons next to them).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": ".",
+    "outDir": "../dist/extension",
+    "newLine": "lf"
+  }
+}

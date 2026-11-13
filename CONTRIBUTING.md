@@ -24,7 +24,7 @@ pnpm run dev
 
 ## Making changes
 
-- Run `pnpm run lint` and `pnpm run test` before opening a PR. The tests cover pure logic only, so also verify a change by running the app with `pnpm run dev` and exercising the affected flow.
+- Run `pnpm run lint`, `pnpm run typecheck` and `pnpm run test` before opening a PR. The tests cover pure logic only, so also verify a change by running the app with `pnpm run dev` and exercising the affected flow.
 - Before changing any UI, read [DESIGN.md](DESIGN.md); it defines MeetMind's visual language and component patterns.
 - For any change beyond a typo or formatting fix, bump `version` in `package.json` using semantic versioning and add an entry to [CHANGELOG.md](CHANGELOG.md) in the same pull request. The rules are in [AGENTS.md](AGENTS.md#versioning-and-changelog).
 - Do not commit FFmpeg binaries, `package-lock.json`, `.env` files or API keys.
@@ -35,7 +35,7 @@ pnpm run dev
 2. Keep each pull request focused on one change.
 3. Describe what changed, why, and how you tested it; include screenshots for UI changes.
 4. Make sure `pnpm run build:dir` (Windows), `pnpm run build:mac:dir` (macOS) or `pnpm run build:linux:dir` (Linux) still succeeds if you touched packaging or the main process.
-5. CI must pass: lint, tests, build, the Windows, macOS and Linux builds with their smoke tests (skipped for docs-only PRs), secret scan, dependency audit, CodeQL, and the version/changelog check. For comment- or formatting-only changes, a maintainer can add the `skip-version-check` label.
+5. CI must pass: lint, type check, tests, build, the Windows, macOS and Linux builds with their smoke tests (skipped for docs-only PRs), secret scan, dependency audit, CodeQL, and the version/changelog check. For comment- or formatting-only changes, a maintainer can add the `skip-version-check` label.
 6. If this is your first PR, a maintainer approves the CI run before it starts. Changes to `.github/`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `electron-builder.yml` or `scripts/` need maintainer review (see `.github/CODEOWNERS`). Pin any new GitHub Action to a full commit SHA, and add dependencies with `pnpm add`, which refuses versions less than a day old; see [AGENTS.md](AGENTS.md#cicd).
 
 By contributing, you agree that your contributions are licensed under the [GNU General Public License v3.0](LICENSE) and that you will follow the [Code of Conduct](CODE_OF_CONDUCT.md).

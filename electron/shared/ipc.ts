@@ -40,8 +40,7 @@ import type { UpdaterActionResult, UpdaterState } from './updater';
 
 /**
  * Most handlers resolve `{ success: true, ... }` or `{ success: false, error }` instead of throwing.
- * Note: until `strictNullChecks` is on (Phase 11), `if (!r.success)` does not narrow this union;
- * `r.success === false` does.
+ * Narrow with `if (!r.success)` / `if (r.success)` (needs `strictNullChecks`, which is on).
  */
 export type Outcome<T = unknown> = ({ success: true } & T) | { success: false; error: string };
 

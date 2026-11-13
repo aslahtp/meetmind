@@ -1,0 +1,263 @@
+/// <reference lib="dom" />
+import { contextBridge, ipcRenderer } from 'electron';
+import type { Meetmind } from './shared';
+
+// Apply the theme class to <html> before the page's own scripts run, so the
+// renderer never paints the wrong theme while the async config:get round-trip is
+// in flight. Main passes the saved theme via webPreferences.additionalArguments,
+// so this reads argv only — no IPC, nothing that can block or deadlock startup.
+//
+// This runs *after* exposeInMainWorld below and can never throw: preload executes
+// before the document is parsed, so documentElement may not exist yet. Losing the
+// theme costs a brief flash; losing the bridge takes out sessions, settings, and
+// the custom titlebar's window controls with it.
+function resolveStartupTheme(): 'light' | 'dark' {
+  try {
+    const arg = (process.argv || []).find((a) => a.startsWith('--meetmind-theme='));
+    const configured = arg ? arg.split('=')[1] : 'light';
+    const themeSetting = ['light', 'dark', 'system'].includes(configured) ? configured : 'light';
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return (themeSetting === 'system' ? (prefersDark ? 'dark' : 'light') : themeSetting) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+function applyStartupThemeClass() {
+  const root = document && document.documentElement;
+  if (!root) return false;
+  root.classList.add(resolveStartupTheme());
+  return true;
+}
+
+// Resolved once, before the page's scripts run: an inline <head> script in index.html reads it
+// so the startup splash paints in the saved theme (the fallback below only lands at
+// DOMContentLoaded, after the splash has already been painted).
+let startupTheme: 'light' | 'dark' = 'light';
+try { startupTheme = resolveStartupTheme(); } catch { /* theme is cosmetic — never fatal */ }
+
+// Startup splash: main sends window:shown whenever the window goes from hidden to visible (first
+// launch, reopening from the tray). Relay it to the page as a DOM event, which crosses the
+// context-isolation boundary, and remember it: the first one can arrive before the page's own
+// scripts are listening, and a reload happens with the window already visible.
+let windowShown = false;
+function markWindowShown() {
+  windowShown = true;
+  try { window.dispatchEvent(new Event('meetmind:window-shown')); } catch { /* cosmetic */ }
+}
+ipcRenderer.on('window:shown', markWindowShown);
+ipcRenderer.invoke('window:isVisible')
+  .then((visible) => { if (visible && !windowShown) markWindowShown(); })
+  .catch(() => { /* cosmetic — the page falls back to a timer */ });
+
+// Typed against the contract in electron/shared/ipc.ts, which the renderer's window.meetmind also uses.
+const meetmind: Meetmind = {
+  // Effective theme ('light' | 'dark') at launch, for index.html's pre-paint script.
+  startupTheme,
+
+  // Host OS ('win32' | 'darwin' | ...), for OS-specific copy and window chrome. See renderer/lib/os.js.
+  platform: process.platform,
+
+  // Window controls (frameless window)
+  window: {
+    minimize:    () => ipcRenderer.invoke('window:minimize'),
+    maximize:    () => ipcRenderer.invoke('window:maximize'),
+    close:       () => ipcRenderer.invoke('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+    // True once the window has been on screen (see markWindowShown); used by the startup splash.
+    wasShown:    () => windowShown,
+  },
+
+  // Shell — open URLs in the system default browser
+  shell: {
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  },
+
+  // Logs
+  logs: {
+    get: (options) => ipcRenderer.invoke('logs:get', options),
+    getHistory: (options) => ipcRenderer.invoke('logs:get', options),
+    clear: () => ipcRenderer.invoke('logs:clear'),
+    openFolder: () => ipcRenderer.invoke('logs:openFolder'),
+  },
+
+  // Config
+  config: {
+    get: () => ipcRenderer.invoke('config:get'),
+    set: (key, value) => ipcRenderer.invoke('config:set', key, value),
+    setMultiple: (updates) => ipcRenderer.invoke('config:set-multiple', updates),
+    autoLaunchStatus: () => ipcRenderer.invoke('config:autoLaunchStatus'),
+  },
+
+  // Recording
+  recording: {
+    // meetingUrl/meetingTitle come from a calendar event when recording one from the Dashboard.
+    start: (sessionId, meetingUrl, meetingTitle) => ipcRenderer.invoke('recording:start', sessionId, meetingUrl, meetingTitle),
+    stop: () => ipcRenderer.invoke('recording:stop'),
+    listDevices: () => ipcRenderer.invoke('audio:list-devices'),
+    probeDevice: (device) => ipcRenderer.invoke('audio:probe-device', device),
+    // Linux: the audio server (PulseAudio / PipeWire) and whether FFmpeg can record from it.
+    linuxStatus: () => ipcRenderer.invoke('audio:linux-status'),
+    uploadFile: () => ipcRenderer.invoke('audio:import-file'),
+  },
+
+  // Sessions
+  sessions: {
+    list: () => ipcRenderer.invoke('sessions:list'),
+    revision: () => ipcRenderer.invoke('sessions:revision'),
+    get: (id) => ipcRenderer.invoke('session:get', id),
+    delete: (id) => ipcRenderer.invoke('session:delete', id),
+    updateNotes: (id, notes) => ipcRenderer.invoke('session:update-notes', id, notes),
+    rename: (id, title) => ipcRenderer.invoke('session:rename', id, title),
+    openRecording: (id) => ipcRenderer.invoke('session:open-recording', id),
+    waveform: (id) => ipcRenderer.invoke('session:waveform', id),
+    // { available, deletedAt, source }: whether the Audio tab has a recording to play, and if not, why.
+    audioStatus: (id) => ipcRenderer.invoke('session:audio-status', id),
+    createFromTranscript: (opts) => ipcRenderer.invoke('session:create-from-transcript', opts),
+  },
+
+  // Recording storage (Settings › Storage). Deleting keeps each meeting's notes and transcript.
+  storage: {
+    // retentionDays previews an unsaved "Keep recordings" choice; omit it for the saved one.
+    summary: (retentionDays) => ipcRenderer.invoke('storage:summary', retentionDays),
+    cleanup: () => ipcRenderer.invoke('storage:cleanup'),
+    deleteAll: () => ipcRenderer.invoke('storage:delete-all'),
+    openFolder: () => ipcRenderer.invoke('storage:open-folder'),
+  },
+
+  // Native dialogs
+  dialog: {
+    chooseFolder: (opts) => ipcRenderer.invoke('dialog:choose-folder', opts),
+  },
+
+  // PDF export
+  pdf: {
+    export: (sessionId, html) => ipcRenderer.invoke('pdf:export', sessionId, html),
+    reveal: (filePath) => ipcRenderer.invoke('pdf:reveal', filePath),
+    defaultDir: () => ipcRenderer.invoke('pdf:default-dir'),
+  },
+
+  // Notion
+  notion: {
+    upload: (sessionId) => ipcRenderer.invoke('notion:upload', sessionId),
+    testConnection: (token, dbId) => ipcRenderer.invoke('notion:test', token, dbId),
+  },
+
+  // STT / LLM providers (descriptors + generic connection test)
+  providers: {
+    list: () => ipcRenderer.invoke('providers:list'),
+    test: (opts) => ipcRenderer.invoke('providers:test', opts),
+  },
+
+  // Gemini
+  gemini: {
+    getDefaultSystemPrompt: () => ipcRenderer.invoke('gemini:default-system-prompt'),
+    getMdDefaultSystemPrompt: () => ipcRenderer.invoke('gemini:default-md-system-prompt'),
+  },
+
+  // Processing
+  processing: {
+    run: (sessionId) => ipcRenderer.invoke('processing:run', sessionId),
+    retry: (sessionId, stage) => ipcRenderer.invoke('processing:retry', sessionId, stage),
+  },
+
+  // System audio capture (main ↔ renderer)
+  capture: {
+    // options: { requireSystemAudio } — fail rather than record the mic alone (main can fall back).
+    onStart: (callback) => { ipcRenderer.on('capture:start', (_e, options) => callback(options || {})); },
+    onStop: (callback) => { ipcRenderer.on('capture:stop', () => callback()); },
+    sendStarted: (sources) => ipcRenderer.send('capture:started', sources),
+    sendFailed: (error) => ipcRenderer.send('capture:failed', error),
+    sendChunk: (buffer) => ipcRenderer.send('capture:chunk', buffer),
+    sendAudioData: (buffer) => ipcRenderer.send('capture:audio-data', buffer),
+    // Settings' "Test system audio": switch the macOS capture strategy for one test capture.
+    testBegin: (strategy) => ipcRenderer.invoke('capture:test-begin', strategy),
+    testEnd: () => ipcRenderer.invoke('capture:test-end'),
+  },
+
+  // macOS privacy permissions (microphone, Screen & System Audio Recording)
+  permissions: {
+    status: () => ipcRenderer.invoke('permissions:status'),
+    request: (kind) => ipcRenderer.invoke('permissions:request', kind),
+    openSettings: (kind) => ipcRenderer.invoke('permissions:open-settings', kind),
+  },
+
+  // Calendars: Google accounts and ICS links (up to 5). Sources come back redacted.
+  calendar: {
+    list: () => ipcRenderer.invoke('calendar:list'),
+    add: (input) => ipcRenderer.invoke('calendar:add', input),
+    update: (id, patch) => ipcRenderer.invoke('calendar:update', id, patch),
+    remove: (id) => ipcRenderer.invoke('calendar:remove', id),
+    reconnect: (id) => ipcRenderer.invoke('calendar:reconnect', id),
+    cancelAuth: () => ipcRenderer.invoke('calendar:cancel-auth'),
+    getEvents: (options) => ipcRenderer.invoke('calendar:events', options),
+  },
+
+  // Auto updater
+  updater: {
+    check: () => ipcRenderer.invoke('updater:check'),
+    download: () => ipcRenderer.invoke('updater:download'),
+    install: () => ipcRenderer.invoke('updater:install'),
+    getStatus: () => ipcRenderer.invoke('updater:get-status'),
+  },
+
+  app: {
+    getVersion: () => ipcRenderer.invoke('app:version'),
+  },
+
+  // FFmpeg
+  ffmpeg: {
+    check: () => ipcRenderer.invoke('ffmpeg:check'),
+    install: () => ipcRenderer.invoke('ffmpeg:install'),
+    onProgress: (callback) => {
+      const sub = (_e: any, data: any) => callback(data);
+      ipcRenderer.on('ffmpeg:install-progress', sub);
+      return () => ipcRenderer.removeListener('ffmpeg:install-progress', sub);
+    },
+  },
+
+  // Event listeners
+  on: (channel, callback) => {
+    const validChannels = [
+      'recording:started',
+      'recording:stopped',
+      'recording:error',
+      'transcription:progress',
+      'processing:progress',
+      'processing:complete',
+      'processing:error',
+      'processing:cancelled',
+      'notes:preview',
+      'ws:extension-connected',
+      'ws:recording-requested',
+      'sessions:changed',
+      'updater:status',
+      'calendar:meeting-starting',
+      'calendar:changed',
+      'llm:fallback-used',
+      'log:entry',
+      'app:open-session',
+      'app:navigate',
+    ];
+    if (validChannels.includes(channel)) {
+      const subscription = (_event: any, ...args: unknown[]) => (callback as (...a: unknown[]) => void)(...args);
+      ipcRenderer.on(channel, subscription);
+      return () => ipcRenderer.removeListener(channel, subscription);
+    }
+  },
+
+  off: (channel, callback) => {
+    ipcRenderer.removeListener(channel, callback);
+  },
+};
+contextBridge.exposeInMainWorld('meetmind', meetmind);
+
+// Bridge is up — now the cosmetic part, isolated so a failure here can't affect it.
+try {
+  if (!applyStartupThemeClass()) {
+    // <html> didn't exist yet; retry at the earliest point it must.
+    document.addEventListener('DOMContentLoaded', () => {
+      try { applyStartupThemeClass(); } catch { /* theme is cosmetic — never fatal */ }
+    }, { once: true });
+  }
+} catch { /* theme is cosmetic — never fatal */ }

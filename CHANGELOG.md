@@ -1,10 +1,16 @@
 ---
 tags: [meta, changelog]
-updated: 2026-11-08
+updated: 2026-11-13
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.17.1] - 2026-11-13
+
+### Fixed
+
+- Settings › System › System audio on Linux now shows the audio server status; the card called a function that did not exist and always stayed empty.
 
 ## [4.17.0] - 2026-11-08
 

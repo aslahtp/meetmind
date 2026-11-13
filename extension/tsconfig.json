@@ -1,0 +1,12 @@
+{
+  // Chrome MV3 extension. The scripts are classic (non-module) scripts that share globals within a
+  // page, so no file may import or export: each stays a plain script and is emitted as one.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["chrome"]
+  },
+  "include": ["./**/*.ts"]
+}

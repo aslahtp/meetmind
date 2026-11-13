@@ -1,0 +1,242 @@
+import path from 'path';
+import fs from 'fs';
+import { app } from 'electron';
+import logger from '../utils/logger';
+
+let db: any = null;
+let SQL = null;
+
+function getDbPath() {
+  const userData = app.getPath('userData');
+  return path.join(userData, 'meetmind.db');
+}
+
+// Bumped on every write, so the renderer can skip re-reading every session when nothing changed.
+let revision = 0;
+
+function getRevision() {
+  return revision;
+}
+
+// Called after every write with the new revision; main.js tells the renderer (sessions:changed),
+// so every screen shows a status change the moment it is saved.
+const changeListeners = new Set<(revision: number) => void>();
+
+function onChange(listener: any) {
+  changeListeners.add(listener);
+  return () => changeListeners.delete(listener);
+}
+
+function persist() {
+  if (!db) return;
+  revision += 1;
+  try {
+    const data: any = db.export();
+    const buf = Buffer.from(data);
+    fs.writeFileSync(getDbPath(), buf);
+  } catch (err: any) {
+    logger.error('Failed to persist database', { error: err.message });
+  }
+  for (const listener of changeListeners) {
+    try {
+      listener(revision);
+    } catch (err: any) {
+      logger.warn('Database change listener failed', { error: err.message });
+    }
+  }
+}
+
+async function initialize() {
+  const initSqlJs = require('sql.js');
+  SQL = await initSqlJs();
+  const dbPath = getDbPath();
+
+  logger.info('Initializing SQLite database', { dbPath });
+
+  if (fs.existsSync(dbPath)) {
+    const buf = fs.readFileSync(dbPath);
+    db = new SQL.Database(buf);
+  } else {
+    db = new SQL.Database();
+  }
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id                TEXT PRIMARY KEY,
+      title             TEXT NOT NULL DEFAULT 'Untitled Meeting',
+      meeting_url       TEXT,
+      started_at        DATETIME,
+      ended_at          DATETIME,
+      duration_seconds  INTEGER,
+      audio_path        TEXT,
+      transcript        TEXT,
+      notes             TEXT,
+      notion_page_url   TEXT,
+      status            TEXT NOT NULL DEFAULT 'recording'
+    )
+  `);
+  // Added in 4.0.0: why the last processing run failed (no migration system, so add if missing).
+  const cols = db.exec('PRAGMA table_info(sessions)')[0]?.values.map((r: any) => r[1]) || [];
+  if (!cols.includes('last_error')) db.run('ALTER TABLE sessions ADD COLUMN last_error TEXT');
+  // Added in 4.10.0: the meeting's own title (detected tab, calendar, pasted title), kept over the LLM's.
+  if (!cols.includes('meeting_title')) db.run('ALTER TABLE sessions ADD COLUMN meeting_title TEXT');
+  // Added in 4.17.0: when Settings › Storage deleted the recording (the notes and transcript stay),
+  // and where a meeting came from ('transcript' for a pasted transcript, otherwise NULL).
+  if (!cols.includes('audio_deleted_at')) db.run('ALTER TABLE sessions ADD COLUMN audio_deleted_at TEXT');
+  if (!cols.includes('source')) db.run('ALTER TABLE sessions ADD COLUMN source TEXT');
+  // Added in 4.17.0: the platform meeting detection saw ('meet' | 'zoom' | 'teams'), for meetings
+  // recorded from its prompt, which have no link to read it from.
+  if (!cols.includes('meeting_platform')) db.run('ALTER TABLE sessions ADD COLUMN meeting_platform TEXT');
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
+  persist();
+
+  logger.info('Database initialized');
+  return db;
+}
+
+function ensureDb() {
+  if (!db) throw new Error('Database not initialized. Call initialize() first.');
+  return db;
+}
+
+// ── CRUD ──────────────────────────────────────────────────────────────────────
+
+function createSession(session: any) {
+  const d = ensureDb();
+  d.run(
+    `INSERT INTO sessions (id, title, meeting_title, meeting_url, meeting_platform, started_at, audio_path, status, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      session.id,
+      session.title         || 'Untitled Meeting',
+      session.meeting_title || null,
+      session.meeting_url   || null,
+      session.meeting_platform || null,
+      session.started_at  || new Date().toISOString(),
+      session.audio_path  || null,
+      session.status      || 'recording',
+      session.source      || null,
+    ]
+  );
+  persist();
+  return getSession(session.id);
+}
+
+function updateSession(id: any, updates: any) {
+  const d = ensureDb();
+  const allowed = ['title', 'meeting_title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status', 'last_error', 'audio_deleted_at'];
+  const keys = Object.keys(updates).filter((k) => allowed.includes(k));
+  if (keys.length === 0) return;
+
+  const setClause = keys.map((k) => `${k} = ?`).join(', ');
+  const values = keys.map((k) => updates[k]);
+  values.push(id);
+  d.run(`UPDATE sessions SET ${setClause} WHERE id = ?`, values);
+  persist();
+}
+
+function getSession(id: any) {
+  const d = ensureDb();
+  const stmt = d.prepare('SELECT * FROM sessions WHERE id = ?');
+  stmt.bind([id]);
+  if (!stmt.step()) {
+    stmt.free();
+    return null;
+  }
+  const row = stmt.getAsObject();
+  stmt.free();
+  return deserializeSession(row);
+}
+
+function listSessions({ limit = null, offset = 0 }: any = {}) {
+  const d = ensureDb();
+  let stmt;
+  if (limit !== null) {
+    stmt = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?');
+    stmt.bind([limit, offset]);
+  } else {
+    stmt = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC');
+    stmt.bind([]);
+  }
+  const rows = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject());
+  }
+  stmt.free();
+  return rows.map(deserializeSession);
+}
+
+function deleteSession(id: any) {
+  const d = ensureDb();
+  d.run('DELETE FROM sessions WHERE id = ?', [id]);
+  persist();
+}
+
+function getSessionCount() {
+  const d = ensureDb();
+  const stmt = d.prepare('SELECT COUNT(*) as count FROM sessions');
+  stmt.step();
+  const count = stmt.get()[0];
+  stmt.free();
+  return count;
+}
+
+function getRecentSessions(limit = 5) {
+  return listSessions({ limit });
+}
+
+/**
+ * Mark sessions stuck in 'recording' (e.g. app crashed or stop failed) as 'error'
+ * if they started more than 2 hours ago.
+ */
+function markStaleRecordingSessionsAsError() {
+  const d = ensureDb();
+  const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  d.run(`UPDATE sessions SET status = 'error' WHERE status = 'recording' AND started_at < ?`, [cutoff]);
+  persist();
+}
+
+// ── Deserialization ───────────────────────────────────────────────────────────
+
+function deserializeSession(row: any) {
+  if (!row) return null;
+  return {
+    ...row,
+    transcript: safeJsonParse(row.transcript, []),
+    notes:      safeJsonParse(row.notes, null),
+  };
+}
+
+function safeJsonParse(value: any, fallback: any) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+// ── Duration calculation ──────────────────────────────────────────────────────
+
+function computeDuration(session: any) {
+  if (!session.started_at || !session.ended_at) return null;
+  const start = new Date(session.started_at).getTime();
+  const end   = new Date(session.ended_at).getTime();
+  return Math.round((end - start) / 1000);
+}
+
+export {
+  initialize,
+  createSession,
+  updateSession,
+  getSession,
+  listSessions,
+  deleteSession,
+  getSessionCount,
+  getRecentSessions,
+  markStaleRecordingSessionsAsError,
+  getRevision,
+  onChange,
+  computeDuration,
+};
