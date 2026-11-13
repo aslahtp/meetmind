@@ -1,14 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AppContext } from '../renderer/lib/app-context';
+import { AppContext, type AppContextValue } from '../renderer/lib/app-context';
+import type { RendererConfig } from '../electron/shared';
 import MacPermissions from '../renderer/components/settings/MacPermissions';
 
 // The Permissions card only renders on macOS, so it can't be seen in the Windows dev app; this
 // at least renders it to markup to catch crashes and check the copy.
-function render(ctx: any) {
+interface FakeContext {
+  config: Partial<RendererConfig>;
+  updateConfig: () => void;
+  isRecording: boolean;
+}
+
+function render(ctx: FakeContext) {
   return renderToStaticMarkup(
-    React.createElement(AppContext.Provider, { value: ctx }, React.createElement(MacPermissions)),
+    React.createElement(AppContext.Provider, { value: ctx as unknown as AppContextValue }, React.createElement(MacPermissions)),
   );
 }
 

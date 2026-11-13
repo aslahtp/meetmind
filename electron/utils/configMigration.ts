@@ -1,3 +1,14 @@
+import type { LlmFallback } from '../shared';
+
+/** The saved settings the migration reads. */
+interface LegacyModelSettings {
+  selectedModel?: string;
+  geminiModel?: string;
+  secondaryGeminiModel?: string;
+  llmModels?: Record<string, string>;
+  llmFallback?: LlmFallback;
+}
+
 /**
  * Pure config migration (no electron-store) so it can be unit tested.
  *
@@ -8,13 +19,13 @@
  * Returns { set, remove } describing what to write/delete; both are empty when
  * there is nothing to migrate, so calling it on every read is cheap and idempotent.
  */
-function migrateLegacyModels(raw: any, deprecatedGeminiModels = {}) {
-  const set: any = {};
-  const remove = [];
+function migrateLegacyModels(raw: LegacyModelSettings, deprecatedGeminiModels: Record<string, string> = {}) {
+  const set: { llmModels?: Record<string, string>; llmFallback?: LlmFallback } = {};
+  const remove: string[] = [];
 
-  const remap = (id: any) => (deprecatedGeminiModels as any)[id] || id;
+  const remap = (id: string) => deprecatedGeminiModels[id] || id;
   const legacyModel = raw.selectedModel || raw.geminiModel || '';
-  const llmModels = raw.llmModels && typeof raw.llmModels === 'object' ? raw.llmModels : {};
+  const llmModels: Record<string, string> = raw.llmModels && typeof raw.llmModels === 'object' ? raw.llmModels : {};
 
   if (legacyModel) {
     if (!llmModels.gemini) set.llmModels = { ...llmModels, gemini: remap(legacyModel) };
@@ -23,8 +34,8 @@ function migrateLegacyModels(raw: any, deprecatedGeminiModels = {}) {
 
   // Retired Gemini IDs saved under the new key.
   const current = (set.llmModels || llmModels).gemini;
-  if (current && (deprecatedGeminiModels as any)[current]) {
-    set.llmModels = { ...(set.llmModels || llmModels), gemini: (deprecatedGeminiModels as any)[current] };
+  if (current && deprecatedGeminiModels[current]) {
+    set.llmModels = { ...(set.llmModels || llmModels), gemini: deprecatedGeminiModels[current] };
   }
 
   const legacyFallback = raw.secondaryGeminiModel || '';

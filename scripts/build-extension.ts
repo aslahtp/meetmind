@@ -42,8 +42,8 @@ const manifestPath = path.join(BUILD_DIR, 'manifest.json');
 let manifestText: string | null = null;
 try {
   manifestText = fs.readFileSync(manifestPath, 'utf8');
-} catch (err: any) {
-  if (err.code !== 'ENOENT') throw err;
+} catch (err) {
+  if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) throw err;
 }
 if (manifestText !== null) {
   const manifest = JSON.parse(manifestText);
@@ -68,8 +68,8 @@ try {
       { stdio: 'inherit' }
     );
   }
-} catch (err: any) {
-  console.error('Failed to create extension zip:', err.message);
+} catch (err) {
+  console.error('Failed to create extension zip:', err instanceof Error ? err.message : String(err));
   process.exit(1);
 } finally {
   fs.rmSync(STAGING_ROOT, { recursive: true, force: true });

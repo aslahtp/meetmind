@@ -1,7 +1,7 @@
 import React from 'react';
 import groqPng from '@assets/icons/services/groq-icon.svg';
 
-export default function GroqIcon({ size = 16, className = '' }: { size?: any; className?: any }) {
+export default function GroqIcon({ size = 16, className = '' }: { size?: number | string; className?: string }) {
   return (
     <img
       src={groqPng}

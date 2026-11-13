@@ -9,10 +9,23 @@ import {
   dueToStart,
   pruneNotified,
 } from '../electron/calendar/calendar-events';
+import type { CalendarEvent } from '../electron/shared';
 
 const NOW = Date.UTC(2026, 10, 2, 10, 0, 0);
-const at = (minutes: any) => new Date(NOW + minutes * 60_000).toISOString();
-const ev = (fields: any) => ({ id: fields.uid, isAllDay: false, sourceType: 'ics', ...fields });
+const at = (minutes: number) => new Date(NOW + minutes * 60_000).toISOString();
+const ev = (fields: Partial<CalendarEvent> & { uid: string }): CalendarEvent => ({
+  id: fields.uid,
+  title: '',
+  start: '',
+  end: '',
+  location: '',
+  description: '',
+  sourceId: '',
+  sourceName: '',
+  isAllDay: false,
+  sourceType: 'ics',
+  ...fields,
+});
 
 describe('extractMeetingLink', () => {
   it('prefers conference fields over text', () => {
@@ -81,8 +94,8 @@ describe('mergeEvents', () => {
 
   it('keeps an all-day event for the whole day', () => {
     const today = new Date(NOW);
-    const pad = (n: any) => String(n).padStart(2, '0');
-    const day = (d: any) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const day = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
     const merged = mergeEvents([[ev({ uid: 'h', title: 'Holiday', isAllDay: true, start: day(today), end: day(tomorrow) })]], { now: NOW });
     expect(merged).toHaveLength(1);

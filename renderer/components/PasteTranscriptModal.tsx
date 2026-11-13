@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, ClipboardPaste } from 'lucide-react';
 import { useApp } from '../lib/app-context';
+import { errorMessage as messageOf } from '../lib/errors';
 import { Dialog, TextField, StatusDot } from './ui/index';
 import { useNotesProviderIcon } from './settings/providers/providerIcons';
 import { STAGE_LABELS } from '../lib/status';
@@ -19,16 +20,16 @@ function defaultTitle() {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function PasteTranscriptModal({ onClose }: { onClose?: any }) {
+export default function PasteTranscriptModal({ onClose }: { onClose: () => void }) {
   const { openSession, refreshSessions, trackProcessing } = useApp();
   const NotesIcon = useNotesProviderIcon();
 
   const [title, setTitle] = useState(defaultTitle);
   const [transcript, setTranscript] = useState('');
-  const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'error'
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [progressLabel, setProgressLabel] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const textareaRef = useRef<any>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Track live processing stage from the existing IPC event
   useEffect(() => {
@@ -69,9 +70,9 @@ export default function PasteTranscriptModal({ onClose }: { onClose?: any }) {
       const session = await window.meetmind.sessions.get(result.sessionId);
       onClose();
       if (session) openSession(session);
-    } catch (err: any) {
+    } catch (err) {
       setStatus('error');
-      setErrorMessage(err.message || 'Failed to process transcript.');
+      setErrorMessage(messageOf(err) || 'Failed to process transcript.');
     }
   }, [title, transcript, openSession, refreshSessions, onClose, trackProcessing]);
 
@@ -123,7 +124,7 @@ export default function PasteTranscriptModal({ onClose }: { onClose?: any }) {
         <TextField
           label="Meeting title"
           value={title}
-          onChange={(e: any) => setTitle(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
           disabled={busy}
           placeholder="e.g. Monday standup"
         />

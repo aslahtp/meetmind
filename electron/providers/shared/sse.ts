@@ -4,7 +4,7 @@
  * Yield each JSON event of a server-sent-events body. Skips the OpenAI-style
  * `data: [DONE]` sentinel, which marks the end of the stream and isn't JSON.
  */
-async function* readEvents(body: any) {
+async function* readEvents<T = unknown>(body: ReadableStream<Uint8Array>): AsyncGenerator<T> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -19,7 +19,7 @@ async function* readEvents(body: any) {
         .filter((line) => line.startsWith('data:'))
         .map((line) => line.slice(5).trimStart())
         .join('\n');
-      if (data && data !== '[DONE]') yield JSON.parse(data);
+      if (data && data !== '[DONE]') yield JSON.parse(data) as T; // T: the fields the caller reads from the provider's event JSON
     }
     if (done) return;
   }

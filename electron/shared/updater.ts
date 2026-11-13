@@ -1,4 +1,4 @@
-// Auto-update state. Source: getUpdaterState() in electron/services/updater.js.
+// Auto-update state. Source: getUpdaterState() in electron/services/updater.ts.
 
 export type UpdaterStatus =
   | 'idle'
@@ -37,7 +37,8 @@ export interface UpdaterState {
   currentVersion: string;
   updateInfo: UpdateInfo | null;
   downloadProgress: UpdateDownloadProgress;
-  lastCheckTime: number | null;
+  /** ISO timestamp of the last check. */
+  lastCheckTime: string | null;
   errorMessage: string | null;
   /** What the last error interrupted. */
   errorPhase: 'check' | 'download' | null;

@@ -1,14 +1,30 @@
 // Settings › System › "Test system audio" (macOS and Linux): the capture methods it can try on
-// macOS (mirrors electron/audio/mac-capture.js), the test itself, and how a result reads.
+// macOS (mirrors electron/audio/mac-capture.ts), the test itself, and how a result reads.
 
-export const CAPTURE_STRATEGIES = [
+import type { MacCaptureStrategy } from '@shared';
+import { errorMessage } from './errors';
+
+/** What one test heard: `peak` (0–1) and whether the stream `ended`, or why it could not run. */
+export interface AudioTestResult {
+  peak?: number;
+  ended?: boolean;
+  error?: string;
+}
+
+/** A test result as a StatusDot tone plus its caption. */
+export interface AudioTestVerdict {
+  tone: 'ok' | 'warning' | 'error';
+  text: string;
+}
+
+export const CAPTURE_STRATEGIES: Array<{ id: MacCaptureStrategy; label: string; description: string }> = [
   { id: 'screen', label: 'Screen source', description: 'The standard method. Needs Screen & System Audio Recording permission.' },
   { id: 'frame', label: 'App window source', description: 'Uses MeetMind’s own window; may work without Screen Recording permission.' },
   { id: 'picker', label: 'System picker', description: 'macOS asks you to choose what to share each time a recording starts.' },
 ];
 
 const TEST_SECONDS = 3;
-const sleep = (ms: any) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** How long each test records, in seconds. */
 export const CAPTURE_TEST_SECONDS = TEST_SECONDS;
@@ -18,11 +34,11 @@ export const CAPTURE_TEST_SECONDS = TEST_SECONDS;
  * `strategy` picks the capture method for this test; Linux has one method. Resolves with
  * { peak, ended } or { error }.
  */
-export async function runCaptureTest(strategy: any) {
+export async function runCaptureTest(strategy: MacCaptureStrategy): Promise<AudioTestResult> {
   const begin = await window.meetmind.capture.testBegin(strategy);
   if (!begin?.success) return { error: begin?.error || 'Could not start the test' };
-  let stream = null;
-  let ctx = null;
+  let stream: MediaStream | null = null;
+  let ctx: AudioContext | null = null;
   try {
     stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
     stream.getVideoTracks().forEach((t) => t.stop());
@@ -45,8 +61,8 @@ export async function runCaptureTest(strategy: any) {
       ended = track.readyState === 'ended';
     }
     return { peak, ended };
-  } catch (err: any) {
-    return { error: err?.message || String(err) };
+  } catch (err) {
+    return { error: errorMessage(err) || String(err) };
   } finally {
     stream?.getTracks().forEach((t) => t.stop());
     ctx?.close().catch(() => {});
@@ -58,7 +74,7 @@ export async function runCaptureTest(strategy: any) {
 export const HEARD_THRESHOLD = 0.01;
 
 /** Largest absolute sample in a Float32Array of audio samples. */
-export function peakOf(samples: any) {
+export function peakOf(samples: ArrayLike<number>): number {
   let peak = 0;
   for (let i = 0; i < samples.length; i++) {
     const v = Math.abs(samples[i]);
@@ -71,12 +87,13 @@ export function peakOf(samples: any) {
  * Reads a test result { peak, ended, error } as { tone, text } for a StatusDot + caption.
  * 'ok' only when audio was heard; silence can mean nothing was playing, so it says so.
  */
-export function describeAudioTest(result: any) {
+export function describeAudioTest(result: AudioTestResult | null | undefined): AudioTestVerdict | null {
   if (!result) return null;
+  const peak = result.peak ?? 0;
   if (result.error) return { tone: 'error', text: `Failed: ${result.error}` };
-  if (result.ended && !(result.peak > HEARD_THRESHOLD)) {
+  if (result.ended && !(peak > HEARD_THRESHOLD)) {
     return { tone: 'error', text: 'The system audio stream stopped straight away. This method doesn’t work on this computer.' };
   }
-  if (result.peak > HEARD_THRESHOLD) return { tone: 'ok', text: `Heard system audio (peak ${Math.round(result.peak * 100)}%).` };
+  if (peak > HEARD_THRESHOLD) return { tone: 'ok', text: `Heard system audio (peak ${Math.round(peak * 100)}%).` };
   return { tone: 'warning', text: 'Silent. Make sure something was playing; if it was, this method doesn’t capture audio here.' };
 }

@@ -3,19 +3,27 @@ import { Bell, BellOff, ExternalLink, Link2, LogIn, MoreHorizontal, Pencil, Tras
 import GoogleCalendarIcon from '../../GoogleCalendarIcon';
 import { AvatarTile, IconButton, StatusDot, Switch, Menu, MenuItem } from '../../ui/index';
 import { openExternal } from '../SettingsParts';
+import type { CalendarEntry } from '../types';
+import type { CalendarSyncStatus } from '@shared';
 
 const MENU_ICON = { size: 14, strokeWidth: 1.75, 'aria-hidden': true };
 
-function syncedAgo(at: any, now: any) {
-  const minutes = Math.floor((now - at) / 60_000);
+function syncedAgo(at: number | undefined, now: number) {
+  const minutes = Math.floor((now - (at ?? now)) / 60_000);
   if (minutes < 1) return 'Synced just now';
   if (minutes < 60) return `Synced ${minutes} min ago`;
   const hours = Math.floor(minutes / 60);
   return `Synced ${hours} h ago`;
 }
 
-function StatusLine({ source, busy, now }: { source?: any; busy?: any; now?: any }) {
-  const { status = {} } = source;
+interface StatusLineProps {
+  source: CalendarEntry;
+  busy?: 'signin' | 'save';
+  now: number;
+}
+
+function StatusLine({ source, busy, now }: StatusLineProps) {
+  const status: Partial<CalendarSyncStatus> = source.status || {};
   if (busy === 'signin') {
     return (
       <>
@@ -58,9 +66,24 @@ function StatusLine({ source, busy, now }: { source?: any; busy?: any; now?: any
 }
 
 /** One calendar source: what it is, how its sync is going, and its on/off switch and menu. */
-export default function CalendarRow({ source, busy, removing, now, onToggle, onReminders, onRename, onEditLink, onSignIn, onCancelSignIn, onRemove }: { source?: any; busy?: any; removing?: any; now?: any; onToggle?: any; onReminders?: any; onRename?: any; onEditLink?: any; onSignIn?: any; onCancelSignIn?: any; onRemove?: any }) {
+interface CalendarRowProps {
+  source: CalendarEntry;
+  busy?: 'signin' | 'save';
+  removing: boolean;
+  now: number;
+  onToggle: (enabled: boolean) => void;
+  onReminders: () => void;
+  onRename: () => void;
+  onEditLink: () => void;
+  onSignIn: () => void;
+  onCancelSignIn: () => void;
+  onRemove: () => void;
+}
+
+export default function CalendarRow({ source, busy, removing, now, onToggle, onReminders, onRename, onEditLink, onSignIn, onCancelSignIn, onRemove }: CalendarRowProps) {
   const isGoogle = source.type === 'google';
-  const { status = {} } = source;
+  const status: Partial<CalendarSyncStatus> = source.status || {};
+  const { actionUrl } = status;
   const needsSignIn = isGoogle && status.needsSignIn && source.enabled;
 
   return (
@@ -86,7 +109,7 @@ export default function CalendarRow({ source, busy, removing, now, onToggle, onR
             <StatusLine source={source} busy={busy} now={now} />
           </p>
 
-          {(needsSignIn || status.actionUrl || busy === 'signin') && source.enabled && (
+          {(needsSignIn || actionUrl || busy === 'signin') && source.enabled && (
             <div className="flex flex-wrap items-center gap-8 mt-16">
               {busy === 'signin' ? (
                 <button type="button" onClick={onCancelSignIn} className="btn-ghost btn-sm">Cancel sign-in</button>
@@ -96,8 +119,8 @@ export default function CalendarRow({ source, busy, removing, now, onToggle, onR
                   Sign in with Google
                 </button>
               ) : null}
-              {status.actionUrl && busy !== 'signin' && (
-                <button type="button" onClick={() => openExternal(status.actionUrl)} className="btn-ghost btn-sm">
+              {actionUrl && busy !== 'signin' && (
+                <button type="button" onClick={() => openExternal(actionUrl)} className="btn-ghost btn-sm">
                   <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
                   {status.actionLabel || 'Open'}
                 </button>
@@ -116,7 +139,7 @@ export default function CalendarRow({ source, busy, removing, now, onToggle, onR
           />
           <Menu
             label={`${source.name} options`}
-            trigger={({ open: _open, ...props }: any) => (
+            trigger={({ open: _open, ...props }) => (
               <IconButton label={`${source.name} options`} disabled={!!busy} {...props}>
                 <MoreHorizontal size={18} strokeWidth={1.75} />
               </IconButton>

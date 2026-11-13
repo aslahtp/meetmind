@@ -17,18 +17,53 @@
 // run) writes nothing, since the exe would be the bare dev electron binary.
 
 import path from 'path';
+import type { AutoLaunchStatus } from '../shared';
+import { errorCode, errorMessage } from '../utils/errors';
+
+/** The login-item half of Electron's `app`, as far as it is used here. */
+interface LoginItemApp {
+  getLoginItemSettings(): LoginItemSettings;
+  setLoginItemSettings(settings: { openAtLogin: boolean; name?: string; args?: string[] }): void;
+}
+
+interface LoginItemSettings {
+  openAtLogin: boolean;
+  /** Windows: the Run entries that start this exe. */
+  launchItems?: Array<{ name: string; scope?: string; enabled?: boolean }>;
+}
+
+interface AutoLaunchLogger {
+  info(...args: unknown[]): void;
+  warn?(...args: unknown[]): void;
+  error(...args: unknown[]): void;
+}
+
+/** The parts of `fs` the autostart entry uses. */
+interface AutostartFs {
+  readFileSync(file: string, encoding: 'utf8'): string;
+  mkdirSync(dir: string, options: { recursive: true }): unknown;
+  writeFileSync(file: string, data: string): void;
+  rmSync(file: string, options: { force: true }): void;
+}
+
+interface LinuxDeps {
+  fs: AutostartFs;
+  env: Record<string, string | undefined>;
+  execPath: string;
+  homedir: string;
+}
 
 const AUTO_LAUNCH_NAME = 'MeetMind';
 const HIDDEN_ARG = '--hidden';
 const AUTOSTART_FILE = 'meetmind.desktop';
 
 // Exec= quoting from the Desktop Entry spec: double quotes, with " ` $ \ escaped.
-function quoteExec(arg: any) {
+function quoteExec(arg: string) {
   return `"${String(arg).replace(/(["`$\\])/g, '\\$1')}"`;
 }
 
 /** The autostart entry that launches `execPath` hidden at login. */
-function buildAutostartEntry(execPath: any) {
+function buildAutostartEntry(execPath: string) {
   return [
     '[Desktop Entry]',
     'Type=Application',
@@ -43,27 +78,27 @@ function buildAutostartEntry(execPath: any) {
 }
 
 /** Whether an autostart entry's text leaves it enabled (no Hidden=true, not turned off in GNOME). */
-function autostartEnabled(text: any) {
+function autostartEnabled(text: string) {
   return !/^Hidden\s*=\s*true\s*$/mi.test(text) && !/^X-GNOME-Autostart-enabled\s*=\s*false\s*$/mi.test(text);
 }
 
 // Reads and writes the XDG autostart entry. `fs`, `env` and `execPath` come in for tests.
-function linuxAutostart({ fs, env, execPath, homedir }: any) {
+function linuxAutostart({ fs, env, execPath, homedir }: LinuxDeps) {
   const dir = path.posix.join(env.XDG_CONFIG_HOME || path.posix.join(homedir, '.config'), 'autostart');
   const file = path.posix.join(dir, AUTOSTART_FILE);
   const target = env.APPIMAGE || execPath;
   return {
     file,
     // null when there is no entry, else { enabled }.
-    read() {
+    read(): { enabled: boolean } | null {
       try {
         return { enabled: autostartEnabled(fs.readFileSync(file, 'utf8')) };
-      } catch (err: any) {
-        if (err.code === 'ENOENT') return null;
+      } catch (err) {
+        if (errorCode(err) === 'ENOENT') return null;
         throw err;
       }
     },
-    write(enabled: any) {
+    write(enabled: boolean) {
       if (enabled) {
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(file, buildAutostartEntry(target));
@@ -76,12 +111,21 @@ function linuxAutostart({ fs, env, execPath, homedir }: any) {
 
 // Once our entry exists Windows is the source of truth, since the user can disable it outside
 // MeetMind; without one, the saved setting decides.
-function resolveStartupState(configured: any, item: any) {
+function resolveStartupState(configured: unknown, item: { enabled?: boolean } | null | undefined) {
   if (item) return item.enabled !== false;
   return !!configured;
 }
 
-function createAutoLaunch({ app, platform = process.platform, isDev = false, logger = console as any, linux = null }: any) {
+interface AutoLaunchOptions {
+  /** Required except on Linux, where the login item is a file. */
+  app?: LoginItemApp;
+  platform?: NodeJS.Platform;
+  isDev?: boolean;
+  logger?: AutoLaunchLogger;
+  linux?: LinuxDeps | null;
+}
+
+function createAutoLaunch({ app, platform = process.platform, isDev = false, logger = console, linux = null }: AutoLaunchOptions) {
   if (platform === 'linux') {
     return createLinuxAutoLaunch({
       isDev,
@@ -95,45 +139,46 @@ function createAutoLaunch({ app, platform = process.platform, isDev = false, log
     });
   }
   const isWindows = platform === 'win32';
+  const loginApp = app!;
 
-  const read = () => app.getLoginItemSettings();
-  const ourItem = (settings: any) => (settings.launchItems || []).find((i: any) => i.name === AUTO_LAUNCH_NAME) || null;
+  const read = () => loginApp.getLoginItemSettings();
+  const ourItem = (settings: LoginItemSettings) => (settings.launchItems || []).find((i) => i.name === AUTO_LAUNCH_NAME) || null;
 
-  function write(enabled: any) {
+  function write(enabled: boolean) {
     if (isWindows) {
-      app.setLoginItemSettings({ openAtLogin: enabled, name: AUTO_LAUNCH_NAME, args: [HIDDEN_ARG] });
+      loginApp.setLoginItemSettings({ openAtLogin: enabled, name: AUTO_LAUNCH_NAME, args: [HIDDEN_ARG] });
     } else {
-      app.setLoginItemSettings({ openAtLogin: enabled });
+      loginApp.setLoginItemSettings({ openAtLogin: enabled });
     }
   }
 
   // Older builds registered this exe under other names (the AppUserModelId). `launchItems` only
   // lists entries that start this exe, so any per-user one not named ours is a leftover.
-  function removeStrays(settings: any) {
+  function removeStrays(settings: LoginItemSettings) {
     for (const item of settings.launchItems || []) {
       if (item.name === AUTO_LAUNCH_NAME || item.scope !== 'user') continue;
-      app.setLoginItemSettings({ openAtLogin: false, name: item.name });
+      loginApp.setLoginItemSettings({ openAtLogin: false, name: item.name });
       logger.info('Removed stale launch-at-login entry', { name: item.name });
     }
   }
 
   // What Settings shows: { openAtLogin }, plus isDev or error when the OS state can't be used.
-  function getStatus() {
+  function getStatus(): AutoLaunchStatus {
     if (isDev) return { openAtLogin: false, isDev: true };
     try {
       const settings = read();
       if (!isWindows) return { openAtLogin: !!settings.openAtLogin };
       const item = ourItem(settings);
       return { openAtLogin: resolveStartupState(false, item), disabledInSystem: !!item && item.enabled === false };
-    } catch (err: any) {
+    } catch (err) {
       logger.error('Failed to read auto-launch status', err);
-      return { openAtLogin: false, error: err.message };
+      return { openAtLogin: false, error: errorMessage(err) };
     }
   }
 
   // Turns launch at login on or off from Settings. Turning it on also re-enables an entry
   // disabled in Task Manager, since the user just asked for it.
-  function set(enabled: any) {
+  function set(enabled: unknown) {
     if (isDev) {
       logger.info('Skipping setLoginItemSettings in an unpackaged app', { enabled });
       return;
@@ -142,13 +187,13 @@ function createAutoLaunch({ app, platform = process.platform, isDev = false, log
       write(!!enabled);
       if (isWindows) removeStrays(read());
       logger.info('Auto-launch updated', { enabled: !!enabled });
-    } catch (err: any) {
+    } catch (err) {
       logger.error('Failed to update auto-launch', err);
     }
   }
 
   // Run once at startup. Returns the effective setting, for main to store.
-  function sync(configured: any) {
+  function sync(configured: unknown) {
     if (isDev) {
       logger.info('Skipping setLoginItemSettings in an unpackaged app', { enabled: configured });
       return !!configured;
@@ -170,7 +215,7 @@ function createAutoLaunch({ app, platform = process.platform, isDev = false, log
         entry: item ? (item.enabled === false ? 'disabled in Windows' : 'enabled') : 'none',
       });
       return enabled;
-    } catch (err: any) {
+    } catch (err) {
       logger.error('Failed to sync auto-launch', err);
       return !!configured;
     }
@@ -181,19 +226,27 @@ function createAutoLaunch({ app, platform = process.platform, isDev = false, log
 
 // Linux: same contract as above over the autostart entry. Like Windows, once the entry exists it
 // is the source of truth, since the desktop's startup-apps settings can disable it.
-function createLinuxAutoLaunch({ isDev, logger, autostart }: any) {
-  function getStatus() {
+function createLinuxAutoLaunch({
+  isDev,
+  logger,
+  autostart,
+}: {
+  isDev: boolean;
+  logger: AutoLaunchLogger;
+  autostart: ReturnType<typeof linuxAutostart>;
+}) {
+  function getStatus(): AutoLaunchStatus {
     if (isDev) return { openAtLogin: false, isDev: true };
     try {
       const entry = autostart.read();
       return { openAtLogin: resolveStartupState(false, entry), disabledInSystem: !!entry && entry.enabled === false };
-    } catch (err: any) {
+    } catch (err) {
       logger.error('Failed to read auto-launch status', err);
-      return { openAtLogin: false, error: err.message };
+      return { openAtLogin: false, error: errorMessage(err) };
     }
   }
 
-  function set(enabled: any) {
+  function set(enabled: unknown) {
     if (isDev) {
       logger.info('Skipping autostart entry in an unpackaged app', { enabled });
       return;
@@ -201,12 +254,12 @@ function createLinuxAutoLaunch({ isDev, logger, autostart }: any) {
     try {
       autostart.write(!!enabled);
       logger.info('Auto-launch updated', { enabled: !!enabled, file: autostart.file });
-    } catch (err: any) {
+    } catch (err) {
       logger.error('Failed to update auto-launch', err);
     }
   }
 
-  function sync(configured: any) {
+  function sync(configured: unknown) {
     if (isDev) {
       logger.info('Skipping autostart entry in an unpackaged app', { enabled: configured });
       return !!configured;
@@ -222,7 +275,7 @@ function createLinuxAutoLaunch({ isDev, logger, autostart }: any) {
         entry: entry ? (entry.enabled ? 'enabled' : 'disabled in startup settings') : 'none',
       });
       return enabled;
-    } catch (err: any) {
+    } catch (err) {
       logger.error('Failed to sync auto-launch', err);
       return !!configured;
     }

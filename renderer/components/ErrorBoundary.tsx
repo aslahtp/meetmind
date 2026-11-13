@@ -5,27 +5,44 @@ import WindowControls from './WindowControls';
 import { reportError } from '../lib/errorReport';
 import { isMac } from '../lib/os';
 
+/** What the fallback is given: the error caught, and a way to render the children again. */
+export interface ErrorFallbackProps {
+  error: unknown;
+  reset: () => void;
+}
+
+export interface ErrorBoundaryProps {
+  /** Labels the boundary in the log. */
+  name?: string;
+  fallback?: React.ComponentType<ErrorFallbackProps>;
+  children?: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  error: unknown;
+}
+
 // Catches an error thrown while rendering its children and shows `fallback` in their place.
 // Without a boundary React unmounts the whole tree, which left the window empty: no content, and
 // (the window being frameless) no buttons to close it with.
 //
 // `fallback` is a component given { error, reset }; `reset` renders the children again. `name`
 // labels the boundary in the log.
-export default class ErrorBoundary extends React.Component<any, any> {
+export default class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Type only (`declare`): assigned in the constructor, so no class field is emitted.
   declare reset: () => void;
 
-  constructor(props: any) {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { error: null };
     this.reset = () => this.setState({ error: null });
   }
 
-  static getDerivedStateFromError(error: any) {
+  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
     return { error };
   }
 
-  componentDidCatch(error: any, info: any) {
+  componentDidCatch(error: unknown, info: React.ErrorInfo) {
     reportError('render', error, {
       boundary: this.props.name,
       componentStack: typeof info?.componentStack === 'string' ? info.componentStack.slice(0, 4000) : undefined,
@@ -50,7 +67,7 @@ function OpenLogsButton() {
 }
 
 // One page failed; the top bar and navigation around it still work.
-export function ViewErrorFallback({ reset }: any) {
+export function ViewErrorFallback({ reset }: Pick<ErrorFallbackProps, 'reset'>) {
   return (
     <div className="h-full overflow-y-auto px-24" role="alert">
       <EmptyState

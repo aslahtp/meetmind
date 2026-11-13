@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { MeetmindOverlay } from './shared';
 
 // Preload for the meeting overlay window. It exposes only what the overlay needs, not the full
@@ -10,8 +10,8 @@ try {
   if (arg && arg.split('=')[1] === 'dark') startupTheme = 'dark';
 } catch { /* theme is cosmetic */ }
 
-function subscribe(channel: any, callback: any) {
-  const listener = (_event: any, payload: any) => callback(payload);
+function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
+  const listener = (_event: IpcRendererEvent, payload: T) => callback(payload);
   ipcRenderer.on(channel, listener);
   return () => ipcRenderer.removeListener(channel, listener);
 }

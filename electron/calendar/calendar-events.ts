@@ -2,6 +2,25 @@
 // calendars into one list (the same meeting in two calendars shows once), and deciding when a
 // "meeting starting" prompt is due. No electron imports, so it's unit-testable.
 
+import type { CalendarEvent } from '../shared';
+
+/** An event as a source (a Google account or an ICS feed) reports it, before it is tagged with the calendar. */
+export type SourceEvent = Pick<
+  CalendarEvent,
+  | 'id'
+  | 'uid'
+  | 'title'
+  | 'start'
+  | 'end'
+  | 'isAllDay'
+  | 'location'
+  | 'description'
+  | 'meetingLink'
+  | 'attendeeCount'
+  | 'organizer'
+  | 'status'
+>;
+
 const REMINDER_WINDOW_MS = 60_000;
 const NOTIFIED_MEMORY_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_LIMIT = 50;
@@ -11,7 +30,7 @@ const DEFAULT_LIMIT = 50;
 const MEETING_HOST = /(?:^|\.)(?:meet\.google\.com|zoom\.us|zoom\.com|zoomgov\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|gotomeeting\.com|gotomeet\.me|meet\.jit\.si|chime\.aws|around\.co)$/i;
 const URL_PATTERN = /https?:\/\/[^\s<>"'()[\]{}]+/gi;
 
-function isMeetingUrl(value: any) {
+function isMeetingUrl(value: string) {
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
@@ -23,7 +42,7 @@ function isMeetingUrl(value: any) {
   }
 }
 
-function findMeetingUrl(text: any) {
+function findMeetingUrl(text: unknown) {
   if (!text) return '';
   for (const match of String(text).matchAll(URL_PATTERN)) {
     const candidate = match[0].replace(/[.,;:!?]+$/, '');
@@ -37,7 +56,17 @@ function findMeetingUrl(text: any) {
  * and conference entry points, the X-GOOGLE-CONFERENCE / X-MICROSOFT-* ICS properties) and win
  * outright; then the event's URL, description and location are searched for a known video host.
  */
-function extractMeetingLink({ conferenceUrls = [], url = '', description = '', location = '' }: any = {}) {
+function extractMeetingLink({
+  conferenceUrls = [],
+  url = '',
+  description = '',
+  location = '',
+}: {
+  conferenceUrls?: Array<string | null | undefined>;
+  url?: string | null;
+  description?: string | null;
+  location?: string | null;
+} = {}) {
   for (const candidate of conferenceUrls) {
     if (candidate && /^https?:\/\//i.test(String(candidate).trim())) return String(candidate).trim();
   }
@@ -48,7 +77,7 @@ function extractMeetingLink({ conferenceUrls = [], url = '', description = '', l
  * Milliseconds for an event time. All-day events carry a bare `YYYY-MM-DD` date, which is local
  * midnight (Date would read it as UTC midnight and shift the day for anyone west of Greenwich).
  */
-function eventTimeMs(value: any) {
+function eventTimeMs(value: string | null | undefined) {
   if (!value) return NaN;
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (dateOnly) return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])).getTime();
@@ -56,7 +85,7 @@ function eventTimeMs(value: any) {
 }
 
 /** The same meeting has the same iCalendar UID and start in every calendar it appears in. */
-function eventKey(event: any) {
+function eventKey(event: Pick<SourceEvent, 'id' | 'uid' | 'start'>) {
   return `${event.uid || event.id}|${eventTimeMs(event.start)}`;
 }
 
@@ -65,8 +94,11 @@ function eventKey(event: any) {
  * keeps one copy of a meeting found in several calendars (the Google API copy has the richer
  * conference data), and sorts by start time.
  */
-function mergeEvents(lists: any, { now = Date.now(), limit = DEFAULT_LIMIT } = {}) {
-  const byKey = new Map();
+function mergeEvents(
+  lists: Array<CalendarEvent[] | null | undefined>,
+  { now = Date.now(), limit = DEFAULT_LIMIT }: { now?: number; limit?: number } = {}
+) {
+  const byKey = new Map<string, CalendarEvent>();
   for (const list of lists) {
     for (const event of list || []) {
       const start = eventTimeMs(event.start);
@@ -90,8 +122,8 @@ function mergeEvents(lists: any, { now = Date.now(), limit = DEFAULT_LIMIT } = {
  * Events whose "meeting starting" prompt is due: timed events starting within a minute either
  * side of `now` that haven't been announced yet. `notified` maps eventKey → end time.
  */
-function dueToStart(events: any, now: any, notified: any) {
-  const due = [];
+function dueToStart(events: CalendarEvent[], now: number, notified: Map<string, number>) {
+  const due: CalendarEvent[] = [];
   for (const event of events) {
     if (event.isAllDay) continue;
     const key = eventKey(event);
@@ -103,7 +135,7 @@ function dueToStart(events: any, now: any, notified: any) {
 }
 
 /** Forget announced events two hours after they end, so the map can't grow without bound. */
-function pruneNotified(notified: any, now: any) {
+function pruneNotified(notified: Map<string, number>, now: number) {
   for (const [key, end] of notified) {
     if (now - end > NOTIFIED_MEMORY_MS) notified.delete(key);
   }

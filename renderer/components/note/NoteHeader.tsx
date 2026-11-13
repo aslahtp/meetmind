@@ -12,14 +12,16 @@ import {
   AlertTriangle,
   Pencil,
 } from 'lucide-react';
+import type { Notes, ProviderDescriptors, Session } from '@shared';
 import { IconButton, SegmentedControl, Menu, MenuItem } from '../ui/index';
+import type { MenuTriggerProps, SegmentedOption } from '../ui/index';
 import NotionIcon from '../NotionIcon';
 import { metaText } from './meta';
 import { meetingHostname, sessionPlatform } from '../../lib/platform';
 import { useApp } from '../../lib/app-context';
 import { providerName } from '../../lib/providers';
 
-const SENTIMENT_LABELS = {
+const SENTIMENT_LABELS: Record<string, string> = {
   positive: 'Positive',
   neutral:  'Neutral',
   mixed:    'Mixed',
@@ -29,19 +31,19 @@ const SENTIMENT_LABELS = {
 // Actions below read the saved notes, so they pause while there are unsaved edits.
 const EDITING_HINT = 'Save or discard your edits first';
 
-function editedLabel(iso: any) {
+function editedLabel(iso: string) {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? 'Edited' : `Edited ${d.toLocaleString()}`;
 }
 
-function metaChips(session: any, notes: any, providers: any) {
-  const sentiment = (SENTIMENT_LABELS as any)[notes?.sentiment];
+function metaChips(session: Session, notes: Notes | null, providers: ProviderDescriptors | null) {
+  const sentiment = notes?.sentiment ? SENTIMENT_LABELS[notes.sentiment] : undefined;
   const hostname = meetingHostname(session.meeting_url);
   const platform = sessionPlatform(session);
   const stt = notes?._sttService && notes._sttService !== 'none' ? providerName(providers, 'stt', notes._sttService) : null;
   const llmModel = notes?._llmModel || notes?._geminiModel;
 
-  const chips = [];
+  const chips: React.ReactElement[] = [];
   if (sentiment) chips.push(<span key="sentiment" className="pill-quiet">{sentiment}</span>);
   if (notes) {
     chips.push(
@@ -72,7 +74,7 @@ function metaChips(session: any, notes: any, providers: any) {
         key="host"
         type="button"
         className="pill-quiet hover:text-ink hover:border-ink transition-colors"
-        onClick={() => window.meetmind?.shell?.openExternal(session.meeting_url)}
+        onClick={() => session.meeting_url && window.meetmind?.shell?.openExternal(session.meeting_url)}
         title={`Open ${session.meeting_url}`}
       >
         {platform?.icon && (
@@ -97,11 +99,19 @@ function metaChips(session: any, notes: any, providers: any) {
 
 // A single "Notion" button for a meeting that already has a page; it opens a small menu with
 // the two things you can do with that page: open it, or replace it with the current notes.
-function NotionMenu({ notionUrl, uploading, updateDisabled, updateTitle, onUpdate }: { notionUrl?: any; uploading?: any; updateDisabled?: any; updateTitle?: any; onUpdate?: any }) {
+interface NotionMenuProps {
+  notionUrl: string;
+  uploading: boolean;
+  updateDisabled: boolean;
+  updateTitle: string;
+  onUpdate: () => void;
+}
+
+function NotionMenu({ notionUrl, uploading, updateDisabled, updateTitle, onUpdate }: NotionMenuProps) {
   return (
     <Menu
       label="Notion page"
-      trigger={({ open, ...props }: any) => (
+      trigger={({ open, ...props }: MenuTriggerProps) => (
         <button
           type="button"
           {...props}
@@ -144,6 +154,44 @@ function NotionMenu({ notionUrl, uploading, updateDisabled, updateTitle, onUpdat
 // the side columns (title visibility, Notion state, notes missing); the actions
 // column never shrinks below its content, so at narrow widths the tabs shift left
 // instead of being overlapped.
+/** The tabs of a meeting page. */
+export type NoteTab = 'summary' | 'transcript' | 'audio';
+
+/** What the toolbar's Regenerate button does on the current tab. */
+export interface RegenerateAction {
+  label: string;
+  title: string;
+  /** Lucide icon or a provider's own artwork; rendered with size, strokeWidth, className and aria-hidden. */
+  icon: React.ElementType;
+  onClick: () => void;
+  /** Why it can't run now; null when it can. */
+  unavailable: string | null;
+}
+
+export interface NoteToolbarProps {
+  title: string;
+  showTitle: boolean;
+  notes: Notes | null;
+  tabs: Array<SegmentedOption<NoteTab>>;
+  activeTab: NoteTab;
+  onTabChange: (tab: NoteTab) => void;
+  onBack: () => void;
+  busy: boolean;
+  copied: boolean;
+  onCopy: () => void;
+  regenerating: boolean;
+  regenerate: RegenerateAction;
+  exporting: boolean;
+  onExportPdf: () => void;
+  notionUrl: string | null;
+  uploading: boolean;
+  onSyncNotion: () => void;
+  /** Unsaved edits: the actions that read the saved notes pause. */
+  editing: boolean;
+  onDelete: () => void;
+  deleting: boolean;
+}
+
 export function NoteToolbar({
   title,
   showTitle,
@@ -165,7 +213,7 @@ export function NoteToolbar({
   editing,
   onDelete,
   deleting,
-}: { title?: any; showTitle?: any; notes?: any; tabs?: any; activeTab?: any; onTabChange?: any; onBack?: any; busy?: any; copied?: any; onCopy?: any; regenerating?: any; regenerate?: any; exporting?: any; onExportPdf?: any; notionUrl?: any; uploading?: any; onSyncNotion?: any; editing?: any; onDelete?: any; deleting?: any }) {
+}: NoteToolbarProps) {
   const lockTitle = editing ? { title: EDITING_HINT } : {};
   return (
     <header className="relative z-20 flex-shrink-0 border-b border-ink bg-paper">
@@ -277,18 +325,25 @@ export function NoteToolbar({
   );
 }
 
-const TITLE_MAX_LENGTH = 200; // matches cleanTitle() in electron/services/meeting-title.js
+const TITLE_MAX_LENGTH = 200; // matches cleanTitle() in electron/services/meeting-title.ts
 const TITLE_COUNT_FROM = 40;  // characters left when the counter appears
 
 // The meeting title, renamed in place: the pencil (or a double-click) turns it into a field
 // set in the same type and width, so a title that wraps keeps its lines and the text doesn't
 // move. Enter or leaving the field saves, Escape cancels. `onRename` resolves true once
 // saved; on failure the field stays open.
-function EditableTitle({ title, onRename, disabledReason }: { title?: any; onRename?: any; disabledReason?: any }) {
+interface EditableTitleProps {
+  title: string;
+  /** Resolves true once saved. */
+  onRename?: (title: string) => Promise<boolean>;
+  disabledReason?: string | null;
+}
+
+function EditableTitle({ title, onRename, disabledReason }: EditableTitleProps) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
   const [saving, setSaving] = useState(false);
-  const inputRef = useRef<any>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   // Blur also fires after Enter or Escape; these keep it from saving twice or after a cancel.
   const busyRef = useRef(false);
   const cancelledRef = useRef(false);
@@ -307,11 +362,11 @@ function EditableTitle({ title, onRename, disabledReason }: { title?: any; onRen
     const el = inputRef.current;
     if (!editing || !el) return undefined;
     const fit = () => {
-      const scroller = el.closest('.overflow-y-auto');
+      const scroller = el.closest<HTMLElement>('.overflow-y-auto');
       const top = scroller?.scrollTop;
       el.style.height = 'auto';
       el.style.height = `${el.scrollHeight + 2}px`; // + the 1px top and bottom borders
-      if (scroller) scroller.scrollTop = top;
+      if (scroller) scroller.scrollTop = top ?? 0;
     };
     fit();
     let width = el.offsetWidth;
@@ -345,7 +400,7 @@ function EditableTitle({ title, onRename, disabledReason }: { title?: any; onRen
     }
     busyRef.current = true;
     setSaving(true);
-    const ok = await onRename(next);
+    const ok = await onRename?.(next);
     busyRef.current = false;
     setSaving(false);
     if (ok) setEditing(false);
@@ -421,9 +476,20 @@ function EditableTitle({ title, onRename, disabledReason }: { title?: any; onRen
 // Title, meta line and chips at the top of the scrolling body, so they scroll
 // away with the notes instead of permanently taking up the viewport. The ref is
 // on the title row (not the heading) because renaming swaps the heading for a field.
-export const NoteTitleBlock = forwardRef(function NoteTitleBlock(
-  { session, notes, title, durationLabel, processingError, aside, onRename, renameDisabledReason }: { session?: any; notes?: any; title?: any; durationLabel?: any; processingError?: any; aside?: any; onRename?: any; renameDisabledReason?: any },
-  ref: React.ForwardedRef<HTMLDivElement>,
+export interface NoteTitleBlockProps {
+  session: Session;
+  notes: Notes | null;
+  title: string;
+  durationLabel: string | null;
+  processingError: string | null;
+  aside?: React.ReactNode;
+  onRename?: (title: string) => Promise<boolean>;
+  renameDisabledReason?: string | null;
+}
+
+export const NoteTitleBlock = forwardRef<HTMLDivElement, NoteTitleBlockProps>(function NoteTitleBlock(
+  { session, notes, title, durationLabel, processingError, aside, onRename, renameDisabledReason },
+  ref,
 ) {
   const meta = metaText(session, notes, durationLabel);
   const { providers } = useApp();

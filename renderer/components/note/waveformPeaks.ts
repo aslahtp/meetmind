@@ -4,10 +4,10 @@
  * Fit `peaks` (0..1) to exactly `count` bars. Downsampling keeps each range's maximum so
  * short bursts of speech never disappear; upsampling (short recordings) repeats the nearest peak.
  */
-export function resamplePeaks(peaks: any, count: any) {
+export function resamplePeaks(peaks: ArrayLike<number> | null | undefined, count: number): number[] {
   if (!count || count < 1) return [];
   if (!peaks || peaks.length === 0) return new Array(count).fill(0);
-  const out = new Array(count);
+  const out: number[] = new Array(count);
   const step = peaks.length / count;
   if (step <= 1) {
     for (let i = 0; i < count; i++) out[i] = peaks[Math.min(peaks.length - 1, Math.floor(i * step))];
@@ -24,7 +24,7 @@ export function resamplePeaks(peaks: any, count: any) {
 }
 
 /** Map a pointer x offset within a width to a time, clamped to [0, duration]. */
-export function timeAtOffset(x: any, width: any, duration: any) {
+export function timeAtOffset(x: number, width: number, duration: number): number {
   if (!width || !duration) return 0;
   return Math.min(duration, Math.max(0, (x / width) * duration));
 }

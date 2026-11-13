@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remend from 'remend';
 
-function openExternal(e: any, url: any) {
+function openExternal(e: React.MouseEvent, url: string | undefined) {
   if (url?.startsWith('http')) {
     e.preventDefault();
     window.meetmind?.shell?.openExternal(url);
@@ -11,12 +11,12 @@ function openExternal(e: any, url: any) {
 }
 
 // Lightweight inline markdown: images, links, code, bold, strike, italic.
-export function parseInlineMarkdown(text: any) {
+export function parseInlineMarkdown(text: string | null | undefined): React.ReactNode {
   if (!text) return text;
   const regex = /(!?\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|__([^_]+)__|~~([^~]+)~~|\*([^*]+)\*|_([^_]+)_)/g;
-  const parts = [];
+  const parts: React.ReactNode[] = [];
   let lastIdx = 0;
-  let match;
+  let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIdx) {
@@ -84,13 +84,15 @@ export function parseInlineMarkdown(text: any) {
 }
 
 // Block-level text: paragraphs, bullet / numbered lines and fenced code.
-export function FormattedText({ content, className = '' }: { content?: any; className?: any }) {
+type TextBlock = { type: 'code'; lang: string; code: string } | { type: 'line'; text: string };
+
+export function FormattedText({ content, className = '' }: { content?: string | null; className?: string }) {
   if (!content) return null;
 
   const lines = content.split(/\r?\n/);
-  const blocks = [];
+  const blocks: TextBlock[] = [];
   let inCodeBlock = false;
-  let currentCodeLines = [];
+  let currentCodeLines: string[] = [];
   let codeLang = '';
 
   for (const line of lines) {
@@ -146,7 +148,7 @@ export function FormattedText({ content, className = '' }: { content?: any; clas
             )}
             {isNumbered && (
               <span className="text-body font-medium text-ink tabular flex-shrink-0">
-                {trimmed.match(/^\d+\./)[0]}
+                {trimmed.match(/^\d+\./)?.[0]}
               </span>
             )}
             <span className="text-body text-graphite">{parseInlineMarkdown(textToFormat)}</span>
@@ -159,7 +161,7 @@ export function FormattedText({ content, className = '' }: { content?: any; clas
 
 // Full markdown renderer for executive-markdown notes (token-mapped prose).
 // Drops a leading "# Title" when it repeats the page title shown above the notes.
-export function stripDuplicateTitle(markdown: any, title: any) {
+export function stripDuplicateTitle(markdown: string, title: string | null | undefined) {
   if (!title) return markdown;
   const match = markdown.match(/^\s*#\s+(.+?)\s*#*\s*(?:\r?\n|$)/);
   if (!match || match[1].trim().toLowerCase() !== title.trim().toLowerCase()) return markdown;
@@ -168,9 +170,9 @@ export function stripDuplicateTitle(markdown: any, title: any) {
 
 // `streaming` marks a live preview: remend closes the syntax the LLM hasn't
 // finished yet (bold, code, links) so it never shows as raw characters.
-export function MarkdownNoteView({ markdown, omitTitle, streaming = false }: { markdown?: any; omitTitle?: any; streaming?: any }) {
-  if (!markdown) return null;
-  markdown = stripDuplicateTitle(markdown, omitTitle);
+export function MarkdownNoteView({ markdown: source, omitTitle, streaming = false }: { markdown?: string | null; omitTitle?: string | null; streaming?: boolean }) {
+  if (!source) return null;
+  let markdown = stripDuplicateTitle(source, omitTitle);
   if (streaming) markdown = remend(markdown, { linkMode: 'text-only' });
   return (
     <article className="prose max-w-none fade-in">

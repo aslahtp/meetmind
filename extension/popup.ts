@@ -12,7 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (_e) {}
 
   // Check status from background
-  chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (status) => {
+  const statusRequest: BackgroundRequest = { type: 'GET_STATUS' };
+  chrome.runtime.sendMessage<BackgroundRequest, GetStatusResponse | undefined>(statusRequest, (status) => {
     if (chrome.runtime.lastError) {
       dot.className  = 'dot disconnected';
       text.textContent = 'Extension error';
@@ -29,7 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('open-app-btn')!.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'OPEN_APP' });
+    const request: BackgroundRequest = { type: 'OPEN_APP' };
+    chrome.runtime.sendMessage(request);
     window.close();
   });
 

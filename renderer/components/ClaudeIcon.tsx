@@ -1,7 +1,7 @@
 import React from 'react';
 import claudePng from '@assets/icons/icons8-claude-96.png';
 
-export default function ClaudeIcon({ size = 16, className = '' }: { size?: any; className?: any }) {
+export default function ClaudeIcon({ size = 16, className = '' }: { size?: number | string; className?: string }) {
   return (
     <img
       src={claudePng}

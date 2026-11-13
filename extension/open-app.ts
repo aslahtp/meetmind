@@ -8,7 +8,7 @@ const launchEl = document.getElementById('launch')!;
 function openProtocol() {
   try {
     launchEl.click();
-  } catch (_: any) {
+  } catch {
     window.location.href = PROTOCOL_URL;
   }
 }
@@ -26,5 +26,6 @@ setTimeout(() => {
 
 // Close helper tab quickly once the OS has the protocol request.
 setTimeout(() => {
-  chrome.runtime.sendMessage({ type: 'CLOSE_OPEN_APP_TAB' }).catch(() => {});
+  const request: BackgroundRequest = { type: 'CLOSE_OPEN_APP_TAB' };
+  chrome.runtime.sendMessage(request).catch(() => {});
 }, 1500);

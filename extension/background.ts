@@ -13,11 +13,11 @@ const WS_PORT_RANGE = 11;   // try 39842–39852 (desktop app uses first free po
 const HEARTBEAT_INTERVAL_MS = 10000;
 const RECONNECT_DELAY_MS = 5000;
 
-let ws: any = null;
+let ws: WebSocket | null = null;
 let wsConnected = false;
-let reconnectTimer: any = null;
-let heartbeatTimer: any = null;
-let activeMeetingTabId: any = null;
+let reconnectTimer: number | undefined;
+let heartbeatTimer: number | undefined;
+let activeMeetingTabId: number | null = null;
 let currentPort = WS_PORT_START;
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
@@ -45,10 +45,10 @@ function connectWebSocket() {
     }
   };
 
-  ws.onmessage = (event: any) => {
+  ws.onmessage = (event: MessageEvent<unknown>) => {
     try {
-      const msg = JSON.parse(event.data);
-      handleDesktopMessage(msg);
+      const msg = parseDesktopMessage(event.data);
+      if (msg) handleDesktopMessage(msg);
     } catch {
       // ignore parse errors
     }
@@ -109,7 +109,41 @@ function stopHeartbeat() {
   clearInterval(heartbeatTimer);
 }
 
-function sendToDesktop(message: any) {
+/** Checks a WebSocket frame from the desktop app (see DesktopToExtensionMessage). Throws on bad JSON. */
+function parseDesktopMessage(data: unknown): DesktopToExtensionMessage | null {
+  if (typeof data !== 'string') return null;
+  const raw: unknown = JSON.parse(data);
+  if (typeof raw !== 'object' || raw === null) return null;
+  const msg = raw as Record<string, unknown>;
+  const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+  switch (msg.type) {
+    case 'APP_STATUS':
+      return { type: 'APP_STATUS', recording: !!msg.recording, sessionId: text(msg.sessionId) };
+    case 'RECORDING_STARTED':
+    case 'RECORDING_STOPPED':
+      return { type: msg.type, sessionId: text(msg.sessionId) };
+    case 'PROCESSING_PROGRESS':
+      return {
+        type: 'PROCESSING_PROGRESS',
+        stage: text(msg.stage),
+        percent: typeof msg.percent === 'number' ? msg.percent : undefined,
+        sessionId: text(msg.sessionId),
+      };
+    case 'PROCESSING_COMPLETE':
+      return {
+        type: 'PROCESSING_COMPLETE',
+        notionUrl: typeof msg.notionUrl === 'string' ? msg.notionUrl : null,
+        sessionId: text(msg.sessionId),
+      };
+    case 'PROCESSING_ERROR':
+      return { type: 'PROCESSING_ERROR', error: text(msg.error), sessionId: text(msg.sessionId) };
+    default:
+      return null;
+  }
+}
+
+function sendToDesktop(message: ExtensionToDesktopMessage) {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(message));
     return true;
@@ -117,12 +151,12 @@ function sendToDesktop(message: any) {
   return false;
 }
 
-let pendingOpenAppTabId: any = null;
-let launchRetryTimer: any = null;
+let pendingOpenAppTabId: number | null = null;
+let launchRetryTimer: number | undefined;
 
 const HTTP_PROBE_TIMEOUT_MS = 200;
 
-async function probePort(port: any) {
+async function probePort(port: number) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HTTP_PROBE_TIMEOUT_MS);
   try {
@@ -187,7 +221,7 @@ function launchDesktopApp() {
     attempts += 1;
     if (wsConnected || attempts >= 24) {
       clearInterval(launchRetryTimer);
-      launchRetryTimer = null;
+      launchRetryTimer = undefined;
       return;
     }
     connectWebSocket();
@@ -196,14 +230,14 @@ function launchDesktopApp() {
 
 function closeOpenAppTab() {
   if (pendingOpenAppTabId == null) return;
-  const tabId: any = pendingOpenAppTabId;
+  const tabId = pendingOpenAppTabId;
   pendingOpenAppTabId = null;
   chrome.tabs.remove(tabId).catch(() => {});
 }
 
 // ── Handle messages from desktop app ─────────────────────────────────────────
 
-function handleDesktopMessage(msg: any) {
+function handleDesktopMessage(msg: DesktopToExtensionMessage) {
   console.log('[MeetMind] Desktop message:', msg.type);
 
   switch (msg.type) {
@@ -271,15 +305,17 @@ function handleDesktopMessage(msg: any) {
 
 // ── Badge management ──────────────────────────────────────────────────────────
 
-function updateBadge(state: any) {
-  const badges = {
+type BadgeState = 'connected' | 'disconnected' | 'recording' | 'meeting';
+
+function updateBadge(state: BadgeState) {
+  const badges: Record<BadgeState, { text: string; color: string; title: string }> = {
     connected:    { text: '',   color: '#22c55e', title: 'MeetMind — Connected'     },
     disconnected: { text: '!',  color: '#6b7280', title: 'MeetMind — App not running' },
     recording:    { text: 'REC', color: '#ef4444', title: 'MeetMind — Recording'    },
     meeting:      { text: '●',  color: '#22c55e', title: 'MeetMind — Meeting detected' },
   };
 
-  const b = (badges as any)[state] || badges.disconnected;
+  const b = badges[state];
   chrome.action.setBadgeText({ text: b.text });
   chrome.action.setBadgeBackgroundColor({ color: b.color });
   chrome.action.setTitle({ title: b.title });
@@ -287,21 +323,21 @@ function updateBadge(state: any) {
 
 // ── Tab detection ─────────────────────────────────────────────────────────────
 
-function isMeetingUrl(url: any) {
+function isMeetingUrl(url: string | undefined): url is string {
   if (!url) return false;
   return (
     url.includes('meet.google.com/') ||
-    url.match(/zoom\.us\/(wc|j)\/\d+/)
+    /zoom\.us\/(wc|j)\/\d+/.test(url)
   );
 }
 
-function getMeetingPlatform(url: any) {
+function getMeetingPlatform(url: string) {
   if (url.includes('meet.google.com')) return 'Google Meet';
   if (url.includes('zoom.us')) return 'Zoom';
   return 'Meeting';
 }
 
-function sendToContentScript(tabId: any, message: any) {
+function sendToContentScript(tabId: number, message: BackgroundToContentMessage) {
   chrome.tabs.sendMessage(tabId, message).catch(() => {
     // Tab may have been closed or content script not ready
   });
@@ -311,11 +347,12 @@ function sendToContentScript(tabId: any, message: any) {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete') return;
 
-  if (isMeetingUrl(tab.url)) {
+  const url = tab.url;
+  if (isMeetingUrl(url)) {
     activeMeetingTabId = tabId;
-    const platform = getMeetingPlatform(tab.url);
+    const platform = getMeetingPlatform(url);
 
-    console.log('[MeetMind] Meeting detected:', tab.url);
+    console.log('[MeetMind] Meeting detected:', url);
     updateBadge(wsConnected ? 'meeting' : 'disconnected');
 
     // Connect to desktop app if not already
@@ -324,7 +361,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     // Notify desktop
     sendToDesktop({
       type: 'MEETING_DETECTED',
-      url: tab.url,
+      url,
       title: tab.title || platform,
       platform,
     });
@@ -333,7 +370,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     setTimeout(() => {
       sendToContentScript(tabId, {
         type: 'INJECT_OVERLAY',
-        meetingUrl: tab.url,
+        meetingUrl: url,
         meetingTitle: tab.title || platform,
         appConnected: wsConnected,
       });
@@ -356,29 +393,56 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
-// Messages from content script / overlay
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[MeetMind] Content message:', message.type);
+/** Checks a chrome.runtime message from a content script, popup or the bridge page. */
+function parseBackgroundRequest(message: unknown): BackgroundRequest | null {
+  if (typeof message !== 'object' || message === null) return null;
+  const msg = message as Record<string, unknown>;
 
-  switch (message.type) {
+  switch (msg.type) {
+    case 'START_RECORDING':
+      return {
+        type: 'START_RECORDING',
+        meetingUrl: typeof msg.meetingUrl === 'string' ? msg.meetingUrl : '',
+        meetingTitle: typeof msg.meetingTitle === 'string' ? msg.meetingTitle : '',
+      };
+    case 'STOP_RECORDING':
+    case 'GET_STATUS':
+    case 'OPEN_APP':
+    case 'CLOSE_OPEN_APP_TAB':
+      return { type: msg.type };
+    default:
+      return null;
+  }
+}
+
+// Messages from content script / overlay
+chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+  const request = parseBackgroundRequest(message);
+  if (!request) return true;
+  console.log('[MeetMind] Content message:', request.type);
+
+  switch (request.type) {
     case 'START_RECORDING': {
       const sent = sendToDesktop({
         type: 'START_RECORDING',
-        meetingUrl:   message.meetingUrl,
-        meetingTitle: message.meetingTitle,
+        meetingUrl:   request.meetingUrl,
+        meetingTitle: request.meetingTitle,
       });
-      sendResponse({ success: sent, wsConnected });
+      const response: StartRecordingResponse = { success: sent, wsConnected };
+      sendResponse(response);
       break;
     }
 
     case 'STOP_RECORDING': {
       const sent = sendToDesktop({ type: 'STOP_RECORDING' });
-      sendResponse({ success: sent });
+      const response: SuccessResponse = { success: sent };
+      sendResponse(response);
       break;
     }
 
     case 'GET_STATUS': {
-      sendResponse({ wsConnected, activeMeetingTabId });
+      const response: GetStatusResponse = { wsConnected, activeMeetingTabId };
+      sendResponse(response);
       break;
     }
 
@@ -390,13 +454,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } else {
         launchDesktopApp();
       }
-      sendResponse({ success: true });
+      const response: SuccessResponse = { success: true };
+      sendResponse(response);
       break;
     }
 
     case 'CLOSE_OPEN_APP_TAB': {
       closeOpenAppTab();
-      sendResponse({ success: true });
+      const response: SuccessResponse = { success: true };
+      sendResponse(response);
       break;
     }
   }

@@ -87,7 +87,7 @@ site/            Static marketing site published to GitHub Pages
 electron-builder.yml   Packaging config: Windows NSIS installer, macOS DMGs + update zips, Linux AppImage + .deb
 vite.config.ts         Renderer build config
 vitest.config.ts      Test runner config (separate root from vite.config.ts)
-tsconfig.base.json     Shared TypeScript options (and the strictness ratchet); each folder has its own tsconfig.json
+tsconfig.base.json     Shared TypeScript options (strict); each folder has its own tsconfig.json
 eslint.config.mjs      Flat ESLint config, scoped per directory
 pnpm-workspace.yaml    pnpm settings (hoisted node_modules, supportedArchitectures, allowBuilds, minimumReleaseAge)
 ```
@@ -197,7 +197,7 @@ grouped by feature:
 Event subscriptions go through a single `on(channel, callback)`, which returns an unsubscribe
 function, with an explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
 `recording:error`, `recording:warning`, `recording:levels` (live meter levels relayed from the
-capture window), `transcription:progress`, `processing:progress`, `processing:complete`,
+capture window), `processing:progress`, `processing:complete`,
 `processing:error`, `processing:cancelled`, `notes:preview`, `ws:extension-connected`, `ws:recording-requested`,
 `sessions:changed`, `updater:status`, `calendar:meeting-starting`, `calendar:changed`,
 `llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.

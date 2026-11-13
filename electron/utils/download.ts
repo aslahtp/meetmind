@@ -1,20 +1,22 @@
 // Streams an HTTPS download to disk and returns its SHA-256. No electron import, so the release
-// fetch script (scripts/fetch-ffmpeg.js) can use it too.
+// fetch script (scripts/fetch-ffmpeg.ts) can use it too.
 
 import fs from 'fs';
 import crypto from 'crypto';
+import http from 'http';
+import https from 'https';
 
 /**
  * Downloads `url` to `dest`, following redirects. `onProgress({ downloaded, total })` is called
  * as bytes arrive (`total` is 0 when the server sends no Content-Length).
  * Resolves with the file's SHA-256 (lowercase hex).
  */
-function downloadFile(url: any, dest: any, { onProgress, userAgent = 'MeetMind-Installer/1.0', maxRedirects = 8 }: { onProgress?: (p: { downloaded: number; total: number }) => void; userAgent?: string; maxRedirects?: number } = {}) {
-  return new Promise((resolve, reject) => {
-    function get(current: any, redirectsLeft: any) {
-      const mod = current.startsWith('https:') ? require('https') : require('http');
-      mod.get(current, { headers: { 'User-Agent': userAgent } }, (res: any) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+function downloadFile(url: string, dest: string, { onProgress, userAgent = 'MeetMind-Installer/1.0', maxRedirects = 8 }: { onProgress?: (p: { downloaded: number; total: number }) => void; userAgent?: string; maxRedirects?: number } = {}) {
+  return new Promise<string>((resolve, reject) => {
+    function get(current: string, redirectsLeft: number) {
+      const mod = current.startsWith('https:') ? https : http;
+      mod.get(current, { headers: { 'User-Agent': userAgent } }, (res) => {
+        if (res.statusCode! >= 300 && res.statusCode! < 400 && res.headers.location) {
           res.resume();
           if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
           return get(new URL(res.headers.location, current).toString(), redirectsLeft - 1);
@@ -29,7 +31,7 @@ function downloadFile(url: any, dest: any, { onProgress, userAgent = 'MeetMind-I
         const file = fs.createWriteStream(dest);
         let downloaded = 0;
 
-        res.on('data', (chunk: any) => {
+        res.on('data', (chunk: Buffer) => {
           downloaded += chunk.length;
           hash.update(chunk);
           onProgress?.({ downloaded, total });
@@ -45,7 +47,7 @@ function downloadFile(url: any, dest: any, { onProgress, userAgent = 'MeetMind-I
 }
 
 /** Throws unless `actual` equals the pinned `expected` SHA-256. */
-function assertSha256(actual: any, expected: any, label: any) {
+function assertSha256(actual: unknown, expected: unknown, label: string) {
   if (String(actual).toLowerCase() !== String(expected).toLowerCase()) {
     throw new Error(`Checksum mismatch for ${label}: expected ${expected}, got ${actual}`);
   }

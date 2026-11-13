@@ -5,14 +5,28 @@ import { formatBytes, plural } from '../../lib/format';
 import { RETENTION_OPTIONS, retentionPeriod, describeRecordings, deletionToast } from '../../lib/storage';
 import { SegmentedControl, Skeleton } from '../ui/index';
 import { SettingsGroup } from './SettingsParts';
+import { errorMessage } from '../../lib/errors';
+import type { FormChange, SettingsForm } from './types';
+import type { StorageSummary } from '@shared';
+
+type Busy = 'cleanup' | 'delete-all' | 'open';
 
 // Settings › Storage: how much space recordings take, how long they're kept, and manual cleanup.
 // Deleting removes only the audio; each meeting's notes and transcript stay.
-export default function StorageSection({ form, onChange, active, savedRetentionDays }: { form?: any; onChange?: any; active?: any; savedRetentionDays?: any }) {
+interface StorageSectionProps {
+  form: SettingsForm;
+  onChange: FormChange;
+  /** Whether the Storage tab is showing. */
+  active: boolean;
+  /** The period saved in config, or undefined while it loads. */
+  savedRetentionDays?: number;
+}
+
+export default function StorageSection({ form, onChange, active, savedRetentionDays }: StorageSectionProps) {
   const { confirm, addToast } = useApp();
-  const [summary, setSummary] = useState<any>(null); // { dir, count, bytes, retentionDays, expiring }
-  const [loadError, setLoadError] = useState<any>(null);
-  const [busy, setBusy] = useState<any>(null); // null | 'cleanup' | 'delete-all' | 'open'
+  const [summary, setSummary] = useState<StorageSummary | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Busy | null>(null);
 
   const retentionDays = form.recordingRetentionDays ?? 0;
   const unsaved = savedRetentionDays != null && retentionDays !== savedRetentionDays;
@@ -22,8 +36,8 @@ export default function StorageSection({ form, onChange, active, savedRetentionD
     try {
       setSummary(await window.meetmind.storage.summary(retentionDays));
       setLoadError(null);
-    } catch (err: any) {
-      setLoadError(err?.message || 'Couldn’t read the recordings folder.');
+    } catch (err) {
+      setLoadError(errorMessage(err) || 'Couldn’t read the recordings folder.');
     }
   }, [retentionDays]);
 
@@ -49,7 +63,7 @@ export default function StorageSection({ form, onChange, active, savedRetentionD
     }
   };
 
-  const runDeletion = async (kind: any) => {
+  const runDeletion = async (kind: 'cleanup' | 'delete-all') => {
     setBusy(kind);
     try {
       const result = kind === 'cleanup'
@@ -57,8 +71,8 @@ export default function StorageSection({ form, onChange, active, savedRetentionD
         : await window.meetmind.storage.deleteAll();
       const { message, type } = deletionToast(result);
       addToast(message, type);
-    } catch (err: any) {
-      addToast(`Couldn’t delete recordings: ${err?.message || 'unknown error'}`, 'error');
+    } catch (err) {
+      addToast(`Couldn’t delete recordings: ${errorMessage(err) || 'unknown error'}`, 'error');
     } finally {
       setBusy(null);
       load();
@@ -66,6 +80,7 @@ export default function StorageSection({ form, onChange, active, savedRetentionD
   };
 
   const handleCleanup = async () => {
+    if (!summary) return;
     const { count, bytes } = summary.expiring;
     const ok = await confirm({
       title: 'Delete old recordings?',
@@ -77,6 +92,7 @@ export default function StorageSection({ form, onChange, active, savedRetentionD
   };
 
   const handleDeleteAll = async () => {
+    if (!summary) return;
     const ok = await confirm({
       title: 'Delete all recordings?',
       message: `All ${describeRecordings(summary.count, summary.bytes)} will be deleted from this computer. Notes and transcripts are kept, but these meetings can’t be played or transcribed again. This can’t be undone.`,
@@ -87,9 +103,9 @@ export default function StorageSection({ form, onChange, active, savedRetentionD
   };
 
   const expiring = summary?.expiring;
-  const canClean = !!summary && retentionDays > 0 && !unsaved && expiring?.count > 0 && !busy;
+  const canClean = !!summary && retentionDays > 0 && !unsaved && !!expiring && expiring.count > 0 && !busy;
 
-  let cleanupHint;
+  let cleanupHint: string;
   if (unsaved) cleanupHint = 'Save your changes first to clean up with the new period.';
   else if (retentionDays === 0) cleanupHint = 'Pick how long to keep recordings to clean up old ones, or delete them all.';
   else cleanupHint = `Delete recordings older than ${retentionPeriod(retentionDays)} now, or delete them all.`;
@@ -143,13 +159,13 @@ export default function StorageSection({ form, onChange, active, savedRetentionD
               label="Keep recordings"
               options={RETENTION_OPTIONS}
               value={retentionDays}
-              onChange={(days: any) => onChange('recordingRetentionDays', days)}
+              onChange={(days: number) => onChange('recordingRetentionDays', days)}
             />
           </div>
           {summary && retentionDays > 0 && (
             <p className="text-caption text-graphite mt-16 tabular">
-              {expiring.count > 0
-                ? `${describeRecordings(expiring.count, expiring.bytes)} ${expiring.count === 1 ? 'is' : 'are'} older than ${retentionPeriod(retentionDays)}${unsaved ? ' and will be deleted when you save.' : '.'}`
+              {summary.expiring.count > 0
+                ? `${describeRecordings(summary.expiring.count, summary.expiring.bytes)} ${summary.expiring.count === 1 ? 'is' : 'are'} older than ${retentionPeriod(retentionDays)}${unsaved ? ' and will be deleted when you save.' : '.'}`
                 : `No recordings are older than ${retentionPeriod(retentionDays)}.`}
             </p>
           )}

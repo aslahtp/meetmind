@@ -1,20 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { Braces, FileText, RotateCcw, FolderOpen, MessageSquareText, FileDown } from 'lucide-react';
+import { Braces, FileText, RotateCcw, FolderOpen, MessageSquareText, FileDown, type LucideIcon } from 'lucide-react';
 import { SegmentedControl, Switch } from '../ui/index';
 import { SettingsGroup, SettingRow } from './SettingsParts';
 import ProviderSection from './providers/ProviderSection';
+import type { FormChange, SettingsForm } from './types';
 
-const OUTPUT_MODES = [
+const OUTPUT_MODES: { value: OutputMode; label: string; icon: LucideIcon }[] = [
   { value: 'json', label: 'JSON (structured)', icon: Braces },
   { value: 'markdown', label: 'Markdown', icon: FileText },
 ];
 
-const OUTPUT_MODE_HELP = {
+const OUTPUT_MODE_HELP: Record<OutputMode, string> = {
   json: 'Structured notes with a discrete summary, key topics, decisions and action items. Best for Notion databases.',
   markdown: 'Executive meeting minutes in Markdown with headings, bullet points and an action items table. Best for Notion pages.',
 };
 
-export default function NotesSection({ form, onChange, defaultSystemPrompt, defaultMdSystemPrompt }: { form?: any; onChange?: any; defaultSystemPrompt?: any; defaultMdSystemPrompt?: any }) {
+type OutputMode = 'json' | 'markdown';
+
+interface NotesSectionProps {
+  form: SettingsForm;
+  onChange: FormChange;
+  defaultSystemPrompt: string;
+  defaultMdSystemPrompt: string;
+}
+
+export default function NotesSection({ form, onChange, defaultSystemPrompt, defaultMdSystemPrompt }: NotesSectionProps) {
   const [downloadsDir, setDownloadsDir] = useState('');
 
   // The default PDF folder is the Windows Downloads folder; shown when no custom folder is set.
@@ -23,22 +33,22 @@ export default function NotesSection({ form, onChange, defaultSystemPrompt, defa
   }, []);
 
   const handleChoosePdfDir = async () => {
-    const res: any = await window.meetmind?.dialog?.chooseFolder?.({
+    const res = await window.meetmind?.dialog?.chooseFolder?.({
       title: 'Choose where to save PDFs',
       defaultPath: form.pdfExportDir || downloadsDir || undefined,
     });
-    if (res?.path) onChange('pdfExportDir', res.path);
+    if (res && 'path' in res && res.path) onChange('pdfExportDir', res.path);
   };
 
-  const outputMode = (form.promptOutputMode || form.noteOutputMode) === 'markdown' ? 'markdown' : 'json';
+  const outputMode: OutputMode = (form.promptOutputMode || form.noteOutputMode) === 'markdown' ? 'markdown' : 'json';
   const hasCustomPrompt = !!(form.systemPrompt && form.systemPrompt.trim() !== '');
 
-  const setOutputMode = (mode: any) => {
+  const setOutputMode = (mode: OutputMode) => {
     onChange('promptOutputMode', mode);
     onChange('noteOutputMode', mode);
   };
 
-  const setPrompt = (value: any) => {
+  const setPrompt = (value: string) => {
     onChange('systemPrompt', value);
     onChange('geminiSystemPrompt', value);
   };
@@ -133,7 +143,7 @@ export default function NotesSection({ form, onChange, defaultSystemPrompt, defa
             id="pdf-include-transcript"
             label="Include transcript in PDF"
             checked={!!form.pdfIncludeTranscript}
-            onChange={(v: any) => onChange('pdfIncludeTranscript', v)}
+            onChange={(v: boolean) => onChange('pdfIncludeTranscript', v)}
           />
         </SettingRow>
       </SettingsGroup>

@@ -3,16 +3,27 @@ import NotionIcon from '../NotionIcon';
 import { PasswordField, TextField, Switch } from '../ui/index';
 import { SettingsGroup, SettingRow, KeyGuide, TestAction, ExternalLink } from './SettingsParts';
 import CalendarsCard from './calendars/CalendarsCard';
+import { errorMessage } from '../../lib/errors';
+import type { FormChange, SettingsForm } from './types';
+import type { NotionTestResult, Outcome } from '@shared';
 
-function notionSuccessLabel(result: any) {
-  if (result?.type === 'page') return 'Notion page connected';
-  if (result?.type === 'database') return 'Notion database connected';
+type NotionOutcome = Outcome<NotionTestResult>;
+
+function notionSuccessLabel(result: NotionOutcome | null) {
+  if (!result?.success) return 'Notion connected';
+  if (result.type === 'page') return 'Notion page connected';
+  if (result.type === 'database') return 'Notion database connected';
   return 'Notion connected';
 }
 
-export default function IntegrationsSection({ form, onChange }: { form?: any; onChange?: any }) {
+interface IntegrationsSectionProps {
+  form: SettingsForm;
+  onChange: FormChange;
+}
+
+export default function IntegrationsSection({ form, onChange }: IntegrationsSectionProps) {
   const [testingNotion, setTestingNotion] = useState(false);
-  const [notionResult, setNotionResult] = useState<any>(null);
+  const [notionResult, setNotionResult] = useState<NotionOutcome | null>(null);
 
   const handleTestNotion = async () => {
     setTestingNotion(true);
@@ -20,8 +31,8 @@ export default function IntegrationsSection({ form, onChange }: { form?: any; on
     try {
       const result = await window.meetmind.notion.testConnection(form.notionApiKey, form.notionDatabaseId);
       setNotionResult(result);
-    } catch (err: any) {
-      setNotionResult({ success: false, error: err.message });
+    } catch (err) {
+      setNotionResult({ success: false, error: errorMessage(err) });
     } finally {
       setTestingNotion(false);
     }
@@ -42,7 +53,7 @@ export default function IntegrationsSection({ form, onChange }: { form?: any; on
             id="notion-key"
             label="Integration secret / API key"
             value={form.notionApiKey || ''}
-            onChange={(e: any) => onChange('notionApiKey', e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange('notionApiKey', e.target.value)}
             placeholder="secret_..."
           />
           <KeyGuide provider="notion" title="How to connect Notion" />
@@ -53,7 +64,7 @@ export default function IntegrationsSection({ form, onChange }: { form?: any; on
           label="Parent page or database ID"
           hint={'Paste the 32-character ID or full Notion URL. Connect the MeetMind integration from the page or database "..." menu first.'}
           value={form.notionDatabaseId || ''}
-          onChange={(e: any) => onChange('notionDatabaseId', e.target.value.trim())}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange('notionDatabaseId', e.target.value.trim())}
           placeholder="Page ID, database ID, or full Notion URL"
         />
 
@@ -66,7 +77,7 @@ export default function IntegrationsSection({ form, onChange }: { form?: any; on
             id="notion-upload-transcript"
             label="Upload transcript to Notion"
             checked={!!form.notionUploadTranscript}
-            onChange={(v: any) => onChange('notionUploadTranscript', v)}
+            onChange={(v: boolean) => onChange('notionUploadTranscript', v)}
           />
         </SettingRow>
 

@@ -5,6 +5,26 @@ import { app } from 'electron';
 
 import { resolveFfmpegPath } from './ffmpeg-path';
 import logger from '../utils/logger';
+import { errorMessage } from '../utils/errors';
+
+/** A session's loudness envelope: `peaks` scaled 0..1, `duration` in seconds. */
+interface Waveform {
+  peaks: number[];
+  duration: number;
+}
+
+/** The cache file: a `Waveform` plus what it was computed from. */
+interface WaveformCache extends Waveform {
+  version: number;
+  sourceSize: number;
+  sourceMtimeMs: number;
+}
+
+/** Streaming RMS accumulator returned by `createRmsAccumulator`. */
+interface RmsAccumulator {
+  push(chunk: Buffer): void;
+  finish(): number[];
+}
 
 // Decode at 8 kHz mono: plenty for a loudness envelope and ~6x cheaper than the source rate.
 const SAMPLE_RATE = 8000;
@@ -16,7 +36,7 @@ const MAX_BUCKETS = 1600;
 const CACHE_VERSION = 1;
 const DECODE_TIMEOUT_MS = 5 * 60 * 1000;
 
-const inFlight = new Map();
+const inFlight = new Map<string, Promise<Waveform>>();
 
 // ── Pure helpers (unit-tested) ────────────────────────────────────────────────
 
@@ -24,13 +44,13 @@ const inFlight = new Map();
  * Streaming RMS accumulator over little-endian signed 16-bit PCM. Chunks may split
  * a sample across boundaries; the odd byte is carried to the next push().
  */
-function createRmsAccumulator(blockSize = BLOCK_SIZE) {
-  const values: any = [];
-  let carry: any = null;
+function createRmsAccumulator(blockSize = BLOCK_SIZE): RmsAccumulator {
+  const values: number[] = [];
+  let carry: Buffer | null = null;
   let sumSq = 0;
   let count = 0;
 
-  function addSample(s: any) {
+  function addSample(s: number) {
     const v = s / 32768;
     sumSq += v * v;
     count += 1;
@@ -42,7 +62,7 @@ function createRmsAccumulator(blockSize = BLOCK_SIZE) {
   }
 
   return {
-    push(chunk: any) {
+    push(chunk: Buffer) {
       let buf = chunk;
       if (carry) {
         buf = Buffer.concat([carry, chunk]);
@@ -62,9 +82,9 @@ function createRmsAccumulator(blockSize = BLOCK_SIZE) {
 }
 
 /** Reduce values to at most `buckets` entries, keeping each bucket's maximum. */
-function reducePeaks(values: any, buckets = MAX_BUCKETS) {
+function reducePeaks(values: number[], buckets = MAX_BUCKETS): number[] {
   if (values.length <= buckets) return values.slice();
-  const out = new Array(buckets);
+  const out = new Array<number>(buckets);
   const step = values.length / buckets;
   for (let b = 0; b < buckets; b++) {
     const start = Math.floor(b * step);
@@ -80,21 +100,21 @@ function reducePeaks(values: any, buckets = MAX_BUCKETS) {
  * Scale peaks to 0..1 against the 99th percentile rather than the absolute max, so a
  * single cough or door slam doesn't flatten the rest of the meeting. Values above it clamp to 1.
  */
-function normalizePeaks(values: any) {
+function normalizePeaks(values: number[]): number[] {
   if (values.length === 0) return [];
-  const sorted = values.slice().sort((a: any, b: any) => a - b);
+  const sorted = values.slice().sort((a, b) => a - b);
   const ref = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.99))] || sorted[sorted.length - 1];
   if (!ref) return values.map(() => 0);
-  return values.map((v: any) => Math.round(Math.min(1, v / ref) * 1000) / 1000);
+  return values.map((v) => Math.round(Math.min(1, v / ref) * 1000) / 1000);
 }
 
 // ── Decoding + cache ──────────────────────────────────────────────────────────
 
-function decodeRms(audioPath: any) {
+function decodeRms(audioPath: string): Promise<number[]> {
   const ffmpegPath = resolveFfmpegPath();
   if (!ffmpegPath) return Promise.reject(new Error('FFmpeg not found.'));
 
-  return new Promise((resolve, reject) => {
+  return new Promise<number[]>((resolve, reject) => {
     const proc = spawn(ffmpegPath, [
       '-hide_banner', '-loglevel', 'error',
       '-i', audioPath,
@@ -125,14 +145,14 @@ function decodeRms(audioPath: any) {
   });
 }
 
-function cachePathFor(sessionId: any) {
+function cachePathFor(sessionId: string): string {
   const safeId = String(sessionId).replace(/[^\w-]/g, '_');
   return path.join(app.getPath('userData'), 'waveforms', `${safeId}.json`);
 }
 
-function readCache(cachePath: any, stat: any) {
+function readCache(cachePath: string, stat: fs.Stats): Waveform | null {
   try {
-    const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    const cached: WaveformCache | null = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
     if (
       cached?.version === CACHE_VERSION
       && cached.sourceSize === stat.size
@@ -151,18 +171,19 @@ function readCache(cachePath: any, stat: any) {
  * Loudness envelope for a session's recording: `{ peaks: number[0..1], duration: seconds }`.
  * Cached next to the app data, keyed on the source file's size and mtime.
  */
-function getSessionWaveform(sessionId: any, audioPath: any) {
-  if (inFlight.has(sessionId)) return inFlight.get(sessionId);
+function getSessionWaveform(sessionId: string, audioPath: string): Promise<Waveform> {
+  const running = inFlight.get(sessionId);
+  if (running) return running;
 
-  const job = (async () => {
+  const job = (async (): Promise<Waveform> => {
     const stat = fs.statSync(audioPath);
     const cachePath = cachePathFor(sessionId);
     const cached = readCache(cachePath, stat);
     if (cached) return cached;
 
     const started = Date.now();
-    const blocks: any = await decodeRms(audioPath);
-    const result = {
+    const blocks = await decodeRms(audioPath);
+    const result: Waveform = {
       peaks: normalizePeaks(reducePeaks(blocks)),
       duration: (blocks.length * BLOCK_SIZE) / SAMPLE_RATE,
     };
@@ -175,8 +196,8 @@ function getSessionWaveform(sessionId: any, audioPath: any) {
         sourceMtimeMs: stat.mtimeMs,
         ...result,
       }));
-    } catch (err: any) {
-      logger.warn('Failed to cache waveform', { sessionId, error: err.message });
+    } catch (err) {
+      logger.warn('Failed to cache waveform', { sessionId, error: errorMessage(err) });
     }
 
     logger.info('Waveform computed', { sessionId, peaks: result.peaks.length, ms: Date.now() - started });
@@ -187,14 +208,15 @@ function getSessionWaveform(sessionId: any, audioPath: any) {
   return job;
 }
 
-function deleteSessionWaveform(sessionId: any) {
+function deleteSessionWaveform(sessionId: string) {
   try {
     fs.rmSync(cachePathFor(sessionId), { force: true });
-  } catch (err: any) {
-    logger.warn('Failed to delete cached waveform', { sessionId, error: err.message });
+  } catch (err) {
+    logger.warn('Failed to delete cached waveform', { sessionId, error: errorMessage(err) });
   }
 }
 
+export type { Waveform, RmsAccumulator };
 export {
   getSessionWaveform,
   deleteSessionWaveform,

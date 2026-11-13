@@ -1,61 +1,65 @@
-import { spawn, spawnSync } from 'child_process';
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
 import { EventEmitter } from 'events';
 
 import { resolveFfmpegPath, resolveFfprobePath } from './ffmpeg-path';
-import { buildAmixFilter, buildSingleDeviceArgs, parseDeviceList, detectDshowLoopback, detectMicrophone, isWasapiLoopback, WASAPI_LOOPBACK_ID, WASAPI_LOOPBACK_LABEL } from './mixer';
+import { buildAmixFilter, buildSingleDeviceArgs, parseDeviceList, detectDshowLoopback, detectMicrophone, isWasapiLoopback, WASAPI_LOOPBACK_ID, WASAPI_LOOPBACK_LABEL, type CaptureBackend } from './mixer';
 import { defaultPulseSources } from './pulse';
 import { getConfig, setConfig } from '../utils/config';
 import logger from '../utils/logger';
+import { errorMessage } from '../utils/errors';
+import type { AudioDevice, AudioDeviceList, DeviceProbeResult } from '../shared';
 
 const recorder = new EventEmitter();
 
-let ffmpegProcess: any = null;
-let currentOutputPath: any = null;
-let recordingStartTime: any = null;
+let ffmpegProcess: ChildProcessWithoutNullStreams | null = null;
+let currentOutputPath: string | null = null;
+let recordingStartTime: number | null = null;
 let wasapiKnownUnsupported = false;
 
 const isLinux = process.platform === 'linux';
 // Linux records through PulseAudio source names; Windows through WASAPI / DirectShow devices.
-const BACKEND = isLinux ? 'pulse' : 'windows';
+const BACKEND: CaptureBackend = isLinux ? 'pulse' : 'windows';
 
 /**
  * Whether this FFmpeg can record from PulseAudio (`-f pulse`), which the Linux fallback needs.
  * The pinned Linux build can; some distro or custom builds can't.
  */
-const pulseSupport = new Map();
-function ffmpegSupportsPulse(ffmpegPath = resolveFfmpegPath()) {
+const pulseSupport = new Map<string, boolean>();
+function ffmpegSupportsPulse(ffmpegPath: string | null = resolveFfmpegPath()): boolean {
   if (!ffmpegPath) return false;
-  if (!pulseSupport.has(ffmpegPath)) {
+  let supported = pulseSupport.get(ffmpegPath);
+  if (supported === undefined) {
     const result = spawnSync(ffmpegPath, ['-hide_banner', '-devices'], { encoding: 'utf8', timeout: 5000 });
-    pulseSupport.set(ffmpegPath, /^\s*D\S*\s+pulse\b/m.test(`${result.stdout || ''}${result.stderr || ''}`));
+    supported = /^\s*D\S*\s+pulse\b/m.test(`${result.stdout || ''}${result.stderr || ''}`);
+    pulseSupport.set(ffmpegPath, supported);
   }
-  return pulseSupport.get(ffmpegPath);
+  return supported;
 }
 
 // ── Device enumeration ────────────────────────────────────────────────────────
 
 // Linux: PulseAudio sources. The default output's monitor is the system audio.
-async function listPulseDevices() {
+async function listPulseDevices(): Promise<AudioDeviceList> {
   try {
     const { system, mic, sources } = await defaultPulseSources();
     logger.info('Audio devices enumerated (PulseAudio)', { system, mic, sources: sources.length });
-    return { all: sources.map((s: any) => ({ id: s.name, label: s.name })), system, mic };
-  } catch (err: any) {
-    logger.error('Failed to enumerate PulseAudio sources', { error: err.message });
-    return { all: [], system: null, mic: null, error: err.message };
+    return { all: sources.map((s) => ({ id: s.name, label: s.name })), system, mic };
+  } catch (err) {
+    logger.error('Failed to enumerate PulseAudio sources', { error: errorMessage(err) });
+    return { all: [], system: null, mic: null, error: errorMessage(err) };
   }
 }
 
-async function listAudioDevices(): Promise<any> {
+async function listAudioDevices(): Promise<AudioDeviceList> {
   if (isLinux) return listPulseDevices();
   const ffmpegPath = resolveFfmpegPath();
 
   if (!ffmpegPath) {
     logger.warn('FFmpeg not found, cannot list devices');
-    return { system: [], mic: [], error: 'FFmpeg not found' };
+    return { all: [], system: null, mic: null, error: 'FFmpeg not found' };
   }
 
   return new Promise((resolve) => {
@@ -109,7 +113,7 @@ async function listAudioDevices(): Promise<any> {
 
     proc.on('error', (err) => {
       logger.error('Failed to enumerate audio devices', { error: err.message });
-      resolve({ system: null, mic: null, error: err.message });
+      resolve({ all: [], system: null, mic: null, error: err.message });
     });
 
     // FFmpeg often exits with code 1 after listing devices (dummy is invalid); allow up to 8s
@@ -126,7 +130,13 @@ async function listAudioDevices(): Promise<any> {
  * Resolves with the output path when FFmpeg confirms it has started writing.
  * Rejects with an error (including the raw FFmpeg output) if it fails.
  */
-function _spawnFFmpegRecording(sessionId: any, systemDevice: any, micDevice: any, outputPath: any, ffmpegPath: any) {
+function _spawnFFmpegRecording(
+  sessionId: string,
+  systemDevice: string | null,
+  micDevice: string | null,
+  outputPath: string,
+  ffmpegPath: string,
+): Promise<string> {
   const { inputs, filterParts, outputArgs } = buildAmixFilter(systemDevice, micDevice, { backend: BACKEND });
   const ffmpegArgs = [
     '-hide_banner',
@@ -139,7 +149,7 @@ function _spawnFFmpegRecording(sessionId: any, systemDevice: any, micDevice: any
 
   logger.info('FFmpeg command', { cmd: [ffmpegPath, ...ffmpegArgs].join(' ') });
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     // Keep a local reference to this specific process so the timeout and close
     // handlers don't accidentally affect a later process that replaced ffmpegProcess.
     const proc = spawn(ffmpegPath, ffmpegArgs);
@@ -148,7 +158,7 @@ function _spawnFFmpegRecording(sessionId: any, systemDevice: any, micDevice: any
 
     let startupOutput = '';
     let started = false;
-    let startupTimer: any = null;
+    let startupTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
     proc.stderr.on('data', (data) => {
       const text = data.toString();
@@ -202,7 +212,7 @@ function _spawnFFmpegRecording(sessionId: any, systemDevice: any, micDevice: any
  * Record a short clip from a single device and return its peak amplitude.
  * Used to diagnose silent devices before a real recording.
  */
-async function probeAudioDevice(device: any, durationSec = 3): Promise<any> {
+async function probeAudioDevice(device: string, durationSec = 3): Promise<DeviceProbeResult> {
   const ffmpegPath = resolveFfmpegPath();
   if (!ffmpegPath) {
     return { device, peak: 0, isSilent: true, error: 'FFmpeg not found' };
@@ -252,7 +262,7 @@ async function probeAudioDevice(device: any, durationSec = 3): Promise<any> {
   });
 }
 
-function recordingPath(sessionId: any) {
+function recordingPath(sessionId: string): string {
   const recordingsDir = path.join(app.getPath('userData'), 'recordings');
   if (!fs.existsSync(recordingsDir)) {
     fs.mkdirSync(recordingsDir, { recursive: true });
@@ -262,7 +272,7 @@ function recordingPath(sessionId: any) {
 
 // Linux: records the default output's monitor (system audio) and the default microphone,
 // whatever the user picks as default in their sound settings at the time.
-async function startPulseRecording(sessionId: any, ffmpegPath: any) {
+async function startPulseRecording(sessionId: string, ffmpegPath: string): Promise<string> {
   if (!ffmpegSupportsPulse(ffmpegPath)) {
     throw new Error('This FFmpeg build cannot record from PulseAudio. Install FFmpeg from Settings → System.');
   }
@@ -275,7 +285,7 @@ async function startPulseRecording(sessionId: any, ffmpegPath: any) {
   return _spawnFFmpegRecording(sessionId, system, mic, currentOutputPath, ffmpegPath);
 }
 
-async function startRecording(sessionId: any) {
+async function startRecording(sessionId: string): Promise<string> {
   if (ffmpegProcess) {
     throw new Error('Recording already in progress');
   }
@@ -285,8 +295,8 @@ async function startRecording(sessionId: any) {
   if (isLinux) return startPulseRecording(sessionId, ffmpegPath);
   const config = getConfig();
 
-  let systemDevice = config.systemAudioDevice;
-  let micDevice = config.micDevice;
+  let systemDevice: string | null = config.systemAudioDevice;
+  let micDevice: string | null = config.micDevice;
 
   // Auto-detect devices if not configured
   if (!systemDevice && !micDevice) {
@@ -308,8 +318,9 @@ async function startRecording(sessionId: any) {
   // silent when using headphones, USB speakers, or Bluetooth. WASAPI loopback
   // captures all system audio regardless of output device.
   if (systemDevice && !isWasapiLoopback(systemDevice) && !wasapiKnownUnsupported) {
+    const lowered = systemDevice.toLowerCase();
     const isDshowLoopback = ['stereo mix', 'what u hear', 'loopback', 'cable output'].some(
-      (k) => systemDevice.toLowerCase().includes(k)
+      (k) => lowered.includes(k)
     );
     if (isDshowLoopback) {
       logger.info('Config has dshow loopback, upgrading to WASAPI loopback', {
@@ -336,20 +347,21 @@ async function startRecording(sessionId: any) {
 
   try {
     return await _spawnFFmpegRecording(sessionId, systemDevice, micDevice, currentOutputPath, ffmpegPath);
-  } catch (err: any) {
+  } catch (err) {
     // ── WASAPI loopback fallback ──────────────────────────────────────────────
+    const message = errorMessage(err);
     const wasapiNotSupported =
       isWasapiLoopback(systemDevice) &&
-      (err.message.includes('Unrecognized option') || err.message.includes('Option not found'));
+      (message.includes('Unrecognized option') || message.includes('Option not found'));
 
     if (wasapiNotSupported) {
       wasapiKnownUnsupported = true;
-      logger.warn('WASAPI loopback not supported by this FFmpeg build — falling back to dshow', { ffmpegError: err.message });
+      logger.warn('WASAPI loopback not supported by this FFmpeg build — falling back to dshow', { ffmpegError: message });
 
       const freshDevices = await listAudioDevices();
       const dshowNames = freshDevices.all
-        .filter((d: any) => (d?.id ?? d) !== WASAPI_LOOPBACK_ID)
-        .map((d: any) => d?.id ?? d);
+        .filter((d) => d.id !== WASAPI_LOOPBACK_ID)
+        .map((d) => d.id);
 
       const fallbackSystem = detectDshowLoopback(dshowNames);
       if (fallbackSystem) {
@@ -371,16 +383,17 @@ async function startRecording(sessionId: any) {
   }
 }
 
-async function stopRecording() {
-  if (!ffmpegProcess) {
+async function stopRecording(): Promise<string> {
+  const proc = ffmpegProcess;
+  if (!proc) {
     throw new Error('No active recording');
   }
 
-  const outputPath: any = currentOutputPath;
+  const outputPath = currentOutputPath as string;   // set before every FFmpeg process starts
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     // Send 'q' to FFmpeg stdin to gracefully stop and finalize the WAV file
-    ffmpegProcess.stdin.write('q');
+    proc.stdin.write('q');
 
     const timeout = setTimeout(() => {
       if (ffmpegProcess) {
@@ -388,11 +401,11 @@ async function stopRecording() {
       }
     }, 5000);
 
-    ffmpegProcess.on('close', () => {
+    proc.on('close', () => {
       clearTimeout(timeout);
       ffmpegProcess = null;
 
-      const durationMs: any = Date.now() - (recordingStartTime || Date.now());
+      const durationMs = Date.now() - (recordingStartTime || Date.now());
       recordingStartTime = null;
 
       logger.info('Recording stopped', {
@@ -409,7 +422,7 @@ async function stopRecording() {
       }
     });
 
-    ffmpegProcess.on('error', (err: any) => {
+    proc.on('error', (err) => {
       clearTimeout(timeout);
       reject(err);
     });
@@ -420,11 +433,11 @@ async function stopRecording() {
  * Convert a webm/opus file (from renderer MediaRecorder) to 16 kHz mono WAV
  * suitable for the STT pipeline.
  */
-async function convertWebmToWav(webmPath: any, wavPath: any) {
+async function convertWebmToWav(webmPath: string, wavPath: string): Promise<string> {
   const ffmpegPath = resolveFfmpegPath();
   if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System.');
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const args = [
       '-hide_banner', '-i', webmPath,
       '-af', 'volume=4',
@@ -456,11 +469,11 @@ async function convertWebmToWav(webmPath: any, wavPath: any) {
  * a 16 kHz mono WAV suitable for the STT pipeline. Relies on FFmpeg's
  * built-in demuxers/decoders for the source format.
  */
-async function convertFileToWav(inputPath: any, wavPath: any) {
+async function convertFileToWav(inputPath: string, wavPath: string): Promise<string> {
   const ffmpegPath = resolveFfmpegPath();
   if (!ffmpegPath) throw new Error('FFmpeg not found. Please install it via Settings → System.');
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const args = [
       '-hide_banner', '-i', inputPath,
       '-vn', // drop any video track
@@ -492,7 +505,7 @@ async function convertFileToWav(inputPath: any, wavPath: any) {
  * Probe media duration in seconds via ffprobe (works for wav/webm/mp3/m4a/…).
  * Returns null when the file is missing or duration cannot be read.
  */
-function getMediaDurationSeconds(filePath: any) {
+function getMediaDurationSeconds(filePath: string | null | undefined): number | null {
   if (!filePath || !fs.existsSync(filePath)) return null;
 
   const ffprobePath = resolveFfprobePath();
@@ -525,12 +538,13 @@ function getMediaDurationSeconds(filePath: any) {
       return null;
     }
     return seconds;
-  } catch (err: any) {
-    logger.warn('ffprobe duration probe error', { filePath, error: err.message });
+  } catch (err) {
+    logger.warn('ffprobe duration probe error', { filePath, error: errorMessage(err) });
     return null;
   }
 }
 
+export type { AudioDevice, AudioDeviceList, DeviceProbeResult };
 export {
   startRecording,
   stopRecording,

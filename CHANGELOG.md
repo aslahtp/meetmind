@@ -6,6 +6,16 @@ updated: 2026-11-13
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.19.2] - 2026-11-13
+
+### Changed
+
+- **Internal**: Every value in the codebase now has a real type, and the linter rejects `any`.
+
+### Fixed
+
+- **Notion**: Notes whose status update is plain text, such as notes edited as Markdown, no longer upload an empty "Status Update" callout.
+
 ## [4.19.1] - 2026-11-13
 
 ### Changed

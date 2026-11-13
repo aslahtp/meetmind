@@ -1,16 +1,45 @@
 import http from 'http';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import logger from './utils/logger';
+import { errorCode, errorMessage } from './utils/errors';
 
-let wss: any = null;
-let httpServer: any = null;
-let extensionSocket: any = null;
+/** What main supplies to react to the extension. */
+interface ExtensionHandlers {
+  onStartRecording?: (request: { meetingUrl: string; meetingTitle: string }) => void;
+  onStopRecording?: () => void;
+  onShowWindow?: () => void;
+  onStatusRequest?: () => { recording: boolean; sessionId?: string | null };
+  sendToRenderer?: (channel: string, payload?: unknown) => void;
+}
+
+/** A message from the extension's service worker (extension/background.ts). */
+interface ExtensionMessage {
+  type?: string;
+  meetingUrl?: string;
+  meetingTitle?: string;
+}
+
+/** A message for the extension (`APP_STATUS`, `PROCESSING_PROGRESS`, …). */
+interface ExtensionBroadcast {
+  type: string;
+  [key: string]: unknown;
+}
+
+interface ListeningServer {
+  wss: WebSocketServer;
+  httpServer: http.Server;
+  port: number;
+}
+
+let wss: WebSocketServer | null = null;
+let httpServer: http.Server | null = null;
+let extensionSocket: WebSocket | null = null;
 const PORT_RANGE = 11; // try port, port+1, ... port+10
 
 /**
  * Try to listen on a single port. Resolves with { wss, httpServer, port } when ready.
  */
-function tryListen(port: any, handlers: any): Promise<any> {
+function tryListen(port: number, handlers: ExtensionHandlers): Promise<ListeningServer> {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       const url = req.url || '/';
@@ -18,8 +47,8 @@ function tryListen(port: any, handlers: any): Promise<any> {
       if (req.method === 'GET' && (url === '/open' || url.startsWith('/open?'))) {
         try {
           handlers.onShowWindow?.();
-        } catch (err: any) {
-          logger.error('Failed to show window via /open', { error: err.message });
+        } catch (err) {
+          logger.error('Failed to show window via /open', { error: errorMessage(err) });
         }
         res.writeHead(200, {
           'Content-Type': 'text/plain',
@@ -62,8 +91,8 @@ function tryListen(port: any, handlers: any): Promise<any> {
 /**
  * Attach connection handler and message logic to the server.
  */
-function attachHandlers(server: any, port: any, handlers: any) {
-  server.on('connection', (ws: any, req: any) => {
+function attachHandlers(server: WebSocketServer, port: number, handlers: ExtensionHandlers) {
+  server.on('connection', (ws, req) => {
     try {
       const origin = req.headers.origin || '';
 
@@ -80,12 +109,12 @@ function attachHandlers(server: any, port: any, handlers: any) {
         handlers.sendToRenderer('ws:extension-connected', { origin });
       }
 
-      ws.on('message', (data: any) => {
+      ws.on('message', (data: RawData) => {
         try {
-          const message = JSON.parse(data.toString());
+          const message: ExtensionMessage = JSON.parse(data.toString());
           handleExtensionMessage(message, ws, handlers);
-        } catch (err: any) {
-          logger.error('Failed to parse WebSocket message', { error: err.message });
+        } catch (err) {
+          logger.error('Failed to parse WebSocket message', { error: errorMessage(err) });
         }
       });
 
@@ -94,8 +123,8 @@ function attachHandlers(server: any, port: any, handlers: any) {
         if (extensionSocket === ws) extensionSocket = null;
       });
 
-      ws.on('error', (err: any) => {
-        logger.error('WebSocket client error', { error: err.message });
+      ws.on('error', (err) => {
+        logger.error('WebSocket client error', { error: errorMessage(err) });
       });
 
       try {
@@ -105,11 +134,11 @@ function attachHandlers(server: any, port: any, handlers: any) {
           recording: !!status.recording,
           sessionId: status.sessionId || null,
         }));
-      } catch (err: any) {
-        logger.error('Failed to send status to extension on connection', { error: err.message });
+      } catch (err) {
+        logger.error('Failed to send status to extension on connection', { error: errorMessage(err) });
       }
-    } catch (err: any) {
-      logger.error('Error in WebSocket connection handler', { error: err.message });
+    } catch (err) {
+      logger.error('Error in WebSocket connection handler', { error: errorMessage(err) });
     }
   });
 }
@@ -117,8 +146,8 @@ function attachHandlers(server: any, port: any, handlers: any) {
 /**
  * Start the WebSocket server. Tries port, then port+1, ... port+10 until one is free.
  */
-async function startWebSocketServer(port: any, handlers: any) {
-  let lastErr = null;
+async function startWebSocketServer(port: number, handlers: ExtensionHandlers): Promise<WebSocketServer> {
+  let lastErr: unknown = null;
 
   for (let i = 0; i < PORT_RANGE; i++) {
     const tryPort = port + i;
@@ -128,13 +157,13 @@ async function startWebSocketServer(port: any, handlers: any) {
       httpServer = started.httpServer;
       attachHandlers(wss, tryPort, handlers);
       return wss;
-    } catch (err: any) {
+    } catch (err) {
       lastErr = err;
-      if (err.code === 'EADDRINUSE') {
+      if (errorCode(err) === 'EADDRINUSE') {
         logger.warn(`Port ${tryPort} in use, trying next...`);
         continue;
       }
-      logger.error('WebSocket server error', { error: err.message });
+      logger.error('WebSocket server error', { error: errorMessage(err) });
       throw err;
     }
   }
@@ -146,7 +175,7 @@ async function startWebSocketServer(port: any, handlers: any) {
   throw lastErr || new Error('Could not bind WebSocket server');
 }
 
-function handleExtensionMessage(message: any, ws: any, handlers: any) {
+function handleExtensionMessage(message: ExtensionMessage, ws: WebSocket, handlers: ExtensionHandlers) {
   // APP_STATUS is the extension's 10s heartbeat; logging it would flood the log.
   if (message?.type !== 'APP_STATUS') {
     logger.debug('Received extension message', { type: message?.type });
@@ -188,17 +217,17 @@ function handleExtensionMessage(message: any, ws: any, handlers: any) {
       default:
         logger.warn('Unknown WebSocket message type', { type: message?.type });
     }
-  } catch (err: any) {
-    logger.error('Failed to handle extension message', { type: message?.type, error: err.message });
+  } catch (err) {
+    logger.error('Failed to handle extension message', { type: message?.type, error: errorMessage(err) });
   }
 }
 
-function broadcastToExtension(message: any) {
+function broadcastToExtension(message: ExtensionBroadcast) {
   if (!extensionSocket || extensionSocket.readyState !== 1) return;
   try {
     extensionSocket.send(JSON.stringify(message));
-  } catch (err: any) {
-    logger.error('Failed to send message to extension', { error: err.message });
+  } catch (err) {
+    logger.error('Failed to send message to extension', { error: errorMessage(err) });
   }
 }
 
@@ -214,4 +243,5 @@ function stopWebSocketServer() {
   logger.info('WebSocket server stopped');
 }
 
+export type { ExtensionHandlers, ExtensionMessage, ExtensionBroadcast };
 export { startWebSocketServer, stopWebSocketServer, broadcastToExtension };

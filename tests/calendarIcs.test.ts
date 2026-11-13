@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import { parseIcs, NOT_A_CALENDAR } from '../electron/calendar/ics-parse';
 
-const ics = (...lines: any[]) => ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//test//EN', ...lines, 'END:VCALENDAR'].join('\r\n');
+const ics = (...lines: string[]) => ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//test//EN', ...lines, 'END:VCALENDAR'].join('\r\n');
 
 const NOV = { from: Date.UTC(2026, 10, 1), to: Date.UTC(2026, 11, 1) };
 
@@ -121,23 +121,23 @@ describe('parseIcs', () => {
   });
 
   it('expands a weekly series in the window, skipping EXDATEs and cancelled occurrences', () => {
-    const standups = parseIcs(GOOGLE, NOV).events.filter((e: any) => e.uid === 'standup@google.com');
-    expect(standups.map((e: any) => e.start)).toEqual([
+    const standups = parseIcs(GOOGLE, NOV).events.filter((e) => e.uid === 'standup@google.com');
+    expect(standups.map((e) => e.start)).toEqual([
       '2026-11-02T04:30:00.000Z',
       // 9 Nov excluded by EXDATE; 16 Nov moved to 17 Nov 11:00 IST; 23 Nov cancelled.
       '2026-11-17T05:30:00.000Z',
       '2026-11-30T04:30:00.000Z',
     ]);
-    expect(standups[1].title).toBe('Standup (moved)');
-    expect(standups[0].end).toBe('2026-11-02T04:45:00.000Z');
-    expect(standups[0].meetingLink).toBe('https://meet.google.com/abc-defg-hij');
-    expect(new Set(standups.map((e: any) => e.id)).size).toBe(3);
+    expect(standups[1]?.title).toBe('Standup (moved)');
+    expect(standups[0]?.end).toBe('2026-11-02T04:45:00.000Z');
+    expect(standups[0]?.meetingLink).toBe('https://meet.google.com/abc-defg-hij');
+    expect(new Set(standups.map((e) => e.id)).size).toBe(3);
   });
 
   it('drops cancelled events and keeps a lone invited occurrence', () => {
     const { events } = parseIcs(GOOGLE, NOV);
-    expect(events.find((e: any) => e.uid === 'offsite@google.com')).toBeUndefined();
-    const guest = events.find((e: any) => e.uid === 'their-series@google.com');
+    expect(events.find((e) => e.uid === 'offsite@google.com')).toBeUndefined();
+    const guest = events.find((e) => e.uid === 'their-series@google.com');
     expect(guest).toMatchObject({
       title: 'Guest slot',
       start: '2026-11-03T15:00:00.000Z',
@@ -150,29 +150,29 @@ describe('parseIcs', () => {
 
   it('clips to the window', () => {
     const events = parseIcs(GOOGLE, { from: Date.UTC(2026, 10, 2), to: Date.UTC(2026, 10, 3) }).events;
-    expect(events.map((e: any) => e.title)).toEqual(['Standup']);
+    expect(events.map((e) => e.title)).toEqual(['Standup']);
   });
 
   it('uses the feed’s VTIMEZONE for Windows zone names and prefers the Teams property', () => {
     const [event] = parseIcs(OUTLOOK, NOV).events;
-    expect(event.start).toBe('2026-11-04T10:00:00.000Z');
-    expect(event.meetingLink).toBe('https://teams.microsoft.com/l/meetup-join/direct');
+    expect(event?.start).toBe('2026-11-04T10:00:00.000Z');
+    expect(event?.meetingLink).toBe('https://teams.microsoft.com/l/meetup-join/direct');
   });
 
   it('handles all-day events without DTEND and floating times', () => {
     const { events } = parseIcs(APPLE, NOV);
-    expect(events.find((e: any) => e.title === 'Holiday')).toMatchObject({ isAllDay: true, start: '2026-11-02', end: '2026-11-03' });
-    expect(events.find((e: any) => e.title === 'Dentist').start).toBe(new Date(2026, 10, 2, 9, 0, 0).toISOString());
+    expect(events.find((e) => e.title === 'Holiday')).toMatchObject({ isAllDay: true, start: '2026-11-02', end: '2026-11-03' });
+    expect(events.find((e) => e.title === 'Dentist')?.start).toBe(new Date(2026, 10, 2, 9, 0, 0).toISOString());
   });
 
   it('reads UTC times, Cal Video links and undefined IANA zones', () => {
     const { events } = parseIcs(CALCOM, NOV);
-    expect(events.find((e: any) => e.title === 'Intro call')).toMatchObject({
+    expect(events.find((e) => e.title === 'Intro call')).toMatchObject({
       start: '2026-11-06T12:00:00.000Z',
       meetingLink: 'https://app.cal.com/video/abc123',
     });
     // Berlin is UTC+1 in November.
-    expect(events.find((e: any) => e.title === 'Berlin sync').start).toBe('2026-11-04T13:00:00.000Z');
+    expect(events.find((e) => e.title === 'Berlin sync')?.start).toBe('2026-11-04T13:00:00.000Z');
   });
 
   it('rejects anything that is not a calendar', () => {
@@ -194,6 +194,6 @@ describe('parseIcs', () => {
       'SUMMARY:Fine',
       'END:VEVENT',
     );
-    expect(parseIcs(text, NOV).events.map((e: any) => e.title)).toEqual(['Fine']);
+    expect(parseIcs(text, NOV).events.map((e) => e.title)).toEqual(['Fine']);
   });
 });

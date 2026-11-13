@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, Square, Mic, Monitor, AlertTriangle, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { formatClock } from '../lib/format';
 import { audioMeter } from '../lib/audioMeter';
+import type { AudioLevels } from '../lib/audioMeter';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -19,7 +21,7 @@ const SILENCE_THRESHOLD_SEC = 120; // 2 minutes
  * base contribution from its index so the meter "breathes" rather than
  * snapping as a flat block.
  */
-function LevelMeter({ level, label, icon: Icon, muted }: { level?: any; label?: any; icon?: any; muted?: any }) {
+function LevelMeter({ level, label, icon: Icon, muted }: { level: number; label: string; icon: LucideIcon; muted: boolean }) {
   // Clamp and apply an easing curve so quiet speech still shows motion.
   const clamped = Math.max(0, Math.min(1, level));
   const eased = Math.pow(clamped, 0.6);
@@ -53,7 +55,7 @@ function LevelMeter({ level, label, icon: Icon, muted }: { level?: any; label?: 
 
 // ── Silence Warning ──────────────────────────────────────────────────────────
 
-function SilenceWarning({ seconds, onDismiss }: { seconds?: any; onDismiss?: any }) {
+function SilenceWarning({ seconds, onDismiss }: { seconds: number; onDismiss: () => void }) {
   const mins = Math.floor(seconds / 60);
   return (
     <div className="silence-warning fade-in" role="alert">
@@ -79,7 +81,14 @@ function SilenceWarning({ seconds, onDismiss }: { seconds?: any; onDismiss?: any
 // derived from the App-level start timestamp, so it survives remounts.
 // `audioLevels` is { mic: 0–1, system: 0–1 } updated ~30 fps from the capture
 // AnalyserNodes via audioMeter or passed directly as a prop.
-export default function RecordingBar({ startedAt, onStop, audioLevels: propAudioLevels }: { startedAt?: any; onStop?: any; audioLevels?: any }) {
+export interface RecordingBarProps {
+  /** `Date.now()` when the recording started. */
+  startedAt?: number | null;
+  onStop?: () => unknown;
+  audioLevels?: AudioLevels;
+}
+
+export default function RecordingBar({ startedAt, onStop, audioLevels: propAudioLevels }: RecordingBarProps) {
   const [internalLevels, setInternalLevels] = useState(() => audioMeter.getLevels());
 
   useEffect(() => {

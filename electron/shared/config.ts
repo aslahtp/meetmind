@@ -1,14 +1,14 @@
-// App settings as `getConfig()` returns them. Source: electron/utils/config.js (schema + getConfig()).
+// App settings as `getConfig()` returns them. Source: electron/utils/config.ts (schema + getConfig()).
 // Provider credential keys come from the provider registries (`providerConfigKeys()`); the ones that
 // exist today are listed explicitly below, so a new provider that adds a key adds it here too.
 
-import type { CalendarSyncMinutes } from './calendar';
+import type { CalendarSyncMinutes, StoredCalendarSource } from './calendar';
 import type { EffectiveTheme } from './overlay';
 
 /** Setting for the app's colour theme (`system` follows the OS). */
 export type ThemeSetting = EffectiveTheme | 'system';
 
-/** macOS only: how system audio is captured (electron/audio/mac-capture.js). */
+/** macOS only: how system audio is captured (electron/audio/mac-capture.ts). */
 export type MacCaptureStrategy = 'screen' | 'frame' | 'picker';
 
 /** `llmFallback`: any provider/model to retry with; an empty object means disabled. */
@@ -80,7 +80,7 @@ export interface Config extends ProviderConfigFields {
 
   // Calendars. Sources hold credentials: `getConfig()` returns them as stored (main process only);
   // `config:get` leaves them out, and the renderer uses the redacted `calendar:*` channels.
-  calendars: unknown[];
+  calendars: StoredCalendarSource[];
   calendarSyncMinutes: CalendarSyncMinutes;
 
   // PDF export and recordings storage.

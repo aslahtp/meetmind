@@ -12,6 +12,7 @@ import {
   migrateLegacyCalendar,
   sanitizeSources,
 } from '../electron/calendar/calendar-sources';
+import type { CalendarUpdatePatch, StoredCalendarSource } from '../electron/shared';
 
 const makeId = () => 'new-id';
 
@@ -78,7 +79,7 @@ describe('publicSource', () => {
 
 describe('pickSourceUpdate', () => {
   it('keeps only editable fields', () => {
-    expect(pickSourceUpdate({ name: '  Team   cal ', enabled: false, refreshToken: 'x', type: 'google' }))
+    expect(pickSourceUpdate({ name: '  Team   cal ', enabled: false, refreshToken: 'x', type: 'google' } as CalendarUpdatePatch))
       .toEqual({ name: 'Team cal', enabled: false });
     expect(pickSourceUpdate({ url: 'webcal://a.com/x.ics' })).toEqual({ url: 'https://a.com/x.ics' });
   });
@@ -89,7 +90,7 @@ describe('pickSourceUpdate', () => {
 });
 
 describe('resolveGoogleClient', () => {
-  const sources = [{ id: 'g', type: 'google', clientId: 'cid', clientSecret: 'saved' }];
+  const sources: StoredCalendarSource[] = [{ id: 'g', type: 'google', name: 'Google', clientId: 'cid', clientSecret: 'saved' }];
 
   it('reuses the saved secret for the same client ID', () => {
     expect(resolveGoogleClient(sources, { clientId: ' cid ', clientSecret: '' })).toEqual({ clientId: 'cid', clientSecret: 'saved' });
@@ -124,7 +125,7 @@ describe('migrateLegacyCalendar', () => {
 
   it('keeps entered credentials that were never signed in', () => {
     const { set } = migrateLegacyCalendar({ googleCalendarClientId: 'cid', googleCalendarClientSecret: 'sec', googleCalendarRefreshToken: '' }, makeId);
-    expect(set.calendars[0]).toMatchObject({ name: 'Google Calendar', clientId: 'cid', refreshToken: '' });
+    expect(set.calendars?.[0]).toMatchObject({ name: 'Google Calendar', clientId: 'cid', refreshToken: '' });
   });
 
   it('only removes empty legacy keys', () => {

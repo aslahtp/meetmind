@@ -17,8 +17,20 @@ import {
   CircleX,
   Bug,
 } from 'lucide-react';
+import type { LogEntry } from '@shared';
 import { useApp } from '../lib/app-context';
+import { errorMessage } from '../lib/errors';
 import { IconButton, SegmentedControl, Skeleton } from './ui/index';
+
+/** A log line as shown: an entry from main (or a plain log line from an older history), plus an id for its key. */
+interface LogRow {
+  timestamp: string;
+  level: string;
+  context?: string;
+  message: string;
+  meta?: unknown;
+  _id?: number;
+}
 
 const MAX_LOGS = 2000;
 const NEAR_BOTTOM_PX = 48;
@@ -33,7 +45,7 @@ const LEVELS = [
   { value: 'DEBUG', label: 'Debug', icon: Bug },
 ];
 
-function LevelTag({ level }: { level?: any }) {
+function LevelTag({ level }: { level: string }) {
   const base = 'inline-block flex-shrink-0 w-[64px] text-caption font-medium uppercase';
   const style = { letterSpacing: 'var(--tracking-badge)' };
   if (level === 'WARN') {
@@ -47,7 +59,7 @@ function LevelTag({ level }: { level?: any }) {
   return <span className={`${base} ${color}`} style={style}>{level}</span>;
 }
 
-function formatTimestamp(iso: any) {
+function formatTimestamp(iso: string) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
@@ -61,7 +73,7 @@ function formatTimestamp(iso: any) {
   return `${time}.${ms}`;
 }
 
-function isExtensionLog(entry: any) {
+function isExtensionLog(entry: LogRow | null | undefined) {
   if (!entry) return false;
   const ctx = (entry.context || '').toLowerCase();
   if (ctx.includes('extension') || ctx.includes('websocket')) return true;
@@ -91,17 +103,17 @@ function isExtensionLog(entry: any) {
 // Each entry gets an id for its React key. Keys built from the list position changed for every
 // row once the list was full (the oldest entry drops off), remounting all of them per new line.
 let nextEntryId = 0;
-const withId = (entry: any) => (entry && typeof entry === 'object' && entry._id == null ? { ...entry, _id: ++nextEntryId } : entry);
+const withId = (entry: LogRow): LogRow => (entry && typeof entry === 'object' && entry._id == null ? { ...entry, _id: ++nextEntryId } : entry);
 
-function normalizeEntry(item: any) {
+function normalizeEntry(item: LogEntry | string): LogRow {
   return withId(parseEntry(item));
 }
 
-function parseEntry(item: any) {
+function parseEntry(item: LogEntry | string): LogRow {
   if (typeof item !== 'string') return item;
   const match = item.match(/^\[([^\]]+)\]\s+\[([A-Z]+)\](?:\s+\[([^\]]+)\])?\s+(.*?)(?:\s+(\{.*\}|\[.*\]))?$/);
   if (match) {
-    let meta = null;
+    let meta: unknown = null;
     try { if (match[5]) meta = JSON.parse(match[5]); } catch { meta = match[5]; }
     return {
       timestamp: match[1],
@@ -114,11 +126,11 @@ function parseEntry(item: any) {
   return { timestamp: new Date().toISOString(), level: 'INFO', message: item };
 }
 
-function formatLine(l: any) {
+function formatLine(l: LogRow) {
   return `[${l.timestamp}] [${l.level}] ${l.context ? `[${l.context}] ` : ''}${l.message}${l.meta ? ' ' + JSON.stringify(l.meta) : ''}`;
 }
 
-const capped = (list: any) => (list.length > MAX_LOGS ? list.slice(-MAX_LOGS) : list);
+const capped = <T,>(list: T[]) => (list.length > MAX_LOGS ? list.slice(-MAX_LOGS) : list);
 
 export default function LogsViewer() {
   const { confirm, addToast } = useApp();
@@ -126,9 +138,9 @@ export default function LogsViewer() {
   const hasLogsApi = !!bridge?.logs;
   const hasPush = !!bridge?.on;
 
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(hasLogsApi);
-  const [loadError, setLoadError] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [levelFilter, setLevelFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
@@ -146,8 +158,8 @@ export default function LogsViewer() {
   const [openingLogDir, setOpeningLogDir] = useState(false);
 
   const isLiveRef = useRef(true);
-  const pausedBufferRef = useRef<any[]>([]);
-  const logContainerRef = useRef<any>(null);
+  const pausedBufferRef = useRef<LogRow[]>([]);
+  const logContainerRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
 
   useEffect(() => {
@@ -171,9 +183,9 @@ export default function LogsViewer() {
         setLogs(capped(raw.map(normalizeEntry)));
       }
       setLoadError(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to load logs history:', err);
-      setLoadError(err?.message || 'Failed to load logs');
+      setLoadError(errorMessage(err) || 'Failed to load logs');
     } finally {
       setLoading(false);
     }
@@ -223,12 +235,12 @@ export default function LogsViewer() {
   };
 
   const counts = useMemo(() => {
-    const c = { ALL: 0, INFO: 0, WARN: 0, ERROR: 0, DEBUG: 0 };
+    const c: Record<string, number> = { ALL: 0, INFO: 0, WARN: 0, ERROR: 0, DEBUG: 0 };
     for (const l of logs) {
       if (hideExtensionLogs && isExtensionLog(l)) continue;
       c.ALL++;
       const lvl = (l.level || 'INFO').toUpperCase();
-      if ((c as any)[lvl] !== undefined) (c as any)[lvl]++;
+      if (c[lvl] !== undefined) c[lvl]++;
     }
     return c;
   }, [logs, hideExtensionLogs]);
@@ -262,8 +274,8 @@ export default function LogsViewer() {
       await navigator.clipboard.writeText(filteredLogs.map(formatLine).join('\n'));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err: any) {
-      addToast?.(`Couldn't copy logs: ${err.message}`, 'error');
+    } catch (err) {
+      addToast?.(`Couldn't copy logs: ${errorMessage(err)}`, 'error');
     }
   };
 
@@ -293,8 +305,8 @@ export default function LogsViewer() {
       pausedBufferRef.current = [];
       setPausedCount(0);
       setLogs([]);
-    } catch (err: any) {
-      addToast?.(`Couldn't clear logs: ${err.message}`, 'error');
+    } catch (err) {
+      addToast?.(`Couldn't clear logs: ${errorMessage(err)}`, 'error');
     }
   };
 
@@ -308,16 +320,16 @@ export default function LogsViewer() {
     }
   };
 
-  const toggleHideExtension = (value: any) => {
+  const toggleHideExtension = (value: boolean) => {
     setHideExtensionLogs(value);
     try {
       localStorage.setItem(HIDE_EXT_KEY, value ? 'true' : 'false');
     } catch { /* storage unavailable — keep in-memory preference */ }
   };
 
-  const levelOptions = LEVELS.map((l) => ({ ...l, count: (counts as any)[l.value] || 0 }));
+  const levelOptions = LEVELS.map((l) => ({ ...l, count: counts[l.value] || 0 }));
 
-  let body;
+  let body: React.ReactNode;
   if (!hasLogsApi) {
     body = (
       <div className="flex items-center justify-center h-full text-caption text-graphite">
@@ -365,7 +377,7 @@ export default function LogsViewer() {
           )}
           <span className="text-ink break-all flex-1">
             {entry.message}
-            {entry.meta && (
+            {!!entry.meta && (
               <span className="ml-8 text-graphite">
                 {typeof entry.meta === 'object' ? JSON.stringify(entry.meta) : String(entry.meta)}
               </span>

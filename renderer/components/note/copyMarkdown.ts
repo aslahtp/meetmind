@@ -1,29 +1,31 @@
 // Shared note accessors (used by both the summary screen and the copy export,
 // so what you copy always matches what you see) and the Markdown exporter.
 
-export function getTopics(notes: any) {
+import type { Notes, NotesActionItem, NotesParticipant, NotesStatusUpdate, NotesTopic } from '@shared';
+
+export function getTopics(notes: Notes | null | undefined): NotesTopic[] {
   if (!notes) return [];
   const source = notes.sections?.length
     ? notes.sections
     : notes.topics?.length
       ? notes.topics
       : notes.key_points || [];
-  return source.filter((t: any) => t?.heading || t?.content || t?.summary);
+  return source.filter((t) => t?.heading || t?.content || t?.summary);
 }
 
-export function topicBody(topic: any) {
+export function topicBody(topic: NotesTopic | null | undefined): string {
   return topic?.summary || topic?.content || '';
 }
 
-export function actionItemText(item: any) {
+export function actionItemText(item: NotesActionItem | null | undefined): string {
   return item?.task || item?.description || item?.action || '';
 }
 
-export function notesTitle(notes: any, session?: any) {
+export function notesTitle(notes: Notes | null | undefined, session?: { title?: string | null } | null): string {
   return notes?.meeting_title || notes?.title || session?.title || 'Meeting Notes';
 }
 
-export function buildNotesMarkdown(notes: any, session?: any) {
+export function buildNotesMarkdown(notes: Notes | null | undefined, session?: { title?: string | null } | null): string {
   if (!notes) return '';
   if (notes._rawMarkdown) return notes._rawMarkdown;
 
@@ -31,7 +33,7 @@ export function buildNotesMarkdown(notes: any, session?: any) {
 
   if (notes.participants?.length) {
     md += `## Participants\n`;
-    notes.participants.forEach((p: any) => {
+    notes.participants.forEach((p) => {
       const nameStr = p.name ? (p.label && p.label !== p.name ? `${p.name} (${p.label})` : p.name) : p.label;
       const roleStr = p.role ? ` — ${p.role}` : '';
       const confStr = p.identity_confidence ? ` [${p.identity_confidence}]` : '';
@@ -40,23 +42,25 @@ export function buildNotesMarkdown(notes: any, session?: any) {
     md += `\n`;
   }
 
-  if (typeof notes.status_update === 'string' && notes.status_update.trim()) {
-    md += `## Status Update\n${notes.status_update.trim()}\n\n`;
-  } else if (notes.status_update) {
+  const statusUpdate = notes.status_update;
+  if (typeof statusUpdate === 'string' && statusUpdate.trim()) {
+    md += `## Status Update\n${statusUpdate.trim()}\n\n`;
+  } else if (statusUpdate) {
+    const status: NotesStatusUpdate = typeof statusUpdate === 'string' ? {} : statusUpdate;
     md += `## Status Update\n`;
-    if (notes.status_update.completion_estimate) {
-      md += `- **Completion Estimate:** ${notes.status_update.completion_estimate}\n`;
+    if (status.completion_estimate) {
+      md += `- **Completion Estimate:** ${status.completion_estimate}\n`;
     }
-    if (notes.status_update.remaining_scope?.length) {
+    if (status.remaining_scope?.length) {
       md += `- **Remaining Scope:**\n`;
-      notes.status_update.remaining_scope.forEach((s: any) => (md += `  - ${s}\n`));
+      status.remaining_scope.forEach((s) => (md += `  - ${s}\n`));
     }
     md += `\n`;
   }
 
   if (notes.action_items?.length) {
     md += `## Action Items\n`;
-    notes.action_items.forEach((item: any) => {
+    notes.action_items.forEach((item) => {
       const priority = item.priority ? ` (Priority: ${item.priority[0].toUpperCase()}${item.priority.slice(1)})` : '';
       md += `- [${item.done ? 'x' : ' '}] ${actionItemText(item)}${item.owner ? ` (@${item.owner})` : ''}${item.due ? ` (Due: ${item.due})` : ''}${priority}\n`;
     });
@@ -66,19 +70,19 @@ export function buildNotesMarkdown(notes: any, session?: any) {
   const topics = getTopics(notes);
   if (topics.length) {
     md += `## Key Topics\n\n`;
-    topics.forEach((t: any, idx: any) => {
+    topics.forEach((t, idx) => {
       md += `### ${idx + 1}. ${t.heading || 'Topic'}\n\n`;
       const body = topicBody(t);
       if (body) md += `${body}\n\n`;
       if (t.options_discussed?.length) {
         md += `**Options Discussed:**\n`;
-        t.options_discussed.forEach((opt: any) => (md += `- ${opt}\n`));
+        t.options_discussed.forEach((opt) => (md += `- ${opt}\n`));
         md += `\n`;
       }
       if (t.decision) md += `**Decision:** ${t.decision}\n\n`;
       if (t.open_questions?.length) {
         md += `**Open Questions:**\n`;
-        t.open_questions.forEach((q: any) => (md += `- ${q}\n`));
+        t.open_questions.forEach((q) => (md += `- ${q}\n`));
         md += `\n`;
       }
     });
@@ -86,7 +90,7 @@ export function buildNotesMarkdown(notes: any, session?: any) {
 
   if (notes.notable_mentions?.length) {
     md += `## Notable Mentions\n`;
-    notes.notable_mentions.forEach((m: any) => (md += `- ${m}\n`));
+    notes.notable_mentions.forEach((m) => (md += `- ${m}\n`));
     md += `\n`;
   }
 
@@ -101,7 +105,9 @@ export function buildNotesMarkdown(notes: any, session?: any) {
 // fall back to plain Markdown. Fields Markdown can't express (sentiment,
 // model/STT stamps) are kept from `base`.
 
-const SECTION_KINDS = {
+type SectionKind = 'participants' | 'status' | 'actions' | 'topics' | 'mentions';
+
+const SECTION_KINDS: Record<string, SectionKind> = {
   'participants': 'participants',
   'status update': 'status',
   'action items': 'actions',
@@ -110,23 +116,33 @@ const SECTION_KINDS = {
   'mentions & risks': 'mentions',
 };
 
-const STRUCTURED_FIELDS = [
+const STRUCTURED_FIELDS: Array<keyof Notes> = [
   'participants', 'attendees', 'status_update', 'action_items',
   'sections', 'topics', 'key_points', 'notable_mentions',
 ];
 
 const LIST_ITEM = /^\s*[-*+]\s+(.*)$/;
 
-const sectionKind = (heading: any) => (SECTION_KINDS as any)[heading.trim().toLowerCase()];
+const sectionKind = (heading: string): SectionKind | undefined => SECTION_KINDS[heading.trim().toLowerCase()];
 
-const joinText = (lines: any) => lines.join('\n').replace(/^\n+|\s+$/g, '');
+const joinText = (lines: string[]) => lines.join('\n').replace(/^\n+|\s+$/g, '');
 
-const listItems = (lines: any) => lines.map((l: any) => l.match(LIST_ITEM)?.[1]?.trim()).filter(Boolean);
+const listItems = (lines: string[]) =>
+  lines.map((l) => l.match(LIST_ITEM)?.[1]?.trim()).filter((item): item is string => !!item);
+
+interface MarkdownSection {
+  heading: string;
+  lines: string[];
+}
 
 // { title, preamble, sections: [{ heading, lines }] }; headings inside code fences are text.
-function splitSections(markdown: any) {
-  const out: any = { title: null, preamble: [], sections: [] };
-  let current: any = null;
+function splitSections(markdown: string) {
+  const out: { title: string | null; preamble: string[]; sections: MarkdownSection[] } = {
+    title: null,
+    preamble: [],
+    sections: [],
+  };
+  let current: MarkdownSection | null = null;
   let inFence = false;
   for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
     if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
@@ -145,7 +161,7 @@ function splitSections(markdown: any) {
 }
 
 // "Name (Label) — Role [confidence]"
-function parseParticipant(text: any) {
+function parseParticipant(text: string): NotesParticipant {
   let rest = text;
   const conf = rest.match(/\s\[([^\]]+)\]$/);
   if (conf) rest = rest.slice(0, conf.index);
@@ -153,39 +169,40 @@ function parseParticipant(text: any) {
   const role = dash === -1 ? '' : rest.slice(dash + 3).trim();
   if (dash !== -1) rest = rest.slice(0, dash);
   const labelled = rest.match(/^(.*\S)\s+\(([^)]+)\)$/);
-  const p: any = labelled ? { name: labelled[1], label: labelled[2] } : { name: rest.trim() };
+  const p: NotesParticipant = labelled ? { name: labelled[1], label: labelled[2] } : { name: rest.trim() };
   if (role) p.role = role;
   if (conf) p.identity_confidence = conf[1];
   return p;
 }
 
-function parseStatus(lines: any) {
+function parseStatus(lines: string[]): string | NotesStatusUpdate | undefined {
   const text = joinText(lines);
   if (!/^\s*[-*+]\s+\*\*(Completion Estimate|Remaining Scope):\*\*/m.test(text)) return text || undefined;
-  const status: any = {};
-  let inScope = false;
+  const status: NotesStatusUpdate = {};
+  let scope: string[] | null = null;
   for (const line of lines) {
     const est = line.match(/^\s*[-*+]\s+\*\*Completion Estimate:\*\*\s*(.*)$/);
     if (est) {
       status.completion_estimate = est[1].trim();
-      inScope = false;
+      scope = null;
     } else if (/^\s*[-*+]\s+\*\*Remaining Scope:\*\*/.test(line)) {
-      status.remaining_scope = [];
-      inScope = true;
-    } else if (inScope && LIST_ITEM.test(line)) {
-      status.remaining_scope.push(line.match(LIST_ITEM)[1].trim());
+      scope = [];
+      status.remaining_scope = scope;
+    } else if (scope) {
+      const item = line.match(LIST_ITEM);
+      if (item) scope.push(item[1].trim());
     }
   }
   return status;
 }
 
 // "[x] Task (@owner) (Due: Thu) (Priority: High)"
-function parseActionItem(text: any) {
+function parseActionItem(text: string): NotesActionItem {
   let rest = text;
-  const item: any = {};
+  const item: NotesActionItem = {};
   const box = rest.match(/^\[([ xX])\]\s*/);
   if (box) rest = rest.slice(box[0].length);
-  const take = (re: any) => {
+  const take = (re: RegExp) => {
     const m = rest.match(re);
     if (!m) return '';
     rest = rest.slice(0, m.index);
@@ -202,9 +219,9 @@ function parseActionItem(text: any) {
   return item;
 }
 
-function parseTopic(heading: any, lines: any) {
-  const topic: any = { heading };
-  const body = [];
+function parseTopic(heading: string, lines: string[]): NotesTopic {
+  const topic: NotesTopic = { heading };
+  const body: string[] = [];
   let mode = 'body';
   for (const line of lines) {
     const decision = line.match(/^\*\*Decision:\*\*\s*(.*)$/);
@@ -219,9 +236,9 @@ function parseTopic(heading: any, lines: any) {
       mode = 'decision';
       topic.decision = decision[1].trim();
     } else if (mode === 'options' && item) {
-      topic.options_discussed.push(item[1].trim());
+      topic.options_discussed?.push(item[1].trim());
     } else if (mode === 'questions' && item) {
-      topic.open_questions.push(item[1].trim());
+      topic.open_questions?.push(item[1].trim());
     } else if (mode === 'decision' && line.trim()) {
       topic.decision = `${topic.decision} ${line.trim()}`.trim();
     } else if (!line.trim()) {
@@ -238,9 +255,9 @@ function parseTopic(heading: any, lines: any) {
 }
 
 // "### 1. Heading" blocks; text before the first one becomes an untitled topic.
-function parseTopics(lines: any) {
-  const blocks: any[] = [];
-  const intro: any = [];
+function parseTopics(lines: string[]): NotesTopic[] {
+  const blocks: MarkdownSection[] = [];
+  const intro: string[] = [];
   for (const line of lines) {
     const h3 = line.match(/^###\s+(?:\d+\.\s+)?(.+?)\s*$/);
     if (h3) blocks.push({ heading: h3[1], lines: [] });
@@ -251,40 +268,47 @@ function parseTopics(lines: any) {
   return topics;
 }
 
-export function parseNotesMarkdown(markdown: any, base: any = {}) {
-  const { title, preamble, sections }: any = splitSections(markdown || '');
+export function parseNotesMarkdown(markdown: string | null | undefined, base: Notes = {}): Notes {
+  const { title, preamble, sections } = splitSections(markdown || '');
   const nextTitle = title?.trim() || base.meeting_title || base.title;
 
-  if (base._rawMarkdown || !sections.some((s: any) => sectionKind(s.heading))) {
-    const notes = { ...base, _rawMarkdown: markdown, title: nextTitle, meeting_title: nextTitle };
+  if (base._rawMarkdown || !sections.some((s) => sectionKind(s.heading))) {
+    const notes: Notes = { ...base, _rawMarkdown: markdown ?? undefined, title: nextTitle, meeting_title: nextTitle };
     // Structured fields would be stale next to the Markdown text.
     STRUCTURED_FIELDS.forEach((key) => delete notes[key]);
     return notes;
   }
 
-  const notes = { ...base, title: nextTitle, meeting_title: nextTitle };
+  const notes: Notes = { ...base, title: nextTitle, meeting_title: nextTitle };
   delete notes._rawMarkdown;
   STRUCTURED_FIELDS.forEach((key) => delete notes[key]);
-  notes.participants = [];
-  notes.action_items = [];
-  notes.notable_mentions = [];
+  let participants: NotesParticipant[] = [];
+  let actionItems: NotesActionItem[] = [];
+  let mentions: string[] = [];
+  // Placeholders keep these keys before status_update in the saved JSON; filled in after the loop.
+  notes.participants = participants;
+  notes.action_items = actionItems;
+  notes.notable_mentions = mentions;
 
-  const topics = [];
+  const topics: NotesTopic[] = [];
   if (joinText(preamble)) topics.push(parseTopic('Notes', preamble));
 
   for (const section of sections) {
     const kind = sectionKind(section.heading);
-    if (kind === 'participants') notes.participants = listItems(section.lines).map(parseParticipant);
+    if (kind === 'participants') participants = listItems(section.lines).map(parseParticipant);
     else if (kind === 'status') {
       const status = parseStatus(section.lines);
       if (status) notes.status_update = status;
-    } else if (kind === 'actions') notes.action_items = listItems(section.lines).map(parseActionItem).filter((i: any) => i.task);
+    } else if (kind === 'actions') actionItems = listItems(section.lines).map(parseActionItem).filter((i) => i.task);
     else if (kind === 'topics') topics.push(...parseTopics(section.lines));
-    else if (kind === 'mentions') notes.notable_mentions = listItems(section.lines);
+    else if (kind === 'mentions') mentions = listItems(section.lines);
     else topics.push(parseTopic(section.heading, section.lines));
   }
 
-  notes.attendees = notes.participants.map((p: any) => p.name || p.label);
+  notes.participants = participants;
+  notes.action_items = actionItems;
+  notes.notable_mentions = mentions;
+  notes.attendees = participants.map((p) => p.name || p.label || '');
   notes.sections = topics;
   notes.topics = topics;
   notes.key_points = topics;

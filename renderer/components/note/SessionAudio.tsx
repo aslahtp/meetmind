@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, VolumeX, HardDrive } from 'lucide-react';
+import type { Session, SessionAudioStatus } from '@shared';
 import { useApp } from '../../lib/app-context';
 import { formatDate } from '../../lib/format';
 import { requestSettingsTab } from '../../lib/settingsTab';
@@ -8,10 +9,17 @@ import AudioPlayer from './AudioPlayer';
 
 // A meeting's Audio tab: the player when there's a recording, otherwise why there isn't one
 // (deleted here or from Settings › Storage, made from a pasted transcript, or missing).
-export default function SessionAudio({ session, title, durationLabel, showWaveform }: any) {
+export interface SessionAudioProps {
+  session: Session;
+  title?: string;
+  durationLabel?: string | null;
+  showWaveform?: boolean;
+}
+
+export default function SessionAudio({ session, title, durationLabel, showWaveform }: SessionAudioProps) {
   const { setView } = useApp();
-  // null while checking; then { available, deletedAt, source, bytes, format, busy }
-  const [status, setStatus] = useState<any>(null);
+  // null while checking
+  const [status, setStatus] = useState<(Partial<SessionAudioStatus> & { available: boolean }) | null>(null);
 
   useEffect(() => {
     if (!window.meetmind?.sessions?.audioStatus) {

@@ -1,13 +1,18 @@
 import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { FileText, Mic, Volume2, MicOff, Loader2, Eye, Code, AudioLines } from 'lucide-react';
+import type { Notes, TranscriptSegment } from '@shared';
 import { useApp } from '../lib/app-context';
+import type { OpenSession } from '../lib/app-context';
+import { errorMessage } from '../lib/errors';
 import TranscriptViewer from './TranscriptViewer';
 import { NoteToolbar, NoteTitleBlock } from './note/NoteHeader';
+import type { NoteTab, RegenerateAction } from './note/NoteHeader';
 import SummaryJson from './note/SummaryJson';
 import SessionAudio from './note/SessionAudio';
 import { MarkdownNoteView } from './note/markdown';
 import { buildNotesMarkdown, parseNotesMarkdown, notesTitle } from './note/copyMarkdown';
 import { EmptyState, StepBadge, ProgressBar, SaveBar, SegmentedControl } from './ui/index';
+import type { SegmentedControlProps, SegmentedOption } from './ui/index';
 import { useNotesProviderIcon } from './settings/providers/providerIcons';
 import { formatDurationSeconds } from '../lib/format';
 import { useSessionActions } from '../lib/hooks';
@@ -15,7 +20,17 @@ import { isProcessing, PIPELINE_STAGES, STAGE_LABELS, stageIndex } from '../lib/
 
 // ── Processing state ─────────────────────────────────────────────────────────
 
-function ProcessingCard({ stage, percent, includeNotion, onRestart, previewing, retryingWith }: { stage?: any; percent?: any; includeNotion?: any; onRestart?: any; previewing?: any; retryingWith?: any }) {
+interface ProcessingCardProps {
+  stage: string;
+  percent?: number;
+  includeNotion: boolean;
+  onRestart?: () => void;
+  previewing?: boolean;
+  /** The provider writing the notes after the first one failed. */
+  retryingWith?: string | null;
+}
+
+function ProcessingCard({ stage, percent, includeNotion, onRestart, previewing, retryingWith }: ProcessingCardProps) {
   const stages = includeNotion ? PIPELINE_STAGES : PIPELINE_STAGES.filter((s) => s.key !== 'uploading');
   const current = Math.max(0, stageIndex(stage));
   const pct = percent != null ? Math.round(percent) : null;
@@ -28,7 +43,7 @@ function ProcessingCard({ stage, percent, includeNotion, onRestart, previewing, 
       </div>
       <h2 className="flex items-center gap-8 text-heading-sm font-medium text-ink mt-8">
         <Loader2 size={20} strokeWidth={1.75} className="spinner text-graphite" aria-hidden="true" />
-        {(STAGE_LABELS as any)[stage] || 'Processing'}…
+        {STAGE_LABELS[stage as keyof typeof STAGE_LABELS] || 'Processing'}…
       </h2>
       {previewing ? (
         <p className="flex items-center gap-8 text-body-sm text-graphite mt-8">
@@ -71,7 +86,20 @@ function ProcessingCard({ stage, percent, includeNotion, onRestart, previewing, 
 
 // ── Summary tab ──────────────────────────────────────────────────────────────
 
-function SummaryTab({ notes, title, noSpeech, transcriptionFailed, failureMessage, isError, busy, streaming, onGenerate, onRetry }: { notes?: any; title?: any; noSpeech?: any; transcriptionFailed?: any; failureMessage?: any; isError?: any; busy?: any; streaming?: any; onGenerate?: any; onRetry?: any }) {
+interface SummaryTabProps {
+  notes: Notes | null;
+  title: string;
+  noSpeech: boolean;
+  transcriptionFailed: boolean;
+  failureMessage: string;
+  isError: boolean;
+  busy: boolean;
+  streaming: boolean;
+  onGenerate: () => void;
+  onRetry: () => void;
+}
+
+function SummaryTab({ notes, title, noSpeech, transcriptionFailed, failureMessage, isError, busy, streaming, onGenerate, onRetry }: SummaryTabProps) {
   const NotesIcon = useNotesProviderIcon();
   if (notes) {
     return notes._rawMarkdown
@@ -133,24 +161,26 @@ function SummaryTab({ notes, title, noSpeech, transcriptionFailed, failureMessag
 
 // ── Markdown editor ──────────────────────────────────────────────────────────
 
-const EDIT_MODES = [
+type EditMode = 'preview' | 'markdown';
+
+const EDIT_MODES: Array<SegmentedOption<EditMode>> = [
   { value: 'preview', label: 'Preview', icon: Eye },
   { value: 'markdown', label: 'Markdown', icon: Code },
 ];
 
 // Grows with its content so the page scrolls, not the textarea.
-function MarkdownEditor({ value, onChange, structured }: { value?: any; onChange?: any; structured?: any }) {
-  const ref = useRef<any>(null);
+function MarkdownEditor({ value, onChange, structured }: { value: string; onChange: (value: string) => void; structured: boolean }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     // Collapsing to measure would clamp the page's scroll position; keep it.
-    const scroller = el.closest('.overflow-y-auto');
+    const scroller = el.closest<HTMLElement>('.overflow-y-auto');
     const top = scroller?.scrollTop;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight + 2}px`;
-    if (scroller) scroller.scrollTop = top;
+    if (scroller) scroller.scrollTop = top ?? 0;
   }, [value]);
 
   return (
@@ -176,23 +206,29 @@ function MarkdownEditor({ value, onChange, structured }: { value?: any; onChange
 
 // ── Main NoteViewer ──────────────────────────────────────────────────────────
 
-export default function NoteViewer({ session, onBack, onRefresh }: { session?: any; onBack?: any; onRefresh?: any }) {
+export interface NoteViewerProps {
+  session: OpenSession;
+  onBack: () => void | Promise<void>;
+  onRefresh?: () => void | Promise<void>;
+}
+
+export default function NoteViewer({ session, onBack, onRefresh }: NoteViewerProps) {
   const { processing, trackProcessing, notesPreview, providers, addToast, confirm, config, setNavGuard } = useApp();
   const NotesIcon = useNotesProviderIcon();
-  const [activeTab, setActiveTab] = useState('summary');
+  const [activeTab, setActiveTab] = useState<NoteTab>('summary');
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [uploadResult, setUploadResult] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [starting, setStarting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [titleHidden, setTitleHidden] = useState(false);
-  const [editMode, setEditMode] = useState('preview');
+  const [editMode, setEditMode] = useState<EditMode>('preview');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const { handleDelete, deletingIds } = useSessionActions();
-  const scrollRef = useRef<any>(null);
-  const titleRef = useRef<any>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
 
   // Show the title in the toolbar once the in-page title scrolls out of view.
   useEffect(() => {
@@ -207,7 +243,8 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
   }, []);
 
   const savedNotes = session.notes;
-  const rawTranscript = session.transcript;
+  // Main parses the stored JSON; a row from an older version may still hold the text itself.
+  const rawTranscript: unknown = session.transcript;
 
   // ── Editing: the draft is the notes as one Markdown document ──
   const savedMarkdown = useMemo(
@@ -221,17 +258,17 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
   useEffect(() => {
     const previous = lastSavedRef.current;
     lastSavedRef.current = savedMarkdown;
-    setDraft((d: any) => (d === previous ? savedMarkdown : d));
+    setDraft((d) => (d === previous ? savedMarkdown : d));
   }, [savedMarkdown]);
 
   const dirty = !!savedNotes && draft !== savedMarkdown;
   // Preview shows unsaved edits, parsed back into the same shape as saved notes.
   const notes = useMemo(
-    () => (dirty ? parseNotesMarkdown(draft, savedNotes) : savedNotes),
+    () => (dirty ? parseNotesMarkdown(draft, savedNotes ?? undefined) : savedNotes),
     [dirty, draft, savedNotes],
   );
 
-  const normalizedTranscript = useMemo(() => {
+  const normalizedTranscript = useMemo<TranscriptSegment[]>(() => {
     if (!rawTranscript) return [];
     if (Array.isArray(rawTranscript)) return rawTranscript;
     if (typeof rawTranscript === 'string') {
@@ -247,7 +284,7 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
     return [];
   }, [rawTranscript]);
 
-  const durationLabel = session.duration_seconds > 0 ? formatDurationSeconds(session.duration_seconds) : null;
+  const durationLabel = session.duration_seconds != null && session.duration_seconds > 0 ? formatDurationSeconds(session.duration_seconds) : null;
   const isError = session.status === 'error';
   const processingError = session._processingError || null;
   // Only claim "no speech" when the failure actually said so; other failures (bad key, API error)
@@ -264,8 +301,8 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
   const stage = liveProcessing?.stage || (isProcessing(session.status) ? session.status : 'transcribing');
   // Notes the LLM has streamed so far; while generating they replace any old notes on screen.
   const preview = busy && notesPreview?.sessionId === session.id ? notesPreview : null;
-  const retryingWith = preview?.attempt > 0
-    ? providers?.llm?.find((p: any) => p.id === preview.provider)?.name || preview.provider
+  const retryingWith = preview && preview.attempt > 0
+    ? providers?.llm?.find((p) => p.id === preview.provider)?.name || preview.provider
     : null;
   const includeNotion = stage === 'uploading'
     || !!(config?.notionToken?.trim?.() && config?.notionDatabaseId?.trim?.());
@@ -274,7 +311,7 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
   const showEditor = editMode === 'markdown' && !!savedNotes && !busy;
   const showModeToggle = activeTab === 'summary' && !!savedNotes;
   const pinModeToggle = showModeToggle && config?.pinNotesViewToggle !== false;
-  const modeToggle = {
+  const modeToggle: SegmentedControlProps<EditMode> = {
     label: 'Notes view',
     role: 'radiogroup',
     options: EDIT_MODES,
@@ -285,7 +322,7 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
   };
 
   // Starts a pipeline run and hands progress tracking to the app shell.
-  const startPipeline = async (run: any) => {
+  const startPipeline = async (run: () => Promise<{ success: boolean; error?: string }>) => {
     setStarting(true);
     try {
       const result = await run();
@@ -295,8 +332,8 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
       }
       trackProcessing(session.id);
       await onRefresh?.();
-    } catch (err: any) {
-      addToast(err.message || 'Could not start processing.', 'error');
+    } catch (err) {
+      addToast(errorMessage(err) || 'Could not start processing.', 'error');
     } finally {
       setStarting(false);
     }
@@ -341,7 +378,7 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
   };
 
   const onTranscriptTab = activeTab === 'transcript';
-  const regenerate = onTranscriptTab
+  const regenerate: RegenerateAction = onTranscriptTab
     ? {
       label: 'Regenerate',
       title: 'Regenerate transcript',
@@ -377,8 +414,8 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
       } else {
         addToast(result?.error || 'Notion upload failed.', 'error');
       }
-    } catch (err: any) {
-      addToast(err.message || 'Notion upload failed.', 'error');
+    } catch (err) {
+      addToast(errorMessage(err) || 'Notion upload failed.', 'error');
     } finally {
       setUploading(false);
     }
@@ -405,8 +442,8 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
       } else {
         addToast(result?.error || 'PDF export failed.', 'error');
       }
-    } catch (err: any) {
-      addToast(`PDF export failed: ${err.message}`, 'error');
+    } catch (err) {
+      addToast(`PDF export failed: ${errorMessage(err)}`, 'error');
     } finally {
       setExporting(false);
     }
@@ -425,20 +462,20 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
       await navigator.clipboard.writeText(buildNotesMarkdown(notes, session));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err: any) {
-      addToast(`Couldn't copy notes: ${err.message}`, 'error');
+    } catch (err) {
+      addToast(`Couldn't copy notes: ${errorMessage(err)}`, 'error');
     }
   };
 
   // Toast actions outlive this render, so they call the latest handler.
-  const handleSyncNotionRef = useRef<any>(null);
+  const handleSyncNotionRef = useRef<(() => Promise<void>) | null>(null);
   handleSyncNotionRef.current = handleSyncNotion;
 
   const handleSaveEdits = useCallback(async () => {
     if (!dirty || saving) return;
     setSaving(true);
     try {
-      const next = { ...parseNotesMarkdown(draft, savedNotes), _editedAt: new Date().toISOString() };
+      const next = { ...parseNotesMarkdown(draft, savedNotes ?? undefined), _editedAt: new Date().toISOString() };
       const result = await window.meetmind.sessions.updateNotes(session.id, next);
       if (!result?.success) {
         addToast(result?.error || 'Couldn’t save the notes.', 'error');
@@ -454,8 +491,8 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
           onClick: () => handleSyncNotionRef.current?.(),
         });
       }
-    } catch (err: any) {
-      addToast(`Couldn’t save the notes: ${err.message}`, 'error');
+    } catch (err) {
+      addToast(`Couldn’t save the notes: ${errorMessage(err)}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -464,7 +501,7 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
   const handleDiscardEdits = () => setDraft(savedMarkdown);
 
   // Renames the meeting (and its notes). Resolves true once saved, so the title field can close.
-  const handleRename = async (nextTitle: any) => {
+  const handleRename = async (nextTitle: string) => {
     try {
       const result = await window.meetmind.sessions.rename(session.id, nextTitle);
       if (!result?.success) {
@@ -479,8 +516,8 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
         });
       }
       return true;
-    } catch (err: any) {
-      addToast(`Couldn’t rename the meeting: ${err.message}`, 'error');
+    } catch (err) {
+      addToast(`Couldn’t rename the meeting: ${errorMessage(err)}`, 'error');
       return false;
     }
   };
@@ -496,7 +533,7 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
   // Ctrl/Cmd+S saves while there are edits.
   useEffect(() => {
     if (!dirty) return undefined;
-    const onKey = (e: any) => {
+    const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         handleSaveEdits();
@@ -523,12 +560,12 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
 
   useEffect(() => () => setNavGuard(null), [setNavGuard]);
 
-  const changeTab = (tab: any) => {
+  const changeTab = (tab: NoteTab) => {
     setActiveTab(tab);
     scrollRef.current?.scrollTo({ top: 0 });
   };
 
-  const tabs = [
+  const tabs: Array<SegmentedOption<NoteTab>> = [
     { value: 'summary', label: 'Summary', icon: FileText },
     {
       value: 'transcript',
@@ -605,7 +642,7 @@ export default function NoteViewer({ session, onBack, onRefresh }: { session?: a
                 />
               )}
               {showEditor ? (
-                <MarkdownEditor value={draft} onChange={setDraft} structured={!savedNotes._rawMarkdown} />
+                <MarkdownEditor value={draft} onChange={setDraft} structured={!savedNotes?._rawMarkdown} />
               ) : (
                 <SummaryTab
                   notes={preview ? preview.notes : notes}

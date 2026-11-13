@@ -1,4 +1,4 @@
-// The main (UI) window. main-window-lifecycle.js decides when it is created, checked, repaired
+// The main (UI) window. main-window-lifecycle.ts decides when it is created, checked, repaired
 // and retired; this file runs those decisions and owns the window's IPC.
 //
 // The window exists only while it is wanted: none is made for a login launch, and one hidden to
@@ -7,10 +7,33 @@
 // capture of the top bar must not be one flat colour. Every step is logged.
 
 import path from 'path';
-import { app, BrowserWindow, ipcMain, shell, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, screen, type Rectangle, type WebContents } from 'electron';
 import logger from '../utils/logger';
 import { appRoot } from '../utils/paths';
-import { RETIRE_AFTER_MS, createLifecycle, reduceMainWindow, healthVerdict, isBlankCapture } from './main-window-lifecycle';
+import { errorMessage } from '../utils/errors';
+import type { ViewState } from '../shared';
+import {
+  RETIRE_AFTER_MS, createLifecycle, reduceMainWindow, healthVerdict, isBlankCapture,
+  type HealthPong, type HealthVerdict, type WindowAction, type WindowEvent, type WindowPhase,
+} from './main-window-lifecycle';
+
+/** The hooks main supplies through `registerMainWindowIpc`. */
+interface MainWindowHooks {
+  /** The saved theme setting. */
+  getTheme?: () => string | undefined;
+  /** The colour painted before the renderer's first frame, for a theme. */
+  getBackgroundColor?: (theme: string) => string | undefined;
+  getIconPath?: () => string | undefined;
+  onCreated?: (window: BrowserWindow) => void;
+  /** Repairs ran out. */
+  onGiveUp?: (reason: string) => void;
+}
+
+interface PendingMessage {
+  channel: string;
+  args: unknown[];
+  at: number;
+}
 
 const isDev = process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
@@ -30,37 +53,47 @@ const PENDING_MAX = 10;
 const debugFail = !app.isPackaged ? process.env.MEETMIND_DEBUG_UI_FAIL || '' : '';
 const retireAfterMs = (!app.isPackaged && Number(process.env.MEETMIND_UI_RETIRE_MS)) || RETIRE_AFTER_MS;
 
-let win: any = null;
+let win: BrowserWindow | null = null;
 let life = createLifecycle();
-let options: any = {};          // { getTheme, getBackgroundColor, getIconPath, onGiveUp, onCreated }
+let options: MainWindowHooks = {};
 let ipcRegistered = false;
 
-let loadTimer: any = null;
-let retireTimer: any = null;
-let unresponsiveTimer: any = null;
-let recheckTimer: any = null;
+let loadTimer: ReturnType<typeof setTimeout> | undefined;
+let retireTimer: ReturnType<typeof setTimeout> | undefined;
+let unresponsiveTimer: ReturnType<typeof setTimeout> | undefined;
+let recheckTimer: ReturnType<typeof setTimeout> | undefined;
 let checking = false;
 let pingSeq = 0;
-const pendingPings = new Map();   // id → resolve
+const pendingPings = new Map<number, (pong: HealthPong | null) => void>();   // id → resolve
 
-let lastBounds: any = null;       // restored on the next window, so reopening lands where it was
+let lastBounds: Rectangle | null = null;   // restored on the next window, so reopening lands where it was
 let lastMaximized = false;
-let viewState: any = null;        // { view, sessionId } last reported by the renderer
-let pendingMessages: any = [];    // [{ channel, args, at }] for a window that isn't ready yet
+let viewState: ViewState | null = null;    // last reported by the renderer
+let pendingMessages: PendingMessage[] = [];   // for a window that isn't ready yet
 
-function isAlive() {
-  return !!win && !win.isDestroyed() && !!win.webContents && !win.webContents.isDestroyed();
+function aliveWindow(): BrowserWindow | null {
+  return win && !win.isDestroyed() && !!win.webContents && !win.webContents.isDestroyed() ? win : null;
+}
+
+function isAlive(): boolean {
+  return !!aliveWindow();
+}
+
+/** The window when it is alive, visible and not minimised. */
+function onScreenWindow(): BrowserWindow | null {
+  const w = aliveWindow();
+  return w && w.isVisible() && !w.isMinimized() ? w : null;
 }
 
 // How much memory the machine has left, logged with every window failure. A machine short of
 // RAM pages out idle processes and Chromium drops the surfaces of windows it isn't showing, so
 // this tells a starved machine from a real fault. `commitFreeMb` is what is left of RAM plus
 // the page file (Windows' commit limit): near zero there, allocations start failing.
-function memorySnapshot() {
+function memorySnapshot(): Record<string, number> | undefined {
   try {
-    const mb = (kb: any) => Math.round(kb / 1024);
+    const mb = (kb: number) => Math.round(kb / 1024);
     const sys = process.getSystemMemoryInfo();   // kilobytes
-    const snapshot: any = {
+    const snapshot: Record<string, number> = {
       freeMb: mb(sys.free),
       totalMb: mb(sys.total),
       freePct: Math.round((sys.free / sys.total) * 100),
@@ -69,8 +102,9 @@ function memorySnapshot() {
       snapshot.commitFreeMb = mb(sys.swapFree);
       snapshot.commitTotalMb = mb(sys.swapTotal);
     }
-    if (isAlive()) {
-      const pid: any = win.webContents.getOSProcessId();
+    const alive = aliveWindow();
+    if (alive) {
+      const pid = alive.webContents.getOSProcessId();
       const metric = app.getAppMetrics().find((m) => m.pid === pid);
       if (metric?.memory) snapshot.rendererMb = mb(metric.memory.workingSetSize);
     }
@@ -84,9 +118,9 @@ function clearWindowTimers() {
   clearTimeout(loadTimer);
   clearTimeout(unresponsiveTimer);
   clearTimeout(recheckTimer);
-  loadTimer = null;
-  unresponsiveTimer = null;
-  recheckTimer = null;
+  loadTimer = undefined;
+  unresponsiveTimer = undefined;
+  recheckTimer = undefined;
 }
 
 function rememberBounds() {
@@ -110,7 +144,7 @@ function restoredBounds() {
   }
 }
 
-function armLoadTimeout(gen: any) {
+function armLoadTimeout(gen: number) {
   clearTimeout(loadTimer);
   loadTimer = setTimeout(() => dispatch({ type: 'timeout', gen, now: Date.now() }), LOAD_TIMEOUT_MS);
 }
@@ -121,7 +155,7 @@ function rendererUrl() {
     : `file://${path.join(appRoot, 'dist/renderer/index.html')}`;
 }
 
-function createWindow(gen: any, reveal: any) {
+function createWindow(gen: number, reveal: boolean) {
   const savedTheme = options.getTheme?.() || 'light';
   const bounds = restoredBounds();
 
@@ -136,8 +170,8 @@ function createWindow(gen: any, reveal: any) {
     // Custom titlebar in the renderer. macOS keeps its native traffic lights, inset into the
     // renderer's top bar (which leaves room for them); Windows has no native frame at all.
     ...(isMac
-      ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 24, y: 25 } }
-      : { frame: false, backgroundMaterial: 'none', icon: options.getIconPath?.() }),
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 24, y: 25 } }
+      : { frame: false, backgroundMaterial: 'none' as const, icon: options.getIconPath?.() }),
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
@@ -175,7 +209,7 @@ function createWindow(gen: any, reveal: any) {
     return { action: 'deny' };
   });
 
-  const gone = (reason: any, detail?: any) => {
+  const gone = (reason: string, detail?: Record<string, unknown>) => {
     if (w !== win || app.isQuitting) return;
     logger.warn('Main window lost', { reason, ...detail, memory: memorySnapshot() });
     dispatch({ type: 'gone', gen: life.gen, reason, now: Date.now() });
@@ -196,7 +230,7 @@ function createWindow(gen: any, reveal: any) {
   w.on('responsive', () => {
     if (w !== win || !unresponsiveTimer) return;
     clearTimeout(unresponsiveTimer);
-    unresponsiveTimer = null;
+    unresponsiveTimer = undefined;
     logger.info('Main window responsive again');
   });
   // Errors the page logs itself (failed resource loads, React warnings escalated to errors).
@@ -223,10 +257,10 @@ function createWindow(gen: any, reveal: any) {
 function destroyWindow() {
   clearWindowTimers();
   clearTimeout(retireTimer);
-  retireTimer = null;
+  retireTimer = undefined;
   for (const resolve of pendingPings.values()) resolve(null);
   pendingPings.clear();
-  const w: any = win;
+  const w = win;
   if (w && !w.isDestroyed()) rememberBounds();
   win = null;   // first, so the window's own 'closed' handler ignores this
   if (w && !w.isDestroyed()) w.destroy();
@@ -243,12 +277,13 @@ function reveal_() {
   if (wasHidden && isAlive()) win.webContents.send('window:shown');
 }
 
-function ping(): Promise<any> {
+function ping(): Promise<HealthPong | null> {
   return new Promise((resolve) => {
     const id = ++pingSeq;
     const timer = setTimeout(() => { pendingPings.delete(id); resolve(null); }, PING_TIMEOUT_MS);
-    pendingPings.set(id, (pong: any) => { clearTimeout(timer); pendingPings.delete(id); resolve(pong); });
+    pendingPings.set(id, (pong) => { clearTimeout(timer); pendingPings.delete(id); resolve(pong); });
     try {
+      if (!win) throw new Error('no window');
       win.webContents.send('window:health-ping', id);
     } catch {
       pendingPings.get(id)?.(null);
@@ -258,38 +293,39 @@ function ping(): Promise<any> {
 
 // True when the top bar strip is one flat colour. A capture that fails or comes back empty is
 // "unknown" (null): the check must never be the reason a working window is repaired.
-async function topBarIsBlank() {
+async function topBarIsBlank(w: BrowserWindow): Promise<boolean | null> {
   try {
-    const { width } = win.getContentBounds();
-    const image: any = await win.webContents.capturePage({ x: 0, y: 0, width, height: TOP_BAR_HEIGHT });
+    const { width } = w.getContentBounds();
+    const image = await w.webContents.capturePage({ x: 0, y: 0, width, height: TOP_BAR_HEIGHT });
     if (image.isEmpty()) return null;
     return isBlankCapture(image.toBitmap());
-  } catch (err: any) {
-    logger.warn('Main window paint check failed; assuming it painted', { error: err.message });
+  } catch (err) {
+    logger.warn('Main window paint check failed; assuming it painted', { error: errorMessage(err) });
     return null;
   }
 }
 
-const onScreen = () => isAlive() && win.isVisible() && !win.isMinimized();
-
-async function runHealthCheck(gen: any) {
+async function runHealthCheck(gen: number) {
   if (checking) return;
   checking = true;
   try {
     await new Promise((resolve) => setTimeout(resolve, HEALTH_DELAY_MS));
-    if (gen !== life.gen || !onScreen()) return;
+    let w = onScreenWindow();
+    if (gen !== life.gen || !w) return;
 
-    try { win.webContents.invalidate(); } catch { /* best effort: forces a fresh frame */ }
+    try { w.webContents.invalidate(); } catch { /* best effort: forces a fresh frame */ }
     const pong = await ping();
     // Hidden or minimised meanwhile: frames stop then, so the answer says nothing.
-    if (gen !== life.gen || !onScreen()) return;
+    w = onScreenWindow();
+    if (gen !== life.gen || !w) return;
 
-    const blank = pong && pong.mounted && !pong.splash ? await topBarIsBlank() : null;
-    if (gen !== life.gen || !onScreen()) return;
+    const blank = pong && pong.mounted && !pong.splash ? await topBarIsBlank(w) : null;
+    w = onScreenWindow();
+    if (gen !== life.gen || !w) return;
 
-    const verdict: any = debugFail === 'blank'
+    const verdict: HealthVerdict = debugFail === 'blank'
       ? { ok: false, reason: 'blank (debug)' }
-      : healthVerdict({ pong, focused: win.isFocused(), blank });
+      : healthVerdict({ pong, focused: w.isFocused(), blank });
     if (verdict.again) {
       clearTimeout(recheckTimer);
       recheckTimer = setTimeout(() => dispatch({ type: 'recheck' }), SPLASH_RECHECK_MS);
@@ -297,7 +333,7 @@ async function runHealthCheck(gen: any) {
     }
     if (!verdict.ok) {
       logger.warn('Main window health check failed', {
-        reason: verdict.reason, pong, blank, focused: win.isFocused(), memory: memorySnapshot(),
+        reason: verdict.reason, pong, blank, focused: w.isFocused(), memory: memorySnapshot(),
       });
     }
     dispatch({ type: 'health', gen, ok: verdict.ok, reason: verdict.reason, now: Date.now() });
@@ -308,14 +344,14 @@ async function runHealthCheck(gen: any) {
 
 function flushPending() {
   const now = Date.now();
-  const queue: any = pendingMessages.filter((m: any) => now - m.at < PENDING_MAX_AGE_MS);
+  const queue = pendingMessages.filter((m) => now - m.at < PENDING_MAX_AGE_MS);
   pendingMessages = [];
   for (const { channel, args } of queue) {
-    try { win.webContents.send(channel, ...args); } catch { /* window went away */ }
+    try { win?.webContents.send(channel, ...args); } catch { /* window went away */ }
   }
 }
 
-function run(action: any) {
+function run(action: WindowAction) {
   switch (action.type) {
     case 'create':
       destroyWindow();
@@ -326,7 +362,7 @@ function run(action: any) {
       break;
     case 'reload':
       clearWindowTimers();
-      if (!isAlive()) break;
+      if (!win || !isAlive()) break;
       armLoadTimeout(action.gen);
       win.webContents.reload();
       break;
@@ -345,7 +381,7 @@ function run(action: any) {
       break;
     case 'disarm-retire':
       clearTimeout(retireTimer);
-      retireTimer = null;
+      retireTimer = undefined;
       break;
     case 'check':
       runHealthCheck(action.gen);
@@ -365,7 +401,7 @@ function run(action: any) {
   }
 }
 
-function dispatch(event: any) {
+function dispatch(event: WindowEvent) {
   const { state, actions } = reduceMainWindow(life, event);
   life = state;
   for (const action of actions) run(action);
@@ -379,7 +415,7 @@ function openMainWindow() {
 }
 
 /** The BrowserWindow, or null when there is none (it may be loading or hidden). */
-function getMainWindow() {
+function getMainWindow(): BrowserWindow | null {
   return win && !win.isDestroyed() ? win : null;
 }
 
@@ -392,14 +428,15 @@ function isMainWindowVisible() {
  * message for a window that isn't up yet is kept (for a few minutes) and delivered once it is:
  * for the few events that must not be lost, like "open this meeting".
  */
-function sendToMainWindow(channel: any, args: any[] = [], { queue = false }: { queue?: boolean } = {}) {
+function sendToMainWindow(channel: string, args: unknown[] = [], { queue = false }: { queue?: boolean } = {}): boolean {
   try {
-    if (isAlive() && (life.phase === 'ready' || !queue)) {
-      win.webContents.send(channel, ...args);
+    const w = aliveWindow();
+    if (w && (life.phase === 'ready' || !queue)) {
+      w.webContents.send(channel, ...args);
       return true;
     }
-  } catch (err: any) {
-    logger.warn(`Failed to send ${channel} to renderer`, { error: err.message });
+  } catch (err) {
+    logger.warn(`Failed to send ${channel} to renderer`, { error: errorMessage(err) });
     return false;
   }
   if (queue) {
@@ -419,13 +456,13 @@ function destroyMainWindow() {
   life = createLifecycle();
 }
 
-// none | loading | ready | failed (see main-window-lifecycle.js); for the smoke test.
-function getMainWindowPhase() {
+// none | loading | ready | failed (see main-window-lifecycle.ts); for the smoke test.
+function getMainWindowPhase(): WindowPhase {
   return life.phase;
 }
 
 /** The page the renderer last showed ({ view, sessionId }), so a new window reopens there. */
-function getViewState() {
+function getViewState(): ViewState | null {
   return viewState;
 }
 
@@ -435,12 +472,12 @@ function getViewState() {
  *   getIconPath(); onCreated(window); onGiveUp(reason) when repairs ran out.
  * Safe to call more than once.
  */
-function registerMainWindowIpc(hooks: any = {}) {
+function registerMainWindowIpc(hooks: MainWindowHooks = {}) {
   options = { ...options, ...hooks };
   if (ipcRegistered) return;
   ipcRegistered = true;
 
-  const fromWindow = (event: any) => isAlive() && event.sender === win.webContents;
+  const fromWindow = (event: { sender: WebContents }) => aliveWindow()?.webContents === event.sender;
 
   ipcMain.handle('window:minimize', () => { getMainWindow()?.minimize(); });
   ipcMain.handle('window:maximize', () => {
@@ -461,13 +498,15 @@ function registerMainWindowIpc(hooks: any = {}) {
     dispatch({ type: 'ready', gen: life.gen });
     if (wasLoading && life.phase === 'ready') flushPending();
   });
-  ipcMain.on('window:health-pong', (event, id, pong) => {
-    if (fromWindow(event)) pendingPings.get(id)?.(pong && typeof pong === 'object' ? pong : null);
+  ipcMain.on('window:health-pong', (event, id: number, pong: unknown) => {
+    // The renderer's own report; trusted only as far as its being an object.
+    if (fromWindow(event)) pendingPings.get(id)?.(pong && typeof pong === 'object' ? (pong as HealthPong) : null);
   });
-  ipcMain.on('window:dirty', (event, value) => {
+  ipcMain.on('window:dirty', (event, value: unknown) => {
     if (fromWindow(event)) dispatch({ type: 'dirty', value: !!value });
   });
-  ipcMain.on('window:view-state', (event, state) => {
+  ipcMain.on('window:view-state', (event, rawState: unknown) => {
+    const state = rawState as Partial<Record<keyof ViewState, unknown>> | null | undefined;   // from the renderer; checked below
     if (!fromWindow(event) || !state || typeof state.view !== 'string') return;
     viewState = { view: state.view, sessionId: typeof state.sessionId === 'string' ? state.sessionId : null };
   });

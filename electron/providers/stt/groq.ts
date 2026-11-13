@@ -1,7 +1,7 @@
-import type { STTProvider, STTTranscribeArgs, ProviderDeps } from '../../shared';
+import type { STTProvider, STTTranscribeArgs, ProviderDeps, ProviderTestArgs, TranscriptSegment } from '../../shared';
 import fs from 'fs';
 import * as logger from '../shared/log';
-import { fetchJson, sleep } from '../shared/http';
+import { fetchJson, sleep, type HttpError } from '../shared/http';
 import { getWavDurationSeconds, extractWavChunkBuffer, planChunks, mergeTranscriptSegments } from '../shared/wav';
 
 const GROQ_BASE = 'https://api.groq.com/openai/v1';
@@ -11,14 +11,22 @@ const CHUNK_SECONDS = 10 * 60;
 const OVERLAP_SECONDS = 2;
 const MAX_RETRIES = 3;
 
-function authHeaders(apiKey: any) {
+function authHeaders(apiKey: string) {
   return { Authorization: `Bearer ${apiKey.trim()}` };
 }
 
+/** The fields of Groq's `verbose_json` transcription that are read here. */
+interface GroqTranscription {
+  text?: string;
+  duration?: number;
+  segments?: Array<{ text?: string; start?: number; end?: number }>;
+}
+
 /** Map Groq `verbose_json` segments to MeetMind segments, shifted by the chunk offset. */
-function parseGroqSegments(response: any, offsetSeconds = 0) {
+function parseGroqSegments(input: unknown, offsetSeconds = 0) {
+  const response = input as GroqTranscription | null | undefined;
   const raw = Array.isArray(response?.segments) ? response.segments : [];
-  const segments = [];
+  const segments: Array<TranscriptSegment & { startTime: number; endTime: number }> = [];
   for (const s of raw) {
     const text = String(s.text || '').trim();
     if (!text) continue;
@@ -40,7 +48,10 @@ function parseGroqSegments(response: any, offsetSeconds = 0) {
   return segments;
 }
 
-async function transcribeChunk(audioBuffer: any, { apiKey, model, fetchImpl, sleepImpl }: any) {
+async function transcribeChunk(
+  audioBuffer: Uint8Array<ArrayBuffer>,
+  { apiKey, model, fetchImpl, sleepImpl }: { apiKey: string; model: string; fetchImpl: typeof fetch; sleepImpl: (ms: number) => Promise<void> }
+) {
   for (let attempt = 0; ; attempt++) {
     // FormData bodies are single-use, so rebuild on every attempt.
     const form = new FormData();
@@ -56,7 +67,8 @@ async function transcribeChunk(audioBuffer: any, { apiKey, model, fetchImpl, sle
         { method: 'POST', headers: authHeaders(apiKey), body: form },
         { label: 'Groq transcription', fetchImpl }
       );
-    } catch (err: any) {
+    } catch (thrown) {
+      const err = thrown as HttpError;
       if (err.status === 429 && attempt < MAX_RETRIES) {
         const waitMs = err.retryAfterMs || 5000 * (attempt + 1);
         logger.warn('Groq rate limited, retrying', { attempt: attempt + 1, waitMs });
@@ -101,7 +113,7 @@ async function transcribe({ wavPath, model, config, onProgress }: STTTranscribeA
   return segments;
 }
 
-async function test({ config }: any, deps: ProviderDeps = {}) {
+async function test({ config }: ProviderTestArgs, deps: ProviderDeps = {}) {
   const apiKey = config.groqApiKey;
   if (!apiKey || !apiKey.trim()) throw new Error('Groq API key is required');
   await fetchJson(`${GROQ_BASE}/models`, { headers: authHeaders(apiKey) }, {

@@ -1,22 +1,31 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Check, Copy, Mic, X, ScrollText } from 'lucide-react';
+import type { TranscriptSegment } from '@shared';
 import { EmptyState, HighlightedText } from './ui/index';
 import { speakerName } from '../lib/format';
 
-function formatTime(seconds: any) {
-  if (!seconds && seconds !== 0) return '';
+/** A segment with the display fields TranscriptViewer adds. */
+interface IndexedSegment extends TranscriptSegment {
+  _speaker: string;
+  _key: string;
+}
+
+// `startTime` (seconds) is written by the STT providers; TranscriptSegment leaves it open.
+function formatTime(value: unknown) {
+  if (!value && value !== 0) return '';
+  const seconds = Number(value);
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
   const s = Math.floor(seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
 }
 
-export default function TranscriptViewer({ transcript }: { transcript?: any }) {
+export default function TranscriptViewer({ transcript }: { transcript: TranscriptSegment[] }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [speakerFilter, setSpeakerFilter] = useState<any>(null);
+  const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Stable keys: position in the full transcript never changes while filtering.
-  const indexed = useMemo(() => {
+  const indexed = useMemo<IndexedSegment[]>(() => {
     if (!Array.isArray(transcript)) return [];
     return transcript.map((seg, idx) => ({
       ...seg,

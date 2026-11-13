@@ -4,7 +4,7 @@ const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 2; // 16-bit PCM
 const WAV_HEADER_BYTES = 44;
 
-function parseWavHeader(buffer: any) {
+function parseWavHeader(buffer: Buffer) {
   if (buffer.length < 12 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WAVE') {
     return null;
   }
@@ -34,7 +34,7 @@ function parseWavHeader(buffer: any) {
   return { dataSize, sampleRate, numChannels, bytesPerSample, durationSec };
 }
 
-function getWavDurationSeconds(filePath: any) {
+function getWavDurationSeconds(filePath: string) {
   const buffer = fs.readFileSync(filePath);
   const parsed = parseWavHeader(buffer);
   if (!parsed) return 0;
@@ -48,7 +48,7 @@ function getWavDurationSeconds(filePath: any) {
  *
  * Returns: { peak, windows: [{ label, peak }] }
  */
-function getWavPeakAmplitude(filePath: any) {
+function getWavPeakAmplitude(filePath: string): { peak: number; windows: Array<{ label: string; peak: number }> } {
   const buffer = fs.readFileSync(filePath);
   const parsed = parseWavHeader(buffer);
   if (!parsed || parsed.dataSize === 0) return { peak: 0, windows: [] };
@@ -79,7 +79,7 @@ function getWavPeakAmplitude(filePath: any) {
   ];
 
   let overallPeak = 0;
-  const windowResults = [];
+  const windowResults: Array<{ label: string; peak: number }> = [];
   for (const { label, offset } of windowDefs) {
     let winPeak = 0;
     const winEnd = Math.min(offset + windowBytes, dataEnd);
@@ -95,7 +95,7 @@ function getWavPeakAmplitude(filePath: any) {
 }
 
 /** Extract [startSec, endSec) of a 16 kHz mono 16-bit WAV as a standalone WAV Buffer. */
-function extractWavChunkBuffer(filePath: any, startSec: any, endSec: any) {
+function extractWavChunkBuffer(filePath: string, startSec: number, endSec: number) {
   const buffer = fs.readFileSync(filePath);
   const startByte = WAV_HEADER_BYTES + Math.floor(startSec * SAMPLE_RATE * BYTES_PER_SAMPLE);
   const endByte = WAV_HEADER_BYTES + Math.floor(endSec * SAMPLE_RATE * BYTES_PER_SAMPLE);
@@ -120,13 +120,13 @@ function extractWavChunkBuffer(filePath: any, startSec: any, endSec: any) {
   return Buffer.concat([header, audioData]);
 }
 
-function extractWavChunk(filePath: any, startSec: any, endSec: any) {
+function extractWavChunk(filePath: string, startSec: number, endSec: number) {
   return extractWavChunkBuffer(filePath, startSec, endSec).toString('base64');
 }
 
 /** Overlapping [start, end) windows covering `durationSeconds`. */
-function planChunks(durationSeconds: any, chunkSeconds: any, overlapSeconds: any) {
-  const chunks = [];
+function planChunks(durationSeconds: number, chunkSeconds: number, overlapSeconds: number) {
+  const chunks: Array<{ start: number; end: number }> = [];
   let start = 0;
   while (start < durationSeconds) {
     const end = Math.min(start + chunkSeconds, durationSeconds);
@@ -138,11 +138,11 @@ function planChunks(durationSeconds: any, chunkSeconds: any, overlapSeconds: any
 }
 
 /** Merge per-chunk segments, dropping ones that fall in the overlap region. */
-function mergeTranscriptSegments(segmentGroups: any, overlapSeconds: any) {
+function mergeTranscriptSegments<T extends { startTime: number; endTime: number }>(segmentGroups: T[][], overlapSeconds: number): T[] {
   const all = segmentGroups.flat();
-  all.sort((a: any, b: any) => a.startTime - b.startTime);
+  all.sort((a, b) => a.startTime - b.startTime);
 
-  const merged = [];
+  const merged: T[] = [];
   for (const seg of all) {
     const last = merged[merged.length - 1];
     if (last && seg.startTime < last.endTime - overlapSeconds / 2) continue;

@@ -3,10 +3,10 @@
 
 const MAX_TEXT = 4000;
 
-const clip = (value: any) => (typeof value === 'string' ? value.slice(0, MAX_TEXT) : undefined);
+const clip = (value: unknown) => (typeof value === 'string' ? value.slice(0, MAX_TEXT) : undefined);
 
 /** `kind`: 'render' (caught by an error boundary), 'error' or 'unhandledrejection'. */
-export function reportError(kind: any, error: any, extra = {}) {
+export function reportError(kind: string, error: unknown, extra: Record<string, unknown> = {}) {
   try {
     const err = error instanceof Error ? error : null;
     window.meetmind?.reportError?.({

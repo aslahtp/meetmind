@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
-import { contextBridge, ipcRenderer } from 'electron';
-import type { Meetmind } from './shared';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import type { FfmpegInstallProgress, IpcEventChannel, IpcEventMap, Meetmind } from './shared';
 
 // Apply the theme class to <html> before the page's own scripts run, so the
 // renderer never paints the wrong theme while the async config:get round-trip is
@@ -23,7 +23,7 @@ function resolveStartupTheme(): 'light' | 'dark' {
   }
 }
 
-function applyStartupThemeClass() {
+function applyStartupThemeClass(): boolean {
   const root = document && document.documentElement;
   if (!root) return false;
   root.classList.add(resolveStartupTheme());
@@ -50,14 +50,14 @@ ipcRenderer.invoke('window:isVisible')
   .then((visible) => { if (visible && !windowShown) markWindowShown(); })
   .catch(() => { /* cosmetic — the page falls back to a timer */ });
 
-// Health check (electron/window/main-window.js): main pings whenever the window is shown, to tell
+// Health check (electron/window/main-window.ts): main pings whenever the window is shown, to tell
 // a working window from one that is up but blank. Answered here, not in the app's code, so it
 // still answers when React has failed. Reports whether React has rendered into #root, whether the
 // startup splash still covers the page, and whether the page produced a frame.
 const FRAME_WAIT_MS = 2000;
-ipcRenderer.on('window:health-ping', (_event, id) => {
+ipcRenderer.on('window:health-ping', (_event, id: number) => {
   let answered = false;
-  const answer = (frame: any) => {
+  const answer = (frame: boolean) => {
     if (answered) return;
     answered = true;
     let mounted = false;
@@ -81,12 +81,12 @@ ipcRenderer.on('window:health-ping', (_event, id) => {
 // Live log lines are only sent while something listens for them (the Logs page).
 let logListeners = 0;
 
-// Typed against the contract in electron/shared/ipc.ts, which the renderer's window.meetmind also uses.
-const meetmind: Meetmind = {
+// Checked against the contract in electron/shared/ipc.ts, which the renderer's window.meetmind also uses.
+const meetmind = {
   // Effective theme ('light' | 'dark') at launch, for index.html's pre-paint script.
   startupTheme,
 
-  // Host OS ('win32' | 'darwin' | ...), for OS-specific copy and window chrome. See renderer/lib/os.js.
+  // Host OS ('win32' | 'darwin' | ...), for OS-specific copy and window chrome. See renderer/lib/os.ts.
   platform: process.platform,
 
   // Window controls (frameless window)
@@ -101,23 +101,23 @@ const meetmind: Meetmind = {
     // repairs a window that never sends it.
     ready:       () => ipcRenderer.send('window:ready'),
     // Unsaved edits on screen: a window hidden to the tray is then kept instead of closed.
-    setDirty:    (dirty: any) => ipcRenderer.send('window:dirty', !!dirty),
+    setDirty:    (dirty) => ipcRenderer.send('window:dirty', !!dirty),
     // The page being shown ({ view, sessionId }), so a new window reopens on it.
-    setViewState: (state: any) => ipcRenderer.send('window:view-state', state),
+    setViewState: (state) => ipcRenderer.send('window:view-state', state),
   },
 
-  // Sends a renderer error to the log file. See renderer/lib/errorReport.js.
-  reportError: (report: any) => ipcRenderer.send('renderer:error', report),
+  // Sends a renderer error to the log file. See renderer/lib/errorReport.ts.
+  reportError: (report) => ipcRenderer.send('renderer:error', report),
 
   // Shell — open URLs in the system default browser
   shell: {
-    openExternal: (url: any) => ipcRenderer.invoke('shell:open-external', url),
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   },
 
   // Logs
   logs: {
-    get: (options: any) => ipcRenderer.invoke('logs:get', options),
-    getHistory: (options: any) => ipcRenderer.invoke('logs:get', options),
+    get: (options) => ipcRenderer.invoke('logs:get', options),
+    getHistory: (options) => ipcRenderer.invoke('logs:get', options),
     clear: () => ipcRenderer.invoke('logs:clear'),
     openFolder: () => ipcRenderer.invoke('logs:openFolder'),
   },
@@ -125,18 +125,18 @@ const meetmind: Meetmind = {
   // Config
   config: {
     get: () => ipcRenderer.invoke('config:get'),
-    set: (key: any, value: any) => ipcRenderer.invoke('config:set', key, value),
-    setMultiple: (updates: any) => ipcRenderer.invoke('config:set-multiple', updates),
+    set: (key, value) => ipcRenderer.invoke('config:set', key, value),
+    setMultiple: (updates) => ipcRenderer.invoke('config:set-multiple', updates),
     autoLaunchStatus: () => ipcRenderer.invoke('config:autoLaunchStatus'),
   },
 
   // Recording
   recording: {
     // meetingUrl/meetingTitle come from a calendar event when recording one from the Dashboard.
-    start: (sessionId: any, meetingUrl: any, meetingTitle: any) => ipcRenderer.invoke('recording:start', sessionId, meetingUrl, meetingTitle),
+    start: (sessionId, meetingUrl, meetingTitle) => ipcRenderer.invoke('recording:start', sessionId, meetingUrl, meetingTitle),
     stop: () => ipcRenderer.invoke('recording:stop'),
     listDevices: () => ipcRenderer.invoke('audio:list-devices'),
-    probeDevice: (device: any) => ipcRenderer.invoke('audio:probe-device', device),
+    probeDevice: (device) => ipcRenderer.invoke('audio:probe-device', device),
     // Linux: the audio server (PulseAudio / PipeWire) and whether FFmpeg can record from it.
     linuxStatus: () => ipcRenderer.invoke('audio:linux-status'),
     uploadFile: () => ipcRenderer.invoke('audio:import-file'),
@@ -146,24 +146,24 @@ const meetmind: Meetmind = {
   sessions: {
     list: () => ipcRenderer.invoke('sessions:list'),
     revision: () => ipcRenderer.invoke('sessions:revision'),
-    get: (id: any) => ipcRenderer.invoke('session:get', id),
-    delete: (id: any) => ipcRenderer.invoke('session:delete', id),
-    updateNotes: (id: any, notes: any) => ipcRenderer.invoke('session:update-notes', id, notes),
-    rename: (id: any, title: any) => ipcRenderer.invoke('session:rename', id, title),
-    openRecording: (id: any) => ipcRenderer.invoke('session:open-recording', id),
-    waveform: (id: any) => ipcRenderer.invoke('session:waveform', id),
+    get: (id) => ipcRenderer.invoke('session:get', id),
+    delete: (id) => ipcRenderer.invoke('session:delete', id),
+    updateNotes: (id, notes) => ipcRenderer.invoke('session:update-notes', id, notes),
+    rename: (id, title) => ipcRenderer.invoke('session:rename', id, title),
+    openRecording: (id) => ipcRenderer.invoke('session:open-recording', id),
+    waveform: (id) => ipcRenderer.invoke('session:waveform', id),
     // { available, deletedAt, source, bytes, format, busy }: whether the Audio tab has a recording
     // to play (and its size), and if not, why.
-    audioStatus: (id: any) => ipcRenderer.invoke('session:audio-status', id),
+    audioStatus: (id) => ipcRenderer.invoke('session:audio-status', id),
     // Deletes the meeting's audio only; { success, bytes } or { success: false, error }.
-    deleteRecording: (id: any) => ipcRenderer.invoke('session:delete-recording', id),
-    createFromTranscript: (opts: any) => ipcRenderer.invoke('session:create-from-transcript', opts),
+    deleteRecording: (id) => ipcRenderer.invoke('session:delete-recording', id),
+    createFromTranscript: (opts) => ipcRenderer.invoke('session:create-from-transcript', opts),
   },
 
   // Recording storage (Settings › Storage). Deleting keeps each meeting's notes and transcript.
   storage: {
     // retentionDays previews an unsaved "Keep recordings" choice; omit it for the saved one.
-    summary: (retentionDays: any) => ipcRenderer.invoke('storage:summary', retentionDays),
+    summary: (retentionDays) => ipcRenderer.invoke('storage:summary', retentionDays),
     cleanup: () => ipcRenderer.invoke('storage:cleanup'),
     deleteAll: () => ipcRenderer.invoke('storage:delete-all'),
     openFolder: () => ipcRenderer.invoke('storage:open-folder'),
@@ -171,26 +171,26 @@ const meetmind: Meetmind = {
 
   // Native dialogs
   dialog: {
-    chooseFolder: (opts: any) => ipcRenderer.invoke('dialog:choose-folder', opts),
+    chooseFolder: (opts) => ipcRenderer.invoke('dialog:choose-folder', opts),
   },
 
   // PDF export
   pdf: {
-    export: (sessionId: any, html: any) => ipcRenderer.invoke('pdf:export', sessionId, html),
-    reveal: (filePath: any) => ipcRenderer.invoke('pdf:reveal', filePath),
+    export: (sessionId, html) => ipcRenderer.invoke('pdf:export', sessionId, html),
+    reveal: (filePath) => ipcRenderer.invoke('pdf:reveal', filePath),
     defaultDir: () => ipcRenderer.invoke('pdf:default-dir'),
   },
 
   // Notion
   notion: {
-    upload: (sessionId: any) => ipcRenderer.invoke('notion:upload', sessionId),
-    testConnection: (token: any, dbId: any) => ipcRenderer.invoke('notion:test', token, dbId),
+    upload: (sessionId) => ipcRenderer.invoke('notion:upload', sessionId),
+    testConnection: (token, dbId) => ipcRenderer.invoke('notion:test', token, dbId),
   },
 
   // STT / LLM providers (descriptors + generic connection test)
   providers: {
     list: () => ipcRenderer.invoke('providers:list'),
-    test: (opts: any) => ipcRenderer.invoke('providers:test', opts),
+    test: (opts) => ipcRenderer.invoke('providers:test', opts),
   },
 
   // Gemini
@@ -201,34 +201,34 @@ const meetmind: Meetmind = {
 
   // Processing
   processing: {
-    run: (sessionId: any) => ipcRenderer.invoke('processing:run', sessionId),
-    retry: (sessionId: any, stage: any) => ipcRenderer.invoke('processing:retry', sessionId, stage),
+    run: (sessionId) => ipcRenderer.invoke('processing:run', sessionId),
+    retry: (sessionId, stage) => ipcRenderer.invoke('processing:retry', sessionId, stage),
   },
 
-  // Recordings are captured in their own hidden window (electron/audio/capture-window.js), not
+  // Recordings are captured in their own hidden window (electron/audio/capture-window.ts), not
   // here. This is only Settings' "Test system audio", which runs a short capture in this window.
   capture: {
     // Switch the macOS capture strategy for one test capture.
-    testBegin: (strategy: any) => ipcRenderer.invoke('capture:test-begin', strategy),
+    testBegin: (strategy) => ipcRenderer.invoke('capture:test-begin', strategy),
     testEnd: () => ipcRenderer.invoke('capture:test-end'),
   },
 
   // macOS privacy permissions (microphone, Screen & System Audio Recording)
   permissions: {
     status: () => ipcRenderer.invoke('permissions:status'),
-    request: (kind: any) => ipcRenderer.invoke('permissions:request', kind),
-    openSettings: (kind: any) => ipcRenderer.invoke('permissions:open-settings', kind),
+    request: (kind) => ipcRenderer.invoke('permissions:request', kind),
+    openSettings: (kind) => ipcRenderer.invoke('permissions:open-settings', kind),
   },
 
   // Calendars: Google accounts and ICS links (up to 5). Sources come back redacted.
   calendar: {
     list: () => ipcRenderer.invoke('calendar:list'),
-    add: (input: any) => ipcRenderer.invoke('calendar:add', input),
-    update: (id: any, patch: any) => ipcRenderer.invoke('calendar:update', id, patch),
-    remove: (id: any) => ipcRenderer.invoke('calendar:remove', id),
-    reconnect: (id: any) => ipcRenderer.invoke('calendar:reconnect', id),
+    add: (input) => ipcRenderer.invoke('calendar:add', input),
+    update: (id, patch) => ipcRenderer.invoke('calendar:update', id, patch),
+    remove: (id) => ipcRenderer.invoke('calendar:remove', id),
+    reconnect: (id) => ipcRenderer.invoke('calendar:reconnect', id),
     cancelAuth: () => ipcRenderer.invoke('calendar:cancel-auth'),
-    getEvents: (options: any) => ipcRenderer.invoke('calendar:events', options),
+    getEvents: (options) => ipcRenderer.invoke('calendar:events', options),
   },
 
   // Auto updater
@@ -250,22 +250,21 @@ const meetmind: Meetmind = {
   ffmpeg: {
     check: () => ipcRenderer.invoke('ffmpeg:check'),
     install: () => ipcRenderer.invoke('ffmpeg:install'),
-    onProgress: (callback: any) => {
-      const sub = (_e: any, data: any) => callback(data);
+    onProgress: (callback) => {
+      const sub = (_e: IpcRendererEvent, data: FfmpegInstallProgress) => callback(data);
       ipcRenderer.on('ffmpeg:install-progress', sub);
       return () => ipcRenderer.removeListener('ffmpeg:install-progress', sub);
     },
   },
 
   // Event listeners
-  on: (channel: any, callback: any) => {
-    const validChannels = [
+  on: <C extends IpcEventChannel>(channel: C, callback: (payload: IpcEventMap[C]) => void) => {
+    const validChannels: readonly IpcEventChannel[] = [
       'recording:started',
       'recording:stopped',
       'recording:error',
       'recording:warning',
       'recording:levels',
-      'transcription:progress',
       'processing:progress',
       'processing:complete',
       'processing:error',
@@ -283,7 +282,8 @@ const meetmind: Meetmind = {
       'app:navigate',
     ];
     if (validChannels.includes(channel)) {
-      const subscription = (_event: any, ...args: unknown[]) => (callback as (...a: unknown[]) => void)(...args);
+      // Whatever main sent is passed on as it came; the event map says what each channel carries.
+      const subscription = (_event: IpcRendererEvent, ...args: unknown[]) => (callback as (...a: unknown[]) => void)(...args);
       ipcRenderer.on(channel, subscription);
       if (channel === 'log:entry' && ++logListeners === 1) ipcRenderer.send('logs:subscribe');
       let removed = false;
@@ -295,7 +295,7 @@ const meetmind: Meetmind = {
       };
     }
   },
-};
+} satisfies Meetmind;
 contextBridge.exposeInMainWorld('meetmind', meetmind);
 
 // Bridge is up — now the cosmetic part, isolated so a failure here can't affect it.

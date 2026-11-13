@@ -1,41 +1,68 @@
 // The capture window: a hidden window that exists only while a recording runs. It opens the
 // system-audio loopback and the microphone, mixes them and streams WebM chunks to main
-// (renderer/capture.js). Capture used to live in the main window's renderer, which tied every
+// (renderer/capture.ts). Capture used to live in the main window's renderer, which tied every
 // recording to that window: it could never be closed, reloaded or replaced while recording.
 //
 // One window per recording: created at start, destroyed once the recording has stopped, failed
 // to start or timed out, so no stream or AudioContext outlives it.
 
 import path from 'path';
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, ipcMain, type WebContents } from 'electron';
 import logger from '../utils/logger';
 import { appRoot } from '../utils/paths';
+import { errorMessage } from '../utils/errors';
+
+/** What the page reports when it starts: `systemAudio` is false when only the microphone is recorded. */
+interface CaptureSources {
+  systemAudio?: boolean;
+  [key: string]: unknown;
+}
+
+/** `ok: true` once audio is flowing; `ok: false` when it could not start (the window is gone by then). */
+type CaptureStartResult =
+  | { ok: true; sources: CaptureSources }
+  | { ok: false; error: string };
+
+interface CaptureLevels {
+  mic: number;
+  system: number;
+}
+
+/** The hooks main supplies to `registerCaptureIpc`. */
+interface CaptureHooks {
+  /** Each WebM chunk. */
+  onChunk?: (buffer: ArrayBuffer | Uint8Array) => void;
+  /** The live meters. */
+  onLevels?: (levels: CaptureLevels) => void;
+  /** The window died mid-recording. */
+  onLost?: (reason: string) => void;
+}
 
 const isDev = process.env.NODE_ENV === 'development';
 const READY_TIMEOUT_MS = 10000;   // from creation to the page reporting it has loaded
 const STOP_TIMEOUT_MS = 15000;    // from capture:stop to the "all chunks sent" sentinel
 
-let win: any = null;
+let win: BrowserWindow | null = null;
 let capturing = false;     // between a successful start and the stop
-let onReady: any = null;        // (error?) while the page loads
-let onStartResult: any = null;  // ({ ok, sources, error }) while waiting for capture:started / failed
-let onStopDone: any = null;     // () while waiting for the sentinel
-let hooks: any = {};            // { onChunk(buffer), onLevels(levels), onLost(reason) }
+let onReady: ((error?: Error) => void) | null = null;                    // while the page loads
+let onStartResult: ((result: CaptureStartResult) => void) | null = null;  // while waiting for capture:started / failed
+let onStopDone: (() => void) | null = null;                               // while waiting for the sentinel
+let hooks: CaptureHooks = {};
 let ipcRegistered = false;
 
-function isAlive() {
-  return !!win && !win.isDestroyed() && !win.webContents.isDestroyed();
+function aliveWindow(): BrowserWindow | null {
+  return win && !win.isDestroyed() && !win.webContents.isDestroyed() ? win : null;
 }
 
 function destroyWindow() {
-  const w: any = win;
+  const w = win;
   win = null;   // first, so the window's own handlers ignore this
   capturing = false;
   if (w && !w.isDestroyed()) w.destroy();
 }
 
 // The window went away on its own: renderer crash, failed load.
-function lost(reason: any, detail?: any) {
+function lost(reason: string, detail?: Record<string, unknown>) {
   logger.error('Capture window lost', { reason, ...detail });
   const wasCapturing = capturing;
   destroyWindow();
@@ -85,7 +112,7 @@ function createWindow() {
 function waitUntilReady() {
   return new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => { onReady = null; reject(new Error('capture window did not load')); }, READY_TIMEOUT_MS);
-    onReady = (error: any) => {
+    onReady = (error?: Error) => {
       clearTimeout(timer);
       onReady = null;
       if (error) reject(error);
@@ -100,23 +127,26 @@ function waitUntilReady() {
  *   requireSystemAudio: fail rather than record the microphone alone (main can fall back to FFmpeg)
  *   timeoutMs: how long the page may take to open its streams (macOS may show permission prompts)
  */
-async function startCapture({ requireSystemAudio, timeoutMs }: any) {
+async function startCapture(
+  { requireSystemAudio, timeoutMs }: { requireSystemAudio?: boolean; timeoutMs: number },
+): Promise<CaptureStartResult> {
   destroyWindow();
   try {
     createWindow();
     await waitUntilReady();
-  } catch (err: any) {
+  } catch (err) {
     destroyWindow();
-    return { ok: false, error: err.message };
+    return { ok: false, error: errorMessage(err) };
   }
 
-  const result = await new Promise<any>((resolve) => {
+  const result = await new Promise<CaptureStartResult>((resolve) => {
     const timer = setTimeout(() => onStartResult?.({ ok: false, error: 'timed out opening the audio streams' }), timeoutMs);
-    onStartResult = (value: any) => {
+    onStartResult = (value) => {
       clearTimeout(timer);
       onStartResult = null;
       resolve(value);
     };
+    if (!win) throw new Error('capture window is gone');
     win.webContents.send('capture:start', { requireSystemAudio });
   });
 
@@ -130,7 +160,8 @@ async function startCapture({ requireSystemAudio, timeoutMs }: any) {
  * already on disk stay usable if that never comes. The window is destroyed either way.
  */
 async function stopCapture() {
-  if (isAlive()) {
+  const alive = aliveWindow();
+  if (alive) {
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
         logger.warn('Capture stop timed out, proceeding with what is on disk');
@@ -141,7 +172,7 @@ async function stopCapture() {
         onStopDone = null;
         resolve();
       };
-      win.webContents.send('capture:stop');
+      alive.webContents.send('capture:stop');
     });
   }
   destroyWindow();
@@ -169,12 +200,12 @@ async function probeCaptureWindow() {
  * system }) for the live meters, onLost(reason) when the window dies mid-recording.
  * Safe to call more than once.
  */
-function registerCaptureIpc(nextHooks = {}) {
+function registerCaptureIpc(nextHooks: CaptureHooks = {}) {
   hooks = { ...hooks, ...nextHooks };
   if (ipcRegistered) return;
   ipcRegistered = true;
 
-  const fromCapture = (event: any) => isAlive() && event.sender === win.webContents;
+  const fromCapture = (event: { sender: WebContents }) => aliveWindow()?.webContents === event.sender;
 
   ipcMain.on('capture:ready', (event) => { if (fromCapture(event)) onReady?.(); });
   ipcMain.on('capture:started', (event, sources) => {
@@ -189,4 +220,5 @@ function registerCaptureIpc(nextHooks = {}) {
   ipcMain.on('capture:audio-data', (event) => { if (fromCapture(event)) onStopDone?.(); });
 }
 
+export type { CaptureSources, CaptureStartResult, CaptureLevels, CaptureHooks };
 export { registerCaptureIpc, startCapture, stopCapture, destroyCapture, probeCaptureWindow };

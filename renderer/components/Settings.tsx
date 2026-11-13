@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { SlidersHorizontal, AudioLines, NotebookPen, Blocks, HardDrive, Cpu } from 'lucide-react';
+import { SlidersHorizontal, AudioLines, NotebookPen, Blocks, HardDrive, Cpu, type LucideIcon } from 'lucide-react';
+import type { ProviderDescriptors, RendererConfig, StorageSummary } from '@shared';
 import { useApp } from '../lib/app-context';
 import { providerConfigKeys } from '../lib/providers';
 import { sameValue, changedFields } from '../lib/settingsForm';
 import { readSettingsTab, storeSettingsTab, takeRequestedSettingsTab } from '../lib/settingsTab';
 import { retentionPeriod, describeRecordings, deletionToast } from '../lib/storage';
+import { errorMessage } from '../lib/errors';
 import { PageHeader, SaveBar, SegmentedControl } from './ui/index';
 import GeneralSection from './settings/GeneralSection';
 import TranscriptionSection from './settings/TranscriptionSection';
@@ -12,8 +14,11 @@ import NotesSection from './settings/NotesSection';
 import IntegrationsSection from './settings/IntegrationsSection';
 import StorageSection from './settings/StorageSection';
 import SystemSection from './settings/SystemSection';
+import type { FormChange, SettingsForm } from './settings/types';
 
-const TABS = [
+type SettingsTab = 'general' | 'transcription' | 'notes' | 'integrations' | 'storage' | 'system';
+
+const TABS: { value: SettingsTab; label: string; icon: LucideIcon }[] = [
   { value: 'general', label: 'General', icon: SlidersHorizontal },
   { value: 'transcription', label: 'Transcription', icon: AudioLines },
   { value: 'notes', label: 'Notes', icon: NotebookPen },
@@ -22,12 +27,16 @@ const TABS = [
   { value: 'system', label: 'System', icon: Cpu },
 ];
 
-function readStoredTab() {
-  const v = readSettingsTab();
-  return TABS.some((t) => t.value === v) ? v : null;
+function isSettingsTab(value: unknown): value is SettingsTab {
+  return TABS.some((t) => t.value === value);
 }
 
-const DEFAULT_FORM = {
+function readStoredTab(): SettingsTab | null {
+  const v = readSettingsTab();
+  return isSettingsTab(v) ? v : null;
+}
+
+const DEFAULT_FORM: SettingsForm = {
   sttService: 'google',
   sttModels: {},
   llmProvider: 'gemini',
@@ -61,9 +70,10 @@ const DEFAULT_FORM = {
 
 // Provider credential/option keys come from the provider descriptors, so adding a provider needs
 // no edit here.
-function formFromConfig(cfg: any, providers: any) {
-  const providerFields: any = {};
-  for (const key of providerConfigKeys(providers)) providerFields[key] = cfg[key] || '';
+function formFromConfig(cfg: RendererConfig, providers: ProviderDescriptors): SettingsForm {
+  const stored: Record<string, unknown> = { ...cfg };
+  const providerFields: Record<string, string> = {};
+  for (const key of providerConfigKeys(providers)) providerFields[key] = (stored[key] || '') as string;
 
   return {
     ...providerFields,
@@ -98,15 +108,19 @@ function formFromConfig(cfg: any, providers: any) {
   };
 }
 
-export default function Settings({ onSave }: { onSave?: any }) {
+interface SettingsProps {
+  onSave: (changes: Partial<RendererConfig>) => Promise<void>;
+}
+
+export default function Settings({ onSave }: SettingsProps) {
   const { confirm, addToast, setNavGuard, keysNotSet, providers } = useApp();
-  const [tab, setTab] = useState(() => {
+  const [tab, setTab] = useState<SettingsTab>(() => {
     const requested = takeRequestedSettingsTab();
-    if (TABS.some((t) => t.value === requested)) return requested;
+    if (isSettingsTab(requested)) return requested;
     return keysNotSet ? 'transcription' : readStoredTab() || 'general';
   });
-  const [form, setForm] = useState(DEFAULT_FORM);
-  const [initialForm, setInitialForm] = useState<any>(null);
+  const [form, setForm] = useState<SettingsForm>(DEFAULT_FORM);
+  const [initialForm, setInitialForm] = useState<SettingsForm | null>(null);
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState('');
   const [defaultMdSystemPrompt, setDefaultMdSystemPrompt] = useState('');
   const [saving, setSaving] = useState(false);
@@ -114,7 +128,7 @@ export default function Settings({ onSave }: { onSave?: any }) {
 
   const isDirty = useMemo(() => {
     if (!initialForm) return false;
-    return Object.keys(form).some((key) => !sameValue((form as any)[key], initialForm[key]));
+    return (Object.keys(form) as (keyof SettingsForm)[]).some((key) => !sameValue(form[key], initialForm[key]));
   }, [form, initialForm]);
 
   useEffect(() => {
@@ -179,12 +193,12 @@ export default function Settings({ onSave }: { onSave?: any }) {
     return () => clearTimeout(t);
   }, [saved]);
 
-  const handleChange = useCallback((key: any, val: any) => {
+  const handleChange = useCallback<FormChange>((key, val) => {
     setSaved(false);
     setForm((prev) => ({ ...prev, [key]: val }));
   }, []);
 
-  const handleTabChange = (next: any) => {
+  const handleTabChange = (next: SettingsTab) => {
     setTab(next);
     storeSettingsTab(next);
   };
@@ -194,7 +208,7 @@ export default function Settings({ onSave }: { onSave?: any }) {
   const confirmRetentionChange = async () => {
     const days = form.recordingRetentionDays;
     if (!days || days === initialForm?.recordingRetentionDays || !window.meetmind?.storage) return true;
-    let expiring: any;
+    let expiring: StorageSummary['expiring'] | undefined;
     try {
       ({ expiring } = await window.meetmind.storage.summary(days));
     } catch {
@@ -224,8 +238,8 @@ export default function Settings({ onSave }: { onSave?: any }) {
           addToast(message, type);
         }
       }
-    } catch (err: any) {
-      addToast(`Couldn't save settings: ${err?.message || 'unknown error'}`, 'error');
+    } catch (err) {
+      addToast(`Couldn't save settings: ${errorMessage(err) || 'unknown error'}`, 'error');
     } finally {
       setSaving(false);
     }

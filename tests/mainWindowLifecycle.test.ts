@@ -3,11 +3,12 @@ import { describe, it, expect } from 'vitest';
 import {
   MAX_RECOVERIES, RECOVERY_WINDOW_MS, createLifecycle, reduceMainWindow, healthVerdict, isBlankCapture,
 } from '../electron/window/main-window-lifecycle';
+import type { WindowAction, WindowEvent, WindowLifecycleState } from '../electron/window/main-window-lifecycle';
 
 // Feeds events in order; returns the final state and every action, flattened.
-function play(events: any, start = createLifecycle()) {
+function play(events: WindowEvent[], start = createLifecycle()) {
   let state = start;
-  const actions = [];
+  const actions: WindowAction[] = [];
   for (const event of events) {
     const result = reduceMainWindow(state, event);
     state = result.state;
@@ -16,7 +17,7 @@ function play(events: any, start = createLifecycle()) {
   return { state, actions };
 }
 
-const types = (actions: any) => actions.map((a: any) => a.type);
+const types = (actions: WindowAction[]) => actions.map((a) => a.type);
 
 // A window that was opened, loaded and passed its first health check.
 function healthyWindow() {
@@ -98,7 +99,7 @@ describe('main window lifecycle', () => {
   });
 
   it('tries once more with a new window when the user opens a failed one', () => {
-    const failed = { ...healthyWindow(), phase: 'failed', step: 2, recoveries: [1, 2] };
+    const failed: WindowLifecycleState = { ...healthyWindow(), phase: 'failed', step: 2, recoveries: [1, 2] };
     const { state, actions } = play([{ type: 'open' }], failed);
     expect(types(actions)).toEqual(['disarm-retire', 'destroy', 'create']);
     expect(state).toMatchObject({ phase: 'loading', step: 0, recoveries: [] });
@@ -189,8 +190,8 @@ describe('healthVerdict', () => {
 });
 
 describe('isBlankCapture', () => {
-  const pixels = (...colours: any[]) => Uint8Array.from(colours.flatMap(([b, g, r]) => [b, g, r, 255]));
-  const paper = [237, 245, 248];
+  const pixels = (...colours: Array<[number, number, number]>) => Uint8Array.from(colours.flatMap(([b, g, r]) => [b, g, r, 255]));
+  const paper: [number, number, number] = [237, 245, 248];
 
   it('is true for one flat colour, allowing for dithering', () => {
     expect(isBlankCapture(pixels(paper, paper, paper, paper))).toBe(true);

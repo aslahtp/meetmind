@@ -9,6 +9,30 @@
 
 import { sessionDisplayTitle, speakerName } from './format';
 import { sessionPlatform } from './platform';
+import type { PlatformFields } from './platform';
+import type { Notes } from '@shared';
+
+/**
+ * The session fields search reads. A `Session` fits. Notes come from an LLM (and older versions
+ * stored other shapes), so their fields are read as unknown values and checked as they are used.
+ */
+export interface SearchableSession extends PlatformFields {
+  id: string;
+  title?: string | null;
+  started_at?: string | null;
+  notes?: Notes | null;
+  transcript?: Array<{ speaker?: unknown; text?: unknown } | null> | null;
+}
+
+/** How one session matched a query. */
+export interface SearchMatch {
+  score: number;
+  /** What kind of passage matched best ("Transcript · Asha"), for the card. */
+  label: string | null;
+  snippet: string | null;
+  /** Search keys of the words that matched, for highlighting. */
+  terms: Set<string>;
+}
 
 // ── Text pipeline ───────────────────────────────────────────────────────────
 
@@ -28,7 +52,7 @@ const STOP_WORDS = new Set(`
 `.split(/\s+/).filter(Boolean));
 
 /** Lowercase and fold Latin accents (only U+0300–036F, so other scripts keep their marks). */
-function normalizeWord(word: any) {
+function normalizeWord(word: string) {
   return word.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').normalize('NFC');
 }
 
@@ -38,7 +62,7 @@ const UNDOUBLE_EXEMPT = new Set(['l', 's', 'z']);
  * A deliberately small English suffix stripper (Porter-lite). It only has to map related
  * forms to the same key, never produce real words. Non-Latin words pass through unchanged.
  */
-export function stem(word: any) {
+export function stem(word: string) {
   if (word.length <= 3 || !/^[a-z]+$/.test(word)) return word;
   let w = word;
   let stripped = false;
@@ -74,14 +98,14 @@ export function stem(word: any) {
 }
 
 /** The search key of one surface word. */
-function termOf(word: any) {
+function termOf(word: string) {
   return stem(normalizeWord(word));
 }
 
 /** Search keys of a text, stop words removed. */
-export function tokenize(text: any) {
+export function tokenize(text: unknown): string[] {
   if (!text) return [];
-  const out = [];
+  const out: string[] = [];
   for (const m of String(text).matchAll(WORD_RE)) {
     const norm = normalizeWord(m[0]);
     if (!STOP_WORDS.has(norm)) out.push(stem(norm));
@@ -90,9 +114,9 @@ export function tokenize(text: any) {
 }
 
 /** Normalised words joined by single spaces, padded, for verbatim phrase checks. */
-function flatten(text: any) {
+function flatten(text: unknown) {
   if (!text) return ' ';
-  const words = [];
+  const words: string[] = [];
   for (const m of String(text).matchAll(WORD_RE)) words.push(normalizeWord(m[0]));
   return ` ${words.join(' ')} `;
 }
@@ -101,7 +125,7 @@ function flatten(text: any) {
 
 // Words people use interchangeably about meetings. A query term also matches the other
 // members of its groups, at a lower weight than the word itself.
-export const CONCEPTS = [
+export const CONCEPTS: string[][] = [
   ['deadline', 'due', 'eta', 'timeline', 'schedule'],
   ['decide', 'decision', 'decided', 'agree', 'agreed', 'agreement', 'conclude', 'conclusion', 'resolve', 'resolved', 'approve', 'approved', 'finalize', 'finalized'],
   ['task', 'todo', 'action', 'assign', 'assigned', 'owner', 'followup'],
@@ -125,12 +149,13 @@ export const CONCEPTS = [
 
 // stemmed term → Set of stemmed related terms (itself excluded)
 const RELATED = (() => {
-  const map = new Map();
+  const map = new Map<string, Set<string>>();
   for (const group of CONCEPTS) {
     const terms = [...new Set(group.map(termOf))];
     for (const t of terms) {
-      if (!map.has(t)) map.set(t, new Set());
-      for (const other of terms) if (other !== t) map.get(t).add(other);
+      let related = map.get(t);
+      if (!related) map.set(t, (related = new Set()));
+      for (const other of terms) if (other !== t) related.add(other);
     }
   }
   return map;
@@ -141,7 +166,7 @@ const RELATED = (() => {
 const W = { title: 3, strong: 2, people: 1.5, body: 1, transcript: 0.6, link: 0.5 };
 
 /** Text of a string, or of an object's string values (notes fields vary by prompt). */
-function textOf(value: any): string {
+function textOf(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
@@ -154,11 +179,11 @@ function textOf(value: any): string {
 // A Markdown table's |---|:---:| rule row.
 const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/;
 
-function tableCells(line: any) {
-  return line.trim().replace(/^\||\|$/g, '').split('|').map((c: any) => c.trim()).filter(Boolean);
+function tableCells(line: string) {
+  return line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim()).filter(Boolean);
 }
 
-function plainText(text: any) {
+function plainText(text: unknown) {
   return String(text)
     .split('\n')
     .filter((line) => !TABLE_RULE.test(line))
@@ -175,10 +200,10 @@ function plainText(text: any) {
  * Markdown notes, one passage per line so snippets stay short, each labelled with its
  * heading. Table header rows are skipped: "Deadline" in a header isn't about deadlines.
  */
-function addMarkdown(md: any, add: any) {
+function addMarkdown(md: string, add: AddPassage) {
   const lines = md.split(/\r?\n/);
   let label = 'Notes';
-  lines.forEach((line: any, i: any) => {
+  lines.forEach((line, i) => {
     const trimmed = line.trim();
     if (!trimmed || TABLE_RULE.test(trimmed)) return;
     const heading = trimmed.match(/^#{1,6}\s+(.*)$/);
@@ -193,7 +218,7 @@ function addMarkdown(md: any, add: any) {
   });
 }
 
-function hostname(url: any) {
+function hostname(url: string) {
   try {
     return new URL(url).hostname;
   } catch {
@@ -205,27 +230,43 @@ function hostname(url: any) {
  * Every searchable passage of a session: { label, text, weight, snippet, display }.
  * `snippet: false` passages are never shown as the match; `display` is shown instead of `text`.
  */
-function collectPassages(session: any) {
-  const out: any = [];
-  const add = (label: any, value: any, weight: any, snippet = true, display?: any) => {
+interface Passage {
+  label: string;
+  text: string;
+  weight: number;
+  snippet: boolean;
+  display: string;
+}
+
+type AddPassage = (label: string, value: unknown, weight: number, snippet?: boolean, display?: string) => void;
+
+const arrayOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+/** A notes entry that is an object (the LLM's items vary), read by key. */
+const asRecord = (value: unknown): Record<string, unknown> => value as Record<string, unknown>;
+
+function collectPassages(session: SearchableSession): Passage[] {
+  const out: Passage[] = [];
+  const add: AddPassage = (label, value, weight, snippet = true, display) => {
     const text = plainText(textOf(value));
     if (text) out.push({ label, text, weight, snippet, display: display ? plainText(display) : text });
   };
 
   const title = sessionDisplayTitle(session);
   add('Title', title, W.title, false);
-  const notes = session.notes && typeof session.notes === 'object' ? session.notes : null;
+  const notes = session.notes && typeof session.notes === 'object' ? (session.notes as Record<string, unknown>) : null;
   if (notes?.meeting_title && notes.meeting_title !== title) add('Title', notes.meeting_title, W.title, false);
 
   if (notes) {
     if (notes.summary) add('Summary', notes.summary, W.body);
     // sections/topics/key_points are the same array after normalisation; index it once.
-    const sections = [notes.sections, notes.topics, notes.key_points].find(Array.isArray) || [];
-    for (const sec of sections) {
-      if (!sec || typeof sec !== 'object') {
-        add('Notes', sec, W.body);
+    const sections = [notes.sections, notes.topics, notes.key_points].find((v): v is unknown[] => Array.isArray(v)) || [];
+    for (const item of sections) {
+      if (!item || typeof item !== 'object') {
+        add('Notes', item, W.body);
         continue;
       }
+      const sec = asRecord(item);
       const label = sec.heading ? `Notes · ${plainText(sec.heading)}` : 'Notes';
       add(label, sec.heading, W.strong);
       add(label, sec.content, W.body);
@@ -234,8 +275,9 @@ function collectPassages(session: any) {
       add(label, sec.options_discussed, W.body);
       add('Open question', sec.open_questions, W.body);
     }
-    for (const item of Array.isArray(notes.action_items) ? notes.action_items : []) {
-      if (item && typeof item === 'object') {
+    for (const entry of arrayOf(notes.action_items)) {
+      if (entry && typeof entry === 'object') {
+        const item = asRecord(entry);
         const task = textOf(item.task || item.text || item.description);
         const due = item.due ? `due ${textOf(item.due)}` : '';
         const details = [textOf(item.owner), due].filter(Boolean).join(', ');
@@ -245,13 +287,14 @@ function collectPassages(session: any) {
         // "due Thu", so "deadline" (a relative of "due") finds items that have one.
         if (due) add('Action item', due, W.body, true, display);
       } else {
-        add('Action item', item, W.strong);
+        add('Action item', entry, W.strong);
       }
     }
     add('Decision', notes.decisions, W.strong);
     add('Open question', notes.questions_unresolved, W.body);
-    for (const p of Array.isArray(notes.participants) ? notes.participants : []) {
-      add('Participants', typeof p === 'object' && p ? [p.name, p.label, p.role] : p, W.people);
+    for (const p of arrayOf(notes.participants)) {
+      const person = typeof p === 'object' && p ? asRecord(p) : null;
+      add('Participants', person ? [person.name, person.label, person.role] : p, W.people);
     }
     add('Participants', notes.attendees, W.people);
     add('Mentioned', notes.notable_mentions, W.body);
@@ -259,7 +302,7 @@ function collectPassages(session: any) {
   }
 
   const transcript = Array.isArray(session.transcript) ? session.transcript : [];
-  const speakers = new Set();
+  const speakers = new Set<string>();
   for (const seg of transcript) {
     if (!seg) continue;
     const speaker = speakerName(seg.speaker);
@@ -267,19 +310,31 @@ function collectPassages(session: any) {
     add(`Transcript · ${speaker}`, seg.text, W.transcript);
   }
   if (speakers.size) add('Speakers', [...speakers].join(', '), W.people);
-  if (session.meeting_url) add('Link', hostname(session.meeting_url), W.link, false);
-  else if (sessionPlatform(session)) add('Platform', sessionPlatform(session).name, W.link, false);
+  if (session.meeting_url) {
+    add('Link', hostname(session.meeting_url), W.link, false);
+  } else {
+    const platform = sessionPlatform(session);
+    if (platform) add('Platform', platform.name, W.link, false);
+  }
   return out;
 }
 
-const docCache = new WeakMap(); // session object → document
+interface SessionDocument {
+  tf: Map<string, number>;
+  length: number;
+  passages: Array<Passage & { terms: Set<string> }>;
+  titleFlat: string;
+  flat: string;
+}
+
+const docCache = new WeakMap<SearchableSession, SessionDocument>(); // session object → document
 
 /** Weighted term frequencies, length and passages of one session, cached per object. */
-function sessionDocument(session: any) {
+function sessionDocument(session: SearchableSession): SessionDocument {
   let doc = docCache.get(session);
   if (doc) return doc;
-  const passages = [];
-  const tf = new Map();
+  const passages: SessionDocument['passages'] = [];
+  const tf = new Map<string, number>();
   let length = 0;
   for (const p of collectPassages(session)) {
     const tokens = tokenize(p.text);
@@ -294,12 +349,19 @@ function sessionDocument(session: any) {
   return doc;
 }
 
-const corpusCache = new WeakMap(); // sessions array → corpus stats
+interface Corpus {
+  /** In how many sessions each term appears. */
+  df: Map<string, number>;
+  n: number;
+  avgLength: number;
+}
 
-function corpusOf(sessions: any) {
+const corpusCache = new WeakMap<SearchableSession[], Corpus>(); // sessions array → corpus stats
+
+function corpusOf(sessions: SearchableSession[]): Corpus {
   let corpus = corpusCache.get(sessions);
   if (corpus) return corpus;
-  const df = new Map();
+  const df = new Map<string, number>();
   let total = 0;
   for (const s of sessions) {
     const doc = sessionDocument(s);
@@ -314,9 +376,9 @@ function corpusOf(sessions: any) {
 // ── Query ───────────────────────────────────────────────────────────────────
 
 /** Damerau-Levenshtein (optimal string alignment) distance, giving up past `max`. */
-export function editDistance(a: any, b: any, max = 2) {
+export function editDistance(a: string, b: string, max = 2) {
   if (Math.abs(a.length - b.length) > max) return max + 1;
-  const rows = [];
+  const rows: number[][] = [];
   for (let i = 0; i <= a.length; i++) {
     rows.push(new Array(b.length + 1).fill(0));
     rows[i][0] = i;
@@ -343,9 +405,15 @@ const WEIGHT = { exact: 1, prefix: 0.7, related: 0.6, fuzzy: 0.5 };
  * stand in for it: concept-map relatives, vocabulary prefixes (last word only, as the user is
  * still typing) and close spellings for words the corpus doesn't contain.
  */
-function parseQuery(query: any, df: any) {
-  const phrases = [];
-  const loose = query.replace(/"([^"]+)"/g, (_: any, p: any) => {
+interface QueryGroup {
+  term: string;
+  /** Search key → weight of a hit on it: the word itself, its relatives, prefixes, close spellings. */
+  variants: Map<string, number>;
+}
+
+function parseQuery(query: string, df: Map<string, number>) {
+  const phrases: string[] = [];
+  const loose = query.replace(/"([^"]+)"/g, (_, p: string) => {
     if (flatten(p).trim()) phrases.push(flatten(p));
     return ` ${p} `;
   });
@@ -353,14 +421,14 @@ function parseQuery(query: any, df: any) {
 
   const words = [...loose.matchAll(WORD_RE)].map((m) => normalizeWord(m[0])).filter((w) => !STOP_WORDS.has(w));
 
-  const groups: any = [];
-  const seen = new Set();
+  const groups: QueryGroup[] = [];
+  const seen = new Set<string>();
   words.forEach((word, i) => {
     const term = stem(word);
     if (seen.has(term)) return;
     seen.add(term);
-    const variants = new Map([[term, WEIGHT.exact]]);
-    const put = (t: any, w: any) => {
+    const variants = new Map<string, number>([[term, WEIGHT.exact]]);
+    const put = (t: string, w: number) => {
       if ((variants.get(t) || 0) < w) variants.set(t, w);
     };
     for (const rel of RELATED.get(term) || []) put(rel, WEIGHT.related);
@@ -390,7 +458,7 @@ function parseQuery(query: any, df: any) {
 const K1 = 1.2;
 const B = 0.5; // gentle length normalisation: long transcripts shouldn't bury title hits
 
-function bm25(tf: any, df: any, n: any, length: any, avgLength: any) {
+function bm25(tf: number, df: number, n: number, length: number, avgLength: number) {
   const idf = Math.log(1 + (n - df + 0.5) / (df + 0.5));
   const norm = tf + K1 * (1 - B + (B * length) / (avgLength || 1));
   return (idf * tf * (K1 + 1)) / norm;
@@ -402,7 +470,7 @@ const SNIPPET_LENGTH = 160;
 const SNIPPET_LEAD = 48;
 
 /** About SNIPPET_LENGTH characters of `text`, starting a little before the first hit. */
-function snippetAround(text: any, terms: any) {
+function snippetAround(text: string, terms: Set<string>) {
   if (text.length <= SNIPPET_LENGTH) return text;
   let hit = 0;
   for (const m of text.matchAll(WORD_RE)) {
@@ -428,10 +496,10 @@ function snippetAround(text: any, terms: any) {
  * Split text into runs, marking words whose search key is in `terms`, for highlighting.
  * @returns {{ text: string, hit: boolean }[]}
  */
-export function highlightParts(text: any, terms: any) {
+export function highlightParts(text: string | null | undefined, terms?: ReadonlySet<string> | null) {
   if (!text) return [];
   if (!terms || !terms.size) return [{ text, hit: false }];
-  const parts = [];
+  const parts: Array<{ text: string; hit: boolean }> = [];
   let last = 0;
   for (const m of text.matchAll(WORD_RE)) {
     if (!terms.has(termOf(m[0]))) continue;
@@ -453,14 +521,15 @@ export function highlightParts(text: any, terms: any) {
  * @returns {Map<string, { score: number, label: string|null, snippet: string|null, terms: Set<string> }>|null}
  *   matches by session id, or null when the query is empty (everything matches)
  */
-export function searchSessions(sessions: any, query: any) {
-  const q = (query || '').trim();
+export function searchSessions(sessions: SearchableSession[], query: string | null | undefined): Map<string, SearchMatch> | null {
+  const text = query || '';
+  const q = text.trim();
   if (!q || !Array.isArray(sessions)) return null;
 
   const corpus = corpusOf(sessions);
   // Untrimmed, so a trailing space marks the last word as finished (no prefix matching).
-  const { groups, phrases, flat: queryFlat } = parseQuery(query, corpus.df);
-  const results = new Map();
+  const { groups, phrases, flat: queryFlat } = parseQuery(text, corpus.df);
+  const results = new Map<string, SearchMatch>();
   if (!groups.length && !phrases.length) return results;
 
   const required = groups.length <= 2 ? groups.length : Math.ceil(groups.length * 0.6);
@@ -472,7 +541,7 @@ export function searchSessions(sessions: any, query: any) {
 
     let score = 0;
     let matched = 0;
-    const terms = new Set();
+    const terms = new Set<string>();
     for (const g of groups) {
       let best = 0;
       for (const [t, w] of g.variants) {
@@ -498,7 +567,7 @@ export function searchSessions(sessions: any, query: any) {
 
     // Snippet: the passage (outside the title, which the card already shows) covering the
     // most query groups, weighted by how important that kind of passage is.
-    let bestPassage = null;
+    let bestPassage: Passage | null = null;
     let bestScore = 0;
     for (const p of doc.passages) {
       if (!p.snippet) continue;

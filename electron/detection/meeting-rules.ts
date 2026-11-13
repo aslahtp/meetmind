@@ -2,14 +2,85 @@
 // and the per-tick state machine that turns "who has the mic + which windows are open" into
 // meeting-detected / meeting-ended events. No electron or native imports, so it's unit-testable.
 
-const PLATFORMS = {
+import type { Bounds, DetectedMeeting } from '../shared/overlay';
+import type { MeetingPlatform } from '../shared/session';
+
+/** A visible top-level window, as the backends list it. `exe` is the app id (an exe name, or a Linux app id). */
+interface WindowInfo {
+  exe: string;
+  title: string;
+  bounds?: Bounds | null;
+}
+
+/** What `matchMeetingWindow` reads off a window. */
+interface WindowQuery {
+  exe?: string | null;
+  title?: string | null;
+}
+
+/** A window that looks like a meeting; `url` only when the title held a Google Meet code. */
+interface MeetingWindowMatch {
+  platform: MeetingPlatform;
+  title: string;
+  url?: string;
+}
+
+/** A browser's last meeting-looking window, kept for TITLE_MEMORY_MS. */
+interface RecentWindow extends MeetingWindowMatch {
+  bounds: Bounds | null;
+  seenAt: number;
+}
+
+/** The meeting currently considered live. */
+interface ActiveMeeting extends DetectedMeeting {
+  lastSeenAt: number;
+}
+
+interface DetectorState {
+  /** Browser exe → its last meeting window. */
+  recent: Record<string, RecentWindow>;
+  pendingKey: string | null;
+  pendingTicks: number;
+  active: ActiveMeeting | null;
+  /** Keys the user said "Not now" to; cleared when that meeting ends. */
+  dismissed: string[];
+}
+
+/** Apps on the mic from each source (the shape the backends' `readMicUsers()` returns). */
+interface MicUsers {
+  /** Active audio-session owners: exe names on Windows, `linuxAppId()`s on Linux. */
+  sessions: string[];
+  /** Consent-registry ids (Windows only; always empty on Linux). */
+  registry: string[];
+  /** Set when the audio-session source failed. */
+  sessionsError: string | null;
+}
+
+interface TickInput {
+  micExes?: readonly string[];
+  windows?: readonly WindowInfo[];
+  now?: number;
+  selfExe?: string;
+}
+
+interface DetectorEvent {
+  type: 'meeting-detected' | 'meeting-ended';
+  meeting: DetectedMeeting;
+}
+
+interface TickResult {
+  state: DetectorState;
+  events: DetectorEvent[];
+}
+
+const PLATFORMS: Record<MeetingPlatform, string> = {
   meet: 'Google Meet',
   zoom: 'Zoom',
   teams: 'Microsoft Teams',
 };
 
 // Windows exe names, then the Linux ids linuxAppId() and appFromWindowTitle() produce.
-const BROWSERS = {
+const BROWSERS: Record<string, string> = {
   'chrome.exe': 'Chrome',
   'msedge.exe': 'Edge',
   'brave.exe': 'Brave',
@@ -30,7 +101,7 @@ const BROWSERS = {
 // consent registry reports — an exe name for win32 apps, a package family name for packaged ones —
 // or, on Linux, a linuxAppId(). Microsoft has no Teams app for Linux; teams-for-linux is the
 // community one.
-const NATIVE_APPS: Record<string, { platform: string; label: string; windowExe?: string }> = {
+const NATIVE_APPS: Record<string, { platform: MeetingPlatform; label: string; windowExe?: string }> = {
   'zoom.exe': { platform: 'zoom', label: 'Zoom app' },
   'ms-teams.exe': { platform: 'teams', label: 'Teams app' },
   'teams.exe': { platform: 'teams', label: 'Teams app' },
@@ -41,7 +112,7 @@ const NATIVE_APPS: Record<string, { platform: string; label: string; windowExe?:
 
 // Linux: process names PulseAudio/PipeWire reports for apps on the mic, folded onto one id per
 // app (distros and packages name the same browser differently).
-const LINUX_APP_IDS = {
+const LINUX_APP_IDS: Record<string, string> = {
   'google-chrome': 'chrome',
   'google-chrome-stable': 'chrome',
   chrome: 'chrome',
@@ -93,15 +164,15 @@ const TEAMS_TITLE = /\|\s*Microsoft Teams\b|^Microsoft Teams\b/i;
 
 // "C:#Program Files#Google#Chrome#Application#chrome.exe" -> "chrome.exe";
 // packaged keys ("MSTeams_8wekyb3d8bbwe") are returned lowercased as-is.
-function exeFromConsentKey(name: any) {
+function exeFromConsentKey(name: unknown): string {
   const parts = String(name || '').split('#');
   return parts[parts.length - 1].toLowerCase();
 }
 
 /** Linux: the app id for a process name from PulseAudio/PipeWire (see LINUX_APP_IDS). */
-function linuxAppId(binary: any) {
+function linuxAppId(binary: unknown): string {
   const name = String(binary || '').toLowerCase();
-  return (LINUX_APP_IDS as any)[name] || name;
+  return LINUX_APP_IDS[name] || name;
 }
 
 /**
@@ -109,7 +180,7 @@ function linuxAppId(binary: any) {
  * their process): a browser by its title suffix, a Zoom meeting window as the Zoom app, and ''
  * when it can't tell.
  */
-function appFromWindowTitle(title: any) {
+function appFromWindowTitle(title: unknown): string {
   const raw = String(title || '').replace(/[\u200b\u200e\u200f]/g, '');
   const hit = LINUX_TITLE_APPS.find(([re]) => re.test(raw));
   if (hit) return hit[1];
@@ -120,8 +191,8 @@ function appFromWindowTitle(title: any) {
 // One list of apps holding the mic from both sources: active WASAPI capture sessions (exe names)
 // first, then any consent-registry ids they didn't report. Sessions lead so the same app keeps the
 // same id, and so the same meeting key, from tick to tick.
-function mergeMicUsers(sessions: any = [], registry: any = []) {
-  const out: any = [];
+function mergeMicUsers(sessions: readonly string[] = [], registry: readonly string[] = []): string[] {
+  const out: string[] = [];
   for (const id of [...sessions, ...registry]) {
     const key = String(id || '').toLowerCase();
     if (key && !out.includes(key)) out.push(key);
@@ -131,12 +202,12 @@ function mergeMicUsers(sessions: any = [], registry: any = []) {
 
 // Browsers the audio sessions show on the mic but the consent registry doesn't: a sign Windows has
 // stopped updating the registry, which browser detection used to depend on.
-function browsersMissingFromRegistry(sessions: any = [], registry: any = []) {
-  const reg = registry.map((id: any) => String(id).toLowerCase());
-  return sessions.map((id: any) => String(id).toLowerCase()).filter((id: any) => (BROWSERS as any)[id] && !reg.includes(id));
+function browsersMissingFromRegistry(sessions: readonly string[] = [], registry: readonly string[] = []): string[] {
+  const reg = registry.map((id) => String(id).toLowerCase());
+  return sessions.map((id) => String(id).toLowerCase()).filter((id) => BROWSERS[id] && !reg.includes(id));
 }
 
-function cleanMeetingTitle(title: any) {
+function cleanMeetingTitle(title: unknown): string {
   let t = String(title || '').replace(/[\u200b\u200e\u200f]/g, '');
   t = t.replace(TITLE_SUFFIX, '').replace(MORE_PAGES, '');
   t = t.replace(/^(?:Google )?Meet\s*[-–—:]\s*/i, '');
@@ -146,13 +217,13 @@ function cleanMeetingTitle(title: any) {
 
 // Returns { platform, title } when a window looks like a meeting, else null; plus `url` when the
 // title holds a Google Meet code.
-function matchMeetingWindow({ exe, title }: any) {
+function matchMeetingWindow({ exe, title }: WindowQuery): MeetingWindowMatch | null {
   const app = String(exe || '').toLowerCase();
   const raw = String(title || '');
   if (!raw) return null;
 
-  if ((BROWSERS as any)[app]) {
-    let platform = null;
+  if (BROWSERS[app]) {
+    let platform: MeetingPlatform | null = null;
     if (MEET_TITLE.test(raw)) platform = 'meet';
     else if (ZOOM_TITLE.test(raw)) platform = 'zoom';
     else if (TEAMS_TITLE.test(raw)) platform = 'teams';
@@ -173,7 +244,7 @@ function matchMeetingWindow({ exe, title }: any) {
   return null;
 }
 
-function createDetectorState(): any {
+function createDetectorState(): DetectorState {
   return {
     recent: {},        // browser exe -> { platform, title, bounds, seenAt }
     pendingKey: null,
@@ -183,13 +254,20 @@ function createDetectorState(): any {
   };
 }
 
-function toMeeting(key: any, platform: any, appLabel: any, title: any, bounds: any, url: any) {
+function toMeeting(
+  key: string,
+  platform: MeetingPlatform,
+  appLabel: string,
+  title: string | undefined,
+  bounds: Bounds | null | undefined,
+  url: string | undefined,
+): DetectedMeeting {
   return {
     key,
     platform,
-    platformLabel: (PLATFORMS as any)[platform],
+    platformLabel: PLATFORMS[platform],
     appLabel,
-    title: title || (PLATFORMS as any)[platform],
+    title: title || PLATFORMS[platform],
     bounds: bounds || null,
     // The meeting's link when the window showed it (a Google Meet code), else ''.
     url: url || '',
@@ -197,20 +275,25 @@ function toMeeting(key: any, platform: any, appLabel: any, title: any, bounds: a
 }
 
 // The meeting the current tick points at, or null.
-function findCandidate(state: any, micExes: any, windows: any, now: any) {
+function findCandidate(
+  state: DetectorState,
+  micExes: readonly string[],
+  windows: readonly WindowInfo[],
+  now: number,
+): DetectedMeeting | null {
   for (const id of micExes) {
     const native = NATIVE_APPS[id];
     if (native) {
       const windowExe = native.windowExe || id;
-      const own = windows.filter((w: any) => String(w.exe).toLowerCase() === windowExe);
-      const match = own.map((w: any) => ({ w, m: matchMeetingWindow(w) })).find((x: any) => x.m);
+      const own = windows.filter((w) => String(w.exe).toLowerCase() === windowExe);
+      const match = own.map((w) => ({ w, m: matchMeetingWindow(w) })).find((x): x is { w: WindowInfo; m: MeetingWindowMatch } => !!x.m);
       return toMeeting(`${native.platform}|${id}`, native.platform, native.label,
         match?.m.title, (match?.w || own[0])?.bounds, match?.m.url);
     }
-    if ((BROWSERS as any)[id]) {
+    if (BROWSERS[id]) {
       const seen = state.recent[id];
       if (seen && now - seen.seenAt <= TITLE_MEMORY_MS) {
-        return toMeeting(`${seen.platform}|${id}`, seen.platform, (BROWSERS as any)[id], seen.title, seen.bounds, seen.url);
+        return toMeeting(`${seen.platform}|${id}`, seen.platform, BROWSERS[id], seen.title, seen.bounds, seen.url);
       }
     }
   }
@@ -220,19 +303,22 @@ function findCandidate(state: any, micExes: any, windows: any, now: any) {
 // One poll. `micExes` are the apps currently holding the mic (see mergeMicUsers),
 // `windows` are visible top-level windows as { exe, title, bounds }. Returns the next state and
 // the events to act on: { type: 'meeting-detected' | 'meeting-ended', meeting }.
-function reduceTick(prev: any, { micExes = [], windows = [], now = Date.now(), selfExe = '' }: any) {
-  const state: any = { ...prev, recent: { ...prev.recent }, dismissed: [...prev.dismissed] };
-  const events: any = [];
+function reduceTick(
+  prev: DetectorState,
+  { micExes = [], windows = [], now = Date.now(), selfExe = '' }: TickInput,
+): TickResult {
+  const state: DetectorState = { ...prev, recent: { ...prev.recent }, dismissed: [...prev.dismissed] };
+  const events: DetectorEvent[] = [];
   const self = String(selfExe).toLowerCase();
-  const mic = micExes.map((e: any) => String(e).toLowerCase()).filter((e: any) => e && e !== self);
+  const mic = micExes.map((e) => String(e).toLowerCase()).filter((e) => e && e !== self);
 
   for (const w of windows) {
     const exe = String(w.exe || '').toLowerCase();
-    if (!(BROWSERS as any)[exe]) continue;
+    if (!BROWSERS[exe]) continue;
     const m = matchMeetingWindow({ exe, title: w.title });
     if (m) state.recent[exe] = { ...m, bounds: w.bounds || null, seenAt: now };
   }
-  for (const [exe, seen] of Object.entries<any>(state.recent)) {
+  for (const [exe, seen] of Object.entries(state.recent)) {
     if (now - seen.seenAt > TITLE_MEMORY_MS) delete state.recent[exe];
   }
 
@@ -244,7 +330,7 @@ function reduceTick(prev: any, { micExes = [], windows = [], now = Date.now(), s
     } else if (now - state.active.lastSeenAt >= END_GRACE_MS) {
       const { lastSeenAt: _lastSeenAt, ...meeting } = state.active;
       events.push({ type: 'meeting-ended', meeting });
-      state.dismissed = state.dismissed.filter((k: any) => k !== meeting.key);
+      state.dismissed = state.dismissed.filter((k) => k !== meeting.key);
       state.active = null;
     }
     state.pendingKey = null;
@@ -271,11 +357,22 @@ function reduceTick(prev: any, { micExes = [], windows = [], now = Date.now(), s
   return { state, events };
 }
 
-function dismissMeeting(state: any, key: any) {
+function dismissMeeting(state: DetectorState, key: string | null | undefined): DetectorState {
   if (!key || state.dismissed.includes(key)) return state;
   return { ...state, dismissed: [...state.dismissed, key] };
 }
 
+export type {
+  WindowInfo,
+  MicUsers,
+  MeetingWindowMatch,
+  RecentWindow,
+  ActiveMeeting,
+  DetectorState,
+  TickInput,
+  DetectorEvent,
+  TickResult,
+};
 export {
   PLATFORMS,
   BROWSERS,

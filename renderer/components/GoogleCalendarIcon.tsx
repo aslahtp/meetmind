@@ -3,7 +3,7 @@ import React from 'react';
 // Monochrome Google Calendar mark (tile with a folded corner and "31"), drawn in
 // currentColor so it follows the surrounding text colour in both themes. The colour PNG
 // can't be used here: the mono filter flattened it into a solid square.
-export default function GoogleCalendarIcon({ size = 16, className = '', title }: { size?: any; className?: any; title?: any }) {
+export default function GoogleCalendarIcon({ size = 16, className = '', title }: { size?: number | string; className?: string; title?: string }) {
   return (
     <svg
       width={size}

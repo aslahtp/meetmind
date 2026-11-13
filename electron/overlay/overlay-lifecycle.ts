@@ -1,4 +1,4 @@
-// Pure lifecycle of the floating meeting overlay window; overlay-window.js runs the actions it
+// Pure lifecycle of the floating meeting overlay window; overlay-window.ts runs the actions it
 // returns. There is one window per show: it is created when a visible state arrives and destroyed
 // once it has closed, so no hidden window is kept for days (a long-lived hidden, transparent
 // window can stop painting after sleep, and then shows as nothing at all).
@@ -10,21 +10,58 @@
 // generation number, so late events from a window already replaced are ignored.
 // No electron imports, so it's unit-testable.
 
+import type { OverlayMode } from '../shared/overlay';
+
 const MAX_RETRIES = 1;
 
-// phase: idle | loading (created, waiting for ready) | revealed (shown, waiting for ack)
-//        | shown | closing (hidden state sent, waiting for the close animation) | failed
-function createLifecycle() {
+// idle | loading (created, waiting for ready) | revealed (shown, waiting for ack)
+// | shown | closing (hidden state sent, waiting for the close animation) | failed
+type OverlayPhase = 'idle' | 'loading' | 'revealed' | 'shown' | 'closing' | 'failed';
+
+interface LifecycleState {
+  phase: OverlayPhase;
+  /** Generation number of the current window; events from an older one are ignored. */
+  gen: number;
+  /** 0 for the first window of a show, 1 for its replacement. */
+  attempt: number;
+  /** A visible state should be on screen. */
+  wanted: boolean;
+  mode: OverlayMode | null;
+  /** The mode a window failed twice for; `show` retries only once the mode changes. */
+  failedMode: OverlayMode | null;
+}
+
+/** Events carry the `gen` of the window they come from, so late ones from a replaced window are ignored. */
+type LifecycleEvent =
+  | { type: 'show'; mode: OverlayMode }
+  | { type: 'hide' }
+  | { type: 'ready' | 'ack' | 'timeout' | 'closed'; gen?: number }
+  | { type: 'verified'; gen?: number; ok: boolean }
+  | { type: 'gone'; gen?: number; reason?: string }
+  | { type: 'recheck' };
+
+type LifecycleAction =
+  | { type: 'create' | 'destroy' | 'reveal' | 'verify'; gen: number }
+  | { type: 'send' | 'arm-close' | 'disarm-close' }
+  | { type: 'failed'; reason: string; attempt: number; final: boolean }
+  | { type: 'recovered'; attempt: number };
+
+interface LifecycleResult {
+  state: LifecycleState;
+  actions: LifecycleAction[];
+}
+
+function createLifecycle(): LifecycleState {
   return { phase: 'idle', gen: 0, attempt: 0, wanted: false, mode: null, failedMode: null };
 }
 
-function create(state: any, attempt: any, actions: any) {
+function create(state: LifecycleState, attempt: number, actions: LifecycleAction[]): LifecycleState {
   const gen = state.gen + 1;
   actions.push({ type: 'create', gen });
   return { ...state, phase: 'loading', gen, attempt, failedMode: null };
 }
 
-function fail(state: any, reason: any, actions: any) {
+function fail(state: LifecycleState, reason: string, actions: LifecycleAction[]): LifecycleState {
   actions.push({ type: 'destroy', gen: state.gen });
   if (!state.wanted) return { ...state, phase: 'idle' };
   if (state.attempt < MAX_RETRIES) {
@@ -46,10 +83,11 @@ function fail(state: any, reason: any, actions: any) {
 //   { type: 'closed', gen }  the close animation finished (or its fallback fired)
 //   { type: 'recheck' }      verify the shown window again (after sleep or a display change)
 // Returns { state, actions }.
-function reduceOverlay(prev: any, event: any) {
-  const actions: any = [];
+function reduceOverlay(prev: LifecycleState, event: LifecycleEvent): LifecycleResult {
+  const actions: LifecycleAction[] = [];
   let state = prev;
-  const current = event.gen === undefined || event.gen === prev.gen;
+  const eventGen = 'gen' in event ? event.gen : undefined;
+  const current = eventGen === undefined || eventGen === prev.gen;
 
   switch (event.type) {
     case 'show':
@@ -134,4 +172,5 @@ function reduceOverlay(prev: any, event: any) {
   return { state, actions };
 }
 
+export type { OverlayPhase, LifecycleState, LifecycleEvent, LifecycleAction, LifecycleResult };
 export { MAX_RETRIES, createLifecycle, reduceOverlay };

@@ -1,4 +1,4 @@
-// Pure lifecycle of the main (UI) window; main-window.js runs the actions it returns.
+// Pure lifecycle of the main (UI) window; main-window.ts runs the actions it returns.
 //
 // The window used to be created once and kept, hidden in the tray, for as long as the app ran.
 // A window hidden for hours can come back blank on Windows with its renderer still alive, which
@@ -9,36 +9,99 @@
 //   - each time it is shown, a health check confirms the renderer answers, React is mounted and
 //     something was painted. A failed check, a crashed or hung renderer or a failed load is
 //     repaired by a reload, then by replacing the window, then given up on (`failed`, final).
-// Recording lives in its own window (audio/capture-window.js), so none of this interrupts one.
+// Recording lives in its own window (audio/capture-window.ts), so none of this interrupts one.
 // Each load has a generation number; events from an earlier load are ignored.
 // No electron imports, so it's unit-testable.
+
+// none (no window) | loading (created or reloading, waiting for `ready`) | ready | failed
+type WindowPhase = 'none' | 'loading' | 'ready' | 'failed';
+
+// What a repair does next after a failure.
+type RepairStep = 'destroy' | 'reload' | 'replace';
+
+interface WindowLifecycleState {
+  phase: WindowPhase;
+  /** Generation of the current load; events from an earlier one are ignored. */
+  gen: number;
+  /** The user wants the window on screen (false = in the tray). */
+  shown: boolean;
+  /** The renderer holds unsaved edits. */
+  dirty: boolean;
+  /** Repairs since the window was last healthy (0 none, 1 reloaded, 2 replaced). */
+  step: number;
+  /** Timestamps (ms) of recent repairs. */
+  recoveries: number[];
+}
+
+/** `now` (ms) matters to the events that can fail; `gen` identifies the load an event comes from. */
+type WindowEvent =
+  | { type: 'open' | 'hide' | 'retire' | 'recheck' }
+  | { type: 'dirty'; value: boolean }
+  | { type: 'ready' | 'closed'; gen?: number }
+  | { type: 'health'; gen?: number; ok: boolean; reason?: string; now?: number }
+  | { type: 'gone'; gen?: number; reason?: string; now?: number }
+  | { type: 'timeout'; gen?: number; now?: number };
+
+type WindowAction =
+  | { type: 'create'; gen: number; reveal: boolean }
+  | { type: 'reload' | 'check'; gen: number }
+  | { type: 'destroy' | 'reveal' | 'hide' | 'arm-retire' | 'disarm-retire' | 'retired' }
+  | { type: 'failed'; reason: string; step: number; final: boolean; next?: RepairStep }
+  | { type: 'recovered'; step: number };
+
+interface WindowLifecycleResult {
+  state: WindowLifecycleState;
+  actions: WindowAction[];
+}
+
+/** The preload's answer to a health ping. */
+interface HealthPong {
+  /** React has rendered into #root. */
+  mounted: boolean;
+  /** The startup splash still covers the page. */
+  splash: boolean;
+  /** A frame was produced (requestAnimationFrame fired) while answering. */
+  frame: boolean;
+}
+
+interface HealthInput {
+  /** The renderer's answer, or null if none came. */
+  pong: HealthPong | null;
+  focused: boolean;
+  /** A capture of the top bar was one flat colour (null when no capture was taken). */
+  blank: boolean | null;
+}
+
+interface HealthVerdict {
+  ok: boolean;
+  reason?: string;
+  /** Check once more after the splash is gone. */
+  again?: boolean;
+}
 
 const RETIRE_AFTER_MS = 10 * 60 * 1000;
 // At most this many repairs within the window, so a window that keeps failing can't loop.
 const MAX_RECOVERIES = 3;
 const RECOVERY_WINDOW_MS = 5 * 60 * 1000;
 
-// phase: none (no window) | loading (created or reloading, waiting for `ready`) | ready | failed
-// shown: the user wants the window on screen (false = in the tray)
-// step:  repairs since the window was last healthy (0 none, 1 reloaded, 2 replaced)
-function createLifecycle() {
-  return { phase: 'none', gen: 0, shown: false, dirty: false, step: 0, recoveries: [] as number[] };
+function createLifecycle(): WindowLifecycleState {
+  return { phase: 'none', gen: 0, shown: false, dirty: false, step: 0, recoveries: [] };
 }
 
-function create(state: any, actions: any) {
+function create(state: WindowLifecycleState, actions: WindowAction[]): WindowLifecycleState {
   const gen = state.gen + 1;
   actions.push({ type: 'create', gen, reveal: state.shown });
   return { ...state, phase: 'loading', gen };
 }
 
-function fail(state: any, reason: any, now: any, actions: any) {
+function fail(state: WindowLifecycleState, reason: string, now: number, actions: WindowAction[]): WindowLifecycleState {
   // In the tray nobody is looking: drop the window, the next open makes a new one.
   if (!state.shown) {
     actions.push({ type: 'failed', reason, step: state.step, final: false, next: 'destroy' }, { type: 'destroy' });
     return { ...state, phase: 'none', step: 0 };
   }
 
-  const recoveries = state.recoveries.filter((at: any) => now - at < RECOVERY_WINDOW_MS);
+  const recoveries = state.recoveries.filter((at) => now - at < RECOVERY_WINDOW_MS);
   if (state.step >= 2 || recoveries.length >= MAX_RECOVERIES) {
     actions.push({ type: 'failed', reason, step: state.step, final: true });
     return { ...state, phase: 'failed', recoveries };
@@ -66,11 +129,12 @@ function fail(state: any, reason: any, now: any, actions: any) {
 //   { type: 'closed', gen }          the window was destroyed from outside (quitting)
 //   { type: 'recheck' }              check a shown window again (restore, wake, display change)
 // Returns { state, actions }.
-function reduceMainWindow(prev: any, event: any) {
-  const actions: any = [];
+function reduceMainWindow(prev: WindowLifecycleState, event: WindowEvent): WindowLifecycleResult {
+  const actions: WindowAction[] = [];
   let state = prev;
-  const current = event.gen === undefined || event.gen === prev.gen;
-  const now = event.now ?? 0;
+  const eventGen = 'gen' in event ? event.gen : undefined;
+  const current = eventGen === undefined || eventGen === prev.gen;
+  const now = ('now' in event ? event.now : undefined) ?? 0;
 
   switch (event.type) {
     case 'open':
@@ -166,7 +230,7 @@ function reduceMainWindow(prev: any, event: any) {
 //            so a missing frame only counts when it is in front.
 //   blank:   a capture of the top bar was one flat colour (null when no capture was taken).
 // Returns { ok, reason?, again? }; `again` asks for one more check once the splash is gone.
-function healthVerdict({ pong, focused, blank }: any) {
+function healthVerdict({ pong, focused, blank }: HealthInput): HealthVerdict {
   if (!pong) return { ok: false, reason: 'no-answer' };
   if (!pong.mounted) return { ok: false, reason: 'unmounted' };
   if (pong.splash) return { ok: true, again: true };
@@ -177,7 +241,7 @@ function healthVerdict({ pong, focused, blank }: any) {
 
 // True when a BGRA bitmap is one flat colour (within a small tolerance for dithering): nothing
 // but the window background was painted. The strip checked always holds the top bar's border.
-function isBlankCapture(bitmap: any, tolerance = 3) {
+function isBlankCapture(bitmap: Uint8Array | null | undefined, tolerance = 3): boolean {
   if (!bitmap || bitmap.length < 8) return false;
   const [b, g, r] = bitmap;
   for (let i = 4; i + 2 < bitmap.length; i += 4) {
@@ -188,6 +252,10 @@ function isBlankCapture(bitmap: any, tolerance = 3) {
   return true;
 }
 
+export type {
+  WindowPhase, RepairStep, WindowLifecycleState, WindowEvent, WindowAction, WindowLifecycleResult,
+  HealthPong, HealthInput, HealthVerdict,
+};
 export {
   RETIRE_AFTER_MS, MAX_RECOVERIES, RECOVERY_WINDOW_MS,
   createLifecycle, reduceMainWindow, healthVerdict, isBlankCapture,

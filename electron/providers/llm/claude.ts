@@ -1,5 +1,5 @@
-import type { LLMGenerateArgs, LLMProvider, ProviderDeps } from '../../shared';
-import { fetchJson, httpError } from '../shared/http';
+import type { LLMGenerateArgs, LLMProvider, ProviderDeps, ProviderTestArgs } from '../../shared';
+import { fetchJson, httpError, type HttpError } from '../shared/http';
 import { readEvents } from '../shared/sse';
 
 const CLAUDE_BASE = 'https://api.anthropic.com/v1';
@@ -11,13 +11,13 @@ const MAX_OUTPUT_TOKENS = 64000;
 
 // Claude 5.x and later models have deprecated the `temperature` parameter.
 // Only include it for models that still accept it (3.x and earlier).
-function supportsTemperature(model: any) {
+function supportsTemperature(model: string) {
   const match = /^claude-(?:instant-|sonnet-|opus-|haiku-|fable-|)(\d+)/.exec(model);
   if (!match) return false; // unknown model — omit to be safe
   return parseInt(match[1], 10) <= 3;
 }
 
-function headers(apiKey: any) {
+function headers(apiKey: string) {
   return {
     'x-api-key': apiKey.trim(),
     'anthropic-version': ANTHROPIC_VERSION,
@@ -25,9 +25,10 @@ function headers(apiKey: any) {
   };
 }
 
-function friendlyError(err: any) {
+function friendlyError(thrown: unknown) {
+  const err = thrown as HttpError;
   if (err.status === 429) {
-    const wrapped: any = new Error(
+    const wrapped: HttpError = new Error(
       `Anthropic rate-limited the request (429): you have exceeded your rate limit. ` +
       'Try a smaller model, wait and retry, or configure a fallback provider. ' +
       `(${err.message})`
@@ -36,7 +37,7 @@ function friendlyError(err: any) {
     return wrapped;
   }
   if (err.status === 413) {
-    const wrapped: any = new Error(
+    const wrapped: HttpError = new Error(
       `Anthropic rejected the request (413): the transcript is too large for this model's context. ` +
       'Try a model with a larger context window or configure a fallback provider. ' +
       `(${err.message})`
@@ -45,14 +46,27 @@ function friendlyError(err: any) {
     return wrapped;
   }
   if (err.status === 529) {
-    const wrapped: any = new Error(
+    const wrapped: HttpError = new Error(
       'Anthropic is temporarily overloaded (529). Wait and retry, or configure a fallback provider. ' +
       `(${err.message})`
     );
     wrapped.status = 529;
     return wrapped;
   }
-  return err;
+  return thrown;
+}
+
+/** The fields of a Messages stream event that are read here. */
+interface ClaudeStreamEvent {
+  type?: string;
+  index?: number;
+  content_block?: { type?: string; text?: string };
+  delta?: {
+    text?: string;
+    stop_reason?: string | null;
+    stop_details?: { explanation?: string; category?: string } | null;
+  };
+  error?: { type?: string; message?: string };
 }
 
 /**
@@ -60,7 +74,12 @@ function friendlyError(err: any) {
  * Only `text` blocks are collected (and passed to `onText` as they arrive);
  * Claude 5.x `thinking` blocks are skipped.
  */
-async function streamMessage(apiKey: any, body: any, fetchImpl: any, onText: any) {
+async function streamMessage(
+  apiKey: string,
+  body: Record<string, unknown>,
+  fetchImpl: typeof fetch,
+  onText?: (delta: string) => void
+) {
   const res = await fetchImpl(`${CLAUDE_BASE}/messages`, {
     method: 'POST',
     headers: headers(apiKey),
@@ -68,11 +87,11 @@ async function streamMessage(apiKey: any, body: any, fetchImpl: any, onText: any
   });
   if (!res.ok) throw httpError(res, await res.text(), 'Anthropic');
 
-  const textBlocks = new Set();
+  const textBlocks = new Set<number | undefined>();
   let text = '';
-  let stopReason = null;
-  let stopDetails = null;
-  for await (const event of readEvents(res.body)) {
+  let stopReason: string | null | undefined = null;
+  let stopDetails: { explanation?: string; category?: string } | null | undefined = null;
+  for await (const event of readEvents<ClaudeStreamEvent>(res.body!)) {
     if (event.type === 'content_block_start' && event.content_block?.type === 'text') {
       textBlocks.add(event.index);
       const delta = event.content_block.text || '';
@@ -87,7 +106,7 @@ async function streamMessage(apiKey: any, body: any, fetchImpl: any, onText: any
       stopDetails = event.delta?.stop_details ?? stopDetails;
     } else if (event.type === 'error') {
       // Errors after the 200 arrive in the stream; map them like HTTP errors.
-      const err: any = new Error(`Anthropic error (stream): ${event.error?.message || event.error?.type || 'unknown'}`);
+      const err: HttpError = new Error(`Anthropic error (stream): ${event.error?.message || event.error?.type || 'unknown'}`);
       if (event.error?.type === 'overloaded_error') err.status = 529;
       if (event.error?.type === 'rate_limit_error') err.status = 429;
       throw err;
@@ -128,12 +147,12 @@ async function generate({ systemPrompt, userPrompt, model, config, onText }: LLM
     }
     if (!text.trim()) throw new Error('No response from Anthropic API');
     return text.trim();
-  } catch (err: any) {
+  } catch (err) {
     throw friendlyError(err);
   }
 }
 
-async function test({ config, model }: any, deps: ProviderDeps = {}) {
+async function test({ config, model }: ProviderTestArgs, deps: ProviderDeps = {}) {
   const apiKey = config.claudeApiKey;
   if (!apiKey || !apiKey.trim()) throw new Error('Anthropic API key is required');
 
@@ -151,7 +170,7 @@ async function test({ config, model }: any, deps: ProviderDeps = {}) {
       },
       { label: 'Anthropic', fetchImpl: deps.fetchImpl || globalThis.fetch }
     );
-  } catch (err: any) {
+  } catch (err) {
     throw friendlyError(err);
   }
 }

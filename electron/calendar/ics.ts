@@ -8,7 +8,7 @@ const USER_AGENT = 'MeetMind (+https://github.com/aslahtp/meetmind)';
 
 const DEAD_LINK = 'This calendar link no longer works. Copy a fresh ICS link from your calendar and update it here.';
 
-function host(url: any) {
+function host(url: string) {
   try {
     return new URL(url).hostname;
   } catch {
@@ -16,13 +16,13 @@ function host(url: any) {
   }
 }
 
-async function readCapped(response: any) {
+async function readCapped(response: Response) {
   const declared = Number(response.headers.get('content-length'));
   if (declared > MAX_BYTES) throw new Error('This calendar is too large to read (over 15 MB).');
   if (!response.body) return '';
 
   const reader = response.body.getReader();
-  const chunks = [];
+  const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
     const { done, value } = await reader.read();
@@ -41,16 +41,20 @@ async function readCapped(response: any) {
  * GET the feed. Resolves { notModified: true } on a 304, otherwise { text, etag, lastModified }.
  * Rejects with an error message that is safe to show and to log.
  */
-async function fetchIcs(url: any, { etag = '', lastModified = '', fetchImpl = fetch } = {}) {
-  const headers = { Accept: 'text/calendar, text/plain;q=0.9, */*;q=0.5', 'User-Agent': USER_AGENT };
-  if (etag) (headers as any)['If-None-Match'] = etag;
-  if (lastModified) (headers as any)['If-Modified-Since'] = lastModified;
+async function fetchIcs(
+  url: string,
+  { etag = '', lastModified = '', fetchImpl = fetch }: { etag?: string; lastModified?: string; fetchImpl?: typeof fetch } = {}
+): Promise<{ notModified: true } | { notModified?: undefined; text: string; etag: string; lastModified: string }> {
+  const headers: Record<string, string> = { Accept: 'text/calendar, text/plain;q=0.9, */*;q=0.5', 'User-Agent': USER_AGENT };
+  if (etag) headers['If-None-Match'] = etag;
+  if (lastModified) headers['If-Modified-Since'] = lastModified;
 
-  let response;
+  let response: Response;
   try {
     response = await fetchImpl(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(TIMEOUT_MS) });
-  } catch (err: any) {
-    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+  } catch (err) {
+    const name = (err as { name?: string } | null)?.name;
+    if (name === 'TimeoutError' || name === 'AbortError') {
       throw new Error(`${host(url)} took too long to respond. Try again later.`);
     }
     throw new Error(`Couldn’t reach ${host(url)}. Check your internet connection.`);

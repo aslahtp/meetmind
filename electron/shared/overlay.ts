@@ -1,5 +1,5 @@
-// Meeting detection and the meeting overlay. Sources: electron/detection/meeting-rules.js (`toMeeting`),
-// and `overlayState` / `setOverlay()` in electron/main.js.
+// Meeting detection and the meeting overlay. Sources: electron/detection/meeting-rules.ts (`toMeeting`),
+// and `overlayState` / `setOverlay()` in electron/main.ts.
 
 import type { MeetingPlatform } from './session';
 

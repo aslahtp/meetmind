@@ -9,7 +9,7 @@ const REVEAL_MS = 450;
 const KEY_STEP = 5;
 const PAGE_STEP = 30;
 
-function readRgbVar(name: any) {
+function readRgbVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '0 0 0';
 }
 
@@ -22,12 +22,22 @@ function prefersReducedMotion() {
  * graphite, a darker preview up to the hovered point. Click or drag to scrub; arrow keys
  * step 5 s, Page Up/Down 30 s, Home/End jump to the ends.
  */
-export default function Waveform({ peaks, currentTime, duration, disabled, onSeek, formatTime }: { peaks?: any; currentTime?: any; duration?: any; disabled?: any; onSeek?: any; formatTime?: any }) {
-  const wrapRef = useRef<any>(null);
-  const canvasRef = useRef<any>(null);
+export interface WaveformProps {
+  /** Bar heights from 0 to 1; null until they have loaded. */
+  peaks?: number[] | null;
+  currentTime: number;
+  duration: number;
+  disabled?: boolean;
+  onSeek: (time: number) => void;
+  formatTime: (seconds: number) => string;
+}
+
+export default function Waveform({ peaks, currentTime, duration, disabled, onSeek, formatTime }: WaveformProps) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const draggingRef = useRef(false);
   const [width, setWidth] = useState(0);
-  const [hoverX, setHoverX] = useState<any>(null);
+  const [hoverX, setHoverX] = useState<number | null>(null);
   const [reveal, setReveal] = useState(peaks ? 1 : 0);
   const [themeTick, setThemeTick] = useState(0);
 
@@ -57,9 +67,9 @@ export default function Waveform({ peaks, currentTime, duration, disabled, onSee
       setReveal(1);
       return undefined;
     }
-    let raf: any;
+    let raf: number;
     const start = performance.now();
-    const tick = (now: any) => {
+    const tick = (now: number) => {
       const t = Math.min(1, (now - start) / REVEAL_MS);
       setReveal(1 - (1 - t) ** 3);
       if (t < 1) raf = requestAnimationFrame(tick);
@@ -75,6 +85,7 @@ export default function Waveform({ peaks, currentTime, duration, disabled, onSee
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(HEIGHT * dpr);
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, HEIGHT);
 
@@ -93,7 +104,7 @@ export default function Waveform({ peaks, currentTime, duration, disabled, onSee
     const graphite = readRgbVar('--color-graphite');
     const playedX = duration ? Math.min(1, currentTime / duration) * width : 0;
 
-    const fillRegion = (x0: any, x1: any, color: any) => {
+    const fillRegion = (x0: number, x1: number, color: string) => {
       if (x1 <= x0) return;
       ctx.save();
       ctx.beginPath();
@@ -114,33 +125,33 @@ export default function Waveform({ peaks, currentTime, duration, disabled, onSee
 
   const interactive = !disabled && !!peaks && duration > 0;
 
-  const offsetFromEvent = useCallback((e: any) => {
-    const rect = wrapRef.current.getBoundingClientRect();
+  const offsetFromEvent = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = wrapRef.current!.getBoundingClientRect();
     return Math.min(rect.width, Math.max(0, e.clientX - rect.left));
   }, []);
 
-  const onPointerDown = (e: any) => {
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!interactive || e.button !== 0) return;
     draggingRef.current = true;
     e.currentTarget.setPointerCapture(e.pointerId);
     onSeek(timeAtOffset(offsetFromEvent(e), width, duration));
   };
 
-  const onPointerMove = (e: any) => {
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!interactive) return;
     const x = offsetFromEvent(e);
     setHoverX(x);
     if (draggingRef.current) onSeek(timeAtOffset(x, width, duration));
   };
 
-  const endDrag = (e: any) => {
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     draggingRef.current = false;
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
-  const onKeyDown = (e: any) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!interactive) return;
-    const steps = {
+    const steps: Record<string, number> = {
       ArrowLeft: -KEY_STEP,
       ArrowDown: -KEY_STEP,
       ArrowRight: KEY_STEP,
@@ -148,8 +159,8 @@ export default function Waveform({ peaks, currentTime, duration, disabled, onSee
       PageDown: -PAGE_STEP,
       PageUp: PAGE_STEP,
     };
-    let next;
-    if (e.key in steps) next = currentTime + (steps as any)[e.key];
+    let next: number;
+    if (e.key in steps) next = currentTime + steps[e.key];
     else if (e.key === 'Home') next = 0;
     else if (e.key === 'End') next = duration;
     else return;
@@ -180,7 +191,7 @@ export default function Waveform({ peaks, currentTime, duration, disabled, onSee
       style={{ height: HEIGHT }}
     >
       <canvas ref={canvasRef} className="block" style={{ width: '100%', height: HEIGHT }} aria-hidden="true" />
-      {hoverTime != null && interactive && (
+      {hoverX != null && hoverTime != null && interactive && (
         <span
           aria-hidden="true"
           className="pointer-events-none absolute -top-32 px-8 py-[2px] rounded-full bg-ink text-paper text-caption tabular -translate-x-1/2 whitespace-nowrap"

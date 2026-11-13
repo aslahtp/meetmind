@@ -1,24 +1,63 @@
-// Polls the OS for an active call (see meeting-rules.js) and reports meeting-detected /
+// Polls the OS for an active call (see meeting-rules.ts) and reports meeting-detected /
 // meeting-ended transitions. Ticks are silent; transitions, mic-source problems and a heartbeat
 // every 10 minutes are logged, so a detector that has gone quiet can be told from one that broke.
 
 import path from 'path';
 import logger from '../utils/logger';
+import { errorMessage } from '../utils/errors';
 // Who is on the mic and which windows are open: Win32 APIs on Windows, PulseAudio/PipeWire and
-// Electron's window list on Linux (detection/linux.js). macOS has no backend yet.
-const backend = process.platform === 'linux' ? require('./linux') : require('./win32');
-import { createDetectorState, reduceTick, dismissMeeting, mergeMicUsers, browsersMissingFromRegistry } from './meeting-rules';
+// Electron's window list on Linux (detection/linux.ts). macOS has no backend yet.
+import {
+  createDetectorState,
+  reduceTick,
+  dismissMeeting,
+  mergeMicUsers,
+  browsersMissingFromRegistry,
+  type DetectorState,
+  type MicUsers,
+  type TickResult,
+  type WindowInfo,
+} from './meeting-rules';
+import type { DetectedMeeting } from '../shared/overlay';
+
+/** What a per-OS backend (win32.ts, linux.ts) provides. */
+export interface DetectionBackend {
+  isAvailable(): boolean;
+  getLoadError(): Error | null;
+  readMicUsers(): MicUsers;
+  listVisibleWindows(): WindowInfo[];
+}
+
+const backend: DetectionBackend = process.platform === 'linux' ? require('./linux') : require('./win32');
+
+/** Callbacks `start()` takes. */
+interface DetectorHandlers {
+  onDetected?: (meeting: DetectedMeeting) => void;
+  onEnded?: (meeting: DetectedMeeting) => void;
+}
+
+/** Counters for one heartbeat period. */
+interface Health {
+  since: number;
+  ticks: number;
+  failedTicks: number;
+  lastTickAt: number;
+  maxGapMs: number;
+  micApps: Set<string>;
+  sessionsError: string | null;
+  registryGapLogged: boolean;
+}
 
 const POLL_MS = 1500;
 const HEARTBEAT_MS = 10 * 60 * 1000;
 
-let timer: any = null;
-let state = createDetectorState();
-let handlers: any = {};
-let health: any = null;
+let timer: ReturnType<typeof setInterval> | null = null;
+let state: DetectorState = createDetectorState();
+let handlers: DetectorHandlers = {};
+let health: Health = createHealth(0);
 
 // Counters for one heartbeat period; `prev` carries over what is logged once per run.
-function createHealth(now: any, prev: any = null) {
+function createHealth(now: number, prev: Health | null = null): Health {
   return {
     since: now,
     ticks: 0,
@@ -33,7 +72,7 @@ function createHealth(now: any, prev: any = null) {
 
 // Logs when the audio-session source fails or recovers, and once per run when it sees a browser on
 // the mic that the consent registry doesn't (Windows has stopped updating the registry).
-function noteMicSources(mic: any) {
+function noteMicSources(mic: MicUsers) {
   if (mic.sessionsError !== health.sessionsError) {
     if (mic.sessionsError) {
       logger.warn(process.platform === 'win32'
@@ -54,7 +93,7 @@ function noteMicSources(mic: any) {
   }
 }
 
-function logHeartbeat(now: any) {
+function logHeartbeat(now: number) {
   logger.info('Meeting detection heartbeat', {
     minutes: Math.round((now - health.since) / 60000),
     ticks: health.ticks,
@@ -73,7 +112,7 @@ function tick() {
   health.lastTickAt = now;
   health.ticks += 1;
 
-  let result;
+  let result: TickResult;
   try {
     const mic = backend.readMicUsers();
     noteMicSources(mic);
@@ -85,9 +124,9 @@ function tick() {
       now,
       selfExe: path.basename(process.execPath),
     });
-  } catch (err: any) {
+  } catch (err) {
     health.failedTicks += 1;
-    logger.warn('Meeting detection tick failed', { error: err.message });
+    logger.warn('Meeting detection tick failed', { error: errorMessage(err) });
     return;
   } finally {
     if (now - health.since >= HEARTBEAT_MS) logHeartbeat(now);
@@ -105,7 +144,7 @@ function tick() {
   }
 }
 
-function start(nextHandlers: any = {}) {
+function start(nextHandlers: DetectorHandlers = {}) {
   handlers = nextHandlers;
   if (timer) return true;
   if (!backend.isAvailable()) {
@@ -148,12 +187,12 @@ function handleResume() {
 }
 
 // "Not now": don't prompt for this meeting again until it ends.
-function dismiss(key: any) {
+function dismiss(key: string | null | undefined) {
   state = dismissMeeting(state, key);
 }
 
 // The meeting currently considered live, if any.
-function activeMeeting() {
+function activeMeeting(): DetectedMeeting | null {
   if (!state.active) return null;
   const { lastSeenAt: _lastSeenAt, ...meeting } = state.active;
   return meeting;

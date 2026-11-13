@@ -3,8 +3,24 @@
 // come from the feed's own VTIMEZONEs. Pure (ical.js only), so it's unit-testable.
 
 // ical.js is ESM-only in its types but loads fine through require(); keep it a plain synchronous require.
-const ICAL = require('ical.js');
-import { extractMeetingLink } from './calendar-events';
+import type IcalModule from 'ical.js' with { 'resolution-mode': 'import' };
+const ICAL = require('ical.js') as typeof IcalModule;
+import { extractMeetingLink, type SourceEvent } from './calendar-events';
+
+type IcalComponent = InstanceType<typeof ICAL.Component>;
+type IcalTime = InstanceType<typeof ICAL.Time>;
+/** The calendar date part of a Time. */
+interface DateParts {
+  year: number;
+  month: number;
+  day: number;
+}
+/** A wall-clock time. */
+interface WallClock extends DateParts {
+  hour: number;
+  minute: number;
+  second: number;
+}
 
 // Safety valves for hostile or enormous feeds: occurrences emitted per series, and recurrence
 // steps walked per series (a daily meeting since 2010 is ~6,000 steps).
@@ -25,7 +41,7 @@ const CONFERENCE_PROPS = [
 
 const NOT_A_CALENDAR = 'That link didn’t return a calendar. Copy the ICS (iCal) address, not the calendar’s web page.';
 
-function isValidIanaZone(tzid: any) {
+function isValidIanaZone(tzid: string | null | undefined): tzid is string {
   if (!tzid) return false;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tzid });
@@ -36,20 +52,20 @@ function isValidIanaZone(tzid: any) {
 }
 
 // Offset of an IANA zone from UTC at a given instant, in ms.
-function zoneOffsetMs(tzid: any, utcMs: any) {
+function zoneOffsetMs(tzid: string, utcMs: number) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tzid,
     hourCycle: 'h23',
     year: 'numeric', month: 'numeric', day: 'numeric',
     hour: 'numeric', minute: 'numeric', second: 'numeric',
   }).formatToParts(new Date(utcMs));
-  const get = (type: any) => Number(parts.find((p) => p.type === type)!.value);
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)!.value);
   const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
   return asUtc - utcMs;
 }
 
 // Wall-clock time in an IANA zone → UTC ms (two passes settle DST boundaries).
-function wallClockInZoneMs(t: any, tzid: any) {
+function wallClockInZoneMs(t: WallClock, tzid: string) {
   const wall = Date.UTC(t.year, t.month - 1, t.day, t.hour, t.minute, t.second);
   let utc = wall - zoneOffsetMs(tzid, wall);
   utc = wall - zoneOffsetMs(tzid, utc);
@@ -62,33 +78,33 @@ function wallClockInZoneMs(t: any, tzid: any) {
  * didn't define but that is a real IANA zone (Cal.com, some CalDAV servers) goes through Intl,
  * and floating times are the user's own wall clock.
  */
-function timeToMs(time: any, tzid: any) {
+function timeToMs(time: IcalTime, tzid: string) {
   const zone = time.zone;
   if (zone && zone !== ICAL.Timezone.localTimezone) return time.toUnixTime() * 1000;
   if (isValidIanaZone(tzid)) return wallClockInZoneMs(time, tzid);
   return new Date(time.year, time.month - 1, time.day, time.hour, time.minute, time.second).getTime();
 }
 
-function dateOnly(time: any) {
-  const pad = (n: any) => String(n).padStart(2, '0');
+function dateOnly(time: DateParts) {
+  const pad = (n: number) => String(n).padStart(2, '0');
   return `${time.year}-${pad(time.month)}-${pad(time.day)}`;
 }
 
-function dateOnlyMs(time: any) {
+function dateOnlyMs(time: DateParts) {
   return new Date(time.year, time.month - 1, time.day).getTime();
 }
 
-function propTzid(component: any, name: any) {
-  return component.getFirstProperty(name)?.getParameter('tzid') || '';
+function propTzid(component: IcalComponent, name: string) {
+  return (component.getFirstProperty(name)?.getParameter('tzid') as string | undefined) || '';
 }
 
-function textValue(component: any, name: any) {
+function textValue(component: IcalComponent, name: string) {
   const value = component.getFirstPropertyValue(name);
   return value == null ? '' : String(value).trim();
 }
 
-function conferenceUrls(component: any) {
-  const urls = [];
+function conferenceUrls(component: IcalComponent) {
+  const urls: string[] = [];
   for (const name of CONFERENCE_PROPS) {
     for (const prop of component.getAllProperties(name)) {
       const value = prop.getFirstValue();
@@ -98,19 +114,19 @@ function conferenceUrls(component: any) {
   return urls;
 }
 
-function stripMailto(value: any) {
+function stripMailto(value: unknown) {
   return String(value || '').replace(/^mailto:/i, '');
 }
 
 /** Turn one occurrence (start/end Times from the series or its exception) into an event. */
-function buildEvent(component: any, startTime: any, endTime: any, recurrenceKey: any) {
+function buildEvent(component: IcalComponent, startTime: IcalTime, endTime: IcalTime, recurrenceKey: string) {
   const uid = textValue(component, 'uid');
   const isAllDay = !!startTime.isDate;
 
-  let start;
-  let end;
-  let startMs;
-  let endMs;
+  let start: string;
+  let end: string;
+  let startMs: number;
+  let endMs: number;
   if (isAllDay) {
     start = dateOnly(startTime);
     end = dateOnly(endTime);
@@ -133,8 +149,7 @@ function buildEvent(component: any, startTime: any, endTime: any, recurrenceKey:
 
   const description = textValue(component, 'description');
   const location = textValue(component, 'location');
-  return {
-    event: {
+  const event: SourceEvent = {
       id: recurrenceKey ? `${uid}_${recurrenceKey}` : uid,
       uid,
       title: textValue(component, 'summary') || 'Untitled Event',
@@ -152,21 +167,19 @@ function buildEvent(component: any, startTime: any, endTime: any, recurrenceKey:
       organizer: stripMailto(component.getFirstPropertyValue('organizer')),
       status: (textValue(component, 'status') || 'confirmed').toLowerCase(),
       description,
-    },
-    startMs,
-    endMs,
   };
+  return { event, startMs, endMs };
 }
 
-function isCancelled(component: any) {
+function isCancelled(component: IcalComponent) {
   return textValue(component, 'status').toUpperCase() === 'CANCELLED';
 }
 
-function overlaps(startMs: any, endMs: any, from: any, to: any) {
+function overlaps(startMs: number, endMs: number, from: number, to: number) {
   return endMs > from && startMs < to;
 }
 
-function expandSeries(master: any, exceptions: any, from: any, to: any, out: any) {
+function expandSeries(master: IcalComponent, exceptions: IcalComponent[], from: number, to: number, out: SourceEvent[]) {
   const event = new ICAL.Event(master, { strictExceptions: true, exceptions });
   const tzid = propTzid(master, 'dtstart');
 
@@ -196,37 +209,37 @@ function expandSeries(master: any, exceptions: any, from: any, to: any, out: any
   }
 }
 
-function calendarsIn(text: any) {
-  let jcal;
+function calendarsIn(text: string) {
+  let jcal: ReturnType<typeof ICAL.parse>;
   try {
     jcal = ICAL.parse(text);
   } catch {
     throw new Error(NOT_A_CALENDAR);
   }
   // One VCALENDAR parses to a single jCal array; several to an array of them.
-  const list = Array.isArray(jcal[0]) ? jcal : [jcal];
-  return list.map((data: any) => new ICAL.Component(data)).filter((c: any) => c.name === 'vcalendar');
+  const list = (Array.isArray(jcal[0]) ? jcal : [jcal]) as ConstructorParameters<typeof ICAL.Component>[0][];
+  return list.map((data) => new ICAL.Component(data)).filter((c) => c.name === 'vcalendar');
 }
 
 /**
  * Events from an ICS feed that overlap [from, to) (ms), unsorted. Returns
  * { calendarName, events } where calendarName is the feed's X-WR-CALNAME, if any.
  */
-function parseIcs(text: any, { from, to }: any) {
+function parseIcs(text: unknown, { from, to }: { from: number; to: number }) {
   if (typeof text !== 'string' || !/BEGIN:VCALENDAR/i.test(text)) throw new Error(NOT_A_CALENDAR);
   const calendars = calendarsIn(text);
   if (!calendars.length) throw new Error(NOT_A_CALENDAR);
 
   let calendarName = '';
-  const events: any = [];
+  const events: SourceEvent[] = [];
   for (const calendar of calendars) {
     calendarName ||= textValue(calendar, 'x-wr-calname');
 
     // Group by UID: a series plus its moved/cancelled occurrences (RECURRENCE-ID). Google's
     // secret ICS address lists only the occurrence you were invited to, with no master, so
     // an exception without one stands on its own.
-    const groups = new Map();
-    const standalone = [];
+    const groups = new Map<string, { master: IcalComponent | null; exceptions: IcalComponent[] }>();
+    const standalone: IcalComponent[] = [];
     for (const vevent of calendar.getAllSubcomponents('vevent')) {
       const uid = textValue(vevent, 'uid');
       if (!uid) {
@@ -234,7 +247,7 @@ function parseIcs(text: any, { from, to }: any) {
         continue;
       }
       if (!groups.has(uid)) groups.set(uid, { master: null, exceptions: [] });
-      const group = groups.get(uid);
+      const group = groups.get(uid)!;
       if (vevent.hasProperty('recurrence-id')) group.exceptions.push(vevent);
       else if (!group.master) group.master = vevent;
       else standalone.push(vevent);

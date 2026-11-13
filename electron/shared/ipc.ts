@@ -1,19 +1,15 @@
 // The contract between the main process and the renderer, as types only.
 //
 //   IpcInvokeMap  every `ipcMain.handle` channel: its arguments and what it resolves with
-//   IpcSendMap    fire-and-forget renderer → main messages (`ipcRenderer.send`)
+//   IpcSendMap    fire-and-forget renderer → main messages (`ipcRenderer.send` / `ipcMain.on`)
 //   IpcEventMap   main → renderer events the renderer may subscribe to (`window.meetmind.on`)
-//   Meetmind / MeetmindOverlay   the objects electron/preload.js and electron/overlay-preload.js expose
+//   Meetmind / MeetmindCapture / MeetmindOverlay   the objects electron/preload.ts, electron/capture-preload.ts
+//                 and electron/overlay-preload.ts expose
 //
-// Every result type was read off the handler in electron/main.js (or overlay-window.js). Where the handler's
-// result is built by a service that hasn't been typed yet, the type is deliberately loose and listed in
-// the TODO(strict) checklist below; tighten it when that service is ported (Phases 5-7).
-//
-// TODO(strict):
-//   - `audio:list-devices` / `audio:probe-device` (electron/audio/recorder.js)
-//   - `storage:summary` (electron/services/storage-rules.js `summarize`)
-//   - `pdf:export` extra fields, `notion:test` extra fields, `ffmpeg:install` (ffmpeg-installer.js)
-//   - `transcription:progress` is whitelisted in preload.js but nothing sends it today
+// The three preloads are checked against these types with `satisfies`, and electron/main.ts registers its
+// handlers and listeners through `ipc` (a typed `ipcMain`) built from the maps, so a handler or a preload
+// that drifts from this contract fails the typecheck. Types only: nothing here may import runtime code,
+// because the renderer imports it.
 
 import type { ConfigKey, ConfigUpdate, AutoLaunchStatus, MacCaptureStrategy, RendererConfig } from './config';
 import type {
@@ -83,16 +79,33 @@ export type LinuxAudioStatus =
       error: string | null;
     };
 
-/** `audio:list-devices` (TODO(strict)) */
+/** One entry of the device list: `id` is what a recording takes as its device. */
+export interface AudioDevice {
+  id: string;
+  label: string;
+}
+
+/** `audio:list-devices`. `system` and `mic` are the devices a recording would use by default. */
 export interface AudioDeviceList {
-  all?: unknown[];
+  all: AudioDevice[];
+  system: string | null;
+  mic: string | null;
   error?: string;
-  [key: string]: unknown;
+}
+
+/** `audio:probe-device`: a short clip's peak amplitude; `error` when it could not be recorded. */
+export interface DeviceProbeResult {
+  device: string;
+  peak: number;
+  isSilent: boolean;
+  exitCode?: number | null;
+  stderr?: string;
+  error?: string;
 }
 
 export interface FfmpegBinaryInfo {
   found: boolean;
-  /** 'bundled' | 'installed' | 'homebrew' | 'path' */
+  /** 'bundled' | 'installed' | 'system' (see `FfmpegSource` in electron/audio/ffmpeg-path.ts) */
   source: string | null;
   path: string | null;
   version: string | null;
@@ -104,10 +117,22 @@ export interface FfmpegInstallProgress {
   message?: string;
 }
 
-/** `storage:summary` (TODO(strict)): `dir` plus what `summarize()` returns. */
+/** `storage:summary`: `dir` plus what `summarize()` in electron/services/storage-rules.ts returns. */
 export interface StorageSummary {
   dir: string;
-  [key: string]: unknown;
+  /** Recordings on disk and their total size. */
+  count: number;
+  bytes: number;
+  /** The period this summary was computed for (normalized; 0 = keep forever). */
+  retentionDays: number;
+  /** What a cleanup with `retentionDays` would delete now. */
+  expiring: { count: number; bytes: number };
+}
+
+/** `notion:test`: on success, what the parent page ID turned out to be (absent when no ID was given). */
+export interface NotionTestResult {
+  type?: 'page' | 'database';
+  id?: string;
 }
 
 export interface StorageCleanupCounts {
@@ -157,7 +182,7 @@ export interface IpcInvokeMap {
   'recording:start': Handler<[sessionId?: string | null, meetingUrl?: string, meetingTitle?: string], RecordingResult>;
   'recording:stop': Handler<[], RecordingResult>;
   'audio:list-devices': Handler<[], AudioDeviceList>;
-  'audio:probe-device': Handler<[device: string], { error?: string; [key: string]: unknown }>;
+  'audio:probe-device': Handler<[device: string], DeviceProbeResult>;
   'audio:linux-status': Handler<[], LinuxAudioStatus>;
   'audio:import-file': Handler<
     [],
@@ -205,7 +230,7 @@ export interface IpcInvokeMap {
 
   // Notion
   'notion:upload': Handler<[sessionId: string], Outcome<{ url: string }>>;
-  'notion:test': Handler<[token: string, pageId: string], Outcome<Record<string, unknown>>>;
+  'notion:test': Handler<[token: string, pageId: string], Outcome<NotionTestResult>>;
 
   // Providers and prompts
   'providers:list': Handler<[], ProviderDescriptors>;
@@ -276,6 +301,9 @@ export interface IpcSendMap {
   'window:dirty': [dirty: boolean];
   'window:view-state': [state: ViewState];
   'renderer:error': [report: RendererErrorReport];
+  /** The Logs page is open: main starts pushing `log:entry` lines. */
+  'logs:subscribe': [];
+  'logs:unsubscribe': [];
   /** Renderer capture is running; `systemAudio` is false when only the microphone is being recorded. */
   'capture:started': [sources: { systemAudio?: boolean; [key: string]: unknown } | undefined];
   'capture:failed': [error: unknown];
@@ -312,7 +340,7 @@ export interface NotesPreview {
 }
 
 /**
- * Events `window.meetmind.on()` accepts: exactly the channels whitelisted in electron/preload.js.
+ * Events `window.meetmind.on()` accepts: exactly the channels whitelisted in electron/preload.ts.
  * `void` means the event carries no payload.
  */
 export interface IpcEventMap {
@@ -323,8 +351,6 @@ export interface IpcEventMap {
   'recording:warning': { message: string };
   /** Live microphone and system-audio meters while a recording is running. */
   'recording:levels': { mic: number; system: number };
-  /** Whitelisted but never sent today (TODO(strict)). */
-  'transcription:progress': unknown;
   'processing:progress': { stage: ProcessingProgressStage; percent: number };
   'processing:complete': { sessionId: string; notionUrl?: string | null };
   'processing:error': { sessionId: string; error: string };
@@ -362,7 +388,7 @@ export interface CaptureStartOptions {
 }
 
 /**
- * `window.meetmind`, as exposed by electron/preload.js. Method names differ from channel names, so this is
+ * `window.meetmind`, as exposed by electron/preload.ts. Method names differ from channel names, so this is
  * written out rather than derived; each member uses `Invoke<channel>` so its types come from the maps above.
  */
 export interface Meetmind {
@@ -508,7 +534,7 @@ export interface MeetmindCapture {
 
 // ── window.meetmindOverlay ───────────────────────────────────────────────────
 
-/** `window.meetmindOverlay`, as exposed by electron/overlay-preload.js (the overlay window's own, smaller surface). */
+/** `window.meetmindOverlay`, as exposed by electron/overlay-preload.ts (the overlay window's own, smaller surface). */
 export interface MeetmindOverlay {
   startupTheme: 'light' | 'dark';
   /** Called once on mount: main shows the window, then answers with the state to render. */

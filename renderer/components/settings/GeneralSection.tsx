@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Sun, Moon, Monitor, Palette, Power, Radar } from 'lucide-react';
 import { useApp } from '../../lib/app-context';
-import { SegmentedControl, Switch } from '../ui/index';
+import { SegmentedControl, Switch, type SegmentedOption } from '../ui/index';
+import type { ThemeSetting } from '@shared';
 import { SettingsGroup, SettingRow, RowList } from './SettingsParts';
 import { isMac, isLinux } from '../../lib/os';
+import type { FormChange, SettingsForm } from './types';
 
-const THEME_OPTIONS = [
+const THEME_OPTIONS: SegmentedOption<ThemeSetting>[] = [
   { value: 'light', label: 'Light', icon: Sun },
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'system', label: 'System', icon: Monitor },
@@ -13,7 +15,12 @@ const THEME_OPTIONS = [
 
 const RECENT_LIMIT_OPTIONS = [5, 10, 15].map((n) => ({ value: n, label: String(n) }));
 
-export default function GeneralSection({ form, onChange }: { form?: any; onChange?: any }) {
+interface GeneralSectionProps {
+  form: SettingsForm;
+  onChange: FormChange;
+}
+
+export default function GeneralSection({ form, onChange }: GeneralSectionProps) {
   const { theme, setTheme } = useApp();
   // Unsigned macOS builds and Linux .deb installs can't replace themselves; updates there are
   // downloaded from GitHub.
@@ -47,7 +54,7 @@ export default function GeneralSection({ form, onChange }: { form?: any; onChang
               label="Recent meetings on Dashboard"
               options={RECENT_LIMIT_OPTIONS}
               value={form.dashboardRecentLimit}
-              onChange={(n: any) => onChange('dashboardRecentLimit', n)}
+              onChange={(n: number) => onChange('dashboardRecentLimit', n)}
             />
           </SettingRow>
           <SettingRow
@@ -59,7 +66,7 @@ export default function GeneralSection({ form, onChange }: { form?: any; onChang
               id="pref-show-logs"
               label="Show Logs in navigation"
               checked={!form.hideLogsInSidebar}
-              onChange={(show: any) => onChange('hideLogsInSidebar', !show)}
+              onChange={(show: boolean) => onChange('hideLogsInSidebar', !show)}
             />
           </SettingRow>
           <SettingRow
@@ -71,7 +78,7 @@ export default function GeneralSection({ form, onChange }: { form?: any; onChang
               id="pref-pin-notes-toggle"
               label="Pin the notes view toggle"
               checked={form.pinNotesViewToggle !== false}
-              onChange={(v: any) => onChange('pinNotesViewToggle', v)}
+              onChange={(v: boolean) => onChange('pinNotesViewToggle', v)}
             />
           </SettingRow>
           <SettingRow
@@ -83,7 +90,7 @@ export default function GeneralSection({ form, onChange }: { form?: any; onChang
               id="pref-audio-waveform"
               label="Audio waveform"
               checked={form.showAudioWaveform !== false}
-              onChange={(v: any) => onChange('showAudioWaveform', v)}
+              onChange={(v: boolean) => onChange('showAudioWaveform', v)}
             />
           </SettingRow>
         </RowList>
@@ -109,7 +116,7 @@ export default function GeneralSection({ form, onChange }: { form?: any; onChang
                 id="pref-meeting-detection"
                 label="Detect meetings"
                 checked={form.meetingDetection !== false}
-                onChange={(v: any) => onChange('meetingDetection', v)}
+                onChange={(v: boolean) => onChange('meetingDetection', v)}
               />
             )}
           </SettingRow>
@@ -131,7 +138,7 @@ export default function GeneralSection({ form, onChange }: { form?: any; onChang
                 label="Save the meeting’s platform when you press Record"
                 checked={form.meetingDetection !== false && form.recordUsesDetectedMeeting !== false}
                 disabled={form.meetingDetection === false}
-                onChange={(v: any) => onChange('recordUsesDetectedMeeting', v)}
+                onChange={(v: boolean) => onChange('recordUsesDetectedMeeting', v)}
               />
             </SettingRow>
           )}
@@ -151,7 +158,7 @@ export default function GeneralSection({ form, onChange }: { form?: any; onChang
               id="pref-auto-launch"
               label="Launch on startup"
               checked={!!form.autoLaunch}
-              onChange={(v: any) => onChange('autoLaunch', v)}
+              onChange={(v: boolean) => onChange('autoLaunch', v)}
             />
           </SettingRow>
           <SettingRow
@@ -163,7 +170,7 @@ export default function GeneralSection({ form, onChange }: { form?: any; onChang
               id="pref-auto-updates"
               label="Check for updates automatically"
               checked={form.autoCheckUpdates !== false}
-              onChange={(v: any) => onChange('autoCheckUpdates', v)}
+              onChange={(v: boolean) => onChange('autoCheckUpdates', v)}
             />
           </SettingRow>
           <SettingRow
@@ -183,7 +190,7 @@ export default function GeneralSection({ form, onChange }: { form?: any; onChang
                 label="Download and install updates automatically"
                 checked={form.autoCheckUpdates !== false && form.autoInstallUpdates === true}
                 disabled={form.autoCheckUpdates === false}
-                onChange={(v: any) => onChange('autoInstallUpdates', v)}
+                onChange={(v: boolean) => onChange('autoInstallUpdates', v)}
               />
             )}
           </SettingRow>

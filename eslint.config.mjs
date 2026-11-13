@@ -18,8 +18,9 @@ export default [
     },
   },
 
-  // TypeScript (gradual port, see plan.md): typescript-eslint's recommended rules for .ts/.tsx only,
-  // loosened where the port needs it. Tightened again when strict mode is switched on.
+  // TypeScript: typescript-eslint's recommended rules for .ts/.tsx only. `any` is an error: use real
+  // types, or `unknown` and narrowing. A genuine exception needs
+  // `// eslint-disable-next-line @typescript-eslint/no-explicit-any -- <why>`.
   ...tseslint.configs.recommended.map((config) => ({ ...config, files: TS_FILES })),
   {
     files: TS_FILES,
@@ -28,7 +29,7 @@ export default [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
       ],
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
       // Lazy `require()` of native/heavy modules (koffi, sql.js, googleapis...) must stay synchronous.
       '@typescript-eslint/no-require-imports': 'off',
     },

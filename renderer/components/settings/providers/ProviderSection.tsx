@@ -1,15 +1,29 @@
 import React, { useState } from 'react';
 import { AudioWaveform, BrainCircuit, LifeBuoy } from 'lucide-react';
 import { PasswordField, TextField, StatusDot, AvatarTile } from '../../ui/index';
+import type { LucideIcon } from 'lucide-react';
+import type { CredentialField, ProviderDescriptor, ProviderDescriptors, ProviderKind, Outcome } from '@shared';
+import { errorMessage } from '../../../lib/errors';
+import type { FormChange, ProviderFieldKey, SettingsForm } from '../types';
 import { SettingsGroup, KeyGuide, TestAction, RadioCardGroup, ExternalLink } from '../SettingsParts';
 import { useApp } from '../../../lib/app-context';
 import { isProviderConfigured, findProvider, selectedProvider } from '../../../lib/providers';
 import { providerIcon } from './providerIcons';
 import ModelSelect, { modelMode } from './ModelSelect';
 
+interface KindCopy {
+  pickerTitle: string;
+  pickerDescription: string;
+  pickerIcon: LucideIcon;
+  providerKey: 'sttService' | 'llmProvider';
+  modelsKey: 'sttModels' | 'llmModels';
+  modelTitle: string;
+  modelDescription: string;
+}
+
 // Per-kind wording and the config keys that hold the choice. Everything else comes from the
 // provider descriptors, so a new provider needs no change here.
-const KINDS = {
+const KINDS: Record<ProviderKind, KindCopy> = {
   stt: {
     pickerTitle: 'Speech-to-text engine',
     pickerDescription: 'Choose which service transcribes your recordings.',
@@ -30,17 +44,27 @@ const KINDS = {
   },
 };
 
-function CredentialFields({ kind, provider, form, onChange }: { kind?: any; provider?: any; form?: any; onChange?: any }) {
-  return provider.credentials.map((field: any) => {
+// A descriptor's `configKey` names one of the provider fields in config (`ProviderConfigFields`).
+const fieldKey = (field: CredentialField) => field.configKey as ProviderFieldKey;
+
+interface CredentialFieldsProps {
+  kind: ProviderKind;
+  provider: ProviderDescriptor;
+  form: SettingsForm;
+  onChange: FormChange;
+}
+
+function CredentialFields({ kind, provider, form, onChange }: CredentialFieldsProps) {
+  return provider.credentials.map((field) => {
     const Field = field.type === 'password' ? PasswordField : TextField;
     return (
       <Field
         key={field.configKey}
         id={`${kind}-${provider.id}-${field.configKey}`}
         label={field.label}
-        hint={field.hint}
-        value={form[field.configKey] || ''}
-        onChange={(e: any) => onChange(field.configKey, e.target.value)}
+        hint={typeof field.hint === 'string' ? field.hint : undefined}
+        value={form[fieldKey(field)] || ''}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(fieldKey(field), e.target.value)}
         placeholder={field.placeholder}
       />
     );
@@ -48,11 +72,18 @@ function CredentialFields({ kind, provider, form, onChange }: { kind?: any; prov
 }
 
 /** Cross-provider fallback: optional provider + model tried when the primary fails. */
-function FallbackPicker({ providers, form, onChange }: { providers?: any; form?: any; onChange?: any }) {
+interface FallbackPickerProps {
+  providers: ProviderDescriptors;
+  form: SettingsForm;
+  onChange: FormChange;
+}
+
+function FallbackPicker({ providers, form, onChange }: FallbackPickerProps) {
   const fb = form.llmFallback || {};
   const fbProvider = findProvider(providers, 'llm', fb.provider);
+  const fbLatest = fbProvider?.latestModels ?? [];
 
-  const setFallbackProvider = (id: any) => {
+  const setFallbackProvider = (id: string) => {
     const p = findProvider(providers, 'llm', id);
     onChange('llmFallback', p ? { provider: p.id, model: p.defaultModel } : {});
   };
@@ -73,7 +104,7 @@ function FallbackPicker({ providers, form, onChange }: { providers?: any; form?:
             className="input"
           >
             <option value="">None (disabled)</option>
-            {providers.llm.map((p: any) => (
+            {providers.llm.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
@@ -88,20 +119,20 @@ function FallbackPicker({ providers, form, onChange }: { providers?: any; form?:
               onChange={(e) => onChange('llmFallback', { provider: fbProvider.id, model: e.target.value })}
               className="input"
             >
-              {fbProvider.latestModels?.length > 0 ? (
+              {fbLatest.length > 0 ? (
                 <>
                   <optgroup label="Pinned">
-                    {fbProvider.models.map((m: any) => (
+                    {fbProvider.models.map((m) => (
                       <option key={m.id} value={m.id}>{m.name} — {m.badge}</option>
                     ))}
                   </optgroup>
                   <optgroup label="Latest (auto-updating)">
-                    {fbProvider.latestModels.map((m: any) => (
+                    {fbLatest.map((m) => (
                       <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
                   </optgroup>
                 </>
-              ) : fbProvider.models.map((m: any) => (
+              ) : fbProvider.models.map((m) => (
                 <option key={m.id} value={m.id}>{m.name} — {m.badge}</option>
               ))}
               {fb.model && modelMode(fbProvider, fb.model) === 'custom' && (
@@ -124,23 +155,30 @@ function FallbackPicker({ providers, form, onChange }: { providers?: any; form?:
  * Generic settings for one provider kind: engine picker, credentials, model and connection test.
  * `kind` is 'stt' or 'llm'; the descriptors come from the main process via the app context.
  */
-export default function ProviderSection({ kind, form, onChange }: { kind?: any; form?: any; onChange?: any }) {
+interface ProviderSectionProps {
+  kind: ProviderKind;
+  form: SettingsForm;
+  onChange: FormChange;
+}
+
+export default function ProviderSection({ kind, form, onChange }: ProviderSectionProps) {
   const { providers } = useApp();
   const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<Outcome | null>(null);
 
-  const k = (KINDS as any)[kind];
+  const k = KINDS[kind];
   if (!providers) return null;
 
   const options = providers[kind];
   const provider = selectedProvider(providers, kind, form);
+  if (!provider) return null;
   const models = form[k.modelsKey] || {};
   const model = models[provider.id] || provider.defaultModel;
   const PickerIcon = k.pickerIcon;
   const ProviderIcon = providerIcon(provider.icon);
-  const link = provider.credentials.find((f: any) => f.link)?.link;
+  const link = provider.credentials.find((f) => f.link)?.link;
 
-  const setModel = (id: any) => {
+  const setModel = (id: string) => {
     onChange(k.modelsKey, { ...models, [provider.id]: id });
     setResult(null);
   };
@@ -149,11 +187,11 @@ export default function ProviderSection({ kind, form, onChange }: { kind?: any; 
     setTesting(true);
     setResult(null);
     try {
-      const values = {};
-      for (const f of provider.credentials) (values as any)[f.configKey] = form[f.configKey] || '';
+      const values: Record<string, string> = {};
+      for (const f of provider.credentials) values[f.configKey] = form[fieldKey(f)] || '';
       setResult(await window.meetmind.providers.test({ kind, id: provider.id, values, model }));
-    } catch (err: any) {
-      setResult({ success: false, error: err.message });
+    } catch (err) {
+      setResult({ success: false, error: errorMessage(err) });
     } finally {
       setTesting(false);
     }
@@ -170,9 +208,9 @@ export default function ProviderSection({ kind, form, onChange }: { kind?: any; 
           label={k.pickerTitle}
           options={options}
           value={provider.id}
-          onChange={(id: any) => { onChange(k.providerKey, id); setResult(null); }}
+          onChange={(id) => { onChange(k.providerKey, id); setResult(null); }}
           className="space-y-16"
-          renderOption={(p: any) => {
+          renderOption={(p) => {
             const Icon = providerIcon(p.icon);
             const hasKey = isProviderConfigured(p, form);
             return (

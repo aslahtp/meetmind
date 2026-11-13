@@ -7,15 +7,20 @@ import { SettingsGroup, SettingRow } from '../SettingsParts';
 import CalendarRow from './CalendarRow';
 import AddCalendarDialog from './AddCalendarDialog';
 import EditCalendarDialog from './EditCalendarDialog';
+import { errorMessage } from '../../../lib/errors';
+import type { CalendarAdded, CalendarEntry } from '../types';
+import type { CalendarList, CalendarSyncMinutes, CalendarUpdatePatch } from '@shared';
 
 const REMOVE_ANIMATION_MS = 300; // matches .card-deleting in globals.css
 
-function syncLabel(minutes: any) {
+type SourceBusy = 'signin' | 'save';
+
+function syncLabel(minutes: CalendarSyncMinutes) {
   if (minutes === 60) return '1 h';
   return `${minutes} min`;
 }
 
-function syncPhrase(minutes: any) {
+function syncPhrase(minutes: CalendarSyncMinutes) {
   if (minutes === 1) return 'every minute';
   if (minutes === 60) return 'every hour';
   return `every ${minutes} minutes`;
@@ -27,26 +32,26 @@ function syncPhrase(minutes: any) {
  */
 export default function CalendarsCard() {
   const { confirm, addToast, updateConfig } = useApp();
-  const [data, setData] = useState<any>({ sources: [], max: 5, syncMinutes: 5, syncIntervals: [] });
+  const [data, setData] = useState<CalendarList>({ sources: [], max: 5, syncMinutes: 5, syncIntervals: [] });
   const [loaded, setLoaded] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [busy, setBusy] = useState<any>({}); // sourceId → 'signin' | 'save'
-  const [removing, setRemoving] = useState<any>(null);
+  const [busy, setBusy] = useState<Record<string, SourceBusy>>({});
+  const [removing, setRemoving] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<any>(null); // { source, field }
+  const [editing, setEditing] = useState<{ source: CalendarEntry; field: 'name' | 'url' } | null>(null);
   const now = useNow(30_000);
 
   const refresh = useCallback(async () => {
     try {
       setData(await window.meetmind.calendar.list());
-    } catch (err: any) {
-      addToast(`Couldn’t load your calendars: ${err.message}`, 'error');
+    } catch (err) {
+      addToast(`Couldn’t load your calendars: ${errorMessage(err)}`, 'error');
     } finally {
       setLoaded(true);
     }
   }, [addToast]);
 
-  const sync = useCallback(async (force: any) => {
+  const sync = useCallback(async (force: boolean) => {
     setSyncing(true);
     try {
       await window.meetmind.calendar.getEvents({ force });
@@ -67,24 +72,24 @@ export default function CalendarsCard() {
     if (loaded) refresh();
   }, [now, loaded, refresh]);
 
-  const changeSyncInterval = async (minutes: any) => {
-    setData((prev: any) => ({ ...prev, syncMinutes: minutes }));
+  const changeSyncInterval = async (minutes: CalendarSyncMinutes) => {
+    setData((prev) => ({ ...prev, syncMinutes: minutes }));
     try {
       await updateConfig('calendarSyncMinutes', minutes);
-    } catch (err: any) {
-      addToast(`Couldn\u2019t change the sync interval: ${err.message}`, 'error');
+    } catch (err) {
+      addToast(`Couldn\u2019t change the sync interval: ${errorMessage(err)}`, 'error');
       refresh();
     }
   };
 
-  const setSourceBusy = (id: any, value: any) => setBusy((prev: any) => {
+  const setSourceBusy = (id: string, value: SourceBusy | null) => setBusy((prev) => {
     const next = { ...prev };
-    if (value) (next as any)[id] = value;
-    else delete (next as any)[id];
+    if (value) next[id] = value;
+    else delete next[id];
     return next;
   });
 
-  const update = async (source: any, patch: any) => {
+  const update = async (source: CalendarEntry, patch: CalendarUpdatePatch) => {
     setSourceBusy(source.id, 'save');
     try {
       const result = await window.meetmind.calendar.update(source.id, patch);
@@ -95,7 +100,7 @@ export default function CalendarsCard() {
     }
   };
 
-  const signIn = async (source: any) => {
+  const signIn = async (source: CalendarEntry) => {
     setSourceBusy(source.id, 'signin');
     try {
       const result = await window.meetmind.calendar.reconnect(source.id);
@@ -106,7 +111,7 @@ export default function CalendarsCard() {
     }
   };
 
-  const remove = async (source: any) => {
+  const remove = async (source: CalendarEntry) => {
     const ok = await confirm({
       title: `Remove ${source.name}?`,
       message: source.type === 'google'
@@ -123,7 +128,7 @@ export default function CalendarsCard() {
     if (!result.success) addToast(result.error, 'error');
   };
 
-  const onAdded = (result: any) => {
+  const onAdded = (result: CalendarAdded) => {
     const count = result.eventCount;
     if (result.existing) addToast(`${result.source.name} was already added, so it was signed in again.`);
     else if (count != null) addToast(`Added ${result.source.name}: ${count === 0 ? 'no upcoming meetings yet' : `${count} upcoming ${count === 1 ? 'meeting' : 'meetings'}`}.`);
@@ -133,7 +138,7 @@ export default function CalendarsCard() {
 
   const { sources, max, syncMinutes, syncIntervals } = data;
   const full = sources.length >= max;
-  const googleSource = sources.find((s: any) => s.type === 'google' && s.clientId);
+  const googleSource = sources.find((s): s is CalendarEntry & { clientId: string } => s.type === 'google' && !!s.clientId);
 
   return (
     <SettingsGroup
@@ -162,14 +167,14 @@ export default function CalendarsCard() {
 
       {sources.length > 0 && (
         <ul className="space-y-8" aria-label="Your calendars">
-          {sources.map((source: any) => (
+          {sources.map((source) => (
             <CalendarRow
               key={source.id}
               source={source}
-              busy={(busy as any)[source.id]}
+              busy={busy[source.id]}
               removing={removing === source.id}
               now={now}
-              onToggle={(enabled: any) => update(source, { enabled })}
+              onToggle={(enabled: boolean) => update(source, { enabled })}
               onReminders={() => update(source, { reminders: !source.reminders })}
               onRename={() => setEditing({ source, field: 'name' })}
               onEditLink={() => setEditing({ source, field: 'url' })}
@@ -190,7 +195,7 @@ export default function CalendarsCard() {
             label="Sync every"
             role="radiogroup"
             size="sm"
-            options={syncIntervals.map((m: any) => ({ value: m, label: syncLabel(m) }))}
+            options={syncIntervals.map((m) => ({ value: m, label: syncLabel(m) }))}
             value={syncMinutes}
             onChange={changeSyncInterval}
           />

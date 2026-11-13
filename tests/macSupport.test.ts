@@ -41,6 +41,12 @@ describe('describeAudioTest', () => {
   });
 });
 
+const downloadsFor = (platform: string, arch: string) => {
+  const downloads = ffmpegDownloads(platform, arch);
+  if (!downloads) throw new Error(`no pinned FFmpeg for ${platform}-${arch}`);
+  return downloads;
+};
+
 describe('ffmpegDownloads', () => {
   it('pins every shipped platform/arch', () => {
     expect(pinnedTargets().sort()).toEqual(['darwin-arm64', 'darwin-x64', 'linux-x64', 'win32-x64']);
@@ -49,20 +55,20 @@ describe('ffmpegDownloads', () => {
   it('pins an https zip or tar.xz and a SHA-256 for each download, and covers ffmpeg and ffprobe exactly once', () => {
     for (const target of pinnedTargets()) {
       const [platform, arch] = target.split('-');
-      const downloads = ffmpegDownloads(platform, arch);
+      const downloads = downloadsFor(platform, arch);
       for (const d of downloads) {
         expect(d.url).toMatch(/^https:\/\/.+\.(zip|tar\.xz)$/);
         expect(d.url).toContain(FFMPEG_VERSION);
         expect(d.sha256).toMatch(/^[0-9a-f]{64}$/);
       }
-      expect(downloads.flatMap((d: any) => d.tools).sort()).toEqual(['ffmpeg', 'ffprobe']);
+      expect(downloads.flatMap((d) => d.tools).sort()).toEqual(['ffmpeg', 'ffprobe']);
     }
   });
 
   it('unpacks each archive by its extension', () => {
     expect(archiveType('https://example.com/a/ffmpeg-9.0.2-linux64-gpl-9.0.tar.xz')).toBe('tar.xz');
     expect(archiveType('https://example.com/a/ffmpeg.zip')).toBe('zip');
-    expect(archiveType(ffmpegDownloads('linux', 'x64')[0].url)).toBe('tar.xz');
+    expect(archiveType(downloadsFor('linux', 'x64')[0]?.url ?? '')).toBe('tar.xz');
   });
 
   it('has nothing for other platforms or architectures', () => {

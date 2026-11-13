@@ -1,9 +1,12 @@
-import type { LLMGenerateArgs, LLMProvider, ProviderDeps } from '../../shared';
+import type { LLMGenerateArgs, LLMProvider, ProviderDeps, ProviderTestArgs } from '../../shared';
+
+type GeminiSdk = typeof import('@google/generative-ai');
+
 async function generate({ systemPrompt, userPrompt, model, config, onText }: LLMGenerateArgs, deps: ProviderDeps = {}) {
   const apiKey = config.geminiApiKey;
   if (!apiKey) throw new Error('Gemini API key is required');
 
-  const { GoogleGenerativeAI } = deps.sdk || require('@google/generative-ai');
+  const { GoogleGenerativeAI } = (deps.sdk as GeminiSdk | undefined) || (require('@google/generative-ai') as GeminiSdk);
   const genModel = new GoogleGenerativeAI(apiKey).getGenerativeModel({
     model,
     systemInstruction: systemPrompt,
@@ -18,11 +21,11 @@ async function generate({ systemPrompt, userPrompt, model, config, onText }: LLM
   return text.trim();
 }
 
-async function test({ config, model }: any) {
+async function test({ config, model }: ProviderTestArgs) {
   const apiKey = config.geminiApiKey;
   if (!apiKey) throw new Error('Gemini API key is required');
 
-  const { GoogleGenerativeAI } = require('@google/generative-ai');
+  const { GoogleGenerativeAI } = require('@google/generative-ai') as GeminiSdk;
   const genModel = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model });
   const result = await genModel.generateContent('Reply with "OK" only.');
   if (!result.response.text()) throw new Error('No response from Gemini API');

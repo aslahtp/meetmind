@@ -6,6 +6,19 @@ const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), in
 
 // Modal dialog: role="dialog", Escape + backdrop to close, focus trapped inside,
 // focus restored to the opener on close. Raised with a 2px border, never a shadow.
+export interface DialogProps {
+  open: boolean;
+  onClose: () => void;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  children?: React.ReactNode;
+  footer?: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg';
+  dismissible?: boolean;
+  /** The element to focus on open; the first focusable one when not given. */
+  initialFocusRef?: React.RefObject<HTMLElement>;
+}
+
 export default function Dialog({
   open,
   onClose,
@@ -16,9 +29,9 @@ export default function Dialog({
   size = 'md',
   dismissible = true,
   initialFocusRef,
-}: { open?: any; onClose?: any; title?: any; description?: any; children?: any; footer?: any; size?: any; dismissible?: any; initialFocusRef?: any }) {
-  const panelRef = useRef<any>(null);
-  const openerRef = useRef<any>(null);
+}: DialogProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<Element | null>(null);
   const titleId = useId();
   const descId = useId();
   // Parents often pass an inline onClose; keep it in a ref so the focus effect
@@ -32,19 +45,19 @@ export default function Dialog({
 
     const panel = panelRef.current;
     const focusFirst = () => {
-      const target = initialFocusRef?.current || panel?.querySelector(FOCUSABLE) || panel;
+      const target = initialFocusRef?.current || panel?.querySelector<HTMLElement>(FOCUSABLE) || panel;
       target?.focus();
     };
     const raf = requestAnimationFrame(focusFirst);
 
-    const onKeyDown = (e: any) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && dismissible) {
         e.stopPropagation();
         onCloseRef.current?.();
         return;
       }
       if (e.key !== 'Tab' || !panel) return;
-      const nodes = [...panel.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null);
+      const nodes = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => n.offsetParent !== null);
       if (nodes.length === 0) {
         e.preventDefault();
         return;
@@ -64,7 +77,7 @@ export default function Dialog({
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener('keydown', onKeyDown, true);
-      openerRef.current?.focus?.();
+      (openerRef.current as Partial<HTMLElement> | null)?.focus?.();
     };
   }, [open, dismissible, initialFocusRef]);
 

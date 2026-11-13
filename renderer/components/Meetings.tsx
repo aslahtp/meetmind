@@ -4,6 +4,8 @@ import {
   ArrowUpDown, ChevronDown, SlidersHorizontal,
   Layers, AlertCircle, Loader, BookMarked,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type { Session } from '@shared';
 import { useApp } from '../lib/app-context';
 import PasteTranscriptModal from './PasteTranscriptModal';
 import { SessionList, SessionListSkeleton } from './SessionCard';
@@ -11,6 +13,7 @@ import {
   PageHeader, IconButton, ExpandingButton, EmptyState, Skeleton, StatusDot, SegmentedControl,
   Menu, MenuRadioItem, MenuLabel,
 } from './ui/index';
+import type { MenuTriggerProps, SegmentedOption } from './ui/index';
 import { useDelayedFlag, useSessionActions, SKELETON_DELAY_MS } from '../lib/hooks';
 import { useScrollMemory, useRememberedState, consumeFocus } from '../lib/scrollMemory';
 import { searchSessions } from '../lib/meetingSearch';
@@ -31,27 +34,28 @@ import {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Map STATUS_FILTERS icon keys to Lucide components. */
-const FILTER_ICONS = {
+const FILTER_ICONS: Record<string, LucideIcon> = {
   layers:   Layers,
   alert:    AlertCircle,
   loader:   Loader,
   bookmark: BookMarked,
 };
 
-const asOptions = (list: any) => list.map((f: any) => ({ value: f.key, label: f.label }));
+const asOptions = (list: Array<{ key: string; label: string }>): Array<SegmentedOption<string>> =>
+  list.map((f) => ({ value: f.key, label: f.label }));
 const DATE_OPTIONS = asOptions(DATE_PRESETS);
 const DURATION_OPTIONS = asOptions(DURATION_FILTERS);
 const PLATFORM_OPTIONS = asOptions(PLATFORM_FILTERS);
 
 /** Format a YYYY-MM-DD input value for display, dropping the year when it's this year. */
-function friendlyDate(isoDate: any) {
+function friendlyDate(isoDate: string) {
   if (!isoDate) return '';
   const d = new Date(isoDate + 'T00:00:00'); // local midnight
   const sameYear = d.getFullYear() === new Date().getFullYear();
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
 }
 
-function customRangeLabel(from: any, to: any) {
+function customRangeLabel(from: string, to: string) {
   if (from && to) return from === to ? friendlyDate(from) : `${friendlyDate(from)} – ${friendlyDate(to)}`;
   if (from) return `Since ${friendlyDate(from)}`;
   return `Until ${friendlyDate(to)}`;
@@ -78,17 +82,17 @@ function MeetingsSkeleton() {
  * Sort dropdown: a ghost pill naming the current order, opening a checked radio menu.
  * "Best match" is offered, first, only while searching.
  */
-function SortMenu({ value, onChange, searching }: { value?: any; onChange?: any; searching?: any }) {
+function SortMenu({ value, onChange, searching }: { value: string; onChange: (key: string) => void; searching: boolean }) {
   const relevance = SORT_OPTIONS.find((o) => o.key === 'relevance');
   const others = SORT_OPTIONS.filter((o) => o.key !== 'relevance');
-  const options: any[] = searching ? [relevance, ...others] : others;
-  const current: any = options.find((o) => o.key === value) || options[0];
+  const options = searching && relevance ? [relevance, ...others] : others;
+  const current = options.find((o) => o.key === value) || options[0];
   return (
     <Menu
       label="Sort meetings"
       minWidth={208}
       className="flex"
-      trigger={({ open, ...props }: any) => (
+      trigger={({ open, ...props }: MenuTriggerProps) => (
         <button
           type="button"
           {...props}
@@ -121,7 +125,7 @@ function SortMenu({ value, onChange, searching }: { value?: any; onChange?: any;
  * One labelled row of the Filters panel. On wide windows the label sits beside the control,
  * padded to line up with the centre of a small pill control.
  */
-function FilterField({ label, id, aside, children }: { label?: any; id?: any; aside?: any; children?: any }) {
+function FilterField({ label, id, aside, children }: { label: string; id?: string; aside?: React.ReactNode; children?: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-24">
       <span id={id} className="eyebrow lg:w-[128px] lg:flex-shrink-0 lg:pt-8">{label}</span>
@@ -132,7 +136,7 @@ function FilterField({ label, id, aside, children }: { label?: any; id?: any; as
 }
 
 /** From/to date inputs, shown under the "Custom" date preset. */
-function CustomDateRange({ dateFrom, dateTo, onChange }: { dateFrom?: any; dateTo?: any; onChange?: any }) {
+function CustomDateRange({ dateFrom, dateTo, onChange }: { dateFrom: string; dateTo: string; onChange: (range: { dateFrom: string; dateTo: string }) => void }) {
   return (
     <div className="flex flex-wrap items-center gap-8 fade-in">
       <label className="flex items-center gap-8 text-caption text-graphite">
@@ -160,7 +164,7 @@ function CustomDateRange({ dateFrom, dateTo, onChange }: { dateFrom?: any; dateT
 }
 
 /** Multi-select toggle pills for the content filters. */
-function ContentToggles({ active, onChange, labelledBy }: { active?: any; onChange?: any; labelledBy?: any }) {
+function ContentToggles({ active, onChange, labelledBy }: { active: string[]; onChange: (keys: string[]) => void; labelledBy: string }) {
   return (
     <div role="group" aria-labelledby={labelledBy} className="flex flex-wrap items-center gap-8">
       {CONTENT_FILTERS.map((cf) => {
@@ -170,7 +174,7 @@ function ContentToggles({ active, onChange, labelledBy }: { active?: any; onChan
             key={cf.key}
             type="button"
             aria-pressed={on}
-            onClick={() => onChange(on ? active.filter((k: any) => k !== cf.key) : [...active, cf.key])}
+            onClick={() => onChange(on ? active.filter((k) => k !== cf.key) : [...active, cf.key])}
             className={on ? 'chip-dark' : 'pill'}
           >
             {on && <Check size={14} strokeWidth={2} aria-hidden="true" />}
@@ -183,11 +187,17 @@ function ContentToggles({ active, onChange, labelledBy }: { active?: any; onChan
 }
 
 /** Applied panel filters as dismissible Dark Filter Chips. */
-function AppliedFilters({ chips }: { chips?: any }) {
+interface AppliedChip {
+  key: string;
+  label: string | undefined;
+  clear: () => void;
+}
+
+function AppliedFilters({ chips }: { chips: AppliedChip[] }) {
   if (chips.length === 0) return null;
   return (
     <ul aria-label="Applied filters" className="contents">
-      {chips.map((c: any) => (
+      {chips.map((c) => (
         <li key={c.key} className="fade-in">
           <button
             type="button"
@@ -207,7 +217,7 @@ function AppliedFilters({ chips }: { chips?: any }) {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export default function Meetings({ onOpenSession }: { onOpenSession?: any }) {
+export default function Meetings({ onOpenSession }: { onOpenSession: (session: Session) => void }) {
   const { sessions, refreshSessions, startRecording, isRecording, sessionsLoading, sessionsError } = useApp();
   const { handleUploadAudio } = useSessionActions();
   const showSkeleton = useDelayedFlag(sessionsLoading, SKELETON_DELAY_MS);
@@ -223,14 +233,14 @@ export default function Meetings({ onOpenSession }: { onOpenSession?: any }) {
   const [customTo, setCustomTo] = useRememberedState('meetings:dateTo', '');
   const [duration, setDuration] = useRememberedState('meetings:duration', 'any');
   const [platform, setPlatform] = useRememberedState('meetings:platform', 'any');
-  const [content, setContent] = useRememberedState('meetings:content', []);
+  const [content, setContent] = useRememberedState<string[]>('meetings:content', []);
   const [sort, setSort] = useRememberedState('meetings:sort', 'newest');
   // While searching, results get their own order (best match by default), so a search
   // doesn't overwrite the sort the plain list uses.
   const [searchSort, setSearchSort] = useRememberedState('meetings:searchSort', 'relevance');
   const [filtersOpen, setFiltersOpen] = useRememberedState('meetings:filtersOpen', false);
 
-  const searchRef = useRef<any>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     refreshSessions({ ifChanged: true });
@@ -299,7 +309,7 @@ export default function Meetings({ onOpenSession }: { onOpenSession?: any }) {
     resetPanelFilters();
   };
 
-  const appliedChips = [];
+  const appliedChips: AppliedChip[] = [];
   if (filterOpts.dateFrom || filterOpts.dateTo) {
     appliedChips.push({
       key: 'dates',
@@ -322,7 +332,7 @@ export default function Meetings({ onOpenSession }: { onOpenSession?: any }) {
       appliedChips.push({
         key: cf.key,
         label: cf.label,
-        clear: () => setContent((prev: any) => prev.filter((k: any) => k !== cf.key)),
+        clear: () => setContent((prev) => prev.filter((k) => k !== cf.key)),
       });
     }
   }
@@ -331,7 +341,7 @@ export default function Meetings({ onOpenSession }: { onOpenSession?: any }) {
     return showSkeleton ? <MeetingsSkeleton /> : <div className="h-full" />;
   }
 
-  const attention = (counts as any).attention;
+  const attention = counts.attention;
   const subtitle = sessions.length === 0
     ? 'Recorded, imported and pasted meetings live here.'
     : `${sessions.length} meeting${sessions.length !== 1 ? 's' : ''}${attention ? ` · ${attention} need${attention === 1 ? 's' : ''} attention` : ''}`;
@@ -416,7 +426,7 @@ export default function Meetings({ onOpenSession }: { onOpenSession?: any }) {
 
                 <button
                   type="button"
-                  onClick={() => setFiltersOpen((prev: any) => !prev)}
+                  onClick={() => setFiltersOpen((prev) => !prev)}
                   className={`btn-ghost btn-sm ${filtersOpen ? 'bg-ink/[0.06]' : ''}`}
                   aria-expanded={filtersOpen}
                   aria-controls="meetings-filters"
@@ -454,7 +464,7 @@ export default function Meetings({ onOpenSession }: { onOpenSession?: any }) {
                       <CustomDateRange
                         dateFrom={customFrom}
                         dateTo={customTo}
-                        onChange={({ dateFrom, dateTo }: any) => {
+                        onChange={({ dateFrom, dateTo }) => {
                           setCustomFrom(dateFrom);
                           setCustomTo(dateTo);
                         }}
@@ -508,7 +518,7 @@ export default function Meetings({ onOpenSession }: { onOpenSession?: any }) {
                 <div role="group" aria-label="Filter by status" className="flex flex-wrap items-center gap-8">
                   {STATUS_FILTERS.map((f) => {
                     const active = status === f.key;
-                    const Icon = (FILTER_ICONS as any)[f.icon];
+                    const Icon = FILTER_ICONS[f.icon];
                     return (
                       <button
                         key={f.key}

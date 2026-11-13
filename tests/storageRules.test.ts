@@ -14,7 +14,7 @@ import {
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 10, 8, 12, 0, 0);
-const daysAgo = (n: any) => new Date(NOW - n * DAY).toISOString();
+const daysAgo = (n: number) => new Date(NOW - n * DAY).toISOString();
 
 describe('retention setting', () => {
   it('defaults to keeping recordings forever', () => {

@@ -1,7 +1,7 @@
 {
   // Shared compiler options. Each folder's tsconfig.json extends this one.
   // Everything under electron/, renderer/, extension/, tests/ and scripts/ is TypeScript and fully strict
-  // (the port is described in plan.md). The few remaining .js files (scripts run without a TS runner,
+  // (ESLint also bans `any`). The few remaining .js files (scripts run without a TS runner,
   // Tailwind/PostCSS config) are not part of any TypeScript project.
   "compilerOptions": {
     "target": "ES2022",

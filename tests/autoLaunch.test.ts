@@ -4,12 +4,16 @@ import { AUTO_LAUNCH_NAME, HIDDEN_ARG, resolveStartupState, buildAutostartEntry,
 
 const quietLogger = { info() {}, warn() {}, error() {} };
 
+type LoginApp = NonNullable<Parameters<typeof createAutoLaunch>[0]['app']>;
+type LoginItemOptions = Parameters<LoginApp['setLoginItemSettings']>[0] & { enabled?: boolean };
+interface RunEntry { enabled: boolean; args?: string[] }
+
 // A stand-in for Electron's app login-item API on Windows: Run entries for this exe, keyed by
 // name. Like Electron, `openAtLogin` only looks at the AppUserModelId-named value, so it never
 // sees ours.
-function fakeWindowsApp(entries = {}) {
-  const run = new Map<string, any>(Object.entries(entries));
-  const calls: any = [];
+function fakeWindowsApp(entries: Record<string, RunEntry> = {}) {
+  const run = new Map<string, RunEntry>(Object.entries(entries));
+  const calls: LoginItemOptions[] = [];
   return {
     run,
     calls,
@@ -19,15 +23,15 @@ function fakeWindowsApp(entries = {}) {
         launchItems: [...run.entries()].map(([name, e]) => ({ name, path: 'C:\\MeetMind.exe', args: [], scope: 'user', enabled: e.enabled })),
       };
     },
-    setLoginItemSettings(opts: any) {
+    setLoginItemSettings(opts: LoginItemOptions) {
       calls.push(opts);
-      if (opts.openAtLogin) run.set(opts.name, { enabled: opts.enabled !== false, args: opts.args });
-      else run.delete(opts.name);
+      if (opts.openAtLogin) run.set(opts.name!, { enabled: opts.enabled !== false, args: opts.args });
+      else run.delete(opts.name!);
     },
   };
 }
 
-const windows = (app: any) => createAutoLaunch({ app, platform: 'win32', logger: quietLogger });
+const windows = (app: LoginApp) => createAutoLaunch({ app, platform: 'win32', logger: quietLogger });
 
 describe('resolveStartupState', () => {
   it('follows the saved setting when there is no entry', () => {
@@ -68,7 +72,7 @@ describe('createAutoLaunch on Windows', () => {
   it('re-enables an entry disabled in Task Manager when turned on in Settings', () => {
     const app = fakeWindowsApp({ [AUTO_LAUNCH_NAME]: { enabled: false } });
     windows(app).set(true);
-    expect(app.run.get(AUTO_LAUNCH_NAME).enabled).toBe(true);
+    expect(app.run.get(AUTO_LAUNCH_NAME)?.enabled).toBe(true);
   });
 
   it('removes entries older builds wrote under other names', () => {
@@ -93,7 +97,7 @@ describe('createAutoLaunch on Windows', () => {
     it('keeps an entry disabled in Task Manager disabled, and reports off', () => {
       const app = fakeWindowsApp({ [AUTO_LAUNCH_NAME]: { enabled: false } });
       expect(windows(app).sync(true)).toBe(false);
-      expect(app.run.get(AUTO_LAUNCH_NAME).enabled).toBe(false);
+      expect(app.run.get(AUTO_LAUNCH_NAME)?.enabled).toBe(false);
       expect(app.calls).toEqual([]);
     });
 
@@ -123,8 +127,8 @@ describe('createAutoLaunch elsewhere', () => {
   });
 
   it('uses openAtLogin on macOS, with no name or arguments', () => {
-    const calls: any = [];
-    const app = { getLoginItemSettings: () => ({ openAtLogin: true }), setLoginItemSettings: (o: any) => calls.push(o) };
+    const calls: unknown[] = [];
+    const app = { getLoginItemSettings: () => ({ openAtLogin: true }), setLoginItemSettings: (o: unknown) => calls.push(o) };
     const auto = createAutoLaunch({ app, platform: 'darwin', logger: quietLogger });
     expect(auto.getStatus()).toEqual({ openAtLogin: true });
     expect(auto.sync(false)).toBe(false);
@@ -133,23 +137,24 @@ describe('createAutoLaunch elsewhere', () => {
 });
 
 // An in-memory stand-in for the parts of fs the Linux autostart entry uses.
-function fakeFs(files = {}) {
+function fakeFs(files: Record<string, string> = {}) {
   const store = new Map(Object.entries(files));
   return {
     store,
-    readFileSync(file: any) {
-      if (!store.has(file)) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      return store.get(file);
+    readFileSync(file: string) {
+      const text = store.get(file);
+      if (text === undefined) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      return text;
     },
-    writeFileSync(file: any, text: any) { store.set(file, text); },
+    writeFileSync(file: string, text: string) { store.set(file, text); },
     mkdirSync() {},
-    rmSync(file: any) { store.delete(file); },
+    rmSync(file: string) { store.delete(file); },
   };
 }
 
 const ENTRY = '/home/me/.config/autostart/meetmind.desktop';
 
-function linuxAuto(fs: any, env = {}) {
+function linuxAuto(fs: ReturnType<typeof fakeFs>, env: Record<string, string> = {}) {
   return createAutoLaunch({
     platform: 'linux',
     logger: quietLogger,

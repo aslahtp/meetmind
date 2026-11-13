@@ -69,7 +69,7 @@ Screenshots are written to `.claude/skills/run-meetmind/shots/<name>.png` (gitig
 ## Gotchas
 
 - **Single-instance lock.** `app.requestSingleInstanceLock()` makes a second launch against the default profile exit silently and just focus the user's window. `--user-data-dir` gives the driver its own lock, config (electron-store) and DB; the driver refuses to continue if `app.getPath('userData')` isn't the isolated profile.
-- **Don't set `NODE_ENV=development`.** `electron/main.js` then loads `http://localhost:5173` instead of `dist/renderer`. The driver deletes `NODE_ENV` from the child env.
+- **Don't set `NODE_ENV=development`.** `electron/main.ts` then loads `http://localhost:5173` instead of `dist/renderer`. The driver deletes `NODE_ENV` from the child env.
 - **You can't reach main-process modules from `electronApp.evaluate`.** `process.mainModule` is `undefined` there (`Cannot read properties of undefined (reading 'require')`). That's why the driver seeds data by writing `<profile>/meetmind.db` with `sql.js` **before** launch. A seeded profile is reused on later runs; pass `--fresh` to reset it.
 - **Expected console error:** `Failed to load resource: ... 404`. The demo sessions have no audio file, so `meetmind-audio://` 404s and the logs show `meetmind-audio file not found`.
 - **Wheel scrolling needs the pointer over the scroll container.** Over the 64px top bar it does nothing; `scroll` moves the mouse to (550,500) first.

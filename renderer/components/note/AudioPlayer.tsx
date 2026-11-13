@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Volume2, Play, Pause, FolderOpen, Loader2, AlertTriangle, FileAudio, Trash2 } from 'lucide-react';
 import { useApp } from '../../lib/app-context';
+import { errorMessage } from '../../lib/errors';
 import { formatBytes } from '../../lib/format';
 import { isMac, isLinux } from '../../lib/os';
 import { AvatarTile } from '../ui/index';
@@ -10,29 +11,46 @@ const FILE_MANAGER = isMac ? 'Finder' : isLinux ? 'your file manager' : 'Explore
 
 const SPEEDS = [1, 1.25, 1.5, 2];
 
-function formatPlayerTime(seconds: any) {
+function formatPlayerTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// file: { bytes, format } of the recording; busy: it's being recorded or processed, so it can't be
-// deleted; onDeleted: called once its audio is gone.
-export default function AudioPlayer({ sessionId, title, durationLabel, showWaveform = true, file, busy = false, onDeleted }: any) {
+/** The waveform of a recording, computed once per recording in main. */
+interface WaveformState {
+  status: 'loading' | 'ready' | 'error';
+  peaks: number[] | null;
+  duration: number;
+}
+
+export interface AudioPlayerProps {
+  sessionId: string;
+  title?: string;
+  durationLabel?: string | null;
+  showWaveform?: boolean;
+  /** Size and format of the recording file. */
+  file?: { bytes?: number | null; format?: string | null };
+  /** It's being recorded or processed, so it can't be deleted. */
+  busy?: boolean;
+  /** Called once the audio is gone. */
+  onDeleted?: () => void;
+}
+
+export default function AudioPlayer({ sessionId, title, durationLabel, showWaveform = true, file, busy = false, onDeleted }: AudioPlayerProps) {
   const { confirm, addToast } = useApp();
-  const audioRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [deleting, setDeleting] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [error, setError] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [opening, setOpening] = useState(false);
-  const [openMessage, setOpenMessage] = useState<any>(null);
+  const [openMessage, setOpenMessage] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  // { status: 'loading' | 'ready' | 'error', peaks, duration } — computed once per recording in main.
-  const [waveform, setWaveform] = useState<any>(null);
+  const [waveform, setWaveform] = useState<WaveformState | null>(null);
 
   useEffect(() => {
     if (!showWaveform || !sessionId || !window.meetmind?.sessions?.waveform) {
@@ -57,7 +75,7 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
   // timeupdate fires only ~4x a second; follow the playhead per frame so the waveform moves smoothly.
   useEffect(() => {
     if (!playing) return undefined;
-    let raf: any;
+    let raf: number;
     const tick = () => {
       if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
       raf = requestAnimationFrame(tick);
@@ -88,7 +106,7 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
     }
   };
 
-  const seekTo = (value: any) => {
+  const seekTo = (value: number) => {
     if (!audioRef.current || !effectiveDuration) return;
     audioRef.current.currentTime = value;
     setCurrentTime(value);
@@ -103,8 +121,8 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
       if (!result?.success) {
         setOpenMessage(result?.error || 'Recording file not found for this session.');
       }
-    } catch (err: any) {
-      setOpenMessage(err.message || 'Failed to open recording file.');
+    } catch (err) {
+      setOpenMessage(errorMessage(err) || 'Failed to open recording file.');
     } finally {
       setOpening(false);
     }
@@ -112,7 +130,7 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
 
   const deleteRecording = async () => {
     if (!sessionId || deleting || busy) return;
-    const size = file?.bytes > 0 ? ` (${formatBytes(file.bytes)})` : '';
+    const size = file?.bytes && file.bytes > 0 ? ` (${formatBytes(file.bytes)})` : '';
     const ok = await confirm({
       title: 'Delete this recording?',
       message: `The audio file${size} will be deleted from this computer. The notes and transcript are kept, but this meeting can’t be played or transcribed again. This can’t be undone.`,
@@ -134,8 +152,8 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
       if (!result?.success) throw new Error(result?.error || 'unknown error');
       addToast(result.bytes > 0 ? `Recording deleted, freed ${formatBytes(result.bytes)}.` : 'Recording deleted.', 'success');
       onDeleted?.();
-    } catch (err: any) {
-      addToast(`Couldn’t delete the recording: ${err?.message || 'unknown error'}`, 'error');
+    } catch (err) {
+      addToast(`Couldn’t delete the recording: ${errorMessage(err) || 'unknown error'}`, 'error');
       if (el) {
         el.src = audioSrc;
         el.load();
@@ -144,7 +162,7 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
     }
   };
 
-  const fileMeta = [file?.format, file?.bytes > 0 ? formatBytes(file.bytes) : null].filter(Boolean).join(' · ');
+  const fileMeta = [file?.format, file?.bytes && file.bytes > 0 ? formatBytes(file.bytes) : null].filter(Boolean).join(' · ');
 
   return (
     <div className="card max-w-[560px] mx-auto text-center fade-in">
@@ -232,12 +250,12 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
             onLoadedMetadata={() => {
               setReady(true);
               setError(null);
-              const d = audioRef.current?.duration;
+              const d = audioRef.current?.duration ?? NaN;
               setDuration(Number.isFinite(d) && d > 0 ? d : 0);
               if (audioRef.current) audioRef.current.playbackRate = speed;
             }}
             onDurationChange={() => {
-              const d = audioRef.current?.duration;
+              const d = audioRef.current?.duration ?? NaN;
               if (Number.isFinite(d) && d > 0) setDuration(d);
             }}
             onCanPlay={() => setReady(true)}

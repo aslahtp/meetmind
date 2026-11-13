@@ -4,15 +4,15 @@ export const SETTINGS_TAB_STORAGE_KEY = 'meetmind.settingsTab';
 
 // A tab another screen asked for, which wins over Settings' own choice (e.g. Transcription while
 // no API keys are set). Read once.
-let requestedTab: any = null;
+let requestedTab: string | null = null;
 
-export function requestSettingsTab(tab: any) {
+export function requestSettingsTab(tab: string) {
   requestedTab = tab;
   storeSettingsTab(tab);
 }
 
 export function takeRequestedSettingsTab() {
-  const tab: any = requestedTab;
+  const tab = requestedTab;
   requestedTab = null;
   return tab;
 }
@@ -25,6 +25,6 @@ export function readSettingsTab() {
   }
 }
 
-export function storeSettingsTab(tab: any) {
+export function storeSettingsTab(tab: string) {
   try { localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, tab); } catch {}
 }

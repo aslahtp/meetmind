@@ -8,7 +8,9 @@ import {
   ClipboardList,
   Search,
 } from 'lucide-react';
+import type { CalendarEvent, RendererConfig, Session } from '@shared';
 import { useApp } from '../lib/app-context';
+import type { SetupState } from '../lib/providers';
 import PasteTranscriptModal from './PasteTranscriptModal';
 import UpcomingMeetings from './UpcomingMeetings';
 import { SessionList, SessionListSkeleton } from './SessionCard';
@@ -28,10 +30,16 @@ import { greeting } from '../lib/greeting';
 export { greeting };
 
 // One bordered strip with hairline-separated cells instead of four tall cards.
-function StatStrip({ stats }: { stats?: any }) {
+interface Stat {
+  label: string;
+  value: string | number;
+  caption: string;
+}
+
+function StatStrip({ stats }: { stats: Stat[] }) {
   return (
     <dl className="grid grid-cols-2 md:grid-cols-4 rounded-card border border-ink overflow-hidden mb-32">
-      {stats.map(({ label, value, caption }: any, i: any) => (
+      {stats.map(({ label, value, caption }, i) => (
         <div
           key={label}
           title={caption}
@@ -49,8 +57,8 @@ function StatStrip({ stats }: { stats?: any }) {
 
 // Slim sticky bar shared by the loaded and loading states: greeting left, actions right, and
 // the meeting count centred in whatever space is left between them.
-function DashboardToolbar({ subtitle, actions, greetingText }: { subtitle?: any; actions?: any; greetingText?: any }) {
-  const fallbackRef = useRef<any>(null);
+function DashboardToolbar({ subtitle, actions, greetingText }: { subtitle?: string; actions?: React.ReactNode; greetingText?: string }) {
+  const fallbackRef = useRef<string | null>(null);
   if (!fallbackRef.current) fallbackRef.current = greeting();
   const text = greetingText || fallbackRef.current;
 
@@ -67,7 +75,7 @@ function DashboardToolbar({ subtitle, actions, greetingText }: { subtitle?: any;
   );
 }
 
-function DashboardSkeleton({ greetingText }: { greetingText?: any }) {
+function DashboardSkeleton({ greetingText }: { greetingText: string }) {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <DashboardToolbar greetingText={greetingText} />
@@ -88,7 +96,7 @@ function DashboardSkeleton({ greetingText }: { greetingText?: any }) {
   );
 }
 
-function SetupCard({ config, setup, onSetup }: { config?: any; setup?: any; onSetup?: any }) {
+function SetupCard({ config, setup, onSetup }: { config: RendererConfig | null; setup: SetupState; onSetup: () => void }) {
   const { sttDone, llmDone } = setup;
   const notionDone = !!(config?.notionToken?.trim() && config?.notionPageId?.trim());
 
@@ -112,7 +120,7 @@ function SetupCard({ config, setup, onSetup }: { config?: any; setup?: any; onSe
   );
 }
 
-function MeetingStartingCallout({ event, onRecord, onDismiss }: { event?: any; onRecord?: any; onDismiss?: any }) {
+function MeetingStartingCallout({ event, onRecord, onDismiss }: { event: CalendarEvent; onRecord: () => void; onDismiss: () => void }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-16 rounded-card border border-ink bg-sunshine text-on-sunshine px-24 py-16 mb-32 fade-in" role="status">
       <div className="flex items-center gap-16 min-w-0">
@@ -135,7 +143,13 @@ function MeetingStartingCallout({ event, onRecord, onDismiss }: { event?: any; o
   );
 }
 
-export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavigateToMeetings }: { onOpenSession?: any; onNavigateToSettings?: any; onNavigateToMeetings?: any }) {
+export interface DashboardProps {
+  onOpenSession: (session: Session) => void;
+  onNavigateToSettings: () => void;
+  onNavigateToMeetings: () => void;
+}
+
+export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavigateToMeetings }: DashboardProps) {
   const {
     sessions, refreshSessions, startRecording, isRecording, sessionsLoading, sessionsError,
     config, keysNotSet,
@@ -143,18 +157,18 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
   } = useApp();
   const { handleUploadAudio } = useSessionActions();
   const showSkeleton = useDelayedFlag(sessionsLoading, SKELETON_DELAY_MS);
-  const [meetingToast, setMeetingToast] = useState<any>(null);
+  const [meetingToast, setMeetingToast] = useState<CalendarEvent | null>(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [greetingText] = useState(() => greeting());
   const scrollRef = useScrollMemory('dashboard');
-  const toastTimersRef = useRef<any[]>([]);
+  const toastTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
   const recentLimit = config?.dashboardRecentLimit || 5;
 
   const metrics = useMemo(() => {
-    const totalSecs = sessions.reduce((acc: any, s: any) => acc + (getSessionDuration(s) || 0), 0);
-    const notionCount = sessions.filter((s: any) => s.notion_page_url).length;
+    const totalSecs = sessions.reduce((acc, s) => acc + (getSessionDuration(s) || 0), 0);
+    const notionCount = sessions.filter((s) => s.notion_page_url).length;
 
     // This week: Monday 00:00 → Sunday 23:59
     const now = new Date();
@@ -162,8 +176,8 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
     monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
     monday.setHours(0, 0, 0, 0);
     const weekSecs = sessions
-      .filter((s: any) => s.started_at && new Date(s.started_at) >= monday)
-      .reduce((acc: any, s: any) => acc + (getSessionDuration(s) || 0), 0);
+      .filter((s) => s.started_at && new Date(s.started_at) >= monday)
+      .reduce((acc, s) => acc + (getSessionDuration(s) || 0), 0);
 
     return {
       totalMeetings: sessions.length,
@@ -185,7 +199,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
     const unsub = window.meetmind.on('calendar:meeting-starting', (event) => {
       setMeetingToast(event);
       // Auto-dismiss after 30 seconds
-      const t = setTimeout(() => setMeetingToast((prev: any) => (prev?.id === event.id ? null : prev)), 30_000);
+      const t = setTimeout(() => setMeetingToast((prev) => (prev?.id === event.id ? null : prev)), 30_000);
       toastTimersRef.current.push(t);
     });
     return () => {
@@ -204,7 +218,7 @@ export default function Dashboard({ onOpenSession, onNavigateToSettings, onNavig
     }
   };
 
-  const handleRecordFromCalendar = (event: any) => {
+  const handleRecordFromCalendar = (event: CalendarEvent) => {
     if (event.meetingLink) {
       window.meetmind.shell.openExternal(event.meetingLink);
     }

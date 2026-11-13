@@ -17,6 +17,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
+import { errorMessage } from './utils/errors';
+import type { FfmpegCandidate } from './audio/ffmpeg-path';
+import type { DetectionBackend } from './detection/meeting-detector';
+
+// The modules below are loaded with `require` inside the checks, not imported: the config store
+// opens the profile folder as soon as it loads, which has to wait for `setPath` below. Their types
+// come from `typeof import(...)`.
 
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'meetmind-smoke-'));
 app.setPath('userData', profile);
@@ -24,18 +31,25 @@ app.dock?.hide();
 // Several windows are opened and closed in turn; Electron's default would quit after the first.
 app.on('window-all-closed', () => {});
 
-const checks: any = [];
+interface SmokeCheck {
+  name: string;
+  ok: boolean;
+  detail?: unknown;
+  error?: string;
+}
 
-async function check(name: any, fn: any) {
+const checks: SmokeCheck[] = [];
+
+async function check(name: string, fn: () => unknown) {
   try {
     const detail = await fn();
     checks.push({ name, ok: true, detail: detail ?? null });
-  } catch (err: any) {
-    checks.push({ name, ok: false, error: err?.message || String(err) });
+  } catch (err) {
+    checks.push({ name, ok: false, error: errorMessage(err) || String(err) });
   }
 }
 
-function run(cmd: any, args: any) {
+function run(cmd: string, args: string[]) {
   return new Promise<void>((resolve, reject) => {
     const proc = spawn(cmd, args, { windowsHide: true });
     let stderr = '';
@@ -47,19 +61,19 @@ function run(cmd: any, args: any) {
 
 app.whenReady().then(async () => {
   await check('config', () => {
-    const { getConfig } = require('./utils/config');
+    const { getConfig }: typeof import('./utils/config') = require('./utils/config');
     const config = getConfig();
     return { theme: config.theme, macCaptureStrategy: config.macCaptureStrategy };
   });
 
   await check('database', async () => {
-    const db = require('./db/sessions');
+    const db: typeof import('./db/sessions') = require('./db/sessions');
     await db.initialize();
     return { sessions: db.listSessions().length };
   });
 
-  const { locate } = require('./audio/ffmpeg-path');
-  let ffmpeg: any = null;
+  const { locate }: typeof import('./audio/ffmpeg-path') = require('./audio/ffmpeg-path');
+  let ffmpeg: FfmpegCandidate | null = null;
   await check('ffmpeg', async () => {
     ffmpeg = locate('ffmpeg');
     if (!ffmpeg) throw new Error('ffmpeg not found');
@@ -75,13 +89,13 @@ app.whenReady().then(async () => {
 
   await check('webm-to-wav', async () => {
     if (!ffmpeg) throw new Error('skipped: no ffmpeg');
-    const { convertWebmToWav, getMediaDurationSeconds } = require('./audio/recorder');
+    const { convertWebmToWav, getMediaDurationSeconds }: typeof import('./audio/recorder') = require('./audio/recorder');
     const webm = path.join(profile, 'tone.webm');
     const wav = path.join(profile, 'tone.wav');
     await run(ffmpeg.path, ['-hide_banner', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:a', 'libopus', '-y', webm]);
     await convertWebmToWav(webm, wav);
     const seconds = getMediaDurationSeconds(wav);
-    if (!(seconds > 0.5)) throw new Error(`unexpected WAV duration: ${seconds}`);
+    if (seconds === null || !(seconds > 0.5)) throw new Error(`unexpected WAV duration: ${seconds}`);
     return { seconds };
   });
 
@@ -94,24 +108,23 @@ app.whenReady().then(async () => {
 
   if (process.platform === 'linux') {
     await check('linux-audio', async () => {
-      const { pulseInfo } = require('./audio/pulse');
-      const { ffmpegSupportsPulse } = require('./audio/recorder');
+      const { pulseInfo }: typeof import('./audio/pulse') = require('./audio/pulse');
+      const { ffmpegSupportsPulse, getMediaDurationSeconds }: typeof import('./audio/recorder') = require('./audio/recorder');
       // The bundled build must record from PulseAudio; a distro ffmpeg in development may not.
-      const pulseInput: any = !!ffmpeg && ffmpegSupportsPulse(ffmpeg.path);
+      const pulseInput = !!ffmpeg && ffmpegSupportsPulse(ffmpeg.path);
       if (ffmpeg?.source === 'bundled' && !pulseInput) throw new Error('bundled ffmpeg has no pulse input');
-      let info;
+      let info: Awaited<ReturnType<typeof pulseInfo>>;
       try {
         info = await pulseInfo();
-      } catch (err: any) {
-        return { available: false, reason: err.message, pulseInput };
+      } catch (err) {
+        return { available: false, reason: errorMessage(err), pulseInput };
       }
-      if (!info.defaultSink || !pulseInput) return { available: true, ...info, pulseInput, recorded: false };
+      if (!info.defaultSink || !pulseInput || !ffmpeg) return { available: true, ...info, pulseInput, recorded: false };
       // Records 1 s of the default output's monitor, as the FFmpeg fallback does.
       const wav = path.join(profile, 'monitor.wav');
       await run(ffmpeg.path, ['-hide_banner', '-f', 'pulse', '-i', `${info.defaultSink}.monitor`, '-t', '1', '-ac', '1', '-ar', '16000', '-y', wav]);
-      const { getMediaDurationSeconds } = require('./audio/recorder');
       const seconds = getMediaDurationSeconds(wav);
-      if (!(seconds > 0.5)) throw new Error(`unexpected monitor recording duration: ${seconds}`);
+      if (seconds === null || !(seconds > 0.5)) throw new Error(`unexpected monitor recording duration: ${seconds}`);
       return { available: true, ...info, pulseInput, recorded: seconds };
     });
   }
@@ -120,7 +133,7 @@ app.whenReady().then(async () => {
 
   await check('meeting-detection', async () => {
     const isLinux = process.platform === 'linux';
-    const backend = process.platform === 'win32' ? require('./detection/win32')
+    const backend: DetectionBackend | null = process.platform === 'win32' ? require('./detection/win32')
       : isLinux ? require('./detection/linux') : null;
     if (!backend) return { available: false, reason: `no backend for ${process.platform} yet` };
     if (!backend.isAvailable()) {
@@ -148,10 +161,15 @@ app.whenReady().then(async () => {
   });
 
   await check('meeting-overlay', async () => {
-    const overlay = require('./overlay/overlay-window');
+    const overlay: typeof import('./overlay/overlay-window') = require('./overlay/overlay-window');
     overlay.registerOverlayIpc();
     const startedAt = Date.now();
-    overlay.showOverlay({ mode: 'prompt', meeting: { key: 'smoke', title: 'Smoke test', platformLabel: 'Google Meet' } });
+    overlay.showOverlay({
+      mode: 'prompt',
+      meeting: {
+        key: 'smoke', platform: 'meet', platformLabel: 'Google Meet', appLabel: 'Smoke test', title: 'Smoke test', bounds: null, url: '',
+      },
+    });
     try {
       // Only up to the renderer's acknowledgement: CI runners may not composite, so the paint
       // check that follows it in the app is skipped here.
@@ -170,7 +188,7 @@ app.whenReady().then(async () => {
   // The main window is created on demand and replaced when it fails, so creating one has to work
   // every time: load the app in it and wait for the renderer to report that it mounted.
   await check('main-window', async () => {
-    const mainWindow = require('./window/main-window');
+    const mainWindow: typeof import('./window/main-window') = require('./window/main-window');
     mainWindow.registerMainWindowIpc();
     const startedAt = Date.now();
     mainWindow.openMainWindow();
@@ -190,14 +208,14 @@ app.whenReady().then(async () => {
   // Recordings run in a hidden capture window: check that it loads and its page answers. Opening
   // the audio devices themselves is left to a real recording (CI runners have none to open).
   await check('capture-window', async () => {
-    const capture = require('./audio/capture-window');
+    const capture: typeof import('./audio/capture-window') = require('./audio/capture-window');
     capture.registerCaptureIpc();
     const startedAt = Date.now();
     await capture.probeCaptureWindow();
     return { ms: Date.now() - startedAt };
   });
 
-  const ok = checks.every((c: any) => c.ok);
+  const ok = checks.every((c) => c.ok);
   const report = { ok, version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged, checks };
   process.stdout.write(`MEETMIND_SMOKE ${JSON.stringify(report)}\n`);
   try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* temp dir */ }
