@@ -30,7 +30,7 @@ export default [
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
       ],
       '@typescript-eslint/no-explicit-any': 'error',
-      // Lazy `require()` of native/heavy modules (koffi, sql.js, googleapis...) must stay synchronous.
+      // Lazy `require()` of native/heavy modules (koffi, sql.js, the Google and Notion clients...) must stay synchronous.
       '@typescript-eslint/no-require-imports': 'off',
     },
   },

@@ -77,12 +77,18 @@ async function getJson<R = GoogleOperation>(url: string, headers?: Record<string
  * Used for Speech-to-Text v2, which does not accept API keys.
  */
 async function getServiceAccountAccessToken(keyFilePath: string) {
-  const { GoogleAuth } = require('google-auth-library') as typeof import('google-auth-library');
-  const auth = new GoogleAuth({
-    keyFile: keyFilePath,
+  // Only a service-account key is accepted: the auth library no longer loads arbitrary credential
+  // files (other credential types can make it call out to commands or URLs named in the file).
+  const key = JSON.parse(fs.readFileSync(keyFilePath, 'utf8')) as { type?: unknown; client_email?: unknown; private_key?: unknown };
+  if (key.type !== 'service_account' || typeof key.client_email !== 'string' || typeof key.private_key !== 'string') {
+    throw new Error('The Google key file isn’t a service account key. Create a JSON key for a service account in Google Cloud.');
+  }
+  const { JWT } = require('google-auth-library') as typeof import('google-auth-library');
+  const client = new JWT({
+    email: key.client_email,
+    key: key.private_key,
     scopes: ['https://www.googleapis.com/auth/cloud-platform'],
   });
-  const client = await auth.getClient();
   const tokenResponse = await client.getAccessToken();
   return tokenResponse.token;
 }

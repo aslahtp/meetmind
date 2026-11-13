@@ -2,15 +2,14 @@
 // 'google') brings its own OAuth client from the user's Google Cloud project; sign-in runs a
 // loopback redirect server, one at a time.
 
-import { google, Auth, type calendar_v3 } from 'googleapis';
+import { OAuth2Client, CodeChallengeMethod } from 'google-auth-library';
+import { calendar as calendarApi, type calendar_v3 } from '@googleapis/calendar';
 import crypto from 'crypto';
 import http from 'http';
 import type { StoredCalendarSource } from '../shared';
 import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
 import { extractMeetingLink, type SourceEvent } from './calendar-events';
-
-type OAuth2Client = InstanceType<typeof google.auth.OAuth2>;
 
 /** What the manager reads off a failed fetch or sign-in to word the error for the UI. */
 export type CalendarFetchError = Error & {
@@ -20,8 +19,10 @@ export type CalendarFetchError = Error & {
   cancelled?: boolean;
 };
 
-/** The parts of a Google API error that are read here. */
-type GoogleApiError = Error & { code?: number | string; response?: { data?: { error?: string } } };
+/** The parts of a Google API error that are read here (`code` or `status` carries the HTTP status). */
+type GoogleApiError = Error & { code?: number | string; status?: number; response?: { data?: { error?: string } } };
+
+const USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
 // Scopes for read-only calendar access + user profile email
 const SCOPES = [
@@ -53,7 +54,7 @@ function getClient(source: StoredCalendarSource) {
   const cached = clients.get(source.id);
   if (cached && cached.key === key) return cached.client;
 
-  const client = new google.auth.OAuth2(source.clientId, source.clientSecret, `http://localhost:${LOOPBACK_PORT_START}`);
+  const client = new OAuth2Client({ clientId: source.clientId, clientSecret: source.clientSecret, redirectUri: `http://localhost:${LOOPBACK_PORT_START}` });
   client.setCredentials({ refresh_token: source.refreshToken });
   clients.set(source.id, { client, key });
   return client;
@@ -87,7 +88,7 @@ async function startAuthFlow({
   const { shell } = require('electron') as typeof import('electron');
   const port = await findFreePort(LOOPBACK_PORT_START, LOOPBACK_PORT_END);
   const redirectUri = `http://localhost:${port}`;
-  const client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  const client = new OAuth2Client({ clientId, clientSecret, redirectUri });
 
   // Any web page or local app can reach the loopback port. `state` proves a redirect belongs to
   // this sign-in (so nobody else can finish or cancel it), and PKCE means a code issued to any
@@ -101,7 +102,7 @@ async function startAuthFlow({
     prompt: 'consent', // Always prompt to ensure we get a refresh token
     state,
     code_challenge: codeChallenge,
-    code_challenge_method: Auth.CodeChallengeMethod.S256,
+    code_challenge_method: CodeChallengeMethod.S256,
   });
 
   return new Promise((resolve, reject) => {
@@ -156,8 +157,7 @@ async function startAuthFlow({
 
         let email = '';
         try {
-          const oauth2 = google.oauth2({ version: 'v2', auth: client });
-          const userInfo = await oauth2.userinfo.get();
+          const userInfo = await client.request<{ email?: string }>({ url: USERINFO_URL });
           email = userInfo.data.email || '';
         } catch (e) {
           logger.warn('Could not fetch Google user email', { error: errorMessage(e) });
@@ -218,7 +218,7 @@ async function fetchEvents(source: StoredCalendarSource, { from, to }: { from: n
   const client = getClient(source);
 
   try {
-    const calendar = google.calendar({ version: 'v3', auth: client });
+    const calendar = calendarApi({ version: 'v3', auth: client });
     const res = await calendar.events.list({
       calendarId: 'primary',
       timeMin: new Date(from).toISOString(),
@@ -238,7 +238,7 @@ async function fetchEvents(source: StoredCalendarSource, { from, to }: { from: n
 
     // Revoked/expired refresh token: warn once, then back off to one real attempt a day with
     // this token (the poller keeps running) instead of failing every minute.
-    if (msg.includes('invalid_grant') || err.response?.data?.error === 'invalid_grant' || err.code === 401) {
+    if (msg.includes('invalid_grant') || err.response?.data?.error === 'invalid_grant' || httpStatus(err) === 401) {
       if (!isTokenRejected(source)) {
         rejected.set(source.id, { token: source.refreshToken, at: Date.now() });
         logger.warn('Google Calendar authorization was revoked or has expired; retrying once a day until you sign in again', { calendar: source.name, error: msg });
@@ -253,7 +253,7 @@ async function fetchEvents(source: StoredCalendarSource, { from, to }: { from: n
       throw error;
     }
 
-    if (err.code === 403) throw authError(AUTH_EXPIRED_MESSAGE);
+    if (httpStatus(err) === 403) throw authError(AUTH_EXPIRED_MESSAGE);
     throw new Error(`Couldn’t load Google Calendar: ${msg}`);
   }
 }
@@ -281,6 +281,11 @@ function normalizeEvent(event: calendar_v3.Schema$Event): SourceEvent {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// The HTTP status of a failed API call: the client library puts it in `code`, newer versions in `status`.
+function httpStatus(err: GoogleApiError) {
+  return typeof err.code === 'number' ? err.code : err.status;
+}
 
 // Constant-time comparison of the redirect's `state` with the one this sign-in sent.
 function isExpectedState(received: string | null, expected: string) {

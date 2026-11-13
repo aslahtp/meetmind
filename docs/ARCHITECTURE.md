@@ -573,7 +573,8 @@ read). The controller checks that the recording is not silent and then calls the
   polled via `v1/operations/<name>`.
 - **v2** (`https://speech.googleapis.com/v2/...` for sync recognize, and a separate
   `STT_V2_ENDPOINT` for BatchRecognize): faster and uses the `chirp_3` model, but **does not
-  support API-key authentication** at all; it requires a Bearer token from a service account.
+  support API-key authentication** at all; it requires a Bearer token from a service account
+  (`google-auth-library`'s `JWT` client, built from the key file, which must be a service-account key).
   Two sub-modes:
   - **Sync recognize** (`projects.locations.recognizers.recognize`): 60 second limit per
     request, so also chunked at `CHUNK_DURATION_SECONDS`.
@@ -646,7 +647,7 @@ app names (`Google Meet`, `Zoom Meeting`, `Microsoft Teams`…) and ad-hoc Meet 
 `applyMeetingTitle()` makes it the notes title (and the Markdown `#` heading) whatever the model
 wrote. Without one, the session takes the LLM's title.
 
-- **Gemini** (`llm/gemini.ts`, `@google/generative-ai`): `gemini-3.8-flash` (default),
+- **Gemini** (`llm/gemini.ts`, Google's `@google/genai` SDK, streamed with `generateContentStream`): `gemini-3.8-flash` (default),
   `gemini-3.7-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`, plus Google's auto-updating
   `latestModels` (`gemini-flash-latest`, `gemini-flash-lite-latest`, `gemini-pro-latest`), which
   Settings offers under a Latest / Pinned / Custom toggle. Retired model IDs saved
@@ -848,7 +849,9 @@ Settings › Integrations › Calendars. They are saved in config as `calendars`
   included), recurring events expanded inside the window with their moved and cancelled
   occurrences, an undefined IANA `TZID` resolved through `Intl`, floating times as local time.
 - **Google account** (`type: 'google'`, `clientId`, `clientSecret`, `refreshToken`, `email`): the
-  Calendar API's primary calendar through `googleapis` (`google.ts`), with an OAuth client the
+  Calendar API's primary calendar through `@googleapis/calendar` and `google-auth-library`'s
+  `OAuth2Client` (`google.ts`, loaded only once a Google calendar is synced or signed in to, so
+  startup doesn't load the Google libraries), with an OAuth client the
   user creates in their own Google Cloud project (MeetMind ships no client secret). Scopes are
   read-only: `calendar.readonly` and `userinfo.email`. Sign-in runs one at a time on a
   short-lived loopback server on a port in `39880`-`39890` (separate from the WebSocket bridge's
@@ -950,13 +953,13 @@ PDF is controlled by `pdfIncludeTranscript` (default off).
 | Google Cloud Speech-to-Text v1 | Transcription (fallback, no project ID configured) | API key | `electron/providers/stt/google.ts` |
 | Google Cloud Speech-to-Text v2 | Transcription (`chirp_3` sync, or BatchRecognize for long audio) | Service account Bearer token (no API-key auth) | `electron/providers/stt/google.ts` |
 | Google Cloud Storage | Staging WAV files for v2 BatchRecognize | Service account key file | `electron/providers/stt/google.ts` (`@google-cloud/storage`) |
-| Google Gemini API | Meeting notes generation (Stage 2) | API key | `electron/providers/llm/gemini.ts` (`@google/generative-ai`) |
+| Google Gemini API | Meeting notes generation (Stage 2) | API key | `electron/providers/llm/gemini.ts` (`@google/genai`) |
 | Anthropic Claude API | Notes generation (Sonnet, Fable, Opus, Haiku) | API key | `electron/providers/llm/claude.ts` (REST via `fetch`) |
 | Groq | Notes generation (Llama, GPT-OSS) and Whisper transcription | API key (one key for both) | `electron/providers/llm/groq.ts`, `electron/providers/stt/groq.ts` (REST via `fetch`) |
 | AssemblyAI | Transcription (alternative engine) | API key | `electron/providers/stt/assemblyai.ts` (`assemblyai` SDK + REST) |
 | Sarvam AI | Transcription, `saaras:v3` model for English/Indic code-switching | API key | `electron/providers/stt/sarvam.ts` (REST) |
 | Notion API | Optional notes sync (Stage 3) | Internal integration token | `electron/services/notion.ts` (`@notionhq/client`) |
-| Google Calendar API | Optional upcoming meetings and reminders (Google accounts) | OAuth2 (user-supplied client ID/secret) | `electron/calendar/google.ts` (`googleapis`) |
+| Google Calendar API | Optional upcoming meetings and reminders (Google accounts) | OAuth2 (user-supplied client ID/secret) | `electron/calendar/google.ts` (`@googleapis/calendar`, `google-auth-library`) |
 | ICS calendar feeds | Optional upcoming meetings and reminders (Google, Outlook, Apple, Proton…) | The private subscription URL itself | `electron/calendar/ics.ts` (`fetch`), parsed by `ical.js` |
 | GitHub Releases | Auto-update distribution | none (public releases) | `electron-updater`, configured in `electron-builder.yml` |
 | GyanD/codexffmpeg (gyan.dev builds) | Windows FFmpeg binaries | none | Pinned + SHA-256 verified in `electron/audio/ffmpeg-sources.ts`, used by `scripts/fetch-ffmpeg.ts` (bundled build) and `ffmpeg:install` |
@@ -980,13 +983,14 @@ From `package.json` (pnpm, Node 22.12+, Windows, macOS or Linux).
 | Package | Version | Purpose |
 | --- | --- | --- |
 | `@google-cloud/storage` | ^7.22.0 | GCS upload for Speech-to-Text v2 BatchRecognize |
-| `@google/generative-ai` | ^0.21.0 | Gemini API client (notes generation) |
+| `@google/genai` | ^3.2.0 | Gemini API client (notes generation) |
+| `@googleapis/calendar` | ^20.1.0 | Google Calendar API client (Calendar v3 only), loaded on first use |
 | `@notionhq/client` | ^2.3.0 | Notion API client (Stage 3 upload) |
 | `assemblyai` | ^4.41.2 | AssemblyAI SDK (transcription engine + connection test) |
 | `electron-store` | ^8.2.0 | Persisted settings (JSON-backed key/value store) |
 | `electron-updater` | ^6.8.9 | Auto-update via GitHub Releases |
 | `fluent-ffmpeg` | ^2.1.3 | ffmpeg process control (audio capture and conversion) |
-| `googleapis` | ^176.0.0 | Google Calendar OAuth2 + Calendar API client |
+| `google-auth-library` | ^11.3.4 | Google OAuth2 for Calendar sign-in and the service-account token for Speech-to-Text v2 |
 | `ical.js` | ^2.2.1 | Parses ICS calendar feeds (time zones, recurrence expansion) |
 | `koffi` | ^3.3.3 | FFI to `user32`/`kernel32`/`advapi32` for meeting detection (mic users, window titles) on Windows, and to CoreGraphics for the macOS screen-capture permission check (not used on Linux, whose package leaves its binaries out); prebuilt binaries from its `@koromix/koffi-<os>-<cpu>` optional dependencies (each package ships only its own OS's, via `electron-builder.yml` `files`), so its install script stays disabled in `allowBuilds` |
 | `lucide-react` | ^1.48.0 | Renderer icon set |

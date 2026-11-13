@@ -6,6 +6,14 @@ updated: 2026-11-13
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.19.3] - 2026-11-13
+
+### Changed
+
+- **Performance**: MeetMind opens about twice as fast and uses about a quarter less memory; the Google Calendar and Notion libraries now load only when they are used.
+- **Gemini**: Notes are written through Google's current Gen AI SDK, and Gemini errors now read like the other providers' (e.g. "Gemini API error (400): API key not valid").
+- **Google STT**: Speech-to-Text v2 now accepts only a service-account JSON key file and says so if given another kind, following Google's auth library, which deprecates loading other credential files.
+
 ## [4.19.2] - 2026-11-13
 
 ### Changed

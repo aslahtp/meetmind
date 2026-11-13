@@ -297,30 +297,33 @@ describe('Groq LLM', () => {
 });
 
 describe('Gemini LLM', () => {
-  /** Stand-in for @google/generative-ai streaming the given text pieces. */
+  /** Stand-in for @google/genai streaming the given text pieces. */
   interface SdkCalls {
     apiKey?: string;
     opts?: unknown;
     prompt?: unknown;
   }
 
-  function fakeSdk(pieces: string[], calls: SdkCalls) {
+  interface StreamParams {
+    model: string;
+    contents: unknown;
+    config?: { systemInstruction?: unknown };
+  }
+
+  function fakeSdk(pieces: string[], calls: SdkCalls, last: object = {}) {
     return {
-      GoogleGenerativeAI: class {
-        constructor(apiKey: string) { calls.apiKey = apiKey; }
-        getGenerativeModel(opts: unknown) {
-          calls.opts = opts;
-          return {
-            async generateContentStream(prompt: unknown) {
-              calls.prompt = prompt;
-              return {
-                stream: (async function* () {
-                  for (const p of pieces) yield { text: () => p };
-                })(),
-              };
-            },
-          };
-        }
+      GoogleGenAI: class {
+        constructor({ apiKey }: { apiKey: string }) { calls.apiKey = apiKey; }
+        models = {
+          async generateContentStream({ model, contents, config }: StreamParams) {
+            calls.prompt = contents;
+            calls.opts = { model, systemInstruction: config?.systemInstruction };
+            return (async function* () {
+              for (const p of pieces) yield { text: p };
+              if (!pieces.length) yield { text: undefined, ...last };
+            })();
+          },
+        };
       },
     };
   }
@@ -339,6 +342,32 @@ describe('Gemini LLM', () => {
 
   it('requires an API key', async () => {
     await expect(geminiLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: {} })).rejects.toThrow(/API key/);
+  });
+
+  it("turns the SDK's nested JSON error into a readable message with its status", async () => {
+    const body = JSON.stringify({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT' } });
+    const failing = {
+      GoogleGenAI: class {
+        models = {
+          async generateContentStream(): Promise<never> {
+            throw new Error(JSON.stringify({ error: { message: body } })); // streaming nests the body once more
+          },
+        };
+      },
+    };
+    const err = await geminiLlm
+      .generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: { geminiApiKey: 'g' } }, { sdk: failing })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe('Gemini API error (400): API key not valid. Please pass a valid API key.');
+    expect((err as Error & { status?: number }).status).toBe(400);
+  });
+
+  it('throws on an empty answer, naming why, so the fallback model runs', async () => {
+    const blocked = fakeSdk([], {}, { promptFeedback: { blockReason: 'SAFETY' } });
+    await expect(
+      geminiLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: { geminiApiKey: 'g' } }, { sdk: blocked })
+    ).rejects.toThrow('Gemini returned no text (SAFETY)');
   });
 });
 

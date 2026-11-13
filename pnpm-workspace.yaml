@@ -6,6 +6,9 @@ allowBuilds:
   # koffi's install script only builds from source; the prebuilt binary comes from its
   # @koromix/koffi-<platform> optional dependency, so the script never needs to run.
   koffi: false
+  # protobufjs (pulled in by @google/genai) only prints a version-range warning on install;
+  # it builds nothing, so the script never needs to run.
+  protobufjs: false
 # Electron 42+ has no install script: it downloads its binary the first time it is launched,
 # or explicitly with `pnpm exec install-electron`.
 nodeLinker: hoisted

@@ -18,10 +18,18 @@ import type {
 import { getConfig, setConfig } from '../utils/config';
 import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
-import * as google from './google';
 import type { CalendarFetchError } from './google';
 import { fetchIcs } from './ics';
 import { parseIcs } from './ics-parse';
+
+// The Google client libraries load only once a Google calendar is synced or signed in to, so
+// startup doesn't pay for them when no Google account is connected.
+type GoogleCalendar = typeof import('./google');
+let googleModule: GoogleCalendar | null = null;
+function google(): GoogleCalendar {
+  googleModule ??= require('./google') as GoogleCalendar;
+  return googleModule;
+}
 import { mergeEvents, dueToStart, pruneNotified, eventKey, eventTimeMs, type SourceEvent } from './calendar-events';
 import { MAX_CALENDARS, SYNC_INTERVALS, normalizeIcsUrl, icsHost, cleanName, canAddSource, isGoogleSignedIn, publicSource, pickSourceUpdate, resolveGoogleClient } from './calendar-sources';
 
@@ -90,7 +98,7 @@ function forget(id: string) {
   cache.delete(id);
   inflight.delete(id);
   status.delete(id);
-  google.forgetSource(id);
+  googleModule?.forgetSource(id); // nothing to forget if Google was never loaded
 }
 
 function fetchWindow() {
@@ -143,7 +151,7 @@ async function fetchSource(
     try {
       let entry: CacheEntry;
       if (source.type === 'google') {
-        entry = { events: await google.fetchEvents(source, fetchWindow()) };
+        entry = { events: await google().fetchEvents(source, fetchWindow()) };
       } else {
         entry = await loadIcs(source, cached);
       }
@@ -258,7 +266,7 @@ async function addIcs({ name, url: rawUrl }: Extract<CalendarAddInput, { type: '
 async function addGoogle({ name, clientId, clientSecret }: Extract<CalendarAddInput, { type: 'google' }>) {
   assertRoom();
   const client = resolveGoogleClient(sources(), { clientId, clientSecret });
-  const { refreshToken, email } = await google.startAuthFlow(client);
+  const { refreshToken, email } = await google().startAuthFlow(client);
 
   // The same account signed in again: refresh that entry instead of adding a duplicate.
   const current = sources();
@@ -328,7 +336,7 @@ function removeSource(id: string): { removed: true } {
 async function reconnect(id: string) {
   const source = findSource(id);
   if (source.type !== 'google') throw new Error('Only Google accounts sign in.');
-  const { refreshToken, email } = await google.startAuthFlow({ clientId: source.clientId, clientSecret: source.clientSecret });
+  const { refreshToken, email } = await google().startAuthFlow({ clientId: source.clientId, clientSecret: source.clientSecret });
   const updated = { ...findSource(id), refreshToken, email: email || source.email };
   forget(id);
   saveSources(sources().map((s) => (s.id === id ? updated : s)));
@@ -336,7 +344,7 @@ async function reconnect(id: string) {
 }
 
 function cancelAuth() {
-  google.cancelAuthFlow();
+  googleModule?.cancelAuthFlow(); // no sign-in can be waiting if Google was never loaded
 }
 
 // ── "Meeting starting" poller ─────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { Client } from '@notionhq/client';
+import type { Client } from '@notionhq/client';
 import type {
   BlockObjectRequest,
   CreatePageParameters,
@@ -6,6 +6,12 @@ import type {
 } from '@notionhq/client/build/src/api-endpoints';
 import type { Notes, TranscriptSegment } from '../shared';
 import logger from '../utils/logger';
+
+// The Notion client loads on first use, so startup doesn't pay for it when Notion isn't set up.
+function notionClient(auth: string): Client {
+  const { Client: NotionClient } = require('@notionhq/client') as typeof import('@notionhq/client');
+  return new NotionClient({ auth });
+}
 import { errorMessage } from '../utils/errors';
 
 const NOTION_BLOCK_LIMIT = 100;
@@ -669,7 +675,7 @@ async function uploadToNotion(
   if (!parentId) throw new Error('Notion parent page/database ID is required. Paste it from the Notion URL into Settings.');
 
   const cleanParentId = normalizeNotionId(parentId) || parentId;
-  const notion = new Client({ auth: notionToken });
+  const notion = notionClient(notionToken);
 
   const meetingTitle = (notes.title || 'Meeting Notes').slice(0, 1990);
 
@@ -743,7 +749,7 @@ async function uploadToNotion(
 
 async function testNotionConnection(parentId: string | null | undefined, notionToken: string | null | undefined) {
   if (!notionToken) throw new Error('Notion token is required');
-  const notion = new Client({ auth: notionToken });
+  const notion = notionClient(notionToken);
   if (parentId) {
     const cleanParentId = normalizeNotionId(parentId) || parentId;
     const { type, id: resolvedId } = await detectParentType(notion, cleanParentId);
@@ -764,7 +770,7 @@ async function trashNotionPage(pageRef: unknown, notionToken: string | null | un
   const pageId = normalizeNotionId(pageRef);
   if (!pageId || !notionToken) return false;
   try {
-    const notion = new Client({ auth: notionToken });
+    const notion = notionClient(notionToken);
     await notion.pages.update({ page_id: pageId, archived: true });
     logger.info('Moved previous Notion page to trash', { pageId });
     return true;
