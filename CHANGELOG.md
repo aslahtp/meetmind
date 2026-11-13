@@ -14,6 +14,10 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 - **Gemini**: Notes are written through Google's current Gen AI SDK, and Gemini errors now read like the other providers' (e.g. "Gemini API error (400): API key not valid").
 - **Google STT**: Speech-to-Text v2 now accepts only a service-account JSON key file and says so if given another kind, following Google's auth library, which deprecates loading other credential files.
 
+### Fixed
+
+- **Chrome extension**: The meeting overlay now only accepts messages from the Meet or Zoom tab it is shown in, and "Open in Notion" only opens Notion page links.
+
 ## [4.19.2] - 2026-11-13
 
 ### Changed

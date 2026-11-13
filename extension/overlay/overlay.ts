@@ -281,7 +281,7 @@ function buildCompleteUI() {
       'aria-label': 'Open in Notion',
     });
     notionBtn.appendChild(iconNotion());
-    notionBtn.addEventListener('click', () => window.open(openUrl, '_blank'));
+    notionBtn.addEventListener('click', () => window.open(openUrl, '_blank', 'noopener'));
     pill.appendChild(notionBtn);
   }
 
@@ -378,6 +378,27 @@ function stopRecording() {
 
 // ── Message handler ───────────────────────────────────────────────────────────
 
+/**
+ * Only the content script in the meeting tab may drive the overlay: the message must come from the
+ * parent frame (the tab that injected this iframe) on a meeting site the manifest injects into.
+ * Any other window or frame could otherwise post the same messages.
+ */
+function isFromMeetingTab(event: MessageEvent<unknown>): boolean {
+  if (event.source !== window.parent) return false;
+  let url: URL;
+  try { url = new URL(event.origin); } catch { return false; }
+  if (url.protocol !== 'https:') return false;
+  return url.hostname === 'meet.google.com' || url.hostname === 'zoom.us' || url.hostname.endsWith('.zoom.us');
+}
+
+// A Notion page link as MeetMind's Notion upload returns it (https://www.notion.so/…), or a
+// workspace's public notion.site page. "Open in Notion" opens nothing else.
+const NOTION_PAGE_URL = /^https:\/\/(?:www\.)?notion\.so\/|^https:\/\/[a-z0-9-]+\.notion\.site\//i;
+
+function notionPageUrl(value: unknown): string | null {
+  return typeof value === 'string' && NOTION_PAGE_URL.test(value) ? value : null;
+}
+
 /** Checks a postMessage from the content script (see ContentToOverlayMessage). */
 function parseHostMessage(data: unknown): ContentToOverlayMessage | null {
   if (typeof data !== 'object' || data === null) return null;
@@ -412,7 +433,7 @@ function parseHostMessage(data: unknown): ContentToOverlayMessage | null {
           return {
             type: 'UPDATE_OVERLAY',
             state: 'COMPLETE',
-            notionUrl: text(msg.notionUrl) ?? null,
+            notionUrl: notionPageUrl(msg.notionUrl),
             sessionId: text(msg.sessionId),
           };
         case 'ERROR':
@@ -430,6 +451,7 @@ function postToHost(message: OverlayToContentMessage) {
 }
 
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
+  if (!isFromMeetingTab(event)) return;
   const msg = parseHostMessage(event.data);
   if (!msg) return;
 
