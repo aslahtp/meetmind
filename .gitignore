@@ -4,12 +4,16 @@ dist
 
 .env
 
+
 ffmpeg.exe
 ffprobe.exe
 ffplay.exe
-# macOS and Linux FFmpeg binaries (scripts/fetch-ffmpeg.js); no extension, so match the folders
+# macOS and Linux FFmpeg binaries (scripts/fetch-ffmpeg.ts); no extension, so match the folders
 assets/ffmpeg/mac-*/
 assets/ffmpeg/linux-*/
 
 .cursor
 _site
+
+setup_and_repo.md
+plan.md

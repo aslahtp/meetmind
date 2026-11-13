@@ -12,14 +12,14 @@ Baseline: MeetMind 3.6.2 as described in `docs/ARCHITECTURE.md`.
 >   Windows-style screen handler); FFmpeg `-f pulse` recording of the default output's monitor and
 >   the default input is the fallback, used when the renderer gets no system audio and `pactl` and
 >   a pulse-capable FFmpeg are present. There is no `capture/{win,mac,linux}.js` abstraction:
->   `mixer.js` and `recorder.js` take a `backend` instead.
+>   `mixer.ts` and `recorder.ts` take a `backend` instead.
 > - **FFmpeg**: a BtbN/FFmpeg-Builds GPL static build (glibc 2.28+, with PulseAudio input), pinned
 >   by SHA-256 like the others; the in-app download goes to `userData/ffmpeg`.
 > - **Packaging**: AppImage + `.deb`, x64 only, no rpm. Only the AppImage updates itself; a `.deb`
 >   install checks and links to the new package.
 > - **Meeting detection** is built for Linux: `pactl list source-outputs` for apps on the mic and
 >   Electron's `desktopCapturer` window list for titles (X11/XWayland only; MeetMind forces
->   XWayland when it can), in `electron/detection/linux.js`.
+>   XWayland when it can), in `electron/detection/linux.ts`.
 > - **Auto-launch** writes an XDG autostart entry, as section 3.3 suggested.
 >
 > For macOS:
@@ -35,10 +35,10 @@ Baseline: MeetMind 3.6.2 as described in `docs/ARCHITECTURE.md`.
 > - **No ffmpeg `avfoundation` fallback**: the renderer records the mic alone if system audio is
 >   unavailable.
 > - **FFmpeg**: pinned per-arch builds from ffmpeg.martin-riedl.de with SHA-256 checks
->   (`electron/audio/ffmpeg-sources.js`, `scripts/fetch-ffmpeg.js`); the in-app download goes to
+>   (`electron/audio/ffmpeg-sources.ts`, `scripts/fetch-ffmpeg.ts`); the in-app download goes to
 >   `userData/ffmpeg`.
 > - **Screen Recording can be requested programmatically** with `CGRequestScreenCaptureAccess()`
->   (section 5.4 below says it can't); `electron/services/permissions.js` uses it.
+>   (section 5.4 below says it can't); `electron/services/permissions.ts` uses it.
 > - **Meeting detection on macOS** (CoreAudio process list + CoreGraphics window titles) is not
 >   built yet.
 
@@ -49,7 +49,7 @@ Baseline: MeetMind 3.6.2 as described in `docs/ARCHITECTURE.md`.
 | Option | Backend language | Rewrite cost for MeetMind | System audio capture | Auto-update | Verdict |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | Electron (current) | Node.js | Low: only platform-specific audio code and packaging change | Still needs per-OS native work | electron-updater already in use; supports all 3 OSes | **Recommended** |
-| Tauri | Rust | High: `main.js` (~1700 lines) and every service in `electron/services/` rewritten, Node SDKs replaced by REST calls or crates | Still needs per-OS native work; system webviews have no Chromium loopback | Official updater plugin, all 3 OSes | Revisit only if installer size becomes a real problem |
+| Tauri | Rust | High: `main.ts` (~1700 lines) and every service in `electron/services/` rewritten, Node SDKs replaced by REST calls or crates | Still needs per-OS native work; system webviews have no Chromium loopback | Official updater plugin, all 3 OSes | Revisit only if installer size becomes a real problem |
 | tinyjs | JavaScript on txiki.js (not Node) | High: backend is not Node, so Node-dependent SDKs (`googleapis`, `@google-cloud/storage`, `@notionhq/client`, `assemblyai`) are unlikely to work as-is **[verify]** | Same problem; also known Web Audio issues under WebKitGTK per its own docs | Built-in updater | Not recommended: Windows and Linux are beta per its site, macOS 15+ only |
 
 Key point: the hardest part of this port is **system audio capture on macOS**. It exists regardless of framework, so a framework switch adds a rewrite without removing the hard part.
@@ -68,14 +68,14 @@ Goal: make the codebase platform-aware without changing Windows behavior. Ship t
 
 ### 3.1 Capture abstraction
 
-Move the Windows-specific pieces of `electron/audio/mixer.js` and the capture path selection in `main.js` behind one interface:
+Move the Windows-specific pieces of `electron/audio/mixer.ts` and the capture path selection in `main.ts` behind one interface:
 
 ```
 electron/audio/capture/
   index.js      selects implementation by process.platform
   win.js        existing WASAPI loopback + dshow logic, moved as-is
   mac.js        Phase 2
-  linux.js      Phase 1
+  linux.ts      Phase 1
 ```
 
 ```js
@@ -104,7 +104,7 @@ Keep `WASAPI_LOOPBACK_ID`, `wasapiKnownUnsupported`, `detectDshowLoopback` and t
 
 ### 3.2 FFmpeg path resolution
 
-Update `electron/audio/ffmpeg-path.js`:
+Update `electron/audio/ffmpeg-path.ts`:
 
 - Binary names: `ffmpeg.exe` / `ffprobe.exe` on Windows, `ffmpeg` / `ffprobe` elsewhere.
 - Resource layout: `assets/ffmpeg/<platform>-<arch>/` locally, `ffmpeg/` in the packaged app via per-platform `extraResources`.
@@ -126,7 +126,7 @@ Update `electron/audio/ffmpeg-path.js`:
 | Auto-launch (`autoLaunch`) | `app.setLoginItemSettings` | `app.setLoginItemSettings` works | Not supported by that API; write a `.desktop` file to `~/.config/autostart/` |
 | Default PDF folder | Downloads | `app.getPath('downloads')` (already portable) | Same |
 
-Add `renderer/lib/platform.js` helpers (the file already exists) so the UI can hide or adapt Windows-only settings, such as the WASAPI/Stereo Mix device options.
+Add `renderer/lib/platform.ts` helpers (the file already exists) so the UI can hide or adapt Windows-only settings, such as the WASAPI/Stereo Mix device options.
 
 ### 3.4 Exit criteria
 
@@ -138,7 +138,7 @@ Add `renderer/lib/platform.js` helpers (the file already exists) so the UI can h
 
 Linux goes first because it is the cheapest: PulseAudio and PipeWire (through `pipewire-pulse`) expose a "monitor" source for every output device, which ffmpeg can capture directly.
 
-### 4.1 Capture (`linux.js`)
+### 4.1 Capture (`linux.ts`)
 
 1. Find the default output sink: `pactl get-default-sink`. Its monitor source is `<sink-name>.monitor`.
 2. Find the default mic: `pactl get-default-source`, or let the user choose from `pactl list short sources`, filtering out `.monitor` entries.
@@ -283,7 +283,7 @@ Notes:
 - Move the current top-level FFmpeg `extraResources` entry into the `win` section so each OS only ships its own binaries.
 - Keep `!assets/ffmpeg/**` in `files` so FFmpeg never lands inside the `asar`.
 - Keep `dist/renderer/**` in `build.files` (the documented blank-window failure mode).
-- `icon.icns` for macOS can be generated from the existing source icon; extend `scripts/generate-icons.js` **[verify whether electron-builder can derive it automatically from a 512 px or 1024 px PNG]**.
+- `icon.icns` for macOS can be generated from the existing source icon; extend `scripts/generate-icons.ts` **[verify whether electron-builder can derive it automatically from a 512 px or 1024 px PNG]**.
 - `afterPack` (`scripts/after-pack.js`) and `rcedit` are Windows-oriented; guard them with a platform check.
 
 ## 7. Phase 4: CI/CD
@@ -338,7 +338,7 @@ jobs:
       - uses: actions/checkout@<pinned-sha>
       - uses: ./.github/actions/setup
       - name: Fetch and verify FFmpeg
-        run: node scripts/fetch-ffmpeg.js
+        run: node scripts/fetch-ffmpeg.ts
         env:
           TARGET_PLATFORM: ${{ runner.os }}
       - name: Build mac audio helper
@@ -400,7 +400,7 @@ Your current guarantees (fork PRs get no secrets, only `publish` has `contents: 
 
 - Signing secrets live in a **protected GitHub Environment** (`release-signing`) scoped to the release workflow on `main`. PR runs of `ci.yml` never reference it.
 - Only the macOS leg reads them (Windows stays unsigned unless you add signing later).
-- `scripts/fetch-ffmpeg.js` replaces the inline FFmpeg download, with one pinned version and SHA-256 per `<platform>-<arch>`, for example `FFMPEG_SHA256_WIN_X64`, `FFMPEG_SHA256_MAC_ARM64`, `FFMPEG_SHA256_MAC_X64`, `FFMPEG_SHA256_LINUX_X64`.
+- `scripts/fetch-ffmpeg.ts` replaces the inline FFmpeg download, with one pinned version and SHA-256 per `<platform>-<arch>`, for example `FFMPEG_SHA256_WIN_X64`, `FFMPEG_SHA256_MAC_ARM64`, `FFMPEG_SHA256_MAC_X64`, `FFMPEG_SHA256_LINUX_X64`.
 - Add the new signing and helper-build files to `.github/CODEOWNERS`.
 
 ### 7.5 Runner notes
@@ -415,7 +415,7 @@ Your current guarantees (fork PRs get no secrets, only `publish` has `contents: 
 | Test | Covers |
 | :--- | :--- |
 | `tests/capture-args.test.js` | ffmpeg argument building for win (dshow), linux (pulse), mac (avfoundation fallback) |
-| `tests/ffmpeg-path.test.js` | Binary name and resource path per `process.platform` and `arch` (mock both) |
+| `tests/ffmpeg-path.test.ts` | Binary name and resource path per `process.platform` and `arch` (mock both) |
 | `tests/pactl-parse.test.js` | Parsing `pactl list short sources` output, filtering monitors |
 | `tests/platform-settings.test.js` | Settings visibility rules for Windows-only options |
 

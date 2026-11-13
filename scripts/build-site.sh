@@ -26,7 +26,7 @@ cp assets/icons/icon32.png "$OUT/icon-32.png"
 cp assets/icons/icon256.png "$OUT/icon-256.png"
 touch "$OUT/.nojekyll"
 
-node scripts/build-site-images.js "$OUT"
+pnpm exec tsx scripts/build-site-images.ts "$OUT"
 
 sed -i -e "s/__VERSION__/${VERSION}/g" -e "s/__DATE__/${DATE}/g" -e "s/__RELEASE_DATE__/${RELEASE_DATE}/g" \
   -e "s/__RELEASE_LABEL__/${RELEASE_LABEL}/g" "$OUT/index.html"

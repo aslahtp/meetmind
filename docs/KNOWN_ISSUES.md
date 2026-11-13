@@ -40,7 +40,7 @@ Code blocks in a topic's body text are kept correctly.
 
 ### Why
 
-`parseNotesMarkdown` in `renderer/components/note/copyMarkdown.js` parses in two steps. `splitSections` splits the text into `## ` sections and skips headings inside code fences, so a fenced `## Participants` stays text. Then `listItems` (and the list handling in `parseTopic`) takes every line matching `- ` in a section. That second step checks each line on its own and never tracks whether it's inside a fence.
+`parseNotesMarkdown` in `renderer/components/note/copyMarkdown.ts` parses in two steps. `splitSections` splits the text into `## ` sections and skips headings inside code fences, so a fenced `## Participants` stays text. Then `listItems` (and the list handling in `parseTopic`) takes every line matching `- ` in a section. That second step checks each line on its own and never tracks whether it's inside a fence.
 
 ### Workaround
 
@@ -48,7 +48,7 @@ Don't put code blocks under Action Items, Participants, Notable Mentions, or a t
 
 ### Fix
 
-Track ``` / `~~~` fences in `listItems` and in `parseTopic`'s list modes, and skip list lines inside a fence. Those sections have no field for a code block, so the block would still be dropped, but it would no longer create items. Add a case to `tests/copyMarkdown.test.js` covering a fenced list under Action Items. This changes what saving an edit produces, so give it a changelog entry.
+Track ``` / `~~~` fences in `listItems` and in `parseTopic`'s list modes, and skip list lines inside a fence. Those sections have no field for a code block, so the block would still be dropped, but it would no longer create items. Add a case to `tests/copyMarkdown.test.ts` covering a fenced list under Action Items. This changes what saving an edit produces, so give it a changelog entry.
 
 ---
 
@@ -58,7 +58,7 @@ Track ``` / `~~~` fences in `listItems` and in `parseTopic`'s list modes, and sk
 
 ### What happens
 
-The Linux FFmpeg build comes from a [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) release, pinned by URL and SHA-256 in `electron/audio/ffmpeg-sources.js`. BtbN keeps the last build of each month for two years and deletes the rest after 14 days. The pin is the September 2026 month-end build (`autobuild-2026-09-30-13-08`), so it should stay downloadable until about September 2028. After that, `scripts/fetch-ffmpeg.js` fails in the `build-linux` job with an HTTP 404 and no release is published.
+The Linux FFmpeg build comes from a [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) release, pinned by URL and SHA-256 in `electron/audio/ffmpeg-sources.ts`. BtbN keeps the last build of each month for two years and deletes the rest after 14 days. The pin is the September 2026 month-end build (`autobuild-2026-09-30-13-08`), so it should stay downloadable until about September 2028. After that, `scripts/fetch-ffmpeg.ts` fails in the `build-linux` job with an HTTP 404 and no release is published.
 
 ### Fix
 
@@ -72,9 +72,9 @@ Before then, move the pin to a newer month-end build (download it, compute its S
 
 ### What happens
 
-The macOS FFmpeg builds come from [ffmpeg.martin-riedl.de](https://ffmpeg.martin-riedl.de/), pinned by URL and SHA-256 in `electron/audio/ffmpeg-sources.js`. The site says its macOS Intel (amd64) release builds stop in January 2027. It doesn't say whether existing files stay online.
+The macOS FFmpeg builds come from [ffmpeg.martin-riedl.de](https://ffmpeg.martin-riedl.de/), pinned by URL and SHA-256 in `electron/audio/ffmpeg-sources.ts`. The site says its macOS Intel (amd64) release builds stop in January 2027. It doesn't say whether existing files stay online.
 
-- **If the pinned Intel files are removed:** `scripts/fetch-ffmpeg.js` fails in the `build-mac` job of `release.yml`, and because `publish` needs both build jobs, no release (Windows included) is published. The in-app **Download & Install FFmpeg** (and post-update **Repair now**) fails for Intel Mac users.
+- **If the pinned Intel files are removed:** `scripts/fetch-ffmpeg.ts` fails in the `build-mac` job of `release.yml`, and because `publish` needs both build jobs, no release (Windows included) is published. The in-app **Download & Install FFmpeg** (and post-update **Repair now**) fails for Intel Mac users.
 - **If they stay online:** nothing breaks, but there is no newer Intel build to move to, so Intel users stay on FFmpeg 9.0.2 (no security fixes) unless another source is found.
 
 ### Why
@@ -87,4 +87,4 @@ None needed until the files disappear. If a release fails at **Download FFmpeg B
 
 ### Fix
 
-Before January 2027, mirror the two pinned Intel zips (`.../macos/amd64/1789931006_9.0.2/ffmpeg.zip` and `ffprobe.zip`) somewhere MeetMind controls, for example as assets of a dedicated GitHub release in this repo (tag `ffmpeg-mac-x64-9.0.2`), and point the two `x64` URLs in `electron/audio/ffmpeg-sources.js` at the mirror. Keep the SHA-256 values unchanged: the files are byte-for-byte the same, so the existing checksum check still proves they weren't altered. Link the matching FFmpeg source from that release, as FFmpeg's LGPL/GPL licence expects of anyone redistributing the binaries (which the DMGs already do). Longer term, Apple's macOS 26 is the last release for Intel Macs, so dropping the Intel DMG may eventually be simpler than keeping its FFmpeg current. Changing the URLs changes where the app downloads from, so give it a changelog entry.
+Before January 2027, mirror the two pinned Intel zips (`.../macos/amd64/1789931006_9.0.2/ffmpeg.zip` and `ffprobe.zip`) somewhere MeetMind controls, for example as assets of a dedicated GitHub release in this repo (tag `ffmpeg-mac-x64-9.0.2`), and point the two `x64` URLs in `electron/audio/ffmpeg-sources.ts` at the mirror. Keep the SHA-256 values unchanged: the files are byte-for-byte the same, so the existing checksum check still proves they weren't altered. Link the matching FFmpeg source from that release, as FFmpeg's LGPL/GPL licence expects of anyone redistributing the binaries (which the DMGs already do). Longer term, Apple's macOS 26 is the last release for Intel Macs, so dropping the Intel DMG may eventually be simpler than keeping its FFmpeg current. Changing the URLs changes where the app downloads from, so give it a changelog entry.

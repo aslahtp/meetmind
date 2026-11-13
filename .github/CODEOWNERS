@@ -8,10 +8,10 @@
 /pnpm-workspace.yaml      @aslahtp
 /electron-builder.yml     @aslahtp
 /scripts/                 @aslahtp
-/electron/services/updater.js  @aslahtp
+/electron/services/updater.ts  @aslahtp
 # Downloads and pins of the FFmpeg binaries shipped in, or installed by, the app
-/electron/audio/ffmpeg-sources.js        @aslahtp
-/electron/audio/ffmpeg-fetch.js          @aslahtp
-/electron/services/ffmpeg-installer.js   @aslahtp
-/electron/utils/download.js              @aslahtp
+/electron/audio/ffmpeg-sources.ts        @aslahtp
+/electron/audio/ffmpeg-fetch.ts          @aslahtp
+/electron/services/ffmpeg-installer.ts   @aslahtp
+/electron/utils/download.ts              @aslahtp
 /assets/entitlements.mac.plist           @aslahtp

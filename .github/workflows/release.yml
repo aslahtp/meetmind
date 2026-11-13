@@ -5,7 +5,7 @@ name: Build
 # Supply-chain hardening (public repo): actions are pinned to commit SHAs; the build job runs
 # all dependency code with a read-only token and no dependency cache; only the small publish
 # job, which runs no dependency code or third-party actions, gets `contents: write`. FFmpeg (shipped inside the
-# Windows installer, the macOS apps and the Linux packages) comes from the SHA-256 pins in electron/audio/ffmpeg-sources.js.
+# Windows installer, the macOS apps and the Linux packages) comes from the SHA-256 pins in electron/audio/ffmpeg-sources.ts.
 # Every downloadable file gets a signed build-provenance attestation (`gh attestation verify`),
 # made by a separate job that runs no project code, from checksums the build jobs report; publish
 # checks every file against them. The builds start alongside the CI gate (`checks`), but nothing is
@@ -111,7 +111,7 @@ jobs:
 
       - name: Download FFmpeg Binaries (checksum-verified)
         shell: bash
-        run: node scripts/fetch-ffmpeg.js --platform win32
+        run: pnpm exec tsx scripts/fetch-ffmpeg.ts --platform win32
 
       # `pnpm run build` passes --publish never: electron-builder only builds, it never needs a token.
       # bash, like the setup action's install: under the default pwsh the runner's pnpm shim exited 0
@@ -122,13 +122,13 @@ jobs:
           pnpm run build
           ls -l dist/desktop/*.exe dist/meetmind-extension.zip
 
-      # Headless self-test of the packaged app (electron/smoke.js): bundled FFmpeg, koffi, DB.
+      # Headless self-test of the packaged app (electron/smoke.ts): bundled FFmpeg, koffi, DB.
       - name: Smoke test
         shell: bash
         timeout-minutes: 3
         run: |
           dist/desktop/win-unpacked/MeetMind.exe --smoke > smoke.txt || true
-          node scripts/check-smoke.js smoke.txt "Windows x64 (release)"
+          pnpm exec tsx scripts/check-smoke.ts smoke.txt "Windows x64 (release)"
 
       # SHA-256 of each file users download, for the attest job to sign without downloading them.
       - name: Checksums
@@ -158,7 +158,7 @@ jobs:
 
   # macOS DMGs (Apple Silicon + Intel), ad-hoc signed: there is no Apple Developer ID yet. Both
   # arches build in one electron-builder run so a single latest-mac.yml lists both. FFmpeg comes
-  # from the per-arch pins in electron/audio/ffmpeg-sources.js, each checked against its SHA-256.
+  # from the per-arch pins in electron/audio/ffmpeg-sources.ts, each checked against its SHA-256.
   # When signing is added: give this job a protected environment holding CSC_LINK,
   # CSC_KEY_PASSWORD and the APPLE_API_KEY* notarization secrets, and update electron-builder.yml.
   build-mac:
@@ -184,7 +184,7 @@ jobs:
           cache: 'false'
 
       - name: Download FFmpeg Binaries (checksum-verified)
-        run: node scripts/fetch-ffmpeg.js --platform darwin --arch arm64 --arch x64
+        run: pnpm exec tsx scripts/fetch-ffmpeg.ts --platform darwin --arch arm64 --arch x64
 
       # `build:mac` passes --publish never, like `build`.
       - name: Build macOS App
@@ -208,7 +208,7 @@ jobs:
         timeout-minutes: 3
         run: |
           dist/desktop/mac-arm64/MeetMind.app/Contents/MacOS/MeetMind --smoke > smoke.txt || true
-          node scripts/check-smoke.js smoke.txt "macOS arm64 (release)"
+          pnpm exec tsx scripts/check-smoke.ts smoke.txt "macOS arm64 (release)"
 
       # SHA-256 of each file users download, for the attest job to sign without downloading them.
       - name: Checksums
@@ -259,7 +259,7 @@ jobs:
           cache: 'false'
 
       - name: Download FFmpeg Binaries (checksum-verified)
-        run: node scripts/fetch-ffmpeg.js --platform linux
+        run: pnpm exec tsx scripts/fetch-ffmpeg.ts --platform linux
 
       # `build:linux` passes --publish never, like `build`.
       - name: Build Linux App
@@ -288,7 +288,7 @@ jobs:
         timeout-minutes: 3
         run: |
           xvfb-run -a dist/desktop/linux-unpacked/meetmind --smoke > smoke.txt || true
-          node scripts/check-smoke.js smoke.txt "Linux x64 (release)"
+          pnpm exec tsx scripts/check-smoke.ts smoke.txt "Linux x64 (release)"
 
       # SHA-256 of each file users download, for the attest job to sign without downloading them.
       - name: Checksums

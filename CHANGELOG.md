@@ -1,10 +1,16 @@
 ---
 tags: [meta, changelog]
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 # Changelog
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
+
+## [4.19.1] - 2026-11-13
+
+### Changed
+
+- **Internal**: The app, its extension and its build scripts are now written in strict TypeScript; behavior is unchanged.
 
 ## [4.19.0] - 2026-11-13
 

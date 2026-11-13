@@ -1,0 +1,394 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Users,
+  Video,
+  RefreshCw,
+  MapPin,
+} from 'lucide-react';
+import { IconButton, StatusDot, Skeleton, AvatarTile } from './ui/index';
+import { formatTime, dayLabel } from '../lib/format';
+import { meetingPlatform } from '../lib/platform';
+import { useNow } from '../lib/hooks';
+
+// Reads the main process's cache (synced on the user's interval), so polling often is cheap.
+const POLL_INTERVAL_MS = 60 * 1000;
+const SOON_WINDOW_MS = 15 * 60 * 1000;
+const COLLAPSED_KEY = 'meetmind.upcomingCollapsed';
+
+// All-day events carry a bare YYYY-MM-DD date, which is local midnight (Date would read it as
+// UTC and put the event on the previous day west of Greenwich).
+function eventDate(value: any) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value);
+}
+
+function getEventStatus(event: any, now: any) {
+  const start = new Date(event.start).getTime();
+  const end = new Date(event.end).getTime();
+
+  if (event.isAllDay) return 'all-day';
+  if (now >= start && now <= end) return 'in-progress';
+  if (start - now <= SOON_WINDOW_MS && start - now > 0) return 'starting-soon';
+  return 'upcoming';
+}
+
+function readCollapsed() {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(value: any) {
+  try {
+    localStorage.setItem(COLLAPSED_KEY, value ? '1' : '0');
+  } catch { /* storage unavailable — collapse still works for this session */ }
+}
+
+function EventCard({ event, onStartRecording, isRecording, now, showSource }: { event?: any; onStartRecording?: any; isRecording?: any; now?: any; showSource?: any }) {
+  const status = getEventStatus(event, now);
+  const platform = meetingPlatform(event.meetingLink);
+  const isLive = status === 'in-progress';
+  const isSoon = status === 'starting-soon';
+  const minutesUntil = Math.max(1, Math.ceil((new Date(event.start).getTime() - now) / 60000));
+
+  const meta = [];
+  if (event.isAllDay) meta.push(<span key="time">All day</span>);
+  else meta.push(<span key="time" className="tabular">{formatTime(event.start)} – {formatTime(event.end)}</span>);
+  if (event.attendeeCount > 1) {
+    meta.push(
+      <span key="people" className="flex items-center gap-4">
+        <Users size={14} strokeWidth={1.75} />
+        {event.attendeeCount}
+      </span>
+    );
+  }
+  if (event.location && !event.meetingLink) {
+    meta.push(
+      <span key="loc" className="flex items-center gap-4 truncate max-w-[160px]">
+        <MapPin size={14} strokeWidth={1.75} />
+        {event.location}
+      </span>
+    );
+  }
+  if (showSource && event.sourceName) {
+    meta.push(<span key="source" className="truncate max-w-[160px]">{event.sourceName}</span>);
+  }
+  if (platform) {
+    meta.push(
+      <span key="platform" className="flex items-center gap-4">
+        {platform.icon
+          ? <img src={platform.icon} alt="" className="w-16 h-16 object-contain logo-mono" />
+          : <Video size={14} strokeWidth={1.75} />}
+        {platform.name}
+      </span>
+    );
+  }
+
+  return (
+    <div className={`card-compact py-16 ${isLive ? 'border-2' : ''}`}>
+      <div className="flex items-center justify-between gap-16">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-8 min-w-0">
+            {isLive && (
+              <span className="flex items-center gap-8 text-caption font-medium text-ink flex-shrink-0">
+                <StatusDot tone="ok" className="dot-live" />
+                Live now
+              </span>
+            )}
+            {isSoon && <span className="highlight flex-shrink-0">In {minutesUntil} min</span>}
+            <h4 className="text-body-sm font-medium text-ink truncate">{event.title}</h4>
+          </div>
+
+          <div className="flex items-center gap-8 flex-wrap text-caption text-graphite mt-4">
+            {meta.map((item, i) => (
+              <React.Fragment key={item.key}>
+                {i > 0 && <span aria-hidden="true">·</span>}
+                {item}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-8 flex-shrink-0">
+          {event.meetingLink && (
+            <button
+              type="button"
+              onClick={() => window.meetmind.shell.openExternal(event.meetingLink)}
+              className="btn-ghost btn-sm"
+            >
+              <ExternalLink size={14} strokeWidth={1.75} />
+              Join
+            </button>
+          )}
+          {(isLive || isSoon) && !event.isAllDay && !isRecording && (
+            <button
+              type="button"
+              onClick={() => onStartRecording(event)}
+              className="btn-ink btn-sm"
+            >
+              <span className="dot dot-sm dot-signal" aria-hidden="true" />
+              Record
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonEvent() {
+  return (
+    <div className="card-compact py-16" aria-hidden="true">
+      <div className="flex items-center justify-between gap-16">
+        <div className="flex-1">
+          <Skeleton className="h-16 w-[40%]" />
+          <Skeleton className="h-16 w-[25%] mt-8" />
+        </div>
+        <Skeleton className="h-32 w-[72px] rounded-full" />
+      </div>
+    </div>
+  );
+}
+
+// Calendars that failed this time, listed above the events from the ones that worked.
+function SourceErrors({ errors, onNavigateToSettings }: { errors?: any; onNavigateToSettings?: any }) {
+  return (
+    <div className="card-compact" role="alert">
+      <ul className="space-y-8">
+        {errors.map((err: any) => (
+          <li key={err.sourceId} className="flex items-start gap-16">
+            <StatusDot tone="error" className="mt-8" />
+            <p className="flex-1 min-w-0 text-body-sm text-ink">
+              <span className="font-medium">{err.name}:</span> {err.message}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-8 mt-16">
+        {errors.filter((e: any) => e.actionUrl).map((err: any) => (
+          <button
+            key={err.sourceId}
+            type="button"
+            onClick={() => window.meetmind.shell.openExternal(err.actionUrl)}
+            className="btn-ghost btn-sm"
+          >
+            <ExternalLink size={14} strokeWidth={1.75} />
+            {err.actionLabel || 'Open'}
+          </button>
+        ))}
+        <button type="button" onClick={onNavigateToSettings} className="btn-ghost btn-sm">
+          Calendar settings
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The last answer, kept across mounts: going back to the Dashboard shows it at once and refreshes
+// in the background, instead of flashing skeleton rows and shifting the page when it lands.
+let lastResult: any = null;   // { connected, events, error, errors, multiSource }
+
+export default function UpcomingMeetings({ onNavigateToSettings, onStartRecording, isRecording, className = '' }: { onNavigateToSettings?: any; onStartRecording?: any; isRecording?: any; className?: any }) {
+  const [events, setEvents] = useState(() => lastResult?.events || []);
+  const [loading, setLoading] = useState(!lastResult);
+  const [error, setError] = useState(() => lastResult?.error || null);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [connected, setConnected] = useState(() => !!lastResult?.connected);
+  const [errors, setErrors] = useState(() => lastResult?.errors || []);
+  const [multiSource, setMultiSource] = useState(() => !!lastResult?.multiSource);
+  const [refreshing, setRefreshing] = useState(false);
+  const now = useNow(60_000);
+
+  const fetchEvents = useCallback(async (showRefreshState = false) => {
+    if (!window.meetmind?.calendar) {
+      setConnected(false);
+      setLoading(false);
+      return;
+    }
+
+    if (showRefreshState) setRefreshing(true);
+
+    const remember = (next: any) => {
+      lastResult = { ...lastResult, ...next };
+      if ('connected' in next) setConnected(next.connected);
+      if ('events' in next) setEvents(next.events);
+      if ('error' in next) setError(next.error);
+      if ('errors' in next) setErrors(next.errors);
+      if ('multiSource' in next) setMultiSource(next.multiSource);
+    };
+    try {
+      const { sources = [] } = await window.meetmind.calendar.list();
+      const enabled = sources.filter((s) => s.enabled);
+      if (!enabled.length) {
+        remember({ connected: false, events: [], error: null, errors: [] });
+        return;
+      }
+
+      const result = await window.meetmind.calendar.getEvents({ force: showRefreshState });
+      const multi = enabled.length > 1;
+      if (result.success) {
+        remember({ connected: true, events: result.events || [], error: null, errors: result.errors || [], multiSource: multi });
+      } else {
+        remember({ connected: true, error: result.error, errors: [], multiSource: multi });
+      }
+    } catch (err: any) {
+      remember({ error: err.message });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Initial fetch + polling
+  useEffect(() => {
+    fetchEvents();
+    const interval = setInterval(() => fetchEvents(), POLL_INTERVAL_MS);
+    // A calendar added, removed or switched off in Settings.
+    const unsub = window.meetmind?.on?.('calendar:changed', () => fetchEvents());
+    return () => {
+      clearInterval(interval);
+      unsub?.();
+    };
+  }, [fetchEvents]);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      writeCollapsed(!prev);
+      return !prev;
+    });
+  };
+
+  // Group events by day
+  const groupedEvents = useMemo(() => {
+    const groups: any = {};
+    for (const event of events) {
+      const dateKey = eventDate(event.start).toDateString();
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(event);
+    }
+    return Object.entries<any[]>(groups).map(([dateKey, evts]) => ({
+      dateKey,
+      label: dayLabel(eventDate(evts[0].start).toISOString()),
+      events: evts,
+    }));
+  }, [events]);
+
+  if (!loading && !connected) {
+    return (
+      <section className={className}>
+        <button
+          type="button"
+          onClick={onNavigateToSettings}
+          className="w-full card-compact text-left flex items-center gap-16 transition-colors duration-150 hover:bg-ink/[0.03]"
+        >
+          <AvatarTile size={48}>
+            <CalendarDays size={20} strokeWidth={1.75} />
+          </AvatarTile>
+          <div className="flex-1 min-w-0">
+            <p className="text-body-sm font-medium text-ink">Connect a calendar</p>
+            <p className="text-caption text-graphite mt-4">Google, Outlook, Apple, Cal.com or any ICS link. See upcoming meetings and get a prompt to record when they start.</p>
+          </div>
+          <ChevronRight size={18} strokeWidth={1.75} className="text-graphite flex-shrink-0" />
+        </button>
+      </section>
+    );
+  }
+
+  const errorUrl = error?.match(/https?:\/\/[^\s]+/)?.[0];
+
+  return (
+    <section className={className} aria-labelledby="upcoming-heading">
+      <div className="flex items-center justify-between gap-16 min-h-[32px] mb-16">
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          aria-controls="upcoming-list"
+          className="flex items-center gap-8 text-graphite hover:text-ink transition-colors duration-150"
+        >
+          {collapsed ? <ChevronRight size={16} strokeWidth={1.75} /> : <ChevronDown size={16} strokeWidth={1.75} />}
+          <CalendarDays size={16} strokeWidth={1.75} />
+          <span id="upcoming-heading" className="eyebrow">Upcoming meetings</span>
+          {events.length > 0 && <span className="pill-quiet tabular">{events.length}</span>}
+        </button>
+        {!collapsed && (
+          <IconButton label="Refresh calendar events" onClick={() => fetchEvents(true)} disabled={refreshing}>
+            <RefreshCw size={16} strokeWidth={1.75} className={refreshing ? 'spinner' : ''} />
+          </IconButton>
+        )}
+      </div>
+
+      {!collapsed && (
+        <div id="upcoming-list" className="flex flex-col gap-24 fade-in">
+          {loading ? (
+            <div className="flex flex-col gap-8">
+              <SkeletonEvent />
+              <SkeletonEvent />
+            </div>
+          ) : error ? (
+            <div className="card-compact" role="alert">
+              <div className="flex items-start gap-16">
+                <StatusDot tone="error" className="mt-4" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-body-sm text-ink">
+                    {error.includes('http') ? error.split('http')[0].replace(/:\s*$/, '') : error}
+                  </p>
+                  {(errorUrl || error.includes('Settings')) && (
+                    <div className="flex flex-wrap items-center gap-8 mt-16">
+                      {errorUrl && (
+                        <button
+                          type="button"
+                          onClick={() => window.meetmind.shell.openExternal(errorUrl)}
+                          className="btn-ghost btn-sm"
+                        >
+                          <ExternalLink size={14} strokeWidth={1.75} />
+                          Open
+                        </button>
+                      )}
+                      {error.includes('Settings') && (
+                        <button type="button" onClick={onNavigateToSettings} className="btn-ghost btn-sm">
+                          Go to Settings
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {errors.length > 0 && <SourceErrors errors={errors} onNavigateToSettings={onNavigateToSettings} />}
+              {events.length === 0 ? (
+                <p className="text-caption text-graphite">No upcoming meetings.</p>
+              ) : (
+                groupedEvents.map((group) => (
+                  <div key={group.dateKey}>
+                    <p className="eyebrow mb-8">{group.label}</p>
+                    <div className="flex flex-col gap-8">
+                      {group.events.map((event) => (
+                        <EventCard
+                          key={`${event.sourceId}:${event.id}`}
+                          event={event}
+                          onStartRecording={onStartRecording}
+                          isRecording={isRecording}
+                          now={now}
+                          showSource={multiSource}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}

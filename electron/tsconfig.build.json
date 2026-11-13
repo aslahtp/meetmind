@@ -1,0 +1,16 @@
+{
+  // Compiles the .ts files of the main process to dist/electron/ as CommonJS (run through
+  // `pnpm run compile:electron`, which also copies the .js files there as they are). The type-check
+  // config is tsconfig.json.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": ".",
+    "outDir": "../dist/electron",
+    "allowJs": false,
+    "newLine": "lf"
+  },
+  "include": ["./**/*.ts"],
+  // Types only, nothing at runtime imports them.
+  "exclude": ["shared/**"]
+}

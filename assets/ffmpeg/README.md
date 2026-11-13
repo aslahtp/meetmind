@@ -5,7 +5,7 @@ bundles them into the app as `resources/ffmpeg/`. They are never committed (too 
 CI's repo-hygiene check rejects them).
 
 The quickest way is `pnpm run fetch-ffmpeg`: it downloads the pinned build for your OS (the one
-the releases ship; pins in `electron/audio/ffmpeg-sources.js`), checks its SHA-256 and puts the
+the releases ship; pins in `electron/audio/ffmpeg-sources.ts`), checks its SHA-256 and puts the
 files where they belong.
 
 ## Windows
@@ -35,7 +35,7 @@ app they live at `%INSTALLDIR%\resources\ffmpeg\`.
 
 One folder per architecture: `mac-arm64/` (Apple silicon) and `mac-x64/` (Intel), each holding
 `ffmpeg` and `ffprobe`. Fetch the pinned, checksum-verified builds (from
-ffmpeg.martin-riedl.de; pins in `electron/audio/ffmpeg-sources.js`) with:
+ffmpeg.martin-riedl.de; pins in `electron/audio/ffmpeg-sources.ts`) with:
 
 ```
 pnpm run fetch-ffmpeg                    # both architectures
@@ -50,7 +50,7 @@ For development you can also skip this and `brew install ffmpeg`: the app finds 
 
 One folder per architecture: `linux-x64/`, holding `ffmpeg` and `ffprobe`. Fetch the pinned,
 checksum-verified build (a GPL static build from BtbN/FFmpeg-Builds; pin in
-`electron/audio/ffmpeg-sources.js`) with:
+`electron/audio/ffmpeg-sources.ts`) with:
 
 ```
 pnpm run fetch-ffmpeg

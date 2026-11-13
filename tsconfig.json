@@ -1,0 +1,10 @@
+{
+  // Root TypeScript config files only (vite, vitest). The other folders have their own tsconfig.json.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts", "vitest.config.ts"]
+}
