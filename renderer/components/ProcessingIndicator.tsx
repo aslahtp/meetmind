@@ -7,12 +7,14 @@ import { STAGE_LABELS } from '../lib/status';
 const HOLD_DONE_MS = 1600;
 const HOLD_ERROR_MS = 2600;
 
-function PillContent({ outcome, label, pct, showLabel, showPct }: { outcome?: any; label?: any; pct?: any; showLabel?: any; showPct?: any }) {
+// `spinning`: only the pill on screen spins. The component stays mounted while tucked away, and an
+// animation that never stops there would keep the window compositing frames for nothing.
+function PillContent({ outcome, label, pct, showLabel, showPct, spinning = false }: any) {
   return (
     <>
       {outcome
         ? <StatusDot key={outcome} tone={outcome === 'done' ? 'ok' : 'error'} className="proc-pop" />
-        : <Loader2 size={14} strokeWidth={2} className="spinner text-graphite" aria-hidden="true" />}
+        : <Loader2 size={14} strokeWidth={2} className={`${spinning ? 'spinner ' : ''}text-graphite`} aria-hidden="true" />}
       {showLabel && <span key={label} className="proc-label">{label}</span>}
       {showPct && <span className="tabular text-graphite">{pct}%</span>}
     </>
@@ -144,7 +146,7 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }: {
           <span className="proc-fill" style={{ transform: `scaleX(${pct / 100})` }} aria-hidden="true" />
           <span ref={sizeRef} className="proc-size" style={width ? { width } : undefined}>
             <span className="proc-content">
-              <PillContent outcome={outcome} label={label} pct={pct} showLabel={showLabel} showPct={showPct} />
+              <PillContent outcome={outcome} label={label} pct={pct} showLabel={showLabel} showPct={showPct} spinning={open} />
             </span>
           </span>
           {/* Invisible copies of each variant, measured to decide which one fits. */}

@@ -4,7 +4,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { groupRecordingFiles, planCleanup, planDeleteAll, summarize } from './storage-rules';
+import { AUDIO_EXTENSIONS, isRecordingId, groupRecordingFiles, planCleanup, planDeleteAll, summarize } from './storage-rules';
 
 /**
  * @param {object} deps
@@ -110,7 +110,46 @@ function createRecordingsStorage({ getRecordingsDir, db, deleteSessionWaveform, 
     return { ...result, skipped: plan.skipped };
   }
 
-  return { scan, getSummary, cleanup, deleteAll };
+  /**
+   * One meeting's audio files (its id plus .wav/.webm), without reading the whole folder.
+   * Returns { id, files, bytes, mtimeMs } or null when it has none.
+   */
+  function find(id: any) {
+    if (!isRecordingId(id)) return null;
+    const dir = getRecordingsDir();
+    const entries = [];
+    for (const ext of AUDIO_EXTENSIONS) {
+      const name = `${id}${ext}`;
+      try {
+        const stat = fs.statSync(path.join(dir, name));
+        if (stat.isFile()) entries.push({ name, size: stat.size, mtimeMs: stat.mtimeMs });
+      } catch {
+        // No file with this extension.
+      }
+    }
+    return groupRecordingFiles(entries)[0] || null;
+  }
+
+  /**
+   * Deletes one meeting's audio from its Audio tab. Refuses while it is being recorded or
+   * processed. Returns { success, bytes } or { success: false, error }.
+   */
+  function deleteOne({ id, busyIds }: any) {
+    if (!isRecordingId(id)) return { success: false, error: 'Unknown meeting.' };
+    if (busyIds?.has(id)) {
+      return { success: false, error: 'This meeting is being recorded or processed. Try again when it’s done.' };
+    }
+    const recording = find(id);
+    if (!recording) return { success: false, error: 'There’s no recording to delete.' };
+    const bytes = deleteRecording(recording);
+    if (bytes == null) {
+      return { success: false, error: 'The recording file is in use. Close any app playing it and try again.' };
+    }
+    logger.info('Deleted a recording', { sessionId: id, bytes });
+    return { success: true, bytes };
+  }
+
+  return { scan, find, getSummary, cleanup, deleteAll, deleteOne };
 }
 
 export { createRecordingsStorage };

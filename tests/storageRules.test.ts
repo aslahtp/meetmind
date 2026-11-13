@@ -5,6 +5,7 @@ import {
   RETENTION_DAYS,
   DEFAULT_RETENTION_DAYS,
   normalizeRetentionDays,
+  isRecordingId,
   groupRecordingFiles,
   planCleanup,
   planDeleteAll,
@@ -31,6 +32,19 @@ describe('retention setting', () => {
 
   it('offers the same periods in Settings as the main process accepts', () => {
     expect(RETENTION_OPTIONS.map((o) => o.value)).toEqual(RETENTION_DAYS);
+  });
+});
+
+describe('isRecordingId', () => {
+  it('accepts meeting ids', () => {
+    expect(isRecordingId('3f2b8c1e-9a4d-4e2f-8b7a-1c2d3e4f5a6b')).toBe(true);
+    expect(isRecordingId('demo-1')).toBe(true);
+  });
+
+  it('rejects anything that could name a file outside the recordings folder', () => {
+    for (const id of ['', '.', '..', '../x', '..\\x', 'a\u0000b', 'a/b', 'C:x', 'a b', 'x'.repeat(129), null, undefined, 42]) {
+      expect(isRecordingId(id)).toBe(false);
+    }
   });
 });
 

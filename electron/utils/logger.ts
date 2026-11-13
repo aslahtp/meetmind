@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
-import type { LogEntry } from '../shared';
 
 let logFilePath: any = null;
+let logFileDay: any = null;
 let logEmitter: any = null;
 
 function setLogEmitter(emitter: any) {
@@ -16,11 +16,28 @@ function getLogsDir() {
   return dir;
 }
 
+// One file per (UTC) day. The name used to be fixed when the app started, so an app left running
+// for days wrote them all into the file named after its launch date.
 function getLogFilePath() {
-  if (logFilePath) return logFilePath;
-  const logsDir = getLogsDir();
-  logFilePath = path.join(logsDir, `meetmind-${new Date().toISOString().slice(0, 10)}.log`);
+  const day = new Date().toISOString().slice(0, 10);
+  if (logFilePath && logFileDay === day) return logFilePath;
+  logFileDay = day;
+  logFilePath = path.join(getLogsDir(), `meetmind-${day}.log`);
   return logFilePath;
+}
+
+// Today's log file and, when there is one, the most recent earlier file: oldest first.
+function recentLogFiles() {
+  const current = getLogFilePath();
+  let previous = null;
+  try {
+    const name = path.basename(current);
+    previous = fs.readdirSync(getLogsDir())
+      .filter((f) => /^meetmind-\d{4}-\d{2}-\d{2}\.log$/.test(f) && f < name)
+      .sort()
+      .pop();
+  } catch { /* only today's file */ }
+  return [previous ? path.join(getLogsDir(), previous) : null, current].filter(Boolean);
 }
 
 function formatMessage(level: any, message: any, data: any, ts: any) {
@@ -92,11 +109,15 @@ function parseLogLine(line: any) {
 
 function readLogs(limit = 1000) {
   try {
-    const filePath = getLogFilePath();
-    if (!fs.existsSync(filePath)) return [];
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.split('\n').map((l) => l.trim()).filter(Boolean);
-    return lines.slice(-limit).map(parseLogLine).filter(Boolean) as LogEntry[];
+    // The previous file is read only when today's is short of `limit` (just after midnight, or
+    // after a restart), so the Logs page doesn't go empty at the start of a day.
+    let lines: any = [];
+    for (const filePath of recentLogFiles().reverse()) {
+      if (lines.length >= limit || !fs.existsSync(filePath)) continue;
+      const content = fs.readFileSync(filePath, 'utf8');
+      lines = content.split('\n').map((l) => l.trim()).filter(Boolean).concat(lines);
+    }
+    return lines.slice(-limit).map(parseLogLine).filter(Boolean);
   } catch {
     return [];
   }

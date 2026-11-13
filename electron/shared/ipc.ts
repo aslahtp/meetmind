@@ -223,6 +223,10 @@ export interface IpcInvokeMap {
   'updater:install': Handler<[], UpdaterActionResult>;
   'updater:get-status': Handler<[], UpdaterState>;
   'app:version': Handler<[], string>;
+  /** What main is doing right now, for a window that was just created or reloaded. */
+  'app:state': Handler<[], AppState>;
+  /** Deletes a meeting's audio only (the transcript and notes stay). */
+  'session:delete-recording': Handler<[sessionId: string], Outcome<{ bytes: number }>>;
 
   // FFmpeg
   'ffmpeg:check': Handler<[], { ffmpeg: FfmpegBinaryInfo; ffprobe: FfmpegBinaryInfo }>;
@@ -243,7 +247,35 @@ export interface IpcInvokeMap {
 
 // ── Send channels (renderer → main, no reply) ────────────────────────────────
 
+/** The page being shown, reported by the renderer so a new window reopens on it. */
+export interface ViewState {
+  view: string;
+  sessionId?: string | null;
+}
+
+/** `app:state` */
+export interface AppState {
+  recording: { sessionId: string | null; startedAt: number | null } | null;
+  processing: { sessionId: string; stage: ProcessingProgressStage; percent: number } | null;
+  notesPreview: NotesPreview | null;
+  view: ViewState | null;
+}
+
+/** A renderer error reported to the log (`renderer:error`). */
+export interface RendererErrorReport {
+  kind?: string;
+  message?: string;
+  stack?: string;
+  [key: string]: unknown;
+}
+
 export interface IpcSendMap {
+  /** The app has mounted; main repairs a window that never sends it. */
+  'window:ready': [];
+  /** Unsaved edits on screen: a window hidden to the tray is then kept instead of closed. */
+  'window:dirty': [dirty: boolean];
+  'window:view-state': [state: ViewState];
+  'renderer:error': [report: RendererErrorReport];
   /** Renderer capture is running; `systemAudio` is false when only the microphone is being recorded. */
   'capture:started': [sources: { systemAudio?: boolean; [key: string]: unknown } | undefined];
   'capture:failed': [error: unknown];
@@ -287,6 +319,10 @@ export interface IpcEventMap {
   'recording:started': { sessionId: string };
   'recording:stopped': { sessionId: string; audioPath?: string };
   'recording:error': { error: string };
+  /** Recording continues with a problem, e.g. system audio is unavailable. */
+  'recording:warning': { message: string };
+  /** Live microphone and system-audio meters while a recording is running. */
+  'recording:levels': { mic: number; system: number };
   /** Whitelisted but never sent today (TODO(strict)). */
   'transcription:progress': unknown;
   'processing:progress': { stage: ProcessingProgressStage; percent: number };
@@ -340,6 +376,10 @@ export interface Meetmind {
     maximize: Invoke<'window:maximize'>;
     close: Invoke<'window:close'>;
     isMaximized: Invoke<'window:isMaximized'>;
+    /** The app has mounted; main waits for this after creating or reloading the window. */
+    ready: (...args: IpcSendMap['window:ready']) => void;
+    setDirty: (...args: IpcSendMap['window:dirty']) => void;
+    setViewState: (...args: IpcSendMap['window:view-state']) => void;
     /** True once the window has been on screen (synchronous). */
     wasShown: () => boolean;
   };
@@ -374,6 +414,7 @@ export interface Meetmind {
     openRecording: Invoke<'session:open-recording'>;
     waveform: Invoke<'session:waveform'>;
     audioStatus: Invoke<'session:audio-status'>;
+    deleteRecording: Invoke<'session:delete-recording'>;
     createFromTranscript: Invoke<'session:create-from-transcript'>;
   };
   storage: {
@@ -405,13 +446,8 @@ export interface Meetmind {
     retry: Invoke<'processing:retry'>;
   };
   capture: {
-    /** No unsubscribe: register once. */
-    onStart: (callback: (options: CaptureStartOptions) => void) => void;
-    onStop: (callback: () => void) => void;
-    sendStarted: (...args: IpcSendMap['capture:started']) => void;
-    sendFailed: (...args: IpcSendMap['capture:failed']) => void;
-    sendChunk: (...args: IpcSendMap['capture:chunk']) => void;
-    sendAudioData: (...args: IpcSendMap['capture:audio-data']) => void;
+    // Recordings are captured in their own hidden window (`window.meetmindCapture`); this is only
+    // Settings' "Test system audio".
     testBegin: Invoke<'capture:test-begin'>;
     testEnd: Invoke<'capture:test-end'>;
   };
@@ -435,7 +471,9 @@ export interface Meetmind {
     install: Invoke<'updater:install'>;
     getStatus: Invoke<'updater:get-status'>;
   };
-  app: { getVersion: Invoke<'app:version'> };
+  app: { getVersion: Invoke<'app:version'>; getState: Invoke<'app:state'> };
+  /** Sends a renderer error to the log file. */
+  reportError: (...args: IpcSendMap['renderer:error']) => void;
   ffmpeg: {
     check: Invoke<'ffmpeg:check'>;
     install: Invoke<'ffmpeg:install'>;
@@ -448,7 +486,24 @@ export interface Meetmind {
     channel: C,
     callback: (payload: IpcEventMap[C]) => void,
   ) => (() => void) | undefined;
-  off: (channel: string, callback: (...args: unknown[]) => void) => void;
+}
+
+/**
+ * `window.meetmindCapture`, as exposed by electron/capture-preload.ts to the hidden capture window
+ * (renderer/capture.ts), which records the audio. Not part of the main window's surface.
+ */
+export interface MeetmindCapture {
+  platform: string;
+  /** The page loaded and is listening for `onStart`. */
+  ready: () => void;
+  onStart: (callback: (options: CaptureStartOptions) => void) => (() => void);
+  onStop: (callback: () => void) => (() => void);
+  started: (...args: IpcSendMap['capture:started']) => void;
+  failed: (...args: IpcSendMap['capture:failed']) => void;
+  chunk: (...args: IpcSendMap['capture:chunk']) => void;
+  levels: (levels: { mic: number; system: number }) => void;
+  /** Zero-length sentinel: every chunk has been sent. */
+  done: () => void;
 }
 
 // ── window.meetmindOverlay ───────────────────────────────────────────────────

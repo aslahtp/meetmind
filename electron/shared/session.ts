@@ -135,4 +135,10 @@ export interface SessionAudioStatus {
   available: boolean;
   deletedAt: string | null;
   source: string | null;
+  /** Size of the recording file in bytes, when there is one. */
+  bytes?: number;
+  /** File format of the recording, e.g. 'wav'. */
+  format?: string | null;
+  /** The meeting is being recorded or processed, so its audio can't be deleted now. */
+  busy?: boolean;
 }

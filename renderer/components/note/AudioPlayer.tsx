@@ -1,7 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Volume2, Play, Pause, FolderOpen, Loader2, AlertTriangle } from 'lucide-react';
+import { Volume2, Play, Pause, FolderOpen, Loader2, AlertTriangle, FileAudio, Trash2 } from 'lucide-react';
+import { useApp } from '../../lib/app-context';
+import { formatBytes } from '../../lib/format';
+import { isMac, isLinux } from '../../lib/os';
 import { AvatarTile } from '../ui/index';
 import Waveform from './Waveform';
+
+const FILE_MANAGER = isMac ? 'Finder' : isLinux ? 'your file manager' : 'Explorer';
 
 const SPEEDS = [1, 1.25, 1.5, 2];
 
@@ -12,8 +17,12 @@ function formatPlayerTime(seconds: any) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function AudioPlayer({ sessionId, title, durationLabel, showWaveform = true }: { sessionId?: any; title?: any; durationLabel?: any; showWaveform?: any }) {
+// file: { bytes, format } of the recording; busy: it's being recorded or processed, so it can't be
+// deleted; onDeleted: called once its audio is gone.
+export default function AudioPlayer({ sessionId, title, durationLabel, showWaveform = true, file, busy = false, onDeleted }: any) {
+  const { confirm, addToast } = useApp();
   const audioRef = useRef<any>(null);
+  const [deleting, setDeleting] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [error, setError] = useState<any>(null);
   const [ready, setReady] = useState(false);
@@ -101,6 +110,42 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
     }
   };
 
+  const deleteRecording = async () => {
+    if (!sessionId || deleting || busy) return;
+    const size = file?.bytes > 0 ? ` (${formatBytes(file.bytes)})` : '';
+    const ok = await confirm({
+      title: 'Delete this recording?',
+      message: `The audio file${size} will be deleted from this computer. The notes and transcript are kept, but this meeting can’t be played or transcribed again. This can’t be undone.`,
+      confirmLabel: 'Delete recording',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    setDeleting(true);
+    // Let go of the file first so nothing here is reading it while it's deleted.
+    const el = audioRef.current;
+    if (el) {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    }
+    try {
+      const result = await window.meetmind.sessions.deleteRecording(sessionId);
+      if (!result?.success) throw new Error(result?.error || 'unknown error');
+      addToast(result.bytes > 0 ? `Recording deleted, freed ${formatBytes(result.bytes)}.` : 'Recording deleted.', 'success');
+      onDeleted?.();
+    } catch (err: any) {
+      addToast(`Couldn’t delete the recording: ${err?.message || 'unknown error'}`, 'error');
+      if (el) {
+        el.src = audioSrc;
+        el.load();
+      }
+      setDeleting(false);
+    }
+  };
+
+  const fileMeta = [file?.format, file?.bytes > 0 ? formatBytes(file.bytes) : null].filter(Boolean).join(' · ');
+
   return (
     <div className="card max-w-[560px] mx-auto text-center fade-in">
       <div className="flex flex-col items-center">
@@ -161,9 +206,17 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
                 style={{ accentColor: 'rgb(var(--color-ink))' }}
               />
             )}
-            <div className="flex items-center justify-between text-caption text-graphite tabular">
-              <span>{formatPlayerTime(currentTime)}</span>
-              <span>{formatPlayerTime(effectiveDuration)}</span>
+            <div className="flex items-center justify-between gap-16 text-caption text-graphite tabular">
+              <span className="min-w-[48px] text-left">{formatPlayerTime(currentTime)}</span>
+              <button
+                type="button"
+                onClick={changeSpeed}
+                className="pill tabular"
+                aria-label={`Playback speed ${speed}x. Click to change.`}
+              >
+                {speed}x
+              </button>
+              <span className="min-w-[48px] text-right">{formatPlayerTime(effectiveDuration)}</span>
             </div>
           </div>
 
@@ -205,29 +258,46 @@ export default function AudioPlayer({ sessionId, title, durationLabel, showWavef
         </div>
       )}
 
-      <div className="flex items-center justify-center gap-8 mt-32">
-        <button
-          type="button"
-          onClick={changeSpeed}
-          className="pill tabular"
-          aria-label={`Playback speed ${speed}x. Click to change.`}
-        >
-          {speed}x
-        </button>
-        <button
-          type="button"
-          onClick={openRecordingFile}
-          disabled={opening}
-          className="btn-ghost btn-sm"
-          title="Show recording file in Explorer"
-        >
-          {opening ? (
-            <Loader2 size={14} strokeWidth={2} className="spinner" />
-          ) : (
-            <FolderOpen size={14} strokeWidth={1.75} />
-          )}
-          Open file
-        </button>
+      {/* ── The file: its size, where it is, and deleting it ─────────────── */}
+      <div className="rule mt-32 pt-24 flex flex-wrap items-center gap-16 text-left">
+        <AvatarTile size={40}>
+          <FileAudio size={18} strokeWidth={1.75} />
+        </AvatarTile>
+        <div className="flex-1 min-w-[120px]">
+          <p className="text-body-sm font-medium text-ink">Recording file</p>
+          <p className="text-caption text-graphite tabular">{fileMeta || 'Saved on this computer'}</p>
+        </div>
+        <div className="flex items-center gap-8">
+          <button
+            type="button"
+            onClick={openRecordingFile}
+            disabled={opening || deleting}
+            className="btn-ghost btn-sm"
+            title={`Show the recording file in ${FILE_MANAGER}`}
+          >
+            {opening ? (
+              <Loader2 size={14} strokeWidth={2} className="spinner" />
+            ) : (
+              <FolderOpen size={14} strokeWidth={1.75} />
+            )}
+            Show file
+          </button>
+          <button
+            type="button"
+            onClick={deleteRecording}
+            disabled={deleting || busy}
+            className="btn-danger btn-sm"
+            aria-label="Delete recording"
+            title={busy ? 'This meeting is being recorded or processed' : 'Delete the audio, keeping the notes and transcript'}
+          >
+            {deleting ? (
+              <Loader2 size={14} strokeWidth={2} className="spinner" />
+            ) : (
+              <Trash2 size={14} strokeWidth={1.75} />
+            )}
+            Delete
+          </button>
+        </div>
       </div>
 
       {openMessage && (

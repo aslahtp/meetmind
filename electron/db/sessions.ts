@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
 import logger from '../utils/logger';
+import { sanitizeNotes, sanitizeTranscript } from '../services/notes-sanitize';
 
 let db: any = null;
 let SQL = null;
@@ -203,9 +204,14 @@ function deserializeSession(row: any) {
   if (!row) return null;
   return {
     ...row,
-    transcript: safeJsonParse(row.transcript, []),
-    notes:      safeJsonParse(row.notes, null),
+    // Type-checked on the way out: a wrongly typed field in an old row must not break the UI.
+    transcript: sanitizeStoredTranscript(safeJsonParse(row.transcript, [])),
+    notes:      sanitizeNotes(safeJsonParse(row.notes, null)),
   };
+}
+
+function sanitizeStoredTranscript(transcript: any) {
+  return Array.isArray(transcript) ? sanitizeTranscript(transcript) : transcript;
 }
 
 function safeJsonParse(value: any, fallback: any) {

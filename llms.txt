@@ -1,6 +1,6 @@
 # MeetMind
 
-> MeetMind is a free, open-source (GPL-3.0) AI meeting notes app for Windows 10 and 11, macOS 14.2+ (beta) and Linux x64 (beta). It records system audio and the microphone together, transcribes the recording with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, uses Google Gemini, Groq or Anthropic Claude to write meeting minutes (summary, decisions, action items), and optionally syncs them to Notion. On Windows it detects Google Meet, Zoom and Teams calls on its own and offers to record from a floating overlay; an optional Chrome extension adds a record button inside Meet and Zoom tabs. No bot joins the meeting.
+> MeetMind is a free, open-source (GPL-3.0) AI meeting notes app for Windows 10 and 11, macOS 14.2+ (beta) and Linux x64 (beta). It records system audio and the microphone together, transcribes the recording with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, uses Google Gemini, Groq or Anthropic Claude to write meeting minutes (summary, decisions, action items), and optionally syncs them to Notion. On Windows and Linux it detects Google Meet, Zoom and Teams calls on its own and offers to record from a floating overlay; an optional Chrome extension adds a record button inside Meet and Zoom tabs. No bot joins the meeting. It is a free, open-source alternative to hosted note takers such as Otter.ai and Fireflies.ai.
 
 Key facts:
 
@@ -18,7 +18,7 @@ Key facts:
 ## Docs
 
 - [README](https://github.com/aslahtp/meetmind/blob/main/README.md): features, install steps, developer setup and FAQ
-- [Architecture overview](https://github.com/aslahtp/meetmind/blob/main/AGENTS.md): main process, audio capture, processing pipeline, persistence and the desktop–extension WebSocket bridge
+- [Architecture overview](https://github.com/aslahtp/meetmind/blob/main/docs/ARCHITECTURE.md): main process, audio capture, processing pipeline, persistence and the desktop–extension WebSocket bridge
 - [Changelog](https://github.com/aslahtp/meetmind/blob/main/CHANGELOG.md): release history
 - [Google Cloud Storage setup](https://github.com/aslahtp/meetmind/blob/main/docs/GCS-SETUP.md): required for long recordings with Google Speech-to-Text
 

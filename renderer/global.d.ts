@@ -6,7 +6,7 @@
 // so the pages render in a plain browser (e.g. `vite` alone); those checks stay valid.
 // Asset imports (`*.svg`, `*.png`) come from `vite/client` (see tsconfig.json `types`).
 
-import type { Meetmind, MeetmindOverlay } from '../electron/shared';
+import type { Meetmind, MeetmindCapture, MeetmindOverlay } from '../electron/shared';
 
 declare global {
   interface Window {
@@ -14,6 +14,8 @@ declare global {
     meetmind: Meetmind;
     /** The meeting overlay window's bridge (electron/overlay-preload.ts). */
     meetmindOverlay: MeetmindOverlay;
+    /** The hidden capture window's bridge (electron/capture-preload.ts); only that window has it. */
+    meetmindCapture: MeetmindCapture;
   }
 }
 

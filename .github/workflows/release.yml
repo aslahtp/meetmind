@@ -7,7 +7,10 @@ name: Build
 # job, which runs no dependency code or third-party actions, gets `contents: write`. FFmpeg (shipped inside the
 # Windows installer, the macOS apps and the Linux packages) comes from the SHA-256 pins in electron/audio/ffmpeg-sources.ts.
 # Every downloadable file gets a signed build-provenance attestation (`gh attestation verify`),
-# made by a separate job that runs no project code.
+# made by a separate job that runs no project code, from checksums the build jobs report; publish
+# checks every file against them. The builds start alongside the CI gate (`checks`), but nothing is
+# signed or published until it passes. Once the release is published, the website
+# (pages.yml) is rebuilt so its download links point at the new version.
 
 on:
   push:
@@ -84,12 +87,16 @@ jobs:
 
   build:
     name: Build Windows app
-    needs: [check-version, checks]
+    # Starts alongside `checks` rather than after it: builds hold a read-only token and no secrets,
+    # and nothing is signed or published until `checks` passes (attest and publish need it).
+    needs: check-version
     if: needs.check-version.outputs.release_needed == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
       contents: read
+    outputs:
+      checksums: ${{ steps.checksums.outputs.checksums }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -123,6 +130,18 @@ jobs:
           dist/desktop/win-unpacked/MeetMind.exe --smoke > smoke.txt || true
           pnpm exec tsx scripts/check-smoke.ts smoke.txt "Windows x64 (release)"
 
+      # SHA-256 of each file users download, for the attest job to sign without downloading them.
+      - name: Checksums
+        id: checksums
+        shell: bash
+        run: |
+          {
+            echo 'checksums<<CHECKSUMS_EOF'
+            (cd dist/desktop && sha256sum --binary *.exe | sed 's/ \*/  /')
+            (cd dist && sha256sum --binary meetmind-extension.zip | sed 's/ \*/  /')
+            echo 'CHECKSUMS_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload release files
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -144,12 +163,14 @@ jobs:
   # CSC_KEY_PASSWORD and the APPLE_API_KEY* notarization secrets, and update electron-builder.yml.
   build-mac:
     name: Build macOS app
-    needs: [check-version, checks]
+    needs: check-version # alongside `checks`, as `build` explains
     if: needs.check-version.outputs.release_needed == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     timeout-minutes: 45
     permissions:
       contents: read
+    outputs:
+      checksums: ${{ steps.checksums.outputs.checksums }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -189,6 +210,16 @@ jobs:
           dist/desktop/mac-arm64/MeetMind.app/Contents/MacOS/MeetMind --smoke > smoke.txt || true
           pnpm exec tsx scripts/check-smoke.ts smoke.txt "macOS arm64 (release)"
 
+      # SHA-256 of each file users download, for the attest job to sign without downloading them.
+      - name: Checksums
+        id: checksums
+        run: |
+          {
+            echo 'checksums<<CHECKSUMS_EOF'
+            (cd dist/desktop && shasum -a 256 *.dmg *-mac.zip | sed 's/ \*/  /')
+            echo 'CHECKSUMS_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload release files
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -207,12 +238,14 @@ jobs:
   # builds: read-only token, no dependency cache, FFmpeg from its SHA-256 pin. Nothing to sign.
   build-linux:
     name: Build Linux app
-    needs: [check-version, checks]
+    needs: check-version # alongside `checks`, as `build` explains
     if: needs.check-version.outputs.release_needed == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
+    outputs:
+      checksums: ${{ steps.checksums.outputs.checksums }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -257,6 +290,16 @@ jobs:
           xvfb-run -a dist/desktop/linux-unpacked/meetmind --smoke > smoke.txt || true
           pnpm exec tsx scripts/check-smoke.ts smoke.txt "Linux x64 (release)"
 
+      # SHA-256 of each file users download, for the attest job to sign without downloading them.
+      - name: Checksums
+        id: checksums
+        run: |
+          {
+            echo 'checksums<<CHECKSUMS_EOF'
+            (cd dist/desktop && sha256sum *.AppImage *.deb | sed 's/ \*/  /')
+            echo 'CHECKSUMS_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload release files
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -273,10 +316,12 @@ jobs:
   # Signed SLSA build provenance for every file users download, so anyone can check that a file
   # came from this workflow and commit: gh attestation verify <file> --repo aslahtp/meetmind.
   # Its own job: the OIDC token that signs attestations is never available to the build jobs,
-  # which run dependency code.
+  # which run dependency code. It signs the SHA-256 checksums the build jobs computed from the
+  # files they uploaded, so it downloads nothing; publish checks every file against them before
+  # releasing. It waits for `checks`, so nothing is signed until CI has passed.
   attest:
     name: Attest build provenance
-    needs: [build, build-mac, build-linux]
+    needs: [checks, build, build-mac, build-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -284,38 +329,28 @@ jobs:
       id-token: write # Sigstore signing certificate for the attestation
       attestations: write # store the attestations in this repository
     steps:
-      - name: Download release files
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-files
-          path: release-files
-
-      - name: Download macOS release files
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-files-mac
-          path: release-files-mac
-
-      - name: Download Linux release files
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-files-linux
-          path: release-files-linux
+      # 8 files: the installer, the extension, 2 DMGs, 2 mac update zips, the AppImage and the .deb.
+      - name: Collect checksums
+        env:
+          WINDOWS: ${{ needs.build.outputs.checksums }}
+          MAC: ${{ needs.build-mac.outputs.checksums }}
+          LINUX: ${{ needs.build-linux.outputs.checksums }}
+        run: |
+          printf '%s\n' "$WINDOWS" "$MAC" "$LINUX" | sed '/^$/d' > checksums.txt
+          cat checksums.txt
+          if grep -vqE '^[0-9a-f]{64}  [A-Za-z0-9._-]+$' checksums.txt; then
+            echo "::error::Malformed checksum line"; exit 1
+          fi
+          test "$(wc -l < checksums.txt)" -eq 8 || { echo "::error::Expected 8 checksums"; exit 1; }
 
       - name: Attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: |
-            release-files/desktop/*.exe
-            release-files-mac/*.dmg
-            release-files-mac/*-mac.zip
-            release-files-linux/*.AppImage
-            release-files-linux/*.deb
-            release-files/meetmind-extension.zip
+          subject-checksums: checksums.txt
 
   publish:
     name: Publish Release
-    needs: [check-version, build, build-mac, build-linux, attest]
+    needs: [check-version, checks, build, build-mac, build-linux, attest]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # The only job with write access; it runs no project dependencies.
@@ -348,6 +383,29 @@ jobs:
           name: release-files-linux
           path: release-files-linux
 
+      # Every file users download must be exactly what the attest job signed, and nothing unsigned
+      # may ride along.
+      - name: Check files against the attested checksums
+        env:
+          WINDOWS: ${{ needs.build.outputs.checksums }}
+          MAC: ${{ needs.build-mac.outputs.checksums }}
+          LINUX: ${{ needs.build-linux.outputs.checksums }}
+        run: |
+          printf '%s\n' "$WINDOWS" "$MAC" "$LINUX" | sed '/^$/d' > checksums.txt
+          if grep -vqE '^[0-9a-f]{64}  [A-Za-z0-9._-]+$' checksums.txt; then
+            echo "::error::Malformed checksum line"; exit 1
+          fi
+          mapfile -t files < <(find release-files release-files-mac release-files-linux -type f \
+            \( -name '*.exe' -o -name '*.dmg' -o -name '*-mac.zip' -o -name '*.AppImage' -o -name '*.deb' \
+               -o -name 'meetmind-extension.zip' \))
+          test "${#files[@]}" -eq "$(wc -l < checksums.txt)" ||
+            { echo "::error::${#files[@]} release files but $(wc -l < checksums.txt) attested checksums"; exit 1; }
+          for file in "${files[@]}"; do
+            expected=$(awk -v n="$(basename "$file")" '$2 == n { print $1 }' checksums.txt)
+            test -n "$expected" || { echo "::error::$file was not attested"; exit 1; }
+            echo "$expected  $file" | sha256sum --check --strict -
+          done
+
       - name: Generate Release Notes from Template and CHANGELOG
         run: node scripts/generate-release-notes.js
         env:
@@ -377,3 +435,14 @@ jobs:
             release-files-linux/*.deb \
             release-files-linux/latest-linux.yml \
             release-files/meetmind-extension.zip
+
+  # Rebuild the website now that this version's installers exist; pages.yml skips version bumps.
+  # A called workflow can't ask for more than this, or this whole workflow fails to start.
+  site:
+    name: Website
+    needs: publish
+    permissions:
+      contents: read
+      pages: write # pages.yml deploy: publish to GitHub Pages
+      id-token: write # pages.yml deploy: OIDC token deploy-pages uses to prove the deployment's origin
+    uses: $/.github/workflows/pages.yml

@@ -52,7 +52,7 @@ Three build artifacts come out of this one repository:
         v                                            | RECORDING_STARTED,
  electron/main.ts (recording state machine)          | PROCESSING_PROGRESS,
         |                                            | PROCESSING_COMPLETE
-        | renderer capture (primary) or               |
+        | capture window (primary) or                 |
         | ffmpeg dshow capture (Windows fallback)     |
         v                                            |
  electron/audio/recorder.ts -> .webm/.wav on disk     |
@@ -107,15 +107,16 @@ Owns:
   macOS menu bar), the macOS application menu (`createAppMenu()`: About, Settings… ⌘, which sends
   `app:navigate`, Hide/Quit, Edit and Window menus), and `app.requestSingleInstanceLock()` to
   prevent duplicate windows/tray icons on relaunch (focuses the existing window on
-  `second-instance` instead). Closing the window only hides it on every platform. On Linux,
+  `second-instance` instead). Closing the window only hides it on every platform, and a window
+  left hidden is closed after 10 minutes and made again when next opened (section 3.5). On Linux,
   `main.ts` runs Electron through XWayland (`--ozone-platform=x11`, set before `ready`) whenever
   `DISPLAY` is set, because a native Wayland window can't stay on top or be placed (the meeting
   overlay) and can't list other apps' windows (meeting detection); the window icon is a PNG, since
   Electron can't read `.ico` there.
 - Launch at login (`autoLaunch`, `electron/services/auto-launch.ts`). On Windows the
   `HKCU\…\CurrentVersion\Run` entry is named `MeetMind` and passes `--hidden`, so a login launch
-  creates the window without showing it and the app starts in the tray, with meeting detection
-  running. Electron's `getLoginItemSettings().openAtLogin` only looks for a value named after the
+  creates no window and the app starts in the tray, with meeting detection running; the window
+  is made the first time the user opens the app. Electron's `getLoginItemSettings().openAtLogin` only looks for a value named after the
   AppUserModelId, never a custom name, so the state is read from `launchItems` (the entries that
   start this exe, with whether Task Manager has disabled them). At startup, once the entry
   exists Windows is the source of truth: a disabled entry stays disabled and the stored setting
@@ -176,7 +177,7 @@ grouped by feature:
 | `logs` | `logs:get`, `logs:clear`, `logs:openFolder` | Backing store for the Logs viewer |
 | `config` | `config:get`, `config:set`, `config:set-multiple` | Settings read/write |
 | `recording` | `recording:start/stop`, `audio:list-devices`, `audio:probe-device`, `audio:linux-status`, `audio:import-file` | Recording control and device enumeration (FFmpeg devices: DirectShow/WASAPI on Windows, PulseAudio sources on Linux; macOS returns an error). `audio:linux-status` returns the PulseAudio/PipeWire server, default output and input, and whether FFmpeg can record from it, for Settings › System › System audio |
-| `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/waveform/audio-status/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `audio-status` returns `{ available, deletedAt, source }`, so the Audio tab shows the player, "Recording deleted" or "No recording" (a pasted transcript has `source: 'transcript'`). `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed. Every write also sends `sessions:changed` (writes within 30 ms are sent once; `db.onChange` in `sessions.ts`), and the renderer re-reads the list and the open meeting, so each status change shows at once on every screen; showing or focusing the window re-checks the revision too |
+| `sessions` | `sessions:list`, `sessions:revision`, `session:get/delete/update-notes/rename/open-recording/waveform/audio-status/delete-recording/create-from-transcript` | Session CRUD; `rename` sets the title, the notes title and `meeting_title`. `audio-status` returns `{ available, deletedAt, source, bytes, format, busy }`, so the Audio tab shows the player with the file's format and size, "Recording deleted" or "No recording" (a pasted transcript has `source: 'transcript'`); `delete-recording` deletes that meeting's audio only (section 6.3), refused while it is being recorded or processed. `sessions:revision` is a counter bumped on every database write: the Dashboard and Meetings pages check it when they open and only re-read the full list (every transcript) when it changed. Every write also sends `sessions:changed` (writes within 30 ms are sent once; `db.onChange` in `sessions.ts`), and the renderer re-reads the list and the open meeting, so each status change shows at once on every screen; showing or focusing the window re-checks the revision too |
 | `storage` | `storage:summary`, `storage:cleanup`, `storage:delete-all`, `storage:open-folder` | Settings › Storage (section 6.3): the recordings' count and size, plus what a "Keep recordings" period (saved, or passed in to preview) would delete; deleting old or all recordings' audio; opening the recordings folder |
 | `dialog` | `dialog:choose-folder` | Native folder picker |
 | `pdf` | `pdf:export`, `pdf:reveal`, `pdf:default-dir` | PDF export |
@@ -184,20 +185,25 @@ grouped by feature:
 | `providers` | `providers:list`, `providers:test` | Provider descriptors (models, credential fields, guides) and generic connection test |
 | `gemini` | `gemini:default-system-prompt`, `gemini:default-md-system-prompt` | Default prompt text for Settings |
 | `processing` | `processing:run`, `processing:retry` | Manually (re)run the pipeline on a session |
-| `capture` | `capture:start/stop` (main -> renderer; `capture:start` carries `{ requireSystemAudio }`), `capture:started/failed/chunk/audio-data` (renderer -> main; `capture:started` carries `{ systemAudio, mic }`), `capture:test-begin/test-end` (invoke) | Renderer-side system audio capture handshake; the test pair switches the macOS capture strategy for Settings' "Test system audio" (on Linux it just wraps the one test capture) |
+| `capture` | `capture:test-begin/test-end` (invoke) | Settings' "Test system audio": switches the macOS capture strategy for one test capture in the main window (on Linux it just wraps the one test capture). Recordings are captured in the capture window, which has its own preload (section 4.1) |
+| `window` | `window:minimize/maximize/close/isVisible/isMaximized` (invoke), `window:ready`, `window:dirty`, `window:view-state` (send) | Frameless window buttons, plus what the main-window lifecycle needs from the renderer: that the app mounted, whether it holds unsaved edits, and which page is open (section 3.5) |
+| `reportError` | `renderer:error` (send) | Render errors caught by an error boundary, uncaught errors and unhandled rejections, written to the log file (rate-limited) |
 | `permissions` | `permissions:status`, `permissions:request`, `permissions:open-settings` | macOS microphone and Screen & System Audio Recording status, prompts, and System Settings deep links (`not-applicable` elsewhere) |
 | `calendar` | `calendar:list/add/update/remove/reconnect/cancel-auth/events` | Calendar sources (Google accounts and ICS links, up to 5; returned redacted), Google sign-in, merged upcoming events with per-calendar errors |
 | `updater` | `updater:check/download/install/get-status` | Auto-update control |
-| `app` | `app:version` | App version string |
+| `app` | `app:version`, `app:state` | App version string; the recording, processing progress, notes preview and last page held by main, read by a newly created or reloaded window |
 | `ffmpeg` | `ffmpeg:check`, `ffmpeg:install`, `ffmpeg:onProgress` | FFmpeg presence check (`source`: bundled, installed or system) and runtime download |
 
-Event subscriptions go through a single `on(channel, callback)` / `off(...)` pair with an
-explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
-`recording:error`, `transcription:progress`, `processing:progress`, `processing:complete`,
+Event subscriptions go through a single `on(channel, callback)`, which returns an unsubscribe
+function, with an explicit allowlist of valid channel names (`recording:started`, `recording:stopped`,
+`recording:error`, `recording:warning`, `recording:levels` (live meter levels relayed from the
+capture window), `transcription:progress`, `processing:progress`, `processing:complete`,
 `processing:error`, `processing:cancelled`, `notes:preview`, `ws:extension-connected`, `ws:recording-requested`,
 `sessions:changed`, `updater:status`, `calendar:meeting-starting`, `calendar:changed`,
 `llm:fallback-used`, `log:entry`, `app:open-session`, `app:navigate` (macOS app menu, e.g.
-Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel.
+Settings… ⌘,)) so the renderer cannot subscribe to an arbitrary IPC channel. `log:entry` is only
+sent while something is subscribed to it (the preload sends `logs:subscribe`/`logs:unsubscribe`).
+The preload also answers main's `window:health-ping` itself (section 3.5).
 
 The meeting overlay window uses its own, smaller preload (`electron/overlay-preload.ts`, run
 sandboxed) exposing only `window.meetmindOverlay`: `overlay:ready`, `overlay:start`,
@@ -238,6 +244,10 @@ React 18 + Vite 6, no router: `renderer/app.tsx` is a single view-state switch b
   PipeWire server and default output (`audio:linux-status`), whether the FFmpeg fallback can
   record from it, and the same 3 s "Test system audio" capture.
 - `LogsViewer.tsx`: tails `electron/utils/logger.ts` output live via the `log:entry` IPC event.
+- `ErrorBoundary.tsx`: catches render errors. One wraps the page area in `app.tsx` (keyed by page,
+  so the top bar keeps working and opening another page starts clean) and one wraps the whole app
+  in `main.tsx`, whose fallback draws its own window buttons. Both report to the log through
+  `lib/errorReport.ts`, which also reports uncaught errors and unhandled rejections.
 
 Supporting pieces: `RecordingBar.tsx` (persistent recording control), `ProcessingIndicator.tsx`
 (pipeline progress), `SessionCard.tsx`, `UpcomingMeetings.tsx` (events from every calendar), `settings/calendars/` (the Calendars card, its rows and the add/edit dialogs),
@@ -364,49 +374,95 @@ main also logs any child process (e.g. the GPU process) that dies. For testing t
 unpackaged app run with `MEETMIND_DEBUG_OVERLAY_FAIL=1` never acknowledges the overlay. The
 `meetingDetection` setting (default on) turns detection and the overlay off.
 
+### 3.5 Main window lifecycle (`electron/window/`)
+
+The main window is disposable. It used to be created once and kept, hidden in the tray, for as
+long as the app ran, and a window hidden for hours could come back blank on Windows with its
+renderer still alive, which no crash handler detects. Now:
+
+- **Created on demand.** `openMainWindow()` (tray, second instance, deep link, notification)
+  creates it if there is none. A login launch or a restart into an automatic update creates none.
+- **Retired in the tray.** Ten minutes after × hides it, the window is destroyed, unless the
+  renderer reported unsaved edits (`window:dirty`, set with the navigation guard). A minimised
+  window is kept. Bounds and the maximised state carry over to the next window.
+- **Checked whenever it is shown**: on open, restore from minimise, wake from sleep, a display
+  change and a GPU process crash. Main forces a frame (`webContents.invalidate()`), pings the
+  preload (`window:health-ping` → `window:health-pong { mounted, splash, frame }`: React has
+  rendered into `#root`, the startup splash is still up, a frame was drawn) and captures the top
+  bar, which must not be one flat colour. A missing frame only counts for the focused window, and
+  a failed capture counts as painted, so the check never repairs a working window.
+- **Repaired in steps.** A failed check, a crashed or hung renderer (`render-process-gone`,
+  `unresponsive` for 8 s), a failed load, a preload error or no `window:ready` within 30 s is
+  answered with a reload, then a new window, then a dialog offering to restart (not while
+  recording or processing). At most 3 repairs in 5 minutes. A window that fails while hidden is
+  simply dropped.
+
+`main-window-lifecycle.ts` is the pure, unit-tested state machine (`reduceMainWindow`,
+`healthVerdict`, `isBlankCapture`); `main-window.ts` runs its actions and owns the `window:*`
+IPC. Every step is logged (`Main window created` / `failed` / `recovered` / `closed after
+sitting in the tray`), and a lost, unresponsive or unhealthy window is logged with a memory
+snapshot (free RAM, free commit, the renderer's working set), since a machine short of memory
+is a likely cause. A new or reloaded window reads `app:state` to show a recording or
+processing run in progress and reopen the page the last one showed; the few events that must not
+be lost while there is no window (`app:open-session`, `app:navigate`, `calendar:meeting-starting`)
+are queued for up to 10 minutes and delivered after `window:ready`. On Windows the app also
+disables Chromium's `CalculateNativeWinOcclusion`, a known cause of windows staying blank after
+being hidden. For testing, an unpackaged app honours `MEETMIND_UI_RETIRE_MS` (retire delay) and
+`MEETMIND_DEBUG_UI_FAIL` (`noack` ignores `window:ready`, `blank` fails every health check).
+
 ---
 
 ## 4. Audio capture pipeline
 
 MeetMind has two independent capture paths, tried in order (the second on Windows and Linux only).
 
-### 4.1 Primary path: renderer capture
+### 4.1 Primary path: the capture window
 
-The renderer captures system audio via Electron's display-media loopback API
-(`getDisplayMedia`) and the microphone via the Web Audio API, in-process, then streams encoded
-chunks to main over the `capture:chunk` IPC channel. Main appends each chunk to an
+A hidden window made for each recording (`electron/audio/capture-window.ts`, page
+`renderer/capture.html` + `capture.ts`, sandboxed preload `electron/capture-preload.ts`) captures
+system audio via Electron's display-media loopback API (`getDisplayMedia`) and the microphone via
+the Web Audio API, then streams encoded chunks to main over the `capture:chunk` IPC channel. It
+is separate from the main window so that window can be closed, reloaded or replaced during a
+recording (section 3.5), and it is destroyed when the recording stops, fails to start or times
+out, so no stream outlives it. Main sends `capture:start { requireSystemAudio }` once the page
+reports `capture:ready`, and `capture:stop` at the end; the page answers `capture:started
+{ systemAudio, mic }` or `capture:failed`, sends `capture:levels` (~15 a second, relayed to a
+visible main window as `recording:levels` for the meters) and finishes with a zero-length
+`capture:audio-data`. If the capture window's renderer dies mid-recording, main stops the
+recording and processes what is on disk. Main appends each chunk to an
 in-progress `.webm` file on disk as it arrives, so a crash mid-recording still leaves a usable
 partial file. On stop, `convertWebmToWav()` (`electron/audio/recorder.ts`, ffmpeg-backed)
 produces the final `.wav` used by the transcription stage.
 
-Main's display-media handler (`installDisplayMediaHandler()`) approves the request without a
-picker and answers with `audio: 'loopback'`:
+Main's display-media handler (`installDisplayMediaHandler()`, on the default session, which the
+capture window and the main window share) approves the request without a picker and answers
+with `audio: 'loopback'`:
 
 - **Windows**: Chromium's WASAPI loopback, capturing whatever the default output device plays.
-  The video source is a screen from `desktopCapturer`; the renderer stops that track at once.
+  The video source is a screen from `desktopCapturer`; the capture page stops that track at once.
 - **macOS 14.2+**: the CoreAudio Tap API (Electron 39+), which needs `NSAudioCaptureUsageDescription`
   in Info.plist (without it macOS returns a silent stream with no error) and the user's Screen &
   System Audio Recording permission. Electron's macOS loopback is new and behaves differently
   per video source, so the source is configurable as `config.macCaptureStrategy`
   (`electron/audio/mac-capture.ts`): `screen` (default; a `desktopCapturer` screen), `frame`
-  (MeetMind's own frame, which may avoid the Screen Recording prompt) or `picker` (the macOS
+  (the requesting window's own frame, which may avoid the Screen Recording prompt) or `picker` (the macOS
   system picker). Settings › System › "Test system audio" runs a 3 s capture per strategy via
   `capture:test-begin`/`capture:test-end` and lets the user switch. On macOS `main.ts` asks for
-  microphone access before a recording and allows 60 s for the renderer to start (permission
+  microphone access before a recording and allows 60 s for the capture window to start (permission
   prompts), versus 6 s elsewhere.
 - **Linux**: Chromium's loopback where it gives an audio track, through the same screen-source
   handler as Windows. When it doesn't, 4.2 records the default output's monitor instead.
 
-`capture:start` tells the renderer whether main can capture system audio itself
+`capture:start` tells the capture page whether main can capture system audio itself
 (`requireSystemAudio`, from `canRecordSystemAudioWithFfmpeg()`): always on Windows, on Linux when
 `pactl info` reports a default output and the located FFmpeg lists the `pulse` input device,
-never on macOS. If the renderer then gets no system audio (the request is refused, or the stream
+never on macOS. If the page then gets no system audio (the request is refused, or the stream
 has no audio track), it fails, so main falls back to 4.2; otherwise it records the microphone
-alone and shows a warning.
+alone and main shows a warning (`recording:warning`).
 
 ### 4.2 Fallback path: direct ffmpeg capture (Windows and Linux)
 
-If renderer capture fails to start, `handleStartRecording()` in `main.ts` falls back to a direct
+If the capture window fails to start, `handleStartRecording()` in `main.ts` falls back to a direct
 ffmpeg capture combining the microphone and system audio, using `electron/audio/mixer.ts` (the
 `backend` option picks the inputs). On Linux it records two PulseAudio inputs (`-f pulse`, which
 PipeWire serves through pipewire-pulse): the default output's monitor (`<sink>.monitor`, what the
@@ -697,6 +753,9 @@ Each meeting's audio is `userData/recordings/<sessionId>.wav` (`.webm` while rec
 by a crash; `getRecordingsDir()` in `main.ts`). Settings › Storage (`StorageSection.tsx`) shows
 how many recordings there are and their total size, sets how long they are kept
 (`recordingRetentionDays`), and can delete old ones now, delete them all, or open the folder.
+A meeting's Audio tab (`AudioPlayer.tsx`) shows its file's format and size and can delete just
+that recording (`session:delete-recording` → `deleteOne()`, which only accepts ids matching
+`isRecordingId()`).
 
 - Deleting removes only the audio files and the cached waveform; the meeting row stays with its
   transcript and notes, `audio_path` set to `NULL` and `audio_deleted_at` set. A file that can't
@@ -982,7 +1041,7 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
 | `renderer/assets/fonts/` and `extension/fonts/` | `DMSans-Variable.woff2` (OFL licensed, see accompanying `OFL.txt`), used identically in the app UI and the injected extension overlay so both match the design system in `DESIGN.md` |
 | `docs/brand/` | Wordmark images (light/dark) used in `README.md` |
 | `docs/screenshots/` | App screenshots (light/dark) used in `README.md` |
-| `site/` | Static marketing site: `index.html`, `og.html` (Open Graph preview), `sitemap.xml`, and a Google Search Console verification file, published to GitHub Pages by `.github/workflows/pages.yml` |
+| `site/` | Static marketing site: `index.html`, `404.html` (served by GitHub Pages for any missing path, so its URLs are absolute), `og.html` (Open Graph preview), `sitemap.xml`, and a Google Search Console verification file, published to GitHub Pages by `.github/workflows/pages.yml` |
 
 ---
 
@@ -1133,7 +1192,9 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   already did: a PR can only fake a pass by changing `ci.yml`, which then reaches `main` with the
   identical tree it was tested with, after maintainer review (CODEOWNERS).
 - **`release.yml`**: triggers on a push to `main` that touches `package.json` (i.e. a version
-  bump). Calls `ci.yml` as a gate first. The `build` job then builds the Windows installer with a
+  bump). Calls `ci.yml` as a gate (`checks`); the three build jobs start alongside it, since
+  they hold only a read-only token and no secrets, while `attest` and `publish` wait for it, so
+  nothing is signed or released until CI passes. The `build` job builds the Windows installer with a
   read-only token and no dependency cache, bundling the pinned, checksum-verified FFmpeg
   (`scripts/fetch-ffmpeg.ts`), then smoke-tests the unpacked app. The `build-mac`
   job (`macos-latest`, same read-only/no-cache rules) fetches the pinned macOS FFmpeg for arm64
@@ -1143,15 +1204,19 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   (`ubuntu-latest`, same rules) fetches the pinned Linux FFmpeg, runs `pnpm run build:linux`,
   checks that `latest-linux.yml` lists the AppImage, and smoke-tests the unpacked app the way
   `ci.yml` does. An `attest` job, the
-  only one with `id-token: write` and `attestations: write` and running no project code, signs
+  only one with `attestations: write` and running no project code, signs
   SLSA build provenance (`actions/attest`, Sigstore) for the installer, both DMGs, the mac update
   zips, the AppImage, the `.deb` and the extension, so anyone can check a download with
-  `gh attestation verify <file> --repo aslahtp/meetmind`. A separate `publish` job, which waits
-  for the attestations, the only one granted
-  `contents: write`, runs no dependency code and no third-party actions, and creates the GitHub
+  `gh attestation verify <file> --repo aslahtp/meetmind`. It signs the SHA-256 checksums each
+  build job reports for the files it uploaded (`subject-checksums`), so it downloads nothing.
+  A separate `publish` job, which waits for the attestations, the only one granted
+  `contents: write`, runs no dependency code and no third-party actions, checks that every
+  downloaded file matches an attested checksum and that no unattested one is present, and creates the GitHub
   release (Windows installer, both DMGs, the mac update zips, the AppImage and `.deb`,
   `latest.yml`, `latest-mac.yml`, `latest-linux.yml`, blockmaps and the extension) using the runner's own `gh` CLI. `pnpm run build` is always invoked with
-  `--publish never`, so electron-builder itself never needs a publish token.
+  `--publish never`, so electron-builder itself never needs a publish token. A last `site` job
+  calls `pages.yml` (granting it `pages: write` and `id-token: write` for the deploy) to rebuild
+  the website once the release exists.
 - **`pr-checks.yml`**: PR-only. Enforces that any PR changing code also bumps `package.json`'s
   `version` and adds a matching `## [X.Y.Z] - YYYY-MM-DD` heading to `CHANGELOG.md` (docs and
   `.github/` changes are exempt; a `skip-version-check` label overrides it for the rest). Also
@@ -1159,7 +1224,15 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   high-severity advisory.
 - **`codeql.yml`**: CodeQL security analysis of the JavaScript and of the workflows themselves
   (`actions` language, alongside zizmor) on PRs, pushes to `main`, and weekly on a schedule.
-- **`pages.yml`**: publishes `site/` to GitHub Pages.
+- **`pages.yml`**: builds the website with `scripts/build-site.sh` and publishes it to GitHub
+  Pages on pushes to `main` that touch `site/`, `llms.txt`, the brand assets or screenshots, and
+  when `release.yml` calls it after publishing a release. It never runs on a version bump: the
+  site links the newest published release (`SITE_VERSION`, read with `gh release view`), not
+  `package.json`'s version, so its download links never point at installers that don't exist
+  yet. The sitemap's `lastmod` is the last commit that changed `site/index.html`, or the
+  release date if later. `scripts/build-site-images.ts` (sharp) makes AVIF copies of the
+  screenshots at 750, 1100 and 1500 px wide for the page's `<picture>` `srcset`s and shrinks
+  the header wordmarks.
 - **`.github/dependabot.yml`**: grouped weekly minor/patch dependency update PRs and monthly
   GitHub Actions updates (the workflows and the composite `.github/actions/setup`), each with a
   7-day cooldown.
@@ -1197,6 +1270,10 @@ Current coverage is pure logic only:
 | `tests/ffmpeg-path.test.ts` | FFmpeg binary names and lookup order per OS/arch (`electron/audio/ffmpeg-path.ts`) and the per-OS silent-recording hints (`electron/audio/audio-hints.ts`) |
 | `tests/macSupport.test.ts` | macOS capture strategies (`electron/audio/mac-capture.ts`), "Test system audio" verdicts (`renderer/lib/audioTest.ts`), and the shape of every pinned FFmpeg download and how each archive is unpacked (`electron/audio/ffmpeg-sources.ts`, `ffmpeg-fetch.ts`) |
 | `tests/macPermissions.test.tsx` | Server-renders the macOS Permissions card (`renderer/components/settings/MacPermissions.tsx`), which can't be seen in the Windows dev app |
+| `tests/mainWindowLifecycle.test.ts` | Main window lifecycle (`electron/window/main-window-lifecycle.ts`): created on demand, retired in the tray (kept with unsaved edits), reload → new window → give up, the repair limit, stale events, and the health-check verdict and blank-capture test |
+| `tests/notesSanitize.test.ts` | Type guards for notes and transcripts (`electron/services/notes-sanitize.ts`), and that wrongly typed notes render as the notes page and as Markdown |
+| `tests/noiseGate.test.ts` | The microphone meter's noise gate (`renderer/lib/noiseGate.ts`): a steady background shows nothing, speech above it shows, also through long talking |
+| `tests/errorBoundary.test.tsx` | The error boundary's fallback state and both recovery screens (`renderer/components/ErrorBoundary.tsx`) |
 
 The packaged app is additionally checked by its `--smoke` self-test in CI (section 15). There is
 no maintainer Mac or Linux machine, so macOS and Linux behaviour beyond that (permission prompts,
