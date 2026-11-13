@@ -6,7 +6,7 @@
  * functions so the metadata can be sent to the renderer over IPC.
  */
 
-import type { CredentialField, ProviderDescriptor, ProviderKind } from '../shared';
+import type { Config, CredentialField, ProviderDescriptor, ProviderKind } from '../shared';
 
 /** What the registry needs from any provider; `STTProvider` and `LLMProvider` both satisfy it. */
 type AnyProvider = ProviderDescriptor;
@@ -21,7 +21,7 @@ export interface Registry<P extends AnyProvider = AnyProvider> {
   describe(provider: P): ProviderDescriptor;
   configKeys(): Array<CredentialField & { providerId: string }>;
   resolveModel(provider: P, saved?: unknown): string;
-  isConfigured(provider: P, config: Record<string, unknown>): boolean;
+  isConfigured(provider: P, config: Partial<Config>): boolean;
   describeAll(): ProviderDescriptor[];
 }
 
@@ -60,11 +60,11 @@ function createRegistry<P extends AnyProvider = AnyProvider>(kind: ProviderKind,
 
   /** Serializable metadata (no functions) for the renderer. */
   function describe(provider: P): ProviderDescriptor {
-    const out: any = {};
+    const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(provider)) {
       if (typeof value !== 'function' && !key.startsWith('_')) out[key] = value;
     }
-    return out;
+    return out as ProviderDescriptor;
   }
 
   /** Every config key a provider stores (credentials + extra options). */
@@ -86,10 +86,12 @@ function createRegistry<P extends AnyProvider = AnyProvider>(kind: ProviderKind,
   }
 
   /** True when every required credential of the provider is filled in `config`. */
-  function isConfigured(provider: P, config: Record<string, unknown>) {
+  function isConfigured(provider: P, config: Partial<Config>) {
+    // Credential keys are config keys (see configKeys()).
+    const values = config as Record<string, unknown>;
     return provider.credentials
       .filter((f) => f.required)
-      .every((f) => String(config[f.configKey] ?? '').trim());
+      .every((f) => String(values[f.configKey] ?? '').trim());
   }
 
   return {

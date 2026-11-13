@@ -1,5 +1,5 @@
 // In-app FFmpeg install (the `ffmpeg:install` IPC handler and the post-update "Repair now").
-// Installs the pinned, checksum-verified build from electron/audio/ffmpeg-sources.js:
+// Installs the pinned, checksum-verified build from electron/audio/ffmpeg-sources.ts:
 //
 // Windows: next to where the bundled copy lives (resources/ffmpeg, or assets/ffmpeg in
 //          development).
@@ -8,12 +8,14 @@
 // Linux:   into userData/ffmpeg too: an AppImage is a read-only image, and a .deb installs into
 //          /opt, which the user can't write to.
 
+import type { Outcome } from '../shared';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { app } from 'electron';
 import logger from '../utils/logger';
+import { errorMessage } from '../utils/errors';
 import { getFfmpegInstallDir } from '../audio/ffmpeg-path';
 import { fetchPinnedFfmpeg } from '../audio/ffmpeg-fetch';
 
@@ -24,9 +26,20 @@ function targetDir() {
     : path.join(app.getAppPath(), 'assets', 'ffmpeg');
 }
 
+type SendProgress = (stage: string, percent: number, message: string) => void;
+
+/** What `fetchPinnedFfmpeg` reports. */
+interface FetchProgress {
+  stage: 'download' | 'extract' | 'copy';
+  index: number;
+  count: number;
+  downloaded?: number;
+  total?: number;
+}
+
 // Downloads take 0–80% of the bar, split evenly between the zips; unpacking and copying the rest.
-function progressReporter(sendProgress: any) {
-  return ({ stage, index, count, downloaded, total }: any) => {
+function progressReporter(sendProgress: SendProgress) {
+  return ({ stage, index, count, downloaded = 0, total = 0 }: FetchProgress) => {
     if (stage === 'download') {
       const share = 80 / count;
       const pct = Math.round(index * share + (total > 0 ? (downloaded / total) * share : 0));
@@ -41,7 +54,7 @@ function progressReporter(sendProgress: any) {
 }
 
 /** Installs FFmpeg for this OS. `sendProgress(stage, percent, message)` drives the Settings UI. */
-async function installFfmpeg(sendProgress: any) {
+async function installFfmpeg(sendProgress: SendProgress): Promise<Outcome> {
   const tmpDir = path.join(os.tmpdir(), `meetmind-ffmpeg-${Date.now()}`);
   try {
     sendProgress('download', 0, 'Starting download…');
@@ -64,10 +77,11 @@ async function installFfmpeg(sendProgress: any) {
     sendProgress('done', 100, 'FFmpeg installed successfully!');
     logger.info('FFmpeg installed', { targetDir: outDir });
     return { success: true };
-  } catch (err: any) {
-    logger.error('FFmpeg install failed', { error: err.message });
-    sendProgress('error', 0, err.message);
-    return { success: false, error: err.message };
+  } catch (err) {
+    const message = errorMessage(err);
+    logger.error('FFmpeg install failed', { error: message });
+    sendProgress('error', 0, message);
+    return { success: false, error: message };
   } finally {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best effort */ }
   }

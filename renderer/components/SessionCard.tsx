@@ -1,6 +1,8 @@
 import React, { useEffect, useState, startTransition } from 'react';
 import { Trash2, Loader2, ListChecks, Video, RotateCcw } from 'lucide-react';
+import type { Session } from '@shared';
 import { useApp } from '../lib/app-context';
+import type { SearchMatch } from '../lib/meetingSearch';
 import NotionIcon from './NotionIcon';
 import { IconButton, StatusPill, StatusDot, Skeleton, HighlightedText } from './ui/index';
 import {
@@ -13,8 +15,17 @@ import {
 import { meetingHostname, sessionPlatform } from '../lib/platform';
 import { useSessionActions } from '../lib/hooks';
 
-// `match` is this session's searchSessions() result, shown as the passage that matched.
-export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting, match }: { session?: any; onOpen?: any; onDelete?: any; onRetry?: any; isDeleting?: any; match?: any }) {
+export interface SessionCardProps {
+  session: Session;
+  onOpen: () => void;
+  onDelete: (session: Session) => void;
+  onRetry: (session: Session) => void;
+  isDeleting: boolean;
+  /** This session's searchSessions() result, shown as the passage that matched. */
+  match?: SearchMatch;
+}
+
+export function SessionCard({ session, onOpen, onDelete, onRetry, isDeleting, match }: SessionCardProps) {
   const notes = session.notes;
   const duration = formatDurationSeconds(getSessionDuration(session));
   const startTime = formatTime(session.started_at);
@@ -135,7 +146,7 @@ export function SessionCardSkeleton() {
   );
 }
 
-export function SessionListSkeleton({ count = 3 }: { count?: any }) {
+export function SessionListSkeleton({ count = 3 }: { count?: number }) {
   return (
     <div className="flex flex-col gap-16" aria-busy="true" aria-label="Loading meetings">
       {Array.from({ length: count }, (_, i) => <SessionCardSkeleton key={i} />)}
@@ -147,7 +158,7 @@ export function SessionListSkeleton({ count = 3 }: { count?: any }) {
 // Meetings with a few hundred meetings paints at once instead of after every card is built.
 const FIRST_CARDS = 20;
 
-function useProgressiveCount(total: any) {
+function useProgressiveCount(total: number) {
   const [count, setCount] = useState(FIRST_CARDS);
   useEffect(() => {
     if (count < total) startTransition(() => setCount(total));
@@ -155,21 +166,27 @@ function useProgressiveCount(total: any) {
   return count;
 }
 
+export interface SessionListProps {
+  sessions: Session[];
+  onOpenSession: (session: Session) => void;
+  /** Meetings search: session id → searchSessions() result. */
+  matches?: Map<string, SearchMatch> | null;
+}
+
 // Session list shared by Dashboard and Meetings: wires delete + retry actions.
-// `matches` (Meetings search) maps session id → searchSessions() result.
-export function SessionList({ sessions, onOpenSession, matches }: { sessions?: any; onOpenSession?: any; matches?: any }) {
+export function SessionList({ sessions, onOpenSession, matches }: SessionListProps) {
   const { trackProcessing } = useApp();
   const { deletingIds, handleDelete, handleRetry } = useSessionActions();
   const shown = useProgressiveCount(sessions.length);
 
-  const onRetry = (session: any) => {
+  const onRetry = (session: Session) => {
     trackProcessing(session.id);
     handleRetry(session);
   };
 
   return (
     <div className="flex flex-col gap-16">
-      {sessions.slice(0, shown).map((session: any) => (
+      {sessions.slice(0, shown).map((session) => (
         <SessionCard
           key={session.id}
           session={session}

@@ -8,7 +8,7 @@ import { parsePactlInfo, parseShortSources, parseSourceOutputs, pickPulseSources
 // English field names whatever the user's locale; the parsers rely on them.
 const PACTL_ENV = { ...process.env, LC_ALL: 'C' };
 
-function pactl(args: any, timeout = 3000) {
+function pactl(args: string[], timeout = 3000): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile('pactl', args, { env: PACTL_ENV, timeout, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
       if (err) {

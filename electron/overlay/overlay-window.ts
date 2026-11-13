@@ -2,7 +2,7 @@
 // takes focus, so it can sit over a Meet/Zoom call without stealing keystrokes. It renders
 // renderer/overlay.html and is driven entirely by the state main pushes on overlay:state.
 //
-// A fresh window is made for each show and destroyed once it closes; overlay-lifecycle.js decides
+// A fresh window is made for each show and destroyed once it closes; overlay-lifecycle.ts decides
 // when. The renderer invokes overlay:ready once loaded (the window is shown then, so its opening
 // animation plays on screen) and sends overlay:shown once it has rendered a visible state; a
 // capture then checks that something was actually painted. A window that crashes, fails to load,
@@ -10,10 +10,12 @@
 // prompt another way. Every step is logged, so a missing overlay shows up in the log.
 
 import path from 'path';
-import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, type Display, type WebContents } from 'electron';
 import logger from '../utils/logger';
 import { appRoot } from '../utils/paths';
-import { createLifecycle, reduceOverlay } from './overlay-lifecycle';
+import { errorMessage } from '../utils/errors';
+import type { Bounds, EffectiveTheme, OverlayState } from '../shared/overlay';
+import { createLifecycle, reduceOverlay, type LifecycleAction, type LifecycleEvent } from './overlay-lifecycle';
 
 const isDev = process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
@@ -24,24 +26,25 @@ const CLOSE_FALLBACK_MS = 1200;   // destroy anyway if the renderer never report
 const ACK_TIMEOUT_MS = 5000;      // from creation to the renderer acknowledging a visible state
 const VERIFY_DELAY_MS = 900;      // let the opening animation settle before checking the paint
 
-let win: any = null;
+let win: BrowserWindow | null = null;
 let life = createLifecycle();
-let latestState = { mode: 'hidden' };
-let theme = 'light';
-let anchorBounds: any = null;
+let latestState: OverlayState = { mode: 'hidden' };
+let theme: EffectiveTheme = 'light';
+let anchorBounds: Bounds | null = null;
 let userOffsetX = 0;   // horizontal pixels from centre; positive = right
-let ackTimer: any = null;
-let closeTimer: any = null;
-let verifyTimer: any = null;
-let onFailure: any = null;
+let ackTimer: ReturnType<typeof setTimeout> | undefined;
+let closeTimer: ReturnType<typeof setTimeout> | undefined;
+let verifyTimer: ReturnType<typeof setTimeout> | undefined;
+let onFailure: ((state: OverlayState, reason: string) => void) | null = null;
 let ipcRegistered = false;
 
-function isAlive() {
-  return !!win && !win.isDestroyed();
+function liveWindow(): BrowserWindow | null {
+  return win && !win.isDestroyed() ? win : null;
 }
 
-function send(channel: any, payload: any) {
-  if (isAlive() && !win.webContents.isDestroyed()) win.webContents.send(channel, payload);
+function send(channel: string, payload: unknown) {
+  const w = liveWindow();
+  if (w && !w.webContents.isDestroyed()) w.webContents.send(channel, payload);
 }
 
 function clearTimers() {
@@ -54,7 +57,7 @@ function clearTimers() {
 // Without converting, a meeting on a monitor with different scaling can map to the wrong display.
 // Minimised windows report off-screen bounds (-32000 / -25600), which getDisplayMatching would
 // still map to some display, so those are dropped and the primary display is used.
-function toAnchor(bounds: any) {
+function toAnchor(bounds: Bounds | null | undefined): Bounds | null {
   if (!bounds || bounds.width <= 200 || bounds.x <= -10000 || bounds.y <= -10000) return null;
   if (process.platform !== 'win32') return bounds;
   try {
@@ -65,8 +68,8 @@ function toAnchor(bounds: any) {
 }
 
 // Top centre of the work area of the display showing the meeting (primary display otherwise).
-function targetPosition() {
-  const display: any = anchorBounds ? screen.getDisplayMatching(anchorBounds) : screen.getPrimaryDisplay();
+function targetPosition(): { display: Display; x: number; y: number } {
+  const display = anchorBounds ? screen.getDisplayMatching(anchorBounds) : screen.getPrimaryDisplay();
   const area = display.workArea;
   const centreX = Math.round(area.x + (area.width - WIDTH) / 2);
   // Clamp so the bar stays fully within the work area.
@@ -74,14 +77,16 @@ function targetPosition() {
   return { display, x, y: Math.round(area.y + TOP_MARGIN) };
 }
 
-function place(height: any) {
+function place(height: number) {
+  const w = liveWindow();
+  if (!w) return;
   const { x, y } = targetPosition();
-  win.setBounds({ x, y, width: WIDTH, height });
+  w.setBounds({ x, y, width: WIDTH, height });
 }
 
 // True when the captured window has at least one non-transparent pixel. A capture that throws
 // counts as painted: the check must never be the reason a working overlay is replaced.
-async function paintedSomething(target: any) {
+async function paintedSomething(target: BrowserWindow): Promise<boolean> {
   try {
     const image = await target.webContents.capturePage();
     if (image.isEmpty()) return false;
@@ -90,13 +95,13 @@ async function paintedSomething(target: any) {
       if (bitmap[i] !== 0) return true;
     }
     return false;
-  } catch (err: any) {
-    logger.warn('Meeting overlay paint check failed; assuming it painted', { error: err.message });
+  } catch (err) {
+    logger.warn('Meeting overlay paint check failed; assuming it painted', { error: errorMessage(err) });
     return true;
   }
 }
 
-function createWindow(gen: any) {
+function createWindow(gen: number) {
   const w = new BrowserWindow({
     width: WIDTH,
     height: INITIAL_HEIGHT,
@@ -113,7 +118,7 @@ function createWindow(gen: any) {
     hasShadow: false,
     title: 'MeetMind',
     // macOS: a non-activating panel floats over full-screen apps and shows on every Space.
-    ...(isMac ? { type: 'panel' } : {}),
+    ...(isMac ? { type: 'panel' as const } : {}),
     webPreferences: {
       preload: path.join(__dirname, '..', 'overlay-preload.js'),
       contextIsolation: true,
@@ -131,7 +136,7 @@ function createWindow(gen: any) {
   // into a UI element there, flickering its Dock icon.
   if (!isMac) w.setVisibleOnAllWorkspaces(true);
 
-  const gone = (reason: any, detail?: any) => {
+  const gone = (reason: string, detail?: Record<string, unknown>) => {
     if (w !== win) return;
     logger.warn('Meeting overlay window lost', { reason, ...detail });
     dispatch({ type: 'gone', gen, reason });
@@ -158,12 +163,12 @@ function createWindow(gen: any) {
 
 function destroyWindow() {
   clearTimers();
-  const w: any = win;
+  const w = win;
   win = null;   // first, so the window's own 'closed' handler ignores this
   if (w && !w.isDestroyed()) w.destroy();
 }
 
-function run(action: any) {
+function run(action: LifecycleAction) {
   switch (action.type) {
     case 'create':
       destroyWindow();
@@ -174,16 +179,17 @@ function run(action: any) {
       destroyWindow();
       break;
     case 'reveal': {
-      if (!isAlive()) break;
+      const w = liveWindow();
+      if (!w) break;
       const { display, x, y } = targetPosition();
-      win.setBounds({ x, y, width: WIDTH, height: win.getBounds().height });
-      win.showInactive();
-      win.moveTop();
+      w.setBounds({ x, y, width: WIDTH, height: w.getBounds().height });
+      w.showInactive();
+      w.moveTop();
       logger.info('Meeting overlay shown', {
         mode: latestState.mode,
         display: display.id,
-        bounds: win.getBounds(),
-        pid: win.webContents.getOSProcessId(),
+        bounds: w.getBounds(),
+        pid: w.webContents.getOSProcessId(),
       });
       break;
     }
@@ -202,8 +208,9 @@ function run(action: any) {
       clearTimeout(verifyTimer);
       const { gen } = action;
       verifyTimer = setTimeout(async () => {
-        if (!isAlive() || gen !== life.gen) return;
-        const ok: any = await paintedSomething(win);
+        const w = liveWindow();
+        if (!w || gen !== life.gen) return;
+        const ok = await paintedSomething(w);
         dispatch({ type: 'verified', gen, ok });
       }, VERIFY_DELAY_MS);
       break;
@@ -222,14 +229,17 @@ function run(action: any) {
   }
 }
 
-function dispatch(event: any) {
+function dispatch(event: LifecycleEvent) {
   const { state, actions } = reduceOverlay(life, event);
   life = state;
   for (const action of actions) run(action);
 }
 
 // Shows `state` in the overlay, making a window if needed, without activating it.
-function showOverlay(state: any, { theme: nextTheme, bounds = null }: { theme?: string; bounds?: any } = {}) {
+function showOverlay(
+  state: OverlayState,
+  { theme: nextTheme, bounds = null }: { theme?: EffectiveTheme; bounds?: Bounds | null } = {},
+) {
   latestState = state;
   if (nextTheme) theme = nextTheme;
   // A new window follows this meeting (or the primary display); an open one keeps its anchor
@@ -241,7 +251,7 @@ function showOverlay(state: any, { theme: nextTheme, bounds = null }: { theme?: 
 
 // Asks the renderer to play its closing animation; the window is destroyed when it reports back
 // (overlay:closed), or after a fallback delay.
-function hideOverlay(state = { mode: 'hidden' }) {
+function hideOverlay(state: OverlayState = { mode: 'hidden' }) {
   latestState = state;
   dispatch({ type: 'hide' });
 }
@@ -256,24 +266,24 @@ function recheckOverlay() {
   dispatch({ type: 'recheck' });
 }
 
-// idle | loading | revealed | shown | closing | failed (see overlay-lifecycle.js); for the smoke test.
-function getOverlayPhase() {
+// idle | loading | revealed | shown | closing | failed (see overlay-lifecycle.ts); for the smoke test.
+function getOverlayPhase(): string {
   return life.phase;
 }
 
-function setOverlayTheme(nextTheme: any) {
+function setOverlayTheme(nextTheme: EffectiveTheme) {
   theme = nextTheme;
   send('overlay:theme', nextTheme);
 }
 
 // Registers the overlay's own IPC; `onFailure(state, reason)` runs when the overlay could not be
 // shown even after a retry. Safe to call more than once.
-function registerOverlayIpc(options: any = {}) {
+function registerOverlayIpc(options: { onFailure?: (state: OverlayState, reason: string) => void } = {}) {
   if (options.onFailure) onFailure = options.onFailure;
   if (ipcRegistered) return;
   ipcRegistered = true;
 
-  const fromOverlay = (event: any) => isAlive() && event.sender === win.webContents;
+  const fromOverlay = (event: { sender: WebContents }) => liveWindow()?.webContents === event.sender;
   // Dev only: never acknowledge, to exercise the retry and the fallback notification.
   const failOnPurpose = !app.isPackaged && process.env.MEETMIND_DEBUG_OVERLAY_FAIL === '1';
 
@@ -297,12 +307,14 @@ function registerOverlayIpc(options: any = {}) {
   ipcMain.on('overlay:move', (event, deltaX) => {
     if (!fromOverlay(event)) return;
     userOffsetX += Math.round(Number(deltaX) || 0);
-    place(win.getBounds().height);
+    const w = liveWindow();
+    if (w) place(w.getBounds().height);
   });
 
   screen.on('display-metrics-changed', () => {
-    if (!isAlive() || !win.isVisible()) return;
-    place(win.getBounds().height);
+    const w = liveWindow();
+    if (!w || !w.isVisible()) return;
+    place(w.getBounds().height);
     recheckOverlay();
   });
 }

@@ -3,10 +3,28 @@ import fs from 'fs';
 import { spawnSync } from 'child_process';
 import { appRoot } from '../utils/paths';
 
-// ── Pure helpers (no electron import, unit-tested in tests/ffmpeg-path.test.js) ──────────────
+// ── Pure helpers (no electron import, unit-tested in tests/ffmpeg-path.test.ts) ──────────────
 
 /** `ffmpeg` → `ffmpeg.exe` on Windows, unchanged elsewhere. */
-function binaryName(tool: any, platform: any) {
+type FfmpegSource = 'bundled' | 'installed' | 'system';
+
+/** A place a tool may live; for `system`, `path` can be the bare command. */
+interface FfmpegCandidate {
+  source: FfmpegSource;
+  path: string;
+}
+
+/** What `ffmpegCandidates` needs to know about the running app. */
+interface FfmpegContext {
+  platform: string;
+  arch: string;
+  isPackaged?: boolean;
+  resourcesPath: string;
+  appRoot: string;
+  userData?: string | null;
+}
+
+function binaryName(tool: string, platform: string): string {
   return platform === 'win32' ? `${tool}.exe` : tool;
 }
 
@@ -15,7 +33,7 @@ function binaryName(tool: any, platform: any) {
  * (unchanged layout); macOS and Linux keep one folder per architecture (mac-arm64, mac-x64,
  * linux-x64), the same folders electron-builder copies into the app as resources/ffmpeg/.
  */
-function devBinaryDir(platform: any, arch: any) {
+function devBinaryDir(platform: string, arch: string): string {
   if (platform === 'darwin') return `mac-${arch}`;
   if (platform === 'linux') return `linux-${arch}`;
   return '';
@@ -30,10 +48,13 @@ function devBinaryDir(platform: any, arch: any) {
  *               shell's PATH, so the bare-command lookup below would miss them. On Linux the
  *               distro's ffmpeg is found by that PATH lookup.
  */
-function ffmpegCandidates(tool: any, { platform, arch, isPackaged, resourcesPath, appRoot, userData }: any) {
+function ffmpegCandidates(
+  tool: string,
+  { platform, arch, isPackaged, resourcesPath, appRoot, userData }: FfmpegContext,
+): FfmpegCandidate[] {
   const p = platform === 'win32' ? path.win32 : path.posix;
   const name = binaryName(tool, platform);
-  const list = [];
+  const list: FfmpegCandidate[] = [];
   if (isPackaged) list.push({ source: 'bundled', path: p.join(resourcesPath, 'ffmpeg', name) });
   else list.push({ source: 'bundled', path: p.join(appRoot, 'assets', 'ffmpeg', devBinaryDir(platform, arch), name) });
   if (platform !== 'win32' && userData) list.push({ source: 'installed', path: p.join(userData, 'ffmpeg', name) });
@@ -46,9 +67,9 @@ function ffmpegCandidates(tool: any, { platform, arch, isPackaged, resourcesPath
 
 // ── Runtime ───────────────────────────────────────────────────────────────────────────────────
 
-function runtimeContext() {
-  const { app } = require('electron');
-  let userData = null;
+function runtimeContext(): FfmpegContext {
+  const { app }: typeof import('electron') = require('electron');
+  let userData: string | null = null;
   try { userData = app.getPath('userData'); } catch { /* before ready — skip */ }
   return {
     platform: process.platform,
@@ -60,7 +81,7 @@ function runtimeContext() {
   };
 }
 
-function candidates(tool: any) {
+function candidates(tool: string): FfmpegCandidate[] {
   return ffmpegCandidates(tool, runtimeContext());
 }
 
@@ -80,7 +101,7 @@ function getFfmpegInstallDir() {
   return path.dirname(target.path);
 }
 
-function onPath(tool: any) {
+function onPath(tool: string): boolean {
   try {
     const result = spawnSync(tool, ['-version'], { encoding: 'utf8', timeout: 3000 });
     return result.status === 0 || (result.stdout || result.stderr || '').includes(`${tool} version`);
@@ -93,7 +114,7 @@ function onPath(tool: any) {
  * Finds a usable tool: the first candidate on disk, else the bare command if it is on PATH.
  * Returns { source: 'bundled' | 'installed' | 'system', path } or null.
  */
-function locate(tool: any) {
+function locate(tool: string): FfmpegCandidate | null {
   const hit = candidates(tool).find((c) => fs.existsSync(c.path));
   if (hit) return hit;
   return onPath(tool) ? { source: 'system', path: tool } : null;
@@ -109,6 +130,7 @@ function resolveFfprobePath() {
   return locate('ffprobe')?.path || null;
 }
 
+export type { FfmpegSource, FfmpegCandidate, FfmpegContext };
 export {
   binaryName,
   devBinaryDir,

@@ -1,7 +1,8 @@
-// STT / LLM provider types. Sources: electron/providers/{registry,index}.js and the provider modules
-// (stt/*.js, llm/*.js). `ProviderDescriptor` is what `describe()` sends to the renderer (functions and
+// STT / LLM provider types. Sources: electron/providers/{registry,index}.ts and the provider modules
+// (stt/*.ts, llm/*.ts). `ProviderDescriptor` is what `describe()` sends to the renderer (functions and
 // `_`-prefixed keys stripped); `STTProvider` / `LLMProvider` add the runtime functions (used from Phase 5).
 
+import type { Config } from './config';
 import type { TranscriptSegment } from './session';
 
 export type ProviderKind = 'stt' | 'llm';
@@ -44,7 +45,7 @@ export interface ProviderDescriptor {
   id: string;
   name: string;
   badge?: string;
-  /** Icon key, see renderer/components/settings/providers/providerIcons.js. */
+  /** Icon key, see renderer/components/settings/providers/providerIcons.ts. */
   icon?: string;
   pricing?: string;
   description?: string;
@@ -76,34 +77,37 @@ export interface ProviderTestInput {
 
 /** Test hook shared by both kinds: throws when the credentials don't work. */
 export interface ProviderTestArgs {
-  config: Record<string, any>;
+  config: Partial<Config>;
   model: string;
 }
 
 /** Test doubles for the network/SDK, passed as the second argument by unit tests. */
 export interface ProviderDeps {
-  fetchImpl?: (...args: any[]) => Promise<any>;
-  sdk?: any;
+  fetchImpl?: typeof fetch;
+  /** Replaces the provider's SDK module; each provider casts it to the shape it uses. */
+  sdk?: unknown;
   /** Groq STT only: replaces the real sleep between retries. */
   sleepImpl?: (ms: number) => Promise<void>;
   /** Groq STT only: skips reading the WAV header. */
   durationSeconds?: number;
   /** Groq STT only: replaces cutting a chunk out of the WAV. */
-  extractChunk?: (...args: any[]) => Uint8Array;
+  extractChunk?: (wavPath: string, startSec: number, endSec: number) => Uint8Array<ArrayBuffer>;
 }
 
 export interface STTTranscribeArgs {
   wavPath: string;
   model: string;
-  config: Record<string, any>;
+  config: Partial<Config>;
   /** Progress 0-100 within the transcription stage. */
   onProgress?: (percent: number) => void;
 }
 
 export interface STTProvider extends ProviderDescriptor {
   /** Exposed for unit tests; not sent to the renderer. */
-  _internals?: Record<string, any>;
-  _requestOptions?: (args: any) => any;
+  _internals?: {
+    parseGroqSegments: (response: unknown, offsetSeconds?: number) => TranscriptSegment[];
+  };
+  _requestOptions?: (args: { wavPath: string; model: string; prompt?: unknown }) => Record<string, unknown>;
   transcribe: (args: STTTranscribeArgs, deps?: ProviderDeps) => Promise<TranscriptSegment[]>;
   test: (args: ProviderTestArgs, deps?: ProviderDeps) => Promise<void>;
 }
@@ -112,7 +116,7 @@ export interface LLMGenerateArgs {
   systemPrompt: string;
   userPrompt: string;
   model: string;
-  config: Record<string, any>;
+  config: Partial<Config>;
   /** Ask for JSON output (false in Markdown mode). */
   json?: boolean;
   /** Called with each streamed piece of text. */

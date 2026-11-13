@@ -1,16 +1,17 @@
-import type { LLMGenerateArgs, LLMProvider, ProviderDeps } from '../../shared';
-import { fetchJson, httpError } from '../shared/http';
+import type { LLMGenerateArgs, LLMProvider, ProviderDeps, ProviderTestArgs } from '../../shared';
+import { fetchJson, httpError, type HttpError } from '../shared/http';
 import { readEvents } from '../shared/sse';
 
 const GROQ_BASE = 'https://api.groq.com/openai/v1';
 
-function headers(apiKey: any) {
+function headers(apiKey: string) {
   return { Authorization: `Bearer ${apiKey.trim()}`, 'Content-Type': 'application/json' };
 }
 
-function friendlyError(err: any) {
+function friendlyError(thrown: unknown) {
+  const err = thrown as HttpError;
   if (err.status === 413 || err.status === 429) {
-    const wrapped: any = new Error(
+    const wrapped: HttpError = new Error(
       `Groq rejected the request (${err.status}): the transcript likely exceeds your tokens-per-minute limit. ` +
       'Try a model with a higher limit, upgrade your Groq tier, or configure a fallback provider. ' +
       `(${err.message})`
@@ -18,11 +19,22 @@ function friendlyError(err: any) {
     wrapped.status = err.status;
     return wrapped;
   }
-  return err;
+  return thrown;
+}
+
+/** The fields of a chat-completion stream event that are read here. */
+interface GroqStreamEvent {
+  error?: { message?: string; type?: string; status?: number };
+  choices?: Array<{ delta?: { content?: string } }>;
 }
 
 /** Stream a chat completion, passing each content delta to `onText`, and return the full text. */
-async function streamCompletion(apiKey: any, body: any, fetchImpl: any, onText: any) {
+async function streamCompletion(
+  apiKey: string,
+  body: Record<string, unknown>,
+  fetchImpl: typeof fetch,
+  onText?: (delta: string) => void
+) {
   const res = await fetchImpl(`${GROQ_BASE}/chat/completions`, {
     method: 'POST',
     headers: headers(apiKey),
@@ -31,9 +43,9 @@ async function streamCompletion(apiKey: any, body: any, fetchImpl: any, onText: 
   if (!res.ok) throw httpError(res, await res.text(), 'Groq');
 
   let text = '';
-  for await (const event of readEvents(res.body)) {
+  for await (const event of readEvents<GroqStreamEvent>(res.body!)) {
     if (event.error) {
-      const err: any = new Error(`Groq error (stream): ${event.error.message || event.error.type || 'unknown'}`);
+      const err: HttpError = new Error(`Groq error (stream): ${event.error.message || event.error.type || 'unknown'}`);
       if (Number.isInteger(event.error.status)) err.status = event.error.status;
       throw err;
     }
@@ -49,7 +61,7 @@ async function generate({ systemPrompt, userPrompt, model, config, json, onText 
   if (!apiKey || !apiKey.trim()) throw new Error('Groq API key is required');
   const fetchImpl = deps.fetchImpl || globalThis.fetch;
 
-  const body: any = {
+  const body: Record<string, unknown> = {
     model,
     messages: [
       { role: 'system', content: systemPrompt },
@@ -61,27 +73,28 @@ async function generate({ systemPrompt, userPrompt, model, config, json, onText 
   if (json) body.response_format = { type: 'json_object' };
 
   try {
-    let text;
+    let text: string;
     try {
       text = await streamCompletion(apiKey, body, fetchImpl, onText);
-    } catch (err: any) {
+    } catch (thrown) {
+      const err = thrown as HttpError;
       // Some models refuse to stream in JSON mode; ask again without streaming.
       if (!(json && err.status === 400 && /stream/i.test(err.message))) throw err;
-      const data = await fetchJson(
+      const data = (await fetchJson(
         `${GROQ_BASE}/chat/completions`,
         { method: 'POST', headers: headers(apiKey), body: JSON.stringify(body) },
         { label: 'Groq', fetchImpl }
-      );
+      )) as { choices?: Array<{ message?: { content?: string } }> } | null;
       text = data?.choices?.[0]?.message?.content || '';
     }
     if (!text) throw new Error('No response from Groq API');
     return String(text).trim();
-  } catch (err: any) {
+  } catch (err) {
     throw friendlyError(err);
   }
 }
 
-async function test({ config, model }: any, deps: ProviderDeps = {}) {
+async function test({ config, model }: ProviderTestArgs, deps: ProviderDeps = {}) {
   const apiKey = config.groqApiKey;
   if (!apiKey || !apiKey.trim()) throw new Error('Groq API key is required');
   try {
@@ -98,7 +111,7 @@ async function test({ config, model }: any, deps: ProviderDeps = {}) {
       },
       { label: 'Groq', fetchImpl: deps.fetchImpl || globalThis.fetch }
     );
-  } catch (err: any) {
+  } catch (err) {
     throw friendlyError(err);
   }
 }

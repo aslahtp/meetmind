@@ -2,11 +2,22 @@ import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
 
-let logFilePath: any = null;
-let logFileDay: any = null;
-let logEmitter: any = null;
+/** A log line as `readLogs()` and the emitter give it (the `log:entry` IPC event). */
+interface LogEntry {
+  timestamp: string;
+  level: string;
+  context?: string;
+  message: string;
+  meta: unknown;
+}
 
-function setLogEmitter(emitter: any) {
+type LogLevel = 'info' | 'warn' | 'error' | 'debug';
+
+let logFilePath: string | null = null;
+let logFileDay: string | null = null;
+let logEmitter: ((entry: LogEntry) => void) | null = null;
+
+function setLogEmitter(emitter: ((entry: LogEntry) => void) | null | undefined) {
   logEmitter = typeof emitter === 'function' ? emitter : null;
 }
 
@@ -29,7 +40,7 @@ function getLogFilePath() {
 // Today's log file and, when there is one, the most recent earlier file: oldest first.
 function recentLogFiles() {
   const current = getLogFilePath();
-  let previous = null;
+  let previous: string | null | undefined = null;
   try {
     const name = path.basename(current);
     previous = fs.readdirSync(getLogsDir())
@@ -37,23 +48,23 @@ function recentLogFiles() {
       .sort()
       .pop();
   } catch { /* only today's file */ }
-  return [previous ? path.join(getLogsDir(), previous) : null, current].filter(Boolean);
+  return [previous ? path.join(getLogsDir(), previous) : null, current].filter((file): file is string => !!file);
 }
 
-function formatMessage(level: any, message: any, data: any, ts: any) {
+function formatMessage(level: string, message: unknown, data: unknown, ts: string) {
   const dataStr = data ? ' ' + JSON.stringify(data) : '';
   return `[${ts}] [${level.toUpperCase()}] ${message}${dataStr}`;
 }
 
-function write(level: any, message: any, data?: any) {
+function write(level: LogLevel, message: unknown, data?: unknown) {
   const ts = new Date().toISOString();
   const line = formatMessage(level, message, data, ts);
   const isDev = process.env.NODE_ENV === 'development';
 
   if (isDev) {
-    const colors = { info: '\x1b[36m', warn: '\x1b[33m', error: '\x1b[31m', debug: '\x1b[90m' };
+    const colors: Record<LogLevel, string> = { info: '\x1b[36m', warn: '\x1b[33m', error: '\x1b[31m', debug: '\x1b[90m' };
     const reset = '\x1b[0m';
-    console.log(`${(colors as any)[level] || ''}${line}${reset}`);
+    console.log(`${colors[level] || ''}${line}${reset}`);
   }
 
   try {
@@ -74,7 +85,7 @@ function write(level: any, message: any, data?: any) {
   }
 }
 
-function parseLogLine(line: any) {
+function parseLogLine(line: unknown): LogEntry | null {
   if (!line || typeof line !== 'string') return null;
   const trimmed = line.trim();
   if (!trimmed) return null;
@@ -82,7 +93,7 @@ function parseLogLine(line: any) {
   // Format: [2026-08-15T...] [INFO] message {"data": "..."}
   const match = trimmed.match(/^\[([^\]]+)\]\s+\[([A-Z]+)\](?:\s+\[([^\]]+)\])?\s+(.*?)(?:\s+(\{.*\}|\[.*\]))?$/);
   if (match) {
-    let meta = null;
+    let meta: unknown = null;
     if (match[5]) {
       try {
         meta = JSON.parse(match[5]);
@@ -111,13 +122,13 @@ function readLogs(limit = 1000) {
   try {
     // The previous file is read only when today's is short of `limit` (just after midnight, or
     // after a restart), so the Logs page doesn't go empty at the start of a day.
-    let lines: any = [];
+    let lines: string[] = [];
     for (const filePath of recentLogFiles().reverse()) {
       if (lines.length >= limit || !fs.existsSync(filePath)) continue;
       const content = fs.readFileSync(filePath, 'utf8');
       lines = content.split('\n').map((l) => l.trim()).filter(Boolean).concat(lines);
     }
-    return lines.slice(-limit).map(parseLogLine).filter(Boolean);
+    return lines.slice(-limit).map(parseLogLine).filter((entry): entry is LogEntry => !!entry);
   } catch {
     return [];
   }
@@ -136,10 +147,10 @@ function clearLogs() {
 }
 
 const logger = {
-  info:  (msg: any, data?: any) => write('info',  msg, data),
-  warn:  (msg: any, data?: any) => write('warn',  msg, data),
-  error: (msg: any, data?: any) => write('error', msg, data),
-  debug: (msg: any, data?: any) => write('debug', msg, data),
+  info:  (msg: unknown, data?: unknown) => write('info',  msg, data),
+  warn:  (msg: unknown, data?: unknown) => write('warn',  msg, data),
+  error: (msg: unknown, data?: unknown) => write('error', msg, data),
+  debug: (msg: unknown, data?: unknown) => write('debug', msg, data),
   readLogs,
   clearLogs,
   getLogsDir,

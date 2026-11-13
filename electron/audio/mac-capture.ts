@@ -11,11 +11,13 @@
 //
 // Pure: no electron import.
 
-const MAC_CAPTURE_STRATEGIES = ['screen', 'frame', 'picker'];
-const DEFAULT_MAC_CAPTURE_STRATEGY = 'screen';
+import type { MacCaptureStrategy } from '../shared/config';
 
-function normalizeMacCaptureStrategy(value: any) {
-  return MAC_CAPTURE_STRATEGIES.includes(value) ? value : DEFAULT_MAC_CAPTURE_STRATEGY;
+const MAC_CAPTURE_STRATEGIES: readonly MacCaptureStrategy[] = ['screen', 'frame', 'picker'];
+const DEFAULT_MAC_CAPTURE_STRATEGY: MacCaptureStrategy = 'screen';
+
+function normalizeMacCaptureStrategy(value: unknown): MacCaptureStrategy {
+  return MAC_CAPTURE_STRATEGIES.includes(value as MacCaptureStrategy) ? (value as MacCaptureStrategy) : DEFAULT_MAC_CAPTURE_STRATEGY;
 }
 
 export { MAC_CAPTURE_STRATEGIES, DEFAULT_MAC_CAPTURE_STRATEGY, normalizeMacCaptureStrategy };

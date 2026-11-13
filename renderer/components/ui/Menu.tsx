@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
 
-const MenuContext = createContext<any>(null);
+/** Closes the menu; `refocus` returns focus to its trigger. */
+type CloseMenu = (refocus?: boolean) => void;
+
+const MenuContext = createContext<CloseMenu>(() => {});
 
 const ITEM_SELECTOR = '[role^="menuitem"]:not(:disabled)';
 
@@ -14,22 +17,39 @@ export const MENU_ITEM = 'flex w-full items-center gap-8 rounded-input px-16 py-
  *
  * `trigger(props)` renders the button and must spread `props` onto it.
  */
-export default function Menu({ label, trigger, align = 'right', minWidth = 200, className = '', children }: { label?: any; trigger?: any; align?: any; minWidth?: any; className?: any; children?: any }) {
+export interface MenuTriggerProps {
+  ref: React.RefObject<HTMLButtonElement>;
+  onClick: () => void;
+  'aria-haspopup': 'menu';
+  'aria-expanded': boolean;
+  open: boolean;
+}
+
+export interface MenuProps {
+  label?: string;
+  trigger: (props: MenuTriggerProps) => React.ReactNode;
+  align?: 'left' | 'right';
+  minWidth?: number;
+  className?: string;
+  children?: React.ReactNode;
+}
+
+export default function Menu({ label, trigger, align = 'right', minWidth = 200, className = '', children }: MenuProps) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<any>(null);
-  const triggerRef = useRef<any>(null);
-  const menuRef = useRef<any>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return undefined;
-    const items = () => [...(menuRef.current?.querySelectorAll(ITEM_SELECTOR) || [])];
+    const items = () => [...(menuRef.current?.querySelectorAll<HTMLElement>(ITEM_SELECTOR) || [])];
     const list = items();
     (list.find((el) => el.getAttribute('aria-checked') === 'true') || list[0])?.focus();
 
-    const onPointerDown = (e: any) => {
-      if (!rootRef.current?.contains(e.target)) setOpen(false);
+    const onPointerDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node | null)) setOpen(false);
     };
-    const onKeyDown = (e: any) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         setOpen(false);
@@ -38,7 +58,7 @@ export default function Menu({ label, trigger, align = 'right', minWidth = 200, 
         e.preventDefault();
         const all = items();
         if (!all.length) return;
-        const at = all.indexOf(document.activeElement);
+        const at = all.findIndex((el) => el === document.activeElement);
         let next = 0;
         if (e.key === 'ArrowDown') next = (at + 1) % all.length;
         if (e.key === 'ArrowUp') next = (at - 1 + all.length) % all.length;
@@ -87,8 +107,15 @@ export default function Menu({ label, trigger, align = 'right', minWidth = 200, 
   );
 }
 
+export interface MenuItemProps extends Omit<React.ComponentPropsWithoutRef<'button'>, 'onSelect'> {
+  onSelect: () => void;
+  icon?: React.ReactNode;
+  /** Return focus to the trigger after closing. */
+  refocus?: boolean;
+}
+
 /** An action in a Menu. Closes the menu, then runs `onSelect`. */
-export function MenuItem({ onSelect, icon, children, refocus = false, ...rest }: { onSelect?: any; icon?: any; children?: any; refocus?: any; [key: string]: any }) {
+export function MenuItem({ onSelect, icon, children, refocus = false, ...rest }: MenuItemProps) {
   const close = useContext(MenuContext);
   return (
     <button
@@ -107,8 +134,14 @@ export function MenuItem({ onSelect, icon, children, refocus = false, ...rest }:
   );
 }
 
+export interface MenuRadioItemProps {
+  checked: boolean;
+  onSelect: () => void;
+  children?: React.ReactNode;
+}
+
 /** One choice in a single-select Menu group; the selected one carries a check. */
-export function MenuRadioItem({ checked, onSelect, children }: { checked?: any; onSelect?: any; children?: any }) {
+export function MenuRadioItem({ checked, onSelect, children }: MenuRadioItemProps) {
   const close = useContext(MenuContext);
   return (
     <button
@@ -133,6 +166,6 @@ export function MenuRadioItem({ checked, onSelect, children }: { checked?: any; 
 }
 
 /** Small uppercase heading over a group of menu items. */
-export function MenuLabel({ children }: { children?: any }) {
+export function MenuLabel({ children }: { children?: React.ReactNode }) {
   return <p className="eyebrow px-16 pt-8 pb-4" aria-hidden="true">{children}</p>;
 }

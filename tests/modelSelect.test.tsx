@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { modelMode } from '../renderer/components/settings/providers/ModelSelect';
+import type { ProviderDescriptor } from '../electron/shared';
 
-const gemini = {
-  models: [{ id: 'gemini-3.8-flash' }, { id: 'gemini-3.7-flash' }],
-  latestModels: [{ id: 'gemini-flash-latest' }, { id: 'gemini-pro-latest' }],
+const gemini: ProviderDescriptor = {
+  id: 'gemini',
+  name: 'Gemini',
+  credentials: [],
+  defaultModel: 'gemini-3.8-flash',
+  models: [{ id: 'gemini-3.8-flash', name: 'gemini-3.8-flash' }, { id: 'gemini-3.7-flash', name: 'gemini-3.7-flash' }],
+  latestModels: [{ id: 'gemini-flash-latest', name: 'gemini-flash-latest' }, { id: 'gemini-pro-latest', name: 'gemini-pro-latest' }],
   allowCustomModel: true,
 };
 

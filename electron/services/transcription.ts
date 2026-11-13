@@ -1,4 +1,5 @@
 import fs from 'fs';
+import type { Config } from '../shared';
 import * as logger from '../providers/shared/log';
 import { sttRegistry } from '../providers';
 import { getWavDurationSeconds, getWavPeakAmplitude } from '../providers/shared/wav';
@@ -11,12 +12,12 @@ import { silenceHints } from '../audio/audio-hints';
  *
  * Returns segments shaped { speaker, text, startTime, endTime }.
  */
-async function transcribe(wavPath: any, config: any, onProgress: any) {
+async function transcribe(wavPath: string, config: Partial<Config>, onProgress?: (percent: number) => void) {
   const provider = sttRegistry.get(config.sttService || sttRegistry.defaultId());
   const model = sttRegistry.resolveModel(provider, config.sttModels?.[provider.id]);
 
   if (!sttRegistry.isConfigured(provider, config)) {
-    const missing = provider.credentials.find((f) => f.required && !String(config[f.configKey] ?? '').trim());
+    const missing = provider.credentials.find((f) => f.required && !String((config as Record<string, unknown>)[f.configKey] ?? '').trim());
     throw new Error(`${missing?.label || `${provider.name} credentials`} is required for transcription`);
   }
   if (!fs.existsSync(wavPath)) {

@@ -1,11 +1,29 @@
-// Calendar types. Sources: electron/calendar/{calendar-sources,calendar-events,index,google,ics-parse}.js.
+// Calendar types. Sources: electron/calendar/{calendar-sources,calendar-events,index,google,ics-parse}.ts.
 // Sources hold credentials (ICS links, OAuth secrets), so the renderer only ever sees `CalendarSource`
 // (the redacted form from `publicSource()`), never the stored record.
 
 export type CalendarSourceType = 'google' | 'ics';
 
-/** Minutes between syncs: one of SYNC_INTERVALS in calendar-sources.js. */
+/** Minutes between syncs: one of SYNC_INTERVALS in calendar-sources.ts. */
 export type CalendarSyncMinutes = 1 | 5 | 10 | 15 | 30 | 60;
+
+/** A calendar source as saved in config `calendars` (main process only: it holds credentials). */
+export interface StoredCalendarSource {
+  id: string;
+  type: CalendarSourceType;
+  name: string;
+  /** Off only when `false`; missing counts as on. */
+  enabled?: boolean;
+  /** Meeting-starting prompts; off only when `false`. */
+  reminders?: boolean;
+  /** ICS only: the feed link, which is the credential. */
+  url?: string;
+  /** Google only: the user's OAuth client, the account's refresh token and email. */
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
+  email?: string;
+}
 
 /** Per-calendar sync state shown in Settings › Integrations › Calendars. */
 export interface CalendarSyncStatus {

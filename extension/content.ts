@@ -4,7 +4,7 @@
  * Manages the overlay iframe lifecycle.
  */
 
-let overlayFrame: any = null;
+let overlayFrame: HTMLIFrameElement | null = null;
 const currentMeetingUrl = window.location.href;
 const currentMeetingTitle = document.title;
 let overlayCollapsed = false;
@@ -17,7 +17,7 @@ const BOTTOM_OFFSET = 88;
 const BAR_HEIGHT = 52;
 const COLLAPSED_RADIUS = '14px 0 0 14px';
 
-function important(prop: any, value: any) {
+function important(prop: string, value: string) {
   if (!overlayFrame) return;
   overlayFrame.style.setProperty(prop, value, 'important');
 }
@@ -60,25 +60,26 @@ window.addEventListener('resize', applyOverlayBox);
 
 // ── Overlay management ────────────────────────────────────────────────────────
 
-function injectOverlay(config: any = {}) {
+function injectOverlay(config: { meetingUrl?: string; meetingTitle?: string; appConnected?: boolean } = {}) {
   if (overlayFrame) return; // Already injected
 
-  overlayFrame = document.createElement('iframe');
-  overlayFrame.id = 'meetmind-overlay-frame';
-  overlayFrame.src = chrome.runtime.getURL('overlay/overlay.html');
-  overlayFrame.allow = '';
-  overlayFrame.allowFullscreen = false;
-  overlayFrame.style.colorScheme = 'light';
+  const frame = document.createElement('iframe');
+  overlayFrame = frame;
+  frame.id = 'meetmind-overlay-frame';
+  frame.src = chrome.runtime.getURL('overlay/overlay.html');
+  frame.allow = '';
+  frame.allowFullscreen = false;
+  frame.style.colorScheme = 'light';
 
   overlayWidth = 160;
   overlayHeight = BAR_HEIGHT;
   overlayCollapsed = false;
 
-  (document.documentElement || document.body).appendChild(overlayFrame);
+  (document.documentElement || document.body).appendChild(frame);
   applyOverlayBox();
 
   // Once loaded, send initial state
-  overlayFrame.addEventListener('load', () => {
+  frame.addEventListener('load', () => {
     sendToOverlay({
       type: 'INIT',
       meetingUrl:   config.meetingUrl   || currentMeetingUrl,
@@ -96,12 +97,12 @@ function removeOverlay() {
   }
 }
 
-function sendToOverlay(message: any) {
+function sendToOverlay(message: ContentToOverlayMessage) {
   if (!overlayFrame?.contentWindow) return;
   overlayFrame.contentWindow.postMessage(message, '*');
 }
 
-function resizeOverlay(height: any, width: any, collapsed: any) {
+function resizeOverlay(height?: number, width?: number, collapsed?: boolean) {
   if (!overlayFrame) return;
 
   if (typeof collapsed === 'boolean') {
@@ -119,7 +120,64 @@ function resizeOverlay(height: any, width: any, collapsed: any) {
 
 // ── Messages from background service worker ───────────────────────────────────
 
-chrome.runtime.onMessage.addListener((message) => {
+/** Checks a message from the service worker (see BackgroundToContentMessage). */
+function parseBackgroundMessage(message: unknown): BackgroundToContentMessage | null {
+  if (typeof message !== 'object' || message === null) return null;
+  const msg = message as Record<string, unknown>;
+  const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+  switch (msg.type) {
+    case 'INJECT_OVERLAY':
+      return {
+        type: 'INJECT_OVERLAY',
+        meetingUrl: text(msg.meetingUrl),
+        meetingTitle: text(msg.meetingTitle),
+        appConnected: typeof msg.appConnected === 'boolean' ? msg.appConnected : undefined,
+      };
+    case 'REMOVE_OVERLAY':
+    case 'WS_CONNECTED':
+    case 'APP_OFFLINE':
+      return { type: msg.type };
+    case 'APP_STATUS':
+      return { type: 'APP_STATUS', recording: !!msg.recording };
+    case 'UPDATE_OVERLAY':
+      return readOverlayUpdate(msg);
+    default:
+      return null;
+  }
+}
+
+function readOverlayUpdate(msg: Record<string, unknown>): UpdateOverlayMessage | null {
+  const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+  switch (msg.state) {
+    case 'RECORDING':
+      return { type: 'UPDATE_OVERLAY', state: 'RECORDING', sessionId: text(msg.sessionId) };
+    case 'PROCESSING':
+      return {
+        type: 'UPDATE_OVERLAY',
+        state: 'PROCESSING',
+        stage: text(msg.stage),
+        percent: typeof msg.percent === 'number' ? msg.percent : undefined,
+      };
+    case 'COMPLETE':
+      return {
+        type: 'UPDATE_OVERLAY',
+        state: 'COMPLETE',
+        notionUrl: typeof msg.notionUrl === 'string' ? msg.notionUrl : null,
+        sessionId: text(msg.sessionId),
+      };
+    case 'ERROR':
+      return { type: 'UPDATE_OVERLAY', state: 'ERROR', error: text(msg.error) };
+    default:
+      return null;
+  }
+}
+
+chrome.runtime.onMessage.addListener((raw: unknown) => {
+  const message = parseBackgroundMessage(raw);
+  if (!message) return;
+
   switch (message.type) {
     case 'INJECT_OVERLAY':
       injectOverlay({
@@ -153,15 +211,48 @@ chrome.runtime.onMessage.addListener((message) => {
 
 // ── Messages from overlay iframe (postMessage) ────────────────────────────────
 
-window.addEventListener('message', (event) => {
-  if (!event.data || typeof event.data !== 'object') return;
-  if (overlayFrame && event.source !== overlayFrame.contentWindow) return;
-
-  const msg = event.data;
+/** Checks a postMessage from the overlay iframe (see OverlayToContentMessage). */
+function parseOverlayMessage(data: unknown): OverlayToContentMessage | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const msg = data as Record<string, unknown>;
 
   switch (msg.type) {
     case 'OVERLAY_START_RECORDING':
-      chrome.runtime.sendMessage({
+      return {
+        type: 'OVERLAY_START_RECORDING',
+        meetingUrl: typeof msg.meetingUrl === 'string' ? msg.meetingUrl : undefined,
+        meetingTitle: typeof msg.meetingTitle === 'string' ? msg.meetingTitle : undefined,
+      };
+    case 'OVERLAY_STOP_RECORDING':
+    case 'OVERLAY_OPEN_APP':
+    case 'OVERLAY_DISMISS':
+      return { type: msg.type };
+    case 'OVERLAY_RESIZE':
+      return {
+        type: 'OVERLAY_RESIZE',
+        height: typeof msg.height === 'number' ? msg.height : undefined,
+        width: typeof msg.width === 'number' ? msg.width : undefined,
+        collapsed: typeof msg.collapsed === 'boolean' ? msg.collapsed : undefined,
+      };
+    default:
+      return null;
+  }
+}
+
+function sendToBackground(request: BackgroundRequest) {
+  chrome.runtime.sendMessage(request);
+}
+
+window.addEventListener('message', (event: MessageEvent<unknown>) => {
+  if (!event.data || typeof event.data !== 'object') return;
+  if (overlayFrame && event.source !== overlayFrame.contentWindow) return;
+
+  const msg = parseOverlayMessage(event.data);
+  if (!msg) return;
+
+  switch (msg.type) {
+    case 'OVERLAY_START_RECORDING':
+      sendToBackground({
         type: 'START_RECORDING',
         meetingUrl:   currentMeetingUrl,
         meetingTitle: currentMeetingTitle,
@@ -169,11 +260,11 @@ window.addEventListener('message', (event) => {
       break;
 
     case 'OVERLAY_STOP_RECORDING':
-      chrome.runtime.sendMessage({ type: 'STOP_RECORDING' });
+      sendToBackground({ type: 'STOP_RECORDING' });
       break;
 
     case 'OVERLAY_OPEN_APP':
-      chrome.runtime.sendMessage({ type: 'OPEN_APP' });
+      sendToBackground({ type: 'OPEN_APP' });
       break;
 
     case 'OVERLAY_RESIZE':
@@ -188,15 +279,22 @@ window.addEventListener('message', (event) => {
 
 // ── Auto-inject if we're on a meeting page ────────────────────────────────────
 
+// A meeting page, decided by the parsed host like the service worker's meetingPlatform() (a
+// substring test would also match e.g. https://example.com/?meet.google.com/).
+function isMeetingPage(location: Location) {
+  if (location.protocol !== 'https:') return false;
+  const host = location.hostname;
+  if (host === 'meet.google.com') return true;
+  return (host === 'zoom.us' || host.endsWith('.zoom.us')) && /^\/(wc|j)\/\d+/.test(location.pathname);
+}
+
 function checkAndInject() {
   const url = window.location.href;
-  if (
-    url.includes('meet.google.com/') ||
-    url.match(/zoom\.us\/(wc|j)\/\d+/)
-  ) {
+  if (isMeetingPage(window.location)) {
     // Wait a bit for meeting UI to load
     setTimeout(() => {
-      chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (status) => {
+      const request: BackgroundRequest = { type: 'GET_STATUS' };
+      chrome.runtime.sendMessage<BackgroundRequest, GetStatusResponse | undefined>(request, (status) => {
         injectOverlay({
           meetingUrl:   url,
           meetingTitle: document.title,

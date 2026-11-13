@@ -70,19 +70,19 @@ describe('parseNotesMarkdown', () => {
     ]);
     expect(parsed.notable_mentions).toEqual(['CI is flaky on Windows']);
 
-    const [topic] = parsed.sections;
-    expect(topic.heading).toBe('Environment focus');
-    expect(topic.content).toBe('Stabilise `dev` before staging.');
-    expect(topic.options_discussed).toEqual(['Freeze staging', 'Parallel rollout']);
-    expect(topic.decision).toBe('Freeze staging until dev bugs are fixed.');
-    expect(topic.open_questions).toEqual(['Who owns the rollback plan?']);
+    const [topic] = parsed.sections ?? [];
+    expect(topic?.heading).toBe('Environment focus');
+    expect(topic?.content).toBe('Stabilise `dev` before staging.');
+    expect(topic?.options_discussed).toEqual(['Freeze staging', 'Parallel rollout']);
+    expect(topic?.decision).toBe('Freeze staging until dev bugs are fixed.');
+    expect(topic?.open_questions).toEqual(['Who owns the rollback plan?']);
   });
 
   it('keeps unknown sections as extra topics', () => {
     const parsed = parseNotesMarkdown('# T\n\n## Action Items\n- [ ] Do it\n\n## Risks\nVendor delay', {});
     expect(parsed.action_items).toEqual([{ task: 'Do it' }]);
-    expect(parsed.sections.map((s: any) => s.heading)).toEqual(['Risks']);
-    expect(parsed.sections[0].content).toBe('Vendor delay');
+    expect(parsed.sections?.map((s) => s.heading)).toEqual(['Risks']);
+    expect(parsed.sections?.[0]?.content).toBe('Vendor delay');
   });
 
   it('falls back to raw Markdown when no known section is present', () => {
@@ -99,8 +99,8 @@ describe('parseNotesMarkdown', () => {
     const parsed = parseNotesMarkdown(md, {});
     expect(parsed.participants).toEqual([]);
     expect(parsed.action_items).toEqual([{ task: 'Real task' }]);
-    expect(parsed.sections.map((s: any) => s.heading)).toEqual(['Snippet']);
-    expect(parsed.sections[0].content).toContain('## Participants');
+    expect(parsed.sections?.map((s) => s.heading)).toEqual(['Snippet']);
+    expect(parsed.sections?.[0]?.content).toContain('## Participants');
   });
 });
 

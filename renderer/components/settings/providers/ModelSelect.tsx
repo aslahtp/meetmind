@@ -1,29 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { TextField, SegmentedControl } from '../../ui/index';
 import { RadioCardGroup } from '../SettingsParts';
+import type { ModelOption, ProviderDescriptor } from '@shared';
 
-const MODE_HINTS = {
+/** Which of the model pickers is showing. */
+export type ModelMode = 'latest' | 'pinned' | 'custom';
+
+const MODE_HINTS: Record<ModelMode, string> = {
   pinned: 'A fixed model version. Notes stay consistent until you pick another one.',
   latest: 'Always the newest model in the family. Google can swap the model behind it, with two weeks\' notice for breaking changes, so notes may change without a MeetMind update.',
   custom: 'Any model ID the provider accepts, for a model that isn\'t listed.',
 };
 
 /** Which picker a saved model ID belongs to. */
-export function modelMode(provider: any, value: any) {
-  if (provider.latestModels?.some((m: any) => m.id === value)) return 'latest';
-  if (!value || provider.models.some((m: any) => m.id === value)) return 'pinned';
+export function modelMode(provider: ProviderDescriptor, value: string | undefined): ModelMode {
+  if (provider.latestModels?.some((m) => m.id === value)) return 'latest';
+  if (!value || provider.models.some((m) => m.id === value)) return 'pinned';
   return provider.allowCustomModel ? 'custom' : 'pinned';
 }
 
-function ModelCards({ label, models, value, onChange }: { label?: any; models?: any; value?: any; onChange?: any }) {
+interface ModelCardsProps {
+  label: string;
+  models: ModelOption[];
+  value?: string;
+  onChange: (id: string) => void;
+}
+
+function ModelCards({ label, models, value, onChange }: ModelCardsProps) {
   return (
     <RadioCardGroup
       label={label}
       options={models}
-      value={models.some((m: any) => m.id === value) ? value : undefined}
+      value={models.some((m) => m.id === value) ? value : undefined}
       onChange={onChange}
       className="grid grid-cols-1 md:grid-cols-2 gap-16"
-      renderOption={(model: any) => (
+      renderOption={(model) => (
         <span className="block">
           <span className="flex flex-wrap items-center gap-8">
             <span className="text-body-sm font-medium text-ink">{model.name}</span>
@@ -45,10 +56,20 @@ function ModelCards({ label, models, value, onChange }: { label?: any; models?: 
  * it shows a Latest / Pinned / Custom toggle instead, one picker at a time; Latest only
  * appears when the provider has `latestModels`.
  */
-export default function ModelSelect({ idPrefix, label, provider, value, onChange, toggle = false }: { idPrefix?: any; label?: any; provider?: any; value?: any; onChange?: any; toggle?: any }) {
-  const hasLatest = provider.latestModels?.length > 0;
+interface ModelSelectProps {
+  idPrefix: string;
+  label: string;
+  provider: ProviderDescriptor;
+  value: string;
+  onChange: (id: string) => void;
+  toggle?: boolean;
+}
+
+export default function ModelSelect({ idPrefix, label, provider, value, onChange, toggle = false }: ModelSelectProps) {
+  const latestModels = provider.latestModels ?? [];
+  const hasLatest = latestModels.length > 0;
   const useToggle = hasLatest || (toggle && provider.allowCustomModel);
-  const [mode, setMode] = useState(() => modelMode(provider, value));
+  const [mode, setMode] = useState<ModelMode>(() => modelMode(provider, value));
   const savedMode = modelMode(provider, value);
 
   // Follow outside changes (Discard, a cleared custom field); an empty Custom field keeps its tab.
@@ -66,7 +87,7 @@ export default function ModelSelect({ idPrefix, label, provider, value, onChange
         ? `Clear the field to go back to ${provider.defaultModel}.`
         : 'Use a model that isn\'t listed above. Clear the field or pick a card to go back to the curated list.'}
       value={custom}
-      onChange={(e: any) => onChange(e.target.value.trim() || provider.defaultModel)}
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.trim() || provider.defaultModel)}
       placeholder={provider.defaultModel}
     />
   );
@@ -80,16 +101,16 @@ export default function ModelSelect({ idPrefix, label, provider, value, onChange
     );
   }
 
-  const modes = [
-    ...(hasLatest ? [{ value: 'latest', label: 'Latest' }] : []),
+  const modes: { value: ModelMode; label: string }[] = [
+    ...(hasLatest ? [{ value: 'latest' as const, label: 'Latest' }] : []),
     { value: 'pinned', label: 'Pinned' },
-    ...(provider.allowCustomModel ? [{ value: 'custom', label: 'Custom' }] : []),
+    ...(provider.allowCustomModel ? [{ value: 'custom' as const, label: 'Custom' }] : []),
   ];
 
-  const switchMode = (next: any) => {
+  const switchMode = (next: ModelMode) => {
     setMode(next);
     if (next === 'pinned' && savedMode !== 'pinned') onChange(provider.defaultModel);
-    if (next === 'latest' && savedMode !== 'latest') onChange(provider.latestModels[0].id);
+    if (next === 'latest' && savedMode !== 'latest') onChange(latestModels[0].id);
   };
 
   return (
@@ -103,10 +124,10 @@ export default function ModelSelect({ idPrefix, label, provider, value, onChange
           value={mode}
           onChange={switchMode}
         />
-        <p className="hint">{(MODE_HINTS as any)[mode]}</p>
+        <p className="hint">{MODE_HINTS[mode]}</p>
       </div>
       {mode === 'pinned' && <ModelCards label={label} models={provider.models} value={value} onChange={onChange} />}
-      {mode === 'latest' && <ModelCards label={label} models={provider.latestModels} value={value} onChange={onChange} />}
+      {mode === 'latest' && <ModelCards label={label} models={latestModels} value={value} onChange={onChange} />}
       {mode === 'custom' && customField}
     </div>
   );

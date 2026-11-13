@@ -8,12 +8,13 @@ import { stripDuplicateTitle } from './markdown';
 import { metaText } from './meta';
 import { formatClock, formatDurationSeconds, speakerName } from '../../lib/format';
 import { meetingHostname, sessionPlatform } from '../../lib/platform';
+import type { Notes, Session, TranscriptSegment } from '@shared';
 
 // Builds the self-contained HTML that the main process prints to PDF. Notes go through the
 // same react-markdown + remark-gfm pipeline as the in-app view (raw HTML stays disabled), and
 // the page has its own always-light print stylesheet, independent of Tailwind and the theme.
 
-const SENTIMENT_LABELS = { positive: 'Positive', neutral: 'Neutral', mixed: 'Mixed', tense: 'Tense' };
+const SENTIMENT_LABELS: Record<string, string> = { positive: 'Positive', neutral: 'Neutral', mixed: 'Mixed', tense: 'Tense' };
 
 const STYLES = `
 @font-face { font-family: 'DM Sans'; src: url(${dmSansFont}) format('woff2'); font-weight: 100 1000; font-style: normal; }
@@ -75,18 +76,26 @@ img { max-width: 100%; }
 .speaker { font-weight: 600; margin-right: 4pt; }
 `;
 
-function notesBodyMarkdown(notes: any, session: any, title: any) {
+function notesBodyMarkdown(notes: Notes | null, session: Session, title: string) {
   const markdown = notes?._rawMarkdown || buildNotesMarkdown(notes, session);
   return stripDuplicateTitle(markdown || '', title);
 }
 
-function PdfDocument({ session, notes, transcript, includeTranscript, title }: { session?: any; notes?: any; transcript?: any; includeTranscript?: any; title?: any }) {
-  const duration = session.duration_seconds > 0 ? formatDurationSeconds(session.duration_seconds) : null;
+interface PdfDocumentProps {
+  session: Session;
+  notes: Notes | null;
+  transcript: TranscriptSegment[] | null | undefined;
+  includeTranscript: boolean;
+  title: string;
+}
+
+function PdfDocument({ session, notes, transcript, includeTranscript, title }: PdfDocumentProps) {
+  const duration = session.duration_seconds != null && session.duration_seconds > 0 ? formatDurationSeconds(session.duration_seconds) : null;
   const meta = metaText(session, notes, duration);
-  const sentiment = (SENTIMENT_LABELS as any)[notes?.sentiment];
+  const sentiment = notes?.sentiment ? SENTIMENT_LABELS[notes.sentiment] : undefined;
   const host = meetingHostname(session.meeting_url) || sessionPlatform(session)?.name;
-  const tags = [sentiment, host].filter(Boolean);
-  const segments = includeTranscript ? (transcript || []).filter((s: any) => s?.text) : [];
+  const tags = [sentiment, host].filter((t): t is string => !!t);
+  const segments = includeTranscript ? (transcript || []).filter((s) => s?.text) : [];
 
   return (
     <html lang="en">
@@ -109,9 +118,9 @@ function PdfDocument({ session, notes, transcript, includeTranscript, title }: {
         {segments.length > 0 && (
           <section className="transcript">
             <h2>Transcript</h2>
-            {segments.map((seg: any, i: any) => (
+            {segments.map((seg, i) => (
               <p key={i} className="seg">
-                <span className="ts">{seg.startTime != null ? formatClock(seg.startTime) : ''}</span>
+                <span className="ts">{typeof seg.startTime === 'number' ? formatClock(seg.startTime) : ''}</span>
                 <span>
                   <span className="speaker">{speakerName(seg.speaker)}</span>
                   {seg.text}
@@ -125,7 +134,12 @@ function PdfDocument({ session, notes, transcript, includeTranscript, title }: {
   );
 }
 
-export function buildPdfHtml(session: any, notes: any, transcript: any, { includeTranscript = false } = {}) {
+export function buildPdfHtml(
+  session: Session,
+  notes: Notes | null,
+  transcript: TranscriptSegment[] | null | undefined,
+  { includeTranscript = false }: { includeTranscript?: boolean } = {},
+) {
   const title = notesTitle(notes, session);
   return '<!doctype html>' + renderToStaticMarkup(
     <PdfDocument

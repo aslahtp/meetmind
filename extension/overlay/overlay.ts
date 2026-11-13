@@ -15,15 +15,17 @@ const State = Object.freeze({
   APP_OFFLINE: 'APP_OFFLINE',
 });
 
-let currentState: string = State.APP_OFFLINE;
+type ViewState = (typeof State)[keyof typeof State];
+
+let currentState: ViewState = State.APP_OFFLINE;
 let meetingUrl   = '';
 let meetingTitle = '';
-let notionUrl: any    = null;
+let notionUrl: string | null = null;
 let timerSeconds = 0;
-let timerInterval: any = null;
+let timerInterval: number | undefined;
 let processingStage  = '';
 let processingPercent = 0;
-let dismissTimer: any = null;
+let dismissTimer: number | undefined;
 const dismissSeconds = 10;
 let collapsed = false;
 
@@ -39,7 +41,7 @@ const NOTION_ICON_URL = typeof chrome !== 'undefined' && chrome.runtime?.getURL
   ? chrome.runtime.getURL('icons/icons8-notion-96.png')
   : '../icons/icons8-notion-96.png';
 
-const MATERIAL_ICON_PATHS = {
+const MATERIAL_ICON_PATHS: Record<string, string> = {
   'collapse_content.svg': 'M440-440v240h-80v-160H200v-80h240Zm160-320v160h160v80H520v-240h80Z',
   'open_in_app.svg': 'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H600v-80h160v-480H200v480h160v80H200Zm240 0v-246l-64 64-56-58 160-160 160 160-56 58-64-64v246h-80Z',
 };
@@ -58,24 +60,24 @@ function requestResize() {
   // Fixed bar height keeps expanded + minimized on the same vertical band.
   // Expanded pill uses one fixed width across all states.
   if (collapsed) {
-    window.parent.postMessage({
+    postToHost({
       type: 'OVERLAY_RESIZE',
       height: 52,
       width: 40,
       collapsed: true,
-    }, '*');
+    });
     return;
   }
 
-  window.parent.postMessage({
+  postToHost({
     type: 'OVERLAY_RESIZE',
     height: 52,
     width: 160,
     collapsed: false,
-  }, '*');
+  });
 }
 
-function setCollapsed(next: any) {
+function setCollapsed(next: boolean) {
   collapsed = !!next;
   try {
     sessionStorage.setItem('meetmind-overlay-collapsed', collapsed ? '1' : '0');
@@ -83,7 +85,7 @@ function setCollapsed(next: any) {
 
   if (collapsed) {
     clearTimeout(dismissTimer);
-    dismissTimer = null;
+    dismissTimer = undefined;
   }
 
   render();
@@ -134,7 +136,7 @@ function buildDockUI() {
   return dock;
 }
 
-function addMinimizeControl(pill: any, { dismiss = false } = {}) {
+function addMinimizeControl(pill: HTMLElement, { dismiss = false } = {}) {
   pill.classList.add('has-controls');
 
   const hideBtn = el('button', {
@@ -144,7 +146,7 @@ function addMinimizeControl(pill: any, { dismiss = false } = {}) {
     'aria-label': 'Hide overlay to right edge',
   });
   hideBtn.appendChild(iconAsset('collapse_content.svg'));
-  hideBtn.addEventListener('click', (e: any) => {
+  hideBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     setCollapsed(true);
   });
@@ -158,10 +160,10 @@ function addMinimizeControl(pill: any, { dismiss = false } = {}) {
       'aria-label': 'Dismiss overlay',
     });
     closeBtn.appendChild(iconClose());
-    closeBtn.addEventListener('click', (e: any) => {
+    closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       clearTimeout(dismissTimer);
-      window.parent.postMessage({ type: 'OVERLAY_DISMISS' }, '*');
+      postToHost({ type: 'OVERLAY_DISMISS' });
     });
     pill.appendChild(closeBtn);
   }
@@ -169,7 +171,7 @@ function addMinimizeControl(pill: any, { dismiss = false } = {}) {
   return pill;
 }
 
-function pillLabel(text: any, extraClass = '') {
+function pillLabel(text: string, extraClass = '') {
   return el('span', {
     class: extraClass ? `pill-label ${extraClass}` : 'pill-label',
     title: text,
@@ -241,24 +243,24 @@ function buildProcessingUI() {
   return addMinimizeControl(pill);
 }
 
-function stageLabel(stage: any) {
-  const labels = {
+function stageLabel(stage: string) {
+  const labels: Record<string, string> = {
     transcribing: 'Transcribing audio…',
     generating:   'Generating notes…',
     uploading:    'Uploading to Notion…',
     complete:     'Almost done…',
   };
-  return (labels as any)[stage] || 'Processing…';
+  return labels[stage] || 'Processing…';
 }
 
-function stageShort(stage: any) {
-  const labels = {
+function stageShort(stage: string) {
+  const labels: Record<string, string> = {
     transcribing: 'Transcribe',
     generating:   'Writing',
     uploading:    'Upload',
     complete:     'Finishing',
   };
-  return (labels as any)[stage] || 'Working';
+  return labels[stage] || 'Working';
 }
 
 // ── COMPLETE ──────────────────────────────────────────────────────────────────
@@ -270,7 +272,8 @@ function buildCompleteUI() {
   checkIcon.appendChild(iconCheck(11));
   pill.append(checkIcon, pillLabel('Done'));
 
-  if (notionUrl) {
+  const openUrl = notionUrl;
+  if (openUrl) {
     const notionBtn = el('button', {
       class: 'icon-btn',
       type: 'button',
@@ -278,7 +281,7 @@ function buildCompleteUI() {
       'aria-label': 'Open in Notion',
     });
     notionBtn.appendChild(iconNotion());
-    notionBtn.addEventListener('click', () => window.open(notionUrl, '_blank'));
+    notionBtn.addEventListener('click', () => window.open(openUrl, '_blank', 'noopener'));
     pill.appendChild(notionBtn);
   }
 
@@ -289,7 +292,7 @@ function buildCompleteUI() {
     'aria-label': 'View in App',
   });
   appBtn.appendChild(iconAsset('open_in_app.svg'));
-  appBtn.addEventListener('click', () => window.parent.postMessage({ type: 'OVERLAY_OPEN_APP' }, '*'));
+  appBtn.addEventListener('click', () => postToHost({ type: 'OVERLAY_OPEN_APP' }));
   pill.appendChild(appBtn);
 
   addMinimizeControl(pill);
@@ -303,7 +306,7 @@ function startDismissCountdown() {
   const tick = () => {
     remaining--;
     if (remaining <= 0) {
-      window.parent.postMessage({ type: 'OVERLAY_DISMISS' }, '*');
+      postToHost({ type: 'OVERLAY_DISMISS' });
     } else {
       dismissTimer = setTimeout(tick, 1000);
     }
@@ -328,7 +331,7 @@ function buildOfflineUI() {
     'aria-label': 'Open MeetMind app',
   });
   btn.appendChild(iconAsset('open_in_app.svg'));
-  btn.addEventListener('click', () => window.parent.postMessage({ type: 'OVERLAY_OPEN_APP' }, '*'));
+  btn.addEventListener('click', () => postToHost({ type: 'OVERLAY_OPEN_APP' }));
 
   pill.append(mark, label, btn);
   return addMinimizeControl(pill);
@@ -341,18 +344,18 @@ function startTimer() {
   timerSeconds = 0;
   timerInterval = setInterval(() => {
     timerSeconds++;
-    const display = document.getElementById('timer-display')!;
+    const display = document.getElementById('timer-display');
     if (display) display.textContent = formatTime(timerSeconds);
   }, 1000);
 }
 
 function stopTimer() {
   clearInterval(timerInterval);
-  timerInterval = null;
+  timerInterval = undefined;
   timerSeconds = 0;
 }
 
-function formatTime(secs: any) {
+function formatTime(secs: number) {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60).toString().padStart(2, '0');
   const s = (secs % 60).toString().padStart(2, '0');
@@ -362,22 +365,95 @@ function formatTime(secs: any) {
 // ── Actions ───────────────────────────────────────────────────────────────────
 
 function startRecording() {
-  window.parent.postMessage({
+  postToHost({
     type: 'OVERLAY_START_RECORDING',
     meetingUrl,
     meetingTitle,
-  }, '*');
+  });
 }
 
 function stopRecording() {
-  window.parent.postMessage({ type: 'OVERLAY_STOP_RECORDING' }, '*');
+  postToHost({ type: 'OVERLAY_STOP_RECORDING' });
 }
 
 // ── Message handler ───────────────────────────────────────────────────────────
 
-window.addEventListener('message', (event) => {
-  const msg = event.data;
-  if (!msg || typeof msg !== 'object') return;
+/**
+ * Only the content script in the meeting tab may drive the overlay: the message must come from the
+ * parent frame (the tab that injected this iframe) on a meeting site the manifest injects into.
+ * Any other window or frame could otherwise post the same messages.
+ */
+function isFromMeetingTab(event: MessageEvent<unknown>): boolean {
+  if (event.source !== window.parent) return false;
+  let url: URL;
+  try { url = new URL(event.origin); } catch { return false; }
+  if (url.protocol !== 'https:') return false;
+  return url.hostname === 'meet.google.com' || url.hostname === 'zoom.us' || url.hostname.endsWith('.zoom.us');
+}
+
+// A Notion page link as MeetMind's Notion upload returns it (https://www.notion.so/…), or a
+// workspace's public notion.site page. "Open in Notion" opens nothing else.
+const NOTION_PAGE_URL = /^https:\/\/(?:www\.)?notion\.so\/|^https:\/\/[a-z0-9-]+\.notion\.site\//i;
+
+function notionPageUrl(value: unknown): string | null {
+  return typeof value === 'string' && NOTION_PAGE_URL.test(value) ? value : null;
+}
+
+/** Checks a postMessage from the content script (see ContentToOverlayMessage). */
+function parseHostMessage(data: unknown): ContentToOverlayMessage | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const msg = data as Record<string, unknown>;
+  const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+  switch (msg.type) {
+    case 'INIT':
+      return {
+        type: 'INIT',
+        meetingUrl: text(msg.meetingUrl) ?? '',
+        meetingTitle: text(msg.meetingTitle) ?? '',
+        appConnected: !!msg.appConnected,
+      };
+    case 'APP_CONNECTED':
+    case 'APP_OFFLINE':
+      return { type: msg.type };
+    case 'APP_STATUS':
+      return { type: 'APP_STATUS', recording: !!msg.recording };
+    case 'UPDATE_OVERLAY':
+      switch (msg.state) {
+        case 'RECORDING':
+          return { type: 'UPDATE_OVERLAY', state: 'RECORDING', sessionId: text(msg.sessionId) };
+        case 'PROCESSING':
+          return {
+            type: 'UPDATE_OVERLAY',
+            state: 'PROCESSING',
+            stage: text(msg.stage),
+            percent: typeof msg.percent === 'number' ? msg.percent : undefined,
+          };
+        case 'COMPLETE':
+          return {
+            type: 'UPDATE_OVERLAY',
+            state: 'COMPLETE',
+            notionUrl: notionPageUrl(msg.notionUrl),
+            sessionId: text(msg.sessionId),
+          };
+        case 'ERROR':
+          return { type: 'UPDATE_OVERLAY', state: 'ERROR', error: text(msg.error) };
+        default:
+          return null;
+      }
+    default:
+      return null;
+  }
+}
+
+function postToHost(message: OverlayToContentMessage) {
+  window.parent.postMessage(message, '*');
+}
+
+window.addEventListener('message', (event: MessageEvent<unknown>) => {
+  if (!isFromMeetingTab(event)) return;
+  const msg = parseHostMessage(event.data);
+  if (!msg) return;
 
   switch (msg.type) {
     case 'INIT':
@@ -450,7 +526,11 @@ window.addEventListener('message', (event) => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function el(tag: any, attrs = {}, text = '') {
+function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  attrs: Record<string, string> = {},
+  text = '',
+): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k === 'class') node.className = v;
@@ -470,13 +550,13 @@ function brandMark(variant = '', size = 'pill') {
   return mark;
 }
 
-function iconAsset(filename: any, size = PILL_ICON_SIZE) {
-  const pathD = (MATERIAL_ICON_PATHS as any)[filename];
+function iconAsset(filename: string, size = PILL_ICON_SIZE) {
+  const pathD = MATERIAL_ICON_PATHS[filename];
   if (!pathD) throw new Error(`Unknown icon asset: ${filename}`);
   return iconMaterial(pathD, size);
 }
 
-function iconMaterial(pathD: any, size = PILL_ICON_SIZE) {
+function iconMaterial(pathD: string, size = PILL_ICON_SIZE) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
@@ -489,7 +569,7 @@ function iconMaterial(pathD: any, size = PILL_ICON_SIZE) {
   return svg;
 }
 
-function svgEl(attrs = {}) {
+function svgEl(attrs: Record<string, string | number> = {}) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   const defaults = {
     fill: 'none',
@@ -500,12 +580,12 @@ function svgEl(attrs = {}) {
     viewBox: '0 0 24 24',
   };
   for (const [k, v] of Object.entries({ ...defaults, ...attrs })) {
-    svg.setAttribute(k, v);
+    svg.setAttribute(k, String(v));
   }
   return svg;
 }
 
-function path(d: any) {
+function path(d: string) {
   const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   p.setAttribute('d', d);
   return p;

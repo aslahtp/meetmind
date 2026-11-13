@@ -2,11 +2,27 @@
 // 'google') brings its own OAuth client from the user's Google Cloud project; sign-in runs a
 // loopback redirect server, one at a time.
 
-import { google } from 'googleapis';
+import { OAuth2Client, CodeChallengeMethod } from 'google-auth-library';
+import { calendar as calendarApi, type calendar_v3 } from '@googleapis/calendar';
 import crypto from 'crypto';
 import http from 'http';
+import type { StoredCalendarSource } from '../shared';
 import logger from '../utils/logger';
-import { extractMeetingLink } from './calendar-events';
+import { errorMessage } from '../utils/errors';
+import { extractMeetingLink, type SourceEvent } from './calendar-events';
+
+/** What the manager reads off a failed fetch or sign-in to word the error for the UI. */
+export type CalendarFetchError = Error & {
+  needsSignIn?: boolean;
+  actionUrl?: string;
+  actionLabel?: string;
+  cancelled?: boolean;
+};
+
+/** The parts of a Google API error that are read here (`code` or `status` carries the HTTP status). */
+type GoogleApiError = Error & { code?: number | string; status?: number; response?: { data?: { error?: string } } };
+
+const USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
 // Scopes for read-only calendar access + user profile email
 const SCOPES = [
@@ -20,32 +36,32 @@ const LOOPBACK_PORT_END = 39890;
 const AUTH_TIMEOUT_MS = 120_000;
 
 // sourceId → { client, key }: one OAuth2 client per account, rebuilt when its credentials change.
-const clients = new Map();
+const clients = new Map<string, { client: OAuth2Client; key: string }>();
 // sourceId → { token, at }: refresh token Google rejected (revoked/expired) and when. Calls with
 // that token fail fast without contacting Google, and are retried for real once a day, so sync
 // resumes by itself if the token recovers; signing in again (new token) clears it.
-const rejected = new Map();
+const rejected = new Map<string, { token: string | undefined; at: number }>();
 const AUTH_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 // The sign-in in progress: { cancel }.
-let activeAuth: any = null;
+let activeAuth: { server: http.Server | null; cancel: () => void } | null = null;
 
 const AUTH_EXPIRED_MESSAGE = 'Google sign-in expired or was revoked. Sign in again.';
 const API_DISABLED_URL = 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com';
 
-function getClient(source: any) {
+function getClient(source: StoredCalendarSource) {
   const key = `${source.clientId}\n${source.clientSecret}\n${source.refreshToken}`;
   const cached = clients.get(source.id);
   if (cached && cached.key === key) return cached.client;
 
-  const client = new google.auth.OAuth2(source.clientId, source.clientSecret, `http://localhost:${LOOPBACK_PORT_START}`);
+  const client = new OAuth2Client({ clientId: source.clientId, clientSecret: source.clientSecret, redirectUri: `http://localhost:${LOOPBACK_PORT_START}` });
   client.setCredentials({ refresh_token: source.refreshToken });
   clients.set(source.id, { client, key });
   return client;
 }
 
-function authError(message: any) {
-  const err: any = new Error(message);
+function authError(message: string) {
+  const err: CalendarFetchError = new Error(message);
   err.needsSignIn = true;
   return err;
 }
@@ -57,16 +73,22 @@ function authError(message: any) {
  * on a temporary loopback server, and exchanges the code for tokens. A new sign-in cancels one
  * still waiting. Resolves { refreshToken, email }.
  */
-async function startAuthFlow({ clientId, clientSecret }: any): Promise<any> {
+async function startAuthFlow({
+  clientId,
+  clientSecret,
+}: {
+  clientId?: string;
+  clientSecret?: string;
+}): Promise<{ refreshToken: string; email: string }> {
   if (!clientId || !clientSecret) {
     throw new Error('Enter your OAuth Client ID and Client Secret.');
   }
   cancelAuthFlow();
 
-  const { shell } = require('electron');
+  const { shell } = require('electron') as typeof import('electron');
   const port = await findFreePort(LOOPBACK_PORT_START, LOOPBACK_PORT_END);
   const redirectUri = `http://localhost:${port}`;
-  const client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  const client = new OAuth2Client({ clientId, clientSecret, redirectUri });
 
   // Any web page or local app can reach the loopback port. `state` proves a redirect belongs to
   // this sign-in (so nobody else can finish or cancel it), and PKCE means a code issued to any
@@ -80,21 +102,21 @@ async function startAuthFlow({ clientId, clientSecret }: any): Promise<any> {
     prompt: 'consent', // Always prompt to ensure we get a refresh token
     state,
     code_challenge: codeChallenge,
-    code_challenge_method: 'S256' as any,
+    code_challenge_method: CodeChallengeMethod.S256,
   });
 
   return new Promise((resolve, reject) => {
     let settled = false;
-    let server: any = null;
+    let server: http.Server | null = null;
 
-    const finish = (err: any, value?: any) => {
+    const finish = (err: Error | null, value?: { refreshToken: string; email: string }) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       try { server?.close(); } catch {}
       if (activeAuth?.server === server) activeAuth = null;
       if (err) reject(err);
-      else resolve(value);
+      else resolve(value!);
     };
 
     const timeout = setTimeout(() => {
@@ -103,7 +125,7 @@ async function startAuthFlow({ clientId, clientSecret }: any): Promise<any> {
 
     // Request data never goes into the page or an error message (both end up in front of the
     // user or in the log); only fixed text does.
-    const reply = (res: any, status: any, success: any, message: any) => {
+    const reply = (res: http.ServerResponse, status: number, success: boolean, message: string) => {
       res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(makeCallbackPage(success, message));
     };
@@ -135,11 +157,10 @@ async function startAuthFlow({ clientId, clientSecret }: any): Promise<any> {
 
         let email = '';
         try {
-          const oauth2 = google.oauth2({ version: 'v2', auth: client });
-          const userInfo = await oauth2.userinfo.get();
+          const userInfo = await client.request<{ email?: string }>({ url: USERINFO_URL });
           email = userInfo.data.email || '';
-        } catch (e: any) {
-          logger.warn('Could not fetch Google user email', { error: e.message });
+        } catch (e) {
+          logger.warn('Could not fetch Google user email', { error: errorMessage(e) });
         }
 
         if (!tokens.refresh_token) {
@@ -150,7 +171,7 @@ async function startAuthFlow({ clientId, clientSecret }: any): Promise<any> {
 
         reply(res, 200, true, `Connected as ${escapeHtml(email) || 'your Google account'}. You can close this tab.`);
         finish(null, { refreshToken: tokens.refresh_token, email });
-      } catch (err: any) {
+      } catch (err) {
         const message = tokenErrorMessage(err);
         reply(res, 500, false, `${message} You can close this tab.`);
         finish(new Error(message));
@@ -161,10 +182,10 @@ async function startAuthFlow({ clientId, clientSecret }: any): Promise<any> {
 
     server.listen(port, () => {
       logger.info('OAuth loopback server started', { port });
-      shell.openExternal(authUrl).catch((err: any) => finish(new Error(`Failed to open browser: ${err.message}`)));
+      shell.openExternal(authUrl).catch((err) => finish(new Error(`Failed to open browser: ${errorMessage(err)}`)));
     });
 
-    server.on('error', (err: any) => finish(new Error(`Failed to start OAuth server: ${err.message}`)));
+    server.on('error', (err) => finish(new Error(`Failed to start OAuth server: ${errorMessage(err)}`)));
   });
 }
 
@@ -175,7 +196,7 @@ function cancelAuthFlow() {
 }
 
 /** Drop everything held for a source (removed, or its credentials replaced). */
-function forgetSource(id: any) {
+function forgetSource(id: string) {
   clients.delete(id);
   rejected.delete(id);
 }
@@ -183,7 +204,7 @@ function forgetSource(id: any) {
 // ── Fetch Events ──────────────────────────────────────────────────────────────
 
 // True while this token is inside its once-a-day retry window after Google rejected it.
-function isTokenRejected(source: any) {
+function isTokenRejected(source: StoredCalendarSource) {
   const entry = rejected.get(source.id);
   return !!entry && entry.token === source.refreshToken && Date.now() - entry.at < AUTH_RETRY_INTERVAL_MS;
 }
@@ -192,12 +213,12 @@ function isTokenRejected(source: any) {
  * Events on the account's primary calendar that overlap [from, to) (ms). `timeMin` filters on
  * an event's end, so meetings already in progress come back too.
  */
-async function fetchEvents(source: any, { from, to }: any) {
+async function fetchEvents(source: StoredCalendarSource, { from, to }: { from: number; to: number }): Promise<SourceEvent[]> {
   if (isTokenRejected(source)) throw authError(AUTH_EXPIRED_MESSAGE);
   const client = getClient(source);
 
   try {
-    const calendar = google.calendar({ version: 'v3', auth: client });
+    const calendar = calendarApi({ version: 'v3', auth: client });
     const res = await calendar.events.list({
       calendarId: 'primary',
       timeMin: new Date(from).toISOString(),
@@ -211,12 +232,13 @@ async function fetchEvents(source: any, { from, to }: any) {
       logger.info('Google Calendar authorization works again; sync resumed', { calendar: source.name });
     }
     return (res.data.items || []).filter((e) => e && e.status !== 'cancelled').map(normalizeEvent);
-  } catch (err: any) {
-    const msg = err.message || String(err);
+  } catch (thrown) {
+    const err = thrown as GoogleApiError;
+    const msg = errorMessage(err) || String(err);
 
     // Revoked/expired refresh token: warn once, then back off to one real attempt a day with
     // this token (the poller keeps running) instead of failing every minute.
-    if (msg.includes('invalid_grant') || err.response?.data?.error === 'invalid_grant' || err.code === 401) {
+    if (msg.includes('invalid_grant') || err.response?.data?.error === 'invalid_grant' || httpStatus(err) === 401) {
       if (!isTokenRejected(source)) {
         rejected.set(source.id, { token: source.refreshToken, at: Date.now() });
         logger.warn('Google Calendar authorization was revoked or has expired; retrying once a day until you sign in again', { calendar: source.name, error: msg });
@@ -225,25 +247,25 @@ async function fetchEvents(source: any, { from, to }: any) {
     }
 
     if (msg.includes('Google Calendar API has not been used') || msg.includes('it is disabled') || msg.includes('accessNotConfigured')) {
-      const error: any = new Error('The Google Calendar API is not enabled in your Google Cloud project.');
+      const error: CalendarFetchError = new Error('The Google Calendar API is not enabled in your Google Cloud project.');
       error.actionUrl = msg.match(/https?:\/\/[^\s]+/)?.[0] || API_DISABLED_URL;
       error.actionLabel = 'Enable Google Calendar API';
       throw error;
     }
 
-    if (err.code === 403) throw authError(AUTH_EXPIRED_MESSAGE);
+    if (httpStatus(err) === 403) throw authError(AUTH_EXPIRED_MESSAGE);
     throw new Error(`Couldn’t load Google Calendar: ${msg}`);
   }
 }
 
-function normalizeEvent(event: any) {
-  const videoEntry = event.conferenceData?.entryPoints?.find((e: any) => e.entryPointType === 'video');
+function normalizeEvent(event: calendar_v3.Schema$Event): SourceEvent {
+  const videoEntry = event.conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video');
   return {
-    id: event.id,
-    uid: event.iCalUID || event.id,
+    id: event.id ?? '',
+    uid: event.iCalUID || event.id || '',
     title: event.summary || 'Untitled Event',
-    start: event.start?.dateTime || event.start?.date,
-    end: event.end?.dateTime || event.end?.date,
+    start: event.start?.dateTime || event.start?.date || '',
+    end: event.end?.dateTime || event.end?.date || '',
     isAllDay: !event.start?.dateTime,
     meetingLink: extractMeetingLink({
       conferenceUrls: [event.hangoutLink, videoEntry?.uri],
@@ -253,23 +275,28 @@ function normalizeEvent(event: any) {
     location: event.location || '',
     attendeeCount: event.attendees?.length || 0,
     organizer: event.organizer?.email || '',
-    status: event.status,
+    status: event.status ?? undefined,
     description: event.description || '',
   };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// The HTTP status of a failed API call: the client library puts it in `code`, newer versions in `status`.
+function httpStatus(err: GoogleApiError) {
+  return typeof err.code === 'number' ? err.code : err.status;
+}
+
 // Constant-time comparison of the redirect's `state` with the one this sign-in sent.
-function isExpectedState(received: any, expected: any) {
+function isExpectedState(received: string | null, expected: string) {
   if (typeof received !== 'string' || received.length !== expected.length) return false;
   return crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));
 }
 
 // A fixed message for a failed code exchange, chosen by Google's error code, so nothing from the
 // response is shown or logged verbatim.
-function tokenErrorMessage(err: any) {
-  const code = err?.response?.data?.error;
+function tokenErrorMessage(err: unknown) {
+  const code = (err as GoogleApiError | null | undefined)?.response?.data?.error;
   if (code === 'invalid_client' || code === 'unauthorized_client') {
     return 'Google didn’t accept the OAuth Client ID or Secret. Check them and try again.';
   }
@@ -277,9 +304,9 @@ function tokenErrorMessage(err: any) {
   return 'Google couldn’t complete the sign-in. Try again.';
 }
 
-function findFreePort(start: any, end: any) {
-  return new Promise((resolve, reject) => {
-    function tryPort(port: any) {
+function findFreePort(start: number, end: number) {
+  return new Promise<number>((resolve, reject) => {
+    function tryPort(port: number) {
       if (port > end) {
         reject(new Error(`No free port found in range ${start}-${end}`));
         return;
@@ -294,11 +321,11 @@ function findFreePort(start: any, end: any) {
   });
 }
 
-function escapeHtml(value: any) {
+function escapeHtml(value: unknown) {
   return String(value || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]);
 }
 
-function makeCallbackPage(success: any, message: any) {
+function makeCallbackPage(success: boolean, message: string) {
   const color = success ? '#22c55e' : '#ef4444';
   const icon = success ? '✓' : '✗';
   return `<!DOCTYPE html>

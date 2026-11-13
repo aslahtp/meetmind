@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
+import type { Session } from '@shared';
 import { useApp } from './app-context';
+import { errorMessage } from './errors';
 
 // Sessions come from a local SQLite file and normally load in well under 100ms.
 // Showing the skeleton instantly would just swap one flash for another, so only
 // reveal it if loading is actually slow enough to look like a hang.
 export const SKELETON_DELAY_MS = 160;
 
-export function useDelayedFlag(active: any, delayMs: any) {
+export function useDelayedFlag(active: boolean, delayMs: number) {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     if (!active) {
@@ -33,11 +35,11 @@ const REMOVE_ANIMATION_MS = 300; // matches .card-deleting in globals.css
 
 export function useSessionActions() {
   const { refreshSessions, confirm, addToast } = useApp();
-  const [deletingIds, setDeletingIds] = useState(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   // Resolves true once the meeting is deleted. `animate: false` skips the wait for the list
   // card's removal animation (the meeting page has no card to animate).
-  const handleDelete = async (session: any, { animate = true } = {}) => {
+  const handleDelete = async (session: Pick<Session, 'id'>, { animate = true }: { animate?: boolean } = {}) => {
     if (deletingIds.has(session.id)) return false;
     const ok = await confirm({
       title: 'Delete this meeting?',
@@ -55,8 +57,8 @@ export function useSessionActions() {
       ]);
       await refreshSessions();
       return true;
-    } catch (err: any) {
-      addToast(`Couldn't delete the meeting: ${err.message}`, 'error');
+    } catch (err) {
+      addToast(`Couldn't delete the meeting: ${errorMessage(err)}`, 'error');
       return false;
     } finally {
       setDeletingIds((prev) => {
@@ -69,19 +71,19 @@ export function useSessionActions() {
 
   const handleUploadAudio = async () => {
     try {
-      const result: any = await window.meetmind.recording.uploadFile();
+      const result = await window.meetmind.recording.uploadFile();
       if (result?.success) {
         await refreshSessions();
-      } else if (result?.error && !result.cancelled) {
+      } else if (result && 'error' in result && result.error) {
         addToast(result.error, 'error');
       }
-    } catch (err: any) {
-      addToast(err.message || 'Failed to import audio file.', 'error');
+    } catch (err) {
+      addToast(errorMessage(err) || 'Failed to import audio file.', 'error');
     }
   };
 
   // Processing runs in the background; progress arrives via `processing:progress`.
-  const handleRetry = async (session: any) => {
+  const handleRetry = async (session: Pick<Session, 'id'>) => {
     try {
       const result = await window.meetmind.processing.retry(session.id, 'all');
       if (result?.success === false) {
@@ -89,8 +91,8 @@ export function useSessionActions() {
         return;
       }
       await refreshSessions();
-    } catch (err: any) {
-      addToast(err.message || 'Retry failed.', 'error');
+    } catch (err) {
+      addToast(errorMessage(err) || 'Retry failed.', 'error');
     }
   };
 

@@ -1,14 +1,15 @@
 // Lazy, failure-tolerant logger so provider modules stay importable outside Electron (unit tests).
-let real: any;
-function getLogger() {
+type LoggerModule = Record<string, ((...args: unknown[]) => void) | undefined>;
+let real: LoggerModule | null | undefined;
+function getLogger(): LoggerModule | null {
   if (real === undefined) {
-    try { real = require('../../utils/logger'); } catch { real = null; }
+    try { real = require('../../utils/logger') as LoggerModule; } catch { real = null; }
   }
-  return real;
+  return real ?? null;
 }
 
-function make(level: any) {
-  return (...args: any[]) => {
+function make(level: string) {
+  return (...args: unknown[]) => {
     try { getLogger()?.[level]?.(...args); } catch { /* logging must never break a provider */ }
   };
 }

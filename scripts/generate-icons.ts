@@ -10,7 +10,8 @@
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
-const pngToIco = require('png-to-ico').default || require('png-to-ico');
+// png-to-ico ships no types; it is CommonJS with the function as `default` or as the export itself.
+const pngToIco: (images: Buffer[]) => Promise<Buffer> = require('png-to-ico').default || require('png-to-ico');
 
 const ROOT = path.join(__dirname, '..');
 const SVG = path.join(ROOT, 'assets/icons/icon.svg');
@@ -22,11 +23,11 @@ const EXT_ICONS = path.join(ROOT, 'extension/icons');
 
 const APP_SIZES = [16, 24, 32, 48, 128, 256, 512, 1024];
 // macOS menu-bar icon: 18pt, plus @2x for Retina. The "Template" suffix tells macOS to tint it.
-const TRAY_TEMPLATE_SIZES = [[18, 'trayTemplate.png'], [36, 'trayTemplate@2x.png']];
+const TRAY_TEMPLATE_SIZES: [number, string][] = [[18, 'trayTemplate.png'], [36, 'trayTemplate@2x.png']];
 const EXT_SIZES = [16, 48, 128];
 const ICO_SIZES = [16, 24, 32, 48, 256];
 
-async function renderPng(size: any, outPath: any, source = size <= SMALL_MAX && fs.existsSync(SVG_SMALL) ? SVG_SMALL : SVG) {
+async function renderPng(size: number, outPath: string, source = size <= SMALL_MAX && fs.existsSync(SVG_SMALL) ? SVG_SMALL : SVG) {
   await sharp(source, { density: 72 * Math.max(1, size / 128) * 4 })
     .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
@@ -55,7 +56,7 @@ async function main() {
   console.log('✓ assets/icons/icon.png');
 
   for (const [size, name] of TRAY_TEMPLATE_SIZES) {
-    await renderPng(size, path.join(APP_ICONS, name as string), SVG_TRAY_TEMPLATE);
+    await renderPng(size, path.join(APP_ICONS, name), SVG_TRAY_TEMPLATE);
     console.log(`✓ assets/icons/${name}`);
   }
 

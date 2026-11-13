@@ -9,7 +9,9 @@ import {
   RefreshCw,
   MapPin,
 } from 'lucide-react';
+import type { CalendarEvent, CalendarSyncError } from '@shared';
 import { IconButton, StatusDot, Skeleton, AvatarTile } from './ui/index';
+import { errorMessage } from '../lib/errors';
 import { formatTime, dayLabel } from '../lib/format';
 import { meetingPlatform } from '../lib/platform';
 import { useNow } from '../lib/hooks';
@@ -21,12 +23,12 @@ const COLLAPSED_KEY = 'meetmind.upcomingCollapsed';
 
 // All-day events carry a bare YYYY-MM-DD date, which is local midnight (Date would read it as
 // UTC and put the event on the previous day west of Greenwich).
-function eventDate(value: any) {
+function eventDate(value: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value);
 }
 
-function getEventStatus(event: any, now: any) {
+function getEventStatus(event: CalendarEvent, now: number) {
   const start = new Date(event.start).getTime();
   const end = new Date(event.end).getTime();
 
@@ -44,23 +46,32 @@ function readCollapsed() {
   }
 }
 
-function writeCollapsed(value: any) {
+function writeCollapsed(value: boolean) {
   try {
     localStorage.setItem(COLLAPSED_KEY, value ? '1' : '0');
   } catch { /* storage unavailable — collapse still works for this session */ }
 }
 
-function EventCard({ event, onStartRecording, isRecording, now, showSource }: { event?: any; onStartRecording?: any; isRecording?: any; now?: any; showSource?: any }) {
+interface EventCardProps {
+  event: CalendarEvent;
+  onStartRecording: (event: CalendarEvent) => void;
+  isRecording: boolean;
+  now: number;
+  /** Name the calendar each event comes from (more than one is connected). */
+  showSource: boolean;
+}
+
+function EventCard({ event, onStartRecording, isRecording, now, showSource }: EventCardProps) {
   const status = getEventStatus(event, now);
   const platform = meetingPlatform(event.meetingLink);
   const isLive = status === 'in-progress';
   const isSoon = status === 'starting-soon';
   const minutesUntil = Math.max(1, Math.ceil((new Date(event.start).getTime() - now) / 60000));
 
-  const meta = [];
+  const meta: React.ReactElement[] = [];
   if (event.isAllDay) meta.push(<span key="time">All day</span>);
   else meta.push(<span key="time" className="tabular">{formatTime(event.start)} – {formatTime(event.end)}</span>);
-  if (event.attendeeCount > 1) {
+  if ((event.attendeeCount ?? 0) > 1) {
     meta.push(
       <span key="people" className="flex items-center gap-4">
         <Users size={14} strokeWidth={1.75} />
@@ -119,7 +130,7 @@ function EventCard({ event, onStartRecording, isRecording, now, showSource }: { 
           {event.meetingLink && (
             <button
               type="button"
-              onClick={() => window.meetmind.shell.openExternal(event.meetingLink)}
+              onClick={() => event.meetingLink && window.meetmind.shell.openExternal(event.meetingLink)}
               className="btn-ghost btn-sm"
             >
               <ExternalLink size={14} strokeWidth={1.75} />
@@ -157,11 +168,11 @@ function SkeletonEvent() {
 }
 
 // Calendars that failed this time, listed above the events from the ones that worked.
-function SourceErrors({ errors, onNavigateToSettings }: { errors?: any; onNavigateToSettings?: any }) {
+function SourceErrors({ errors, onNavigateToSettings }: { errors: CalendarSyncError[]; onNavigateToSettings: () => void }) {
   return (
     <div className="card-compact" role="alert">
       <ul className="space-y-8">
-        {errors.map((err: any) => (
+        {errors.map((err) => (
           <li key={err.sourceId} className="flex items-start gap-16">
             <StatusDot tone="error" className="mt-8" />
             <p className="flex-1 min-w-0 text-body-sm text-ink">
@@ -171,7 +182,7 @@ function SourceErrors({ errors, onNavigateToSettings }: { errors?: any; onNaviga
         ))}
       </ul>
       <div className="flex flex-wrap items-center gap-8 mt-16">
-        {errors.filter((e: any) => e.actionUrl).map((err: any) => (
+        {errors.filter((e) => e.actionUrl).map((err) => (
           <button
             key={err.sourceId}
             type="button"
@@ -192,15 +203,30 @@ function SourceErrors({ errors, onNavigateToSettings }: { errors?: any; onNaviga
 
 // The last answer, kept across mounts: going back to the Dashboard shows it at once and refreshes
 // in the background, instead of flashing skeleton rows and shifting the page when it lands.
-let lastResult: any = null;   // { connected, events, error, errors, multiSource }
+interface CalendarAnswer {
+  connected?: boolean;
+  events?: CalendarEvent[];
+  error?: string | null;
+  errors?: CalendarSyncError[];
+  multiSource?: boolean;
+}
 
-export default function UpcomingMeetings({ onNavigateToSettings, onStartRecording, isRecording, className = '' }: { onNavigateToSettings?: any; onStartRecording?: any; isRecording?: any; className?: any }) {
-  const [events, setEvents] = useState(() => lastResult?.events || []);
+let lastResult: CalendarAnswer | null = null;
+
+export interface UpcomingMeetingsProps {
+  onNavigateToSettings: () => void;
+  onStartRecording: (event: CalendarEvent) => void;
+  isRecording: boolean;
+  className?: string;
+}
+
+export default function UpcomingMeetings({ onNavigateToSettings, onStartRecording, isRecording, className = '' }: UpcomingMeetingsProps) {
+  const [events, setEvents] = useState<CalendarEvent[]>(() => lastResult?.events || []);
   const [loading, setLoading] = useState(!lastResult);
-  const [error, setError] = useState(() => lastResult?.error || null);
+  const [error, setError] = useState<string | null>(() => lastResult?.error || null);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [connected, setConnected] = useState(() => !!lastResult?.connected);
-  const [errors, setErrors] = useState(() => lastResult?.errors || []);
+  const [errors, setErrors] = useState<CalendarSyncError[]>(() => lastResult?.errors || []);
   const [multiSource, setMultiSource] = useState(() => !!lastResult?.multiSource);
   const [refreshing, setRefreshing] = useState(false);
   const now = useNow(60_000);
@@ -214,13 +240,13 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
 
     if (showRefreshState) setRefreshing(true);
 
-    const remember = (next: any) => {
+    const remember = (next: CalendarAnswer) => {
       lastResult = { ...lastResult, ...next };
-      if ('connected' in next) setConnected(next.connected);
-      if ('events' in next) setEvents(next.events);
-      if ('error' in next) setError(next.error);
-      if ('errors' in next) setErrors(next.errors);
-      if ('multiSource' in next) setMultiSource(next.multiSource);
+      if ('connected' in next) setConnected(!!next.connected);
+      if ('events' in next) setEvents(next.events ?? []);
+      if ('error' in next) setError(next.error ?? null);
+      if ('errors' in next) setErrors(next.errors ?? []);
+      if ('multiSource' in next) setMultiSource(!!next.multiSource);
     };
     try {
       const { sources = [] } = await window.meetmind.calendar.list();
@@ -237,8 +263,8 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
       } else {
         remember({ connected: true, error: result.error, errors: [], multiSource: multi });
       }
-    } catch (err: any) {
-      remember({ error: err.message });
+    } catch (err) {
+      remember({ error: errorMessage(err) });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -266,13 +292,13 @@ export default function UpcomingMeetings({ onNavigateToSettings, onStartRecordin
 
   // Group events by day
   const groupedEvents = useMemo(() => {
-    const groups: any = {};
+    const groups: Record<string, CalendarEvent[]> = {};
     for (const event of events) {
       const dateKey = eventDate(event.start).toDateString();
       if (!groups[dateKey]) groups[dateKey] = [];
       groups[dateKey].push(event);
     }
-    return Object.entries<any[]>(groups).map(([dateKey, evts]) => ({
+    return Object.entries(groups).map(([dateKey, evts]) => ({
       dateKey,
       label: dayLabel(eventDate(evts[0].start).toISOString()),
       events: evts,

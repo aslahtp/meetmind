@@ -2,6 +2,24 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { Loader2 } from 'lucide-react';
 import { StatusDot } from './ui/index';
 import { STAGE_LABELS } from '../lib/status';
+import type { ProcessingState } from '../lib/app-context';
+
+type Outcome = 'done' | 'error';
+type PillMode = 'full' | 'compact' | 'icon';
+
+/** The run the pill shows: the app's `processing` plus how it ended. */
+interface PillView extends ProcessingState {
+  outcome: Outcome | null;
+}
+
+interface PillContentProps {
+  outcome: Outcome | null | undefined;
+  label: string;
+  pct: number;
+  showLabel: boolean;
+  showPct: boolean;
+  spinning?: boolean;
+}
 
 // How long the finished state ("Notes ready" / "Failed") stays up before the pill tucks away.
 const HOLD_DONE_MS = 1600;
@@ -9,7 +27,7 @@ const HOLD_ERROR_MS = 2600;
 
 // `spinning`: only the pill on screen spins. The component stays mounted while tucked away, and an
 // animation that never stops there would keep the window compositing frames for nothing.
-function PillContent({ outcome, label, pct, showLabel, showPct, spinning = false }: any) {
+function PillContent({ outcome, label, pct, showLabel, showPct, spinning = false }: PillContentProps) {
   return (
     <>
       {outcome
@@ -26,20 +44,27 @@ function PillContent({ outcome, label, pct, showLabel, showPct, spinning = false
 // progress, and when the run ends it shows the outcome before sliding back and collapsing.
 // It shows as much as fits in the bar's free space (`spacerRef` is the flexible spacer beside
 // it): full label, then spinner + percentage, then the spinner alone.
-export default function ProcessingIndicator({ processing, onOpen, spacerRef }: { processing?: any; onOpen?: any; spacerRef?: any }) {
-  const [view, setView] = useState<any>(null); // { sessionId, stage, percent, outcome }
+export interface ProcessingIndicatorProps {
+  processing: ProcessingState | null;
+  onOpen: (sessionId: string) => void;
+  /** The bar's flexible spacer beside the pill. */
+  spacerRef: React.RefObject<HTMLElement>;
+}
+
+export default function ProcessingIndicator({ processing, onOpen, spacerRef }: ProcessingIndicatorProps) {
+  const [view, setView] = useState<PillView | null>(null);
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState('full'); // 'full' | 'compact' | 'icon'
-  const [widths, setWidths] = useState<any>(null); // measured content width per mode
+  const [mode, setMode] = useState<PillMode>('full');
+  const [widths, setWidths] = useState<Record<PillMode, number> | null>(null); // measured content width per mode
   const openRef = useRef(false);
-  const outcomeRef = useRef<any>(null);
-  const hideTimer = useRef<any>(null);
-  const slotRef = useRef<any>(null);
-  const pillRef = useRef<any>(null);
-  const sizeRef = useRef<any>(null);
-  const fullRef = useRef<any>(null);
-  const compactRef = useRef<any>(null);
-  const iconRef = useRef<any>(null);
+  const outcomeRef = useRef<Outcome | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const slotRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const sizeRef = useRef<HTMLSpanElement>(null);
+  const fullRef = useRef<HTMLSpanElement>(null);
+  const compactRef = useRef<HTMLSpanElement>(null);
+  const iconRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => { openRef.current = open; }, [open]);
 
@@ -61,11 +86,11 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }: {
   // recorded before the effect above runs and the pill holds on it instead of vanishing.
   useEffect(() => {
     if (!window.meetmind?.on) return undefined;
-    const finish = (outcome: any, hold: any) => {
+    const finish = (outcome: Outcome, hold: number) => {
       if (!openRef.current) return;
       clearTimeout(hideTimer.current);
       outcomeRef.current = outcome;
-      setView((v: any) => v && { ...v, outcome, percent: outcome === 'done' ? 100 : v.percent });
+      setView((v) => v && { ...v, outcome, percent: outcome === 'done' ? 100 : v.percent });
       hideTimer.current = setTimeout(() => setOpen(false), hold);
     };
     const offComplete = window.meetmind.on('processing:complete', () => finish('done', HOLD_DONE_MS));
@@ -86,19 +111,19 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }: {
   // Pick the richest variant that fits. Free space = the spacer plus this slot's own width,
   // which stays constant however the slot is currently sized, so the choice can't oscillate.
   const fit = useCallback(() => {
-    const m = {
+    const m: Record<PillMode, number> = {
       full: fullRef.current?.offsetWidth ?? 0,
       compact: compactRef.current?.offsetWidth ?? 0,
       icon: iconRef.current?.offsetWidth ?? 0,
     };
-    setWidths((prev: any) => (prev && prev.full === m.full && prev.compact === m.compact && prev.icon === m.icon ? prev : m));
+    setWidths((prev) => (prev && prev.full === m.full && prev.compact === m.compact && prev.icon === m.icon ? prev : m));
     const pill = pillRef.current;
     const size = sizeRef.current;
     const spacer = spacerRef?.current;
     if (!pill || !size || !spacer) return;
     const chrome = pill.offsetWidth - size.offsetWidth + parseFloat(getComputedStyle(pill).marginLeft || '0');
-    const free = spacer.getBoundingClientRect().width + slotRef.current.getBoundingClientRect().width;
-    const next = m.full + chrome <= free + 0.5 ? 'full' : m.compact + chrome <= free + 0.5 ? 'compact' : 'icon';
+    const free = spacer.getBoundingClientRect().width + (slotRef.current?.getBoundingClientRect().width ?? 0);
+    const next: PillMode = m.full + chrome <= free + 0.5 ? 'full' : m.compact + chrome <= free + 0.5 ? 'compact' : 'icon';
     setMode((prev) => (prev === next ? prev : next));
   }, [spacerRef]);
 
@@ -106,7 +131,7 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }: {
     fit();
     const ro = new ResizeObserver(() => fit());
     [spacerRef?.current, slotRef.current, fullRef.current, compactRef.current]
-      .filter(Boolean)
+      .filter((el): el is HTMLElement => !!el)
       .forEach((el) => ro.observe(el));
     return () => ro.disconnect();
   }, [fit, spacerRef]);
@@ -117,7 +142,7 @@ export default function ProcessingIndicator({ processing, onOpen, spacerRef }: {
     ? 'Notes ready'
     : outcome === 'error'
       ? 'Failed'
-      : (STAGE_LABELS as any)[view?.stage] || 'Processing';
+      : (view && STAGE_LABELS[view.stage]) || 'Processing';
   const ariaLabel = outcome
     ? `${label}. Open meeting.`
     : `${label}, ${pct} percent. Open meeting.`;

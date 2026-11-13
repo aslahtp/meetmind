@@ -4,13 +4,21 @@ import { StatusDot } from '../ui/index';
 import { SettingsGroup, SettingRow, RowList } from './SettingsParts';
 import { useApp } from '../../lib/app-context';
 import { CAPTURE_TEST_SECONDS, describeAudioTest, runCaptureTest } from '../../lib/audioTest';
+import type { LinuxAudioStatus } from '@shared';
+
+type CaptureTestResult = Awaited<ReturnType<typeof runCaptureTest>>;
 
 // Linux only (rendered by SystemSection): the audio server MeetMind records from, whether the
 // FFmpeg fallback can record from it, and a test of system audio capture. Recording first tries
 // Electron's loopback; when that hears nothing, MeetMind records the default output's monitor
 // with FFmpeg instead.
 
-function Status({ tone, children }: { tone?: any; children?: any }) {
+interface StatusProps {
+  tone: React.ComponentProps<typeof StatusDot>['tone'];
+  children?: React.ReactNode;
+}
+
+function Status({ tone, children }: StatusProps) {
   return (
     <span className="inline-flex items-center gap-8 text-caption text-ink">
       <StatusDot tone={tone} />
@@ -21,8 +29,8 @@ function Status({ tone, children }: { tone?: any; children?: any }) {
 
 export default function LinuxAudio() {
   const { isRecording } = useApp();
-  const [status, setStatus] = useState<any>(null);
-  const [result, setResult] = useState<any>(null);
+  const [status, setStatus] = useState<LinuxAudioStatus | null>(null);
+  const [result, setResult] = useState<CaptureTestResult | null>(null);
   const [testing, setTesting] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -43,7 +51,9 @@ export default function LinuxAudio() {
   };
 
   const verdict = describeAudioTest(result);
-  const serverFound = !!status?.server;
+  // Anything but the Linux-only error carries the audio server's details.
+  const details = status && 'server' in status ? status : null;
+  const serverFound = !!details?.server;
 
   return (
     <SettingsGroup
@@ -54,10 +64,10 @@ export default function LinuxAudio() {
       <RowList>
         <SettingRow
           label="Audio server"
-          description={status?.defaultSink ? `Output: ${status.defaultSink}` : 'Where meeting audio is played.'}
+          description={details?.defaultSink ? `Output: ${details.defaultSink}` : 'Where meeting audio is played.'}
         >
           {status && (
-            <Status tone={serverFound ? 'ok' : 'error'}>{serverFound ? status.server : 'Not found'}</Status>
+            <Status tone={serverFound ? 'ok' : 'error'}>{serverFound ? details?.server : 'Not found'}</Status>
           )}
         </SettingRow>
         <SettingRow
@@ -65,8 +75,8 @@ export default function LinuxAudio() {
           description="Records the output’s monitor when the app can’t capture system audio itself."
         >
           {status && (
-            <Status tone={status.ffmpegPulse && serverFound ? 'ok' : 'warning'}>
-              {status.ffmpegPulse && serverFound ? 'Available' : 'Unavailable'}
+            <Status tone={details?.ffmpegPulse && serverFound ? 'ok' : 'warning'}>
+              {details?.ffmpegPulse && serverFound ? 'Available' : 'Unavailable'}
             </Status>
           )}
         </SettingRow>
@@ -98,7 +108,7 @@ export default function LinuxAudio() {
           Debian: sudo apt install pulseaudio-utils), then reopen this page.
         </p>
       )}
-      {verdict && verdict.tone !== 'ok' && status?.ffmpegPulse && serverFound && (
+      {verdict && verdict.tone !== 'ok' && details?.ffmpegPulse && serverFound && (
         <p className="hint">Recordings still include system audio: MeetMind switches to the FFmpeg fallback.</p>
       )}
       {isRecording && <p className="hint">Stop the current recording to run a test.</p>}

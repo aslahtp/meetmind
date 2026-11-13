@@ -7,7 +7,7 @@ import './styles/globals.css';
 
 installGlobalErrorReporting();
 
-// Entry point. Mounting lives here, not in app.jsx, so app.jsx exports only a component and
+// Entry point. Mounting lives here, not in app.tsx, so app.tsx exports only a component and
 // React Fast Refresh can hot-swap it during `pnpm run dev` instead of reloading the page.
 // The outer boundary is the last resort: if the app itself throws while rendering, React would
 // otherwise unmount everything and leave an empty window with no way to close it.
@@ -17,7 +17,7 @@ createRoot(document.getElementById('root')!).render(
   </ErrorBoundary>,
 );
 
-// The app reports itself ready once it has loaded its state (app.jsx). If that never happens, say
+// The app reports itself ready once it has loaded its state (app.tsx). If that never happens, say
 // so anyway rather than have main treat a slow start as a failed load and reload the window.
 setTimeout(() => window.meetmind?.window?.ready?.(), 8000);
 

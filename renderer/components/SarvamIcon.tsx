@@ -1,7 +1,7 @@
 import React from 'react';
 import sarvamSvg from '@assets/icons/services/sarvam-dark.svg';
 
-export default function SarvamIcon({ size = 16, className = '' }: { size?: any; className?: any }) {
+export default function SarvamIcon({ size = 16, className = '' }: { size?: number | string; className?: string }) {
   return (
     <img
       src={sarvamSvg}

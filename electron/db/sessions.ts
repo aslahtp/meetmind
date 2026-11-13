@@ -1,11 +1,16 @@
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
+import type initSqlJs from 'sql.js';
+import type { NewSession, Notes, Session, SessionUpdate } from '../shared';
 import logger from '../utils/logger';
+import { errorMessage } from '../utils/errors';
 import { sanitizeNotes, sanitizeTranscript } from '../services/notes-sanitize';
 
-let db: any = null;
-let SQL = null;
+type SqlDatabase = initSqlJs.Database;
+type SqlValue = initSqlJs.SqlValue;
+
+let db: SqlDatabase | null = null;
 
 function getDbPath() {
   const userData = app.getPath('userData');
@@ -19,11 +24,11 @@ function getRevision() {
   return revision;
 }
 
-// Called after every write with the new revision; main.js tells the renderer (sessions:changed),
+// Called after every write with the new revision; main.ts tells the renderer (sessions:changed),
 // so every screen shows a status change the moment it is saved.
 const changeListeners = new Set<(revision: number) => void>();
 
-function onChange(listener: any) {
+function onChange(listener: (revision: number) => void) {
   changeListeners.add(listener);
   return () => changeListeners.delete(listener);
 }
@@ -32,36 +37,32 @@ function persist() {
   if (!db) return;
   revision += 1;
   try {
-    const data: any = db.export();
+    const data = db.export();
     const buf = Buffer.from(data);
     fs.writeFileSync(getDbPath(), buf);
-  } catch (err: any) {
-    logger.error('Failed to persist database', { error: err.message });
+  } catch (err) {
+    logger.error('Failed to persist database', { error: errorMessage(err) });
   }
   for (const listener of changeListeners) {
     try {
       listener(revision);
-    } catch (err: any) {
-      logger.warn('Database change listener failed', { error: err.message });
+    } catch (err) {
+      logger.warn('Database change listener failed', { error: errorMessage(err) });
     }
   }
 }
 
 async function initialize() {
-  const initSqlJs = require('sql.js');
-  SQL = await initSqlJs();
+  const initSql: typeof initSqlJs = require('sql.js');
+  const SQL = await initSql();
   const dbPath = getDbPath();
 
   logger.info('Initializing SQLite database', { dbPath });
 
-  if (fs.existsSync(dbPath)) {
-    const buf = fs.readFileSync(dbPath);
-    db = new SQL.Database(buf);
-  } else {
-    db = new SQL.Database();
-  }
+  const database = fs.existsSync(dbPath) ? new SQL.Database(fs.readFileSync(dbPath)) : new SQL.Database();
+  db = database;
 
-  db.run(`
+  database.run(`
     CREATE TABLE IF NOT EXISTS sessions (
       id                TEXT PRIMARY KEY,
       title             TEXT NOT NULL DEFAULT 'Untitled Meeting',
@@ -77,23 +78,23 @@ async function initialize() {
     )
   `);
   // Added in 4.0.0: why the last processing run failed (no migration system, so add if missing).
-  const cols = db.exec('PRAGMA table_info(sessions)')[0]?.values.map((r: any) => r[1]) || [];
-  if (!cols.includes('last_error')) db.run('ALTER TABLE sessions ADD COLUMN last_error TEXT');
+  const cols = database.exec('PRAGMA table_info(sessions)')[0]?.values.map((r) => r[1]) || [];
+  if (!cols.includes('last_error')) database.run('ALTER TABLE sessions ADD COLUMN last_error TEXT');
   // Added in 4.10.0: the meeting's own title (detected tab, calendar, pasted title), kept over the LLM's.
-  if (!cols.includes('meeting_title')) db.run('ALTER TABLE sessions ADD COLUMN meeting_title TEXT');
+  if (!cols.includes('meeting_title')) database.run('ALTER TABLE sessions ADD COLUMN meeting_title TEXT');
   // Added in 4.17.0: when Settings › Storage deleted the recording (the notes and transcript stay),
   // and where a meeting came from ('transcript' for a pasted transcript, otherwise NULL).
-  if (!cols.includes('audio_deleted_at')) db.run('ALTER TABLE sessions ADD COLUMN audio_deleted_at TEXT');
-  if (!cols.includes('source')) db.run('ALTER TABLE sessions ADD COLUMN source TEXT');
+  if (!cols.includes('audio_deleted_at')) database.run('ALTER TABLE sessions ADD COLUMN audio_deleted_at TEXT');
+  if (!cols.includes('source')) database.run('ALTER TABLE sessions ADD COLUMN source TEXT');
   // Added in 4.17.0: the platform meeting detection saw ('meet' | 'zoom' | 'teams'), for meetings
   // recorded from its prompt, which have no link to read it from.
-  if (!cols.includes('meeting_platform')) db.run('ALTER TABLE sessions ADD COLUMN meeting_platform TEXT');
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
+  if (!cols.includes('meeting_platform')) database.run('ALTER TABLE sessions ADD COLUMN meeting_platform TEXT');
+  database.run(`CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)`);
+  database.run(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
   persist();
 
   logger.info('Database initialized');
-  return db;
+  return database;
 }
 
 function ensureDb() {
@@ -103,7 +104,7 @@ function ensureDb() {
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
-function createSession(session: any) {
+function createSession(session: NewSession) {
   const d = ensureDb();
   d.run(
     `INSERT INTO sessions (id, title, meeting_title, meeting_url, meeting_platform, started_at, audio_path, status, source)
@@ -124,20 +125,20 @@ function createSession(session: any) {
   return getSession(session.id);
 }
 
-function updateSession(id: any, updates: any) {
+function updateSession(id: string, updates: SessionUpdate) {
   const d = ensureDb();
   const allowed = ['title', 'meeting_title', 'meeting_url', 'started_at', 'ended_at', 'duration_seconds', 'audio_path', 'transcript', 'notes', 'notion_page_url', 'status', 'last_error', 'audio_deleted_at'];
   const keys = Object.keys(updates).filter((k) => allowed.includes(k));
   if (keys.length === 0) return;
 
   const setClause = keys.map((k) => `${k} = ?`).join(', ');
-  const values = keys.map((k) => updates[k]);
+  const values = keys.map((k) => (updates as Record<string, SqlValue>)[k]);
   values.push(id);
   d.run(`UPDATE sessions SET ${setClause} WHERE id = ?`, values);
   persist();
 }
 
-function getSession(id: any) {
+function getSession(id: string): Session | null {
   const d = ensureDb();
   const stmt = d.prepare('SELECT * FROM sessions WHERE id = ?');
   stmt.bind([id]);
@@ -150,9 +151,9 @@ function getSession(id: any) {
   return deserializeSession(row);
 }
 
-function listSessions({ limit = null, offset = 0 }: any = {}) {
+function listSessions({ limit = null, offset = 0 }: { limit?: number | null; offset?: number } = {}): Session[] {
   const d = ensureDb();
-  let stmt;
+  let stmt: initSqlJs.Statement;
   if (limit !== null) {
     stmt = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?');
     stmt.bind([limit, offset]);
@@ -160,15 +161,15 @@ function listSessions({ limit = null, offset = 0 }: any = {}) {
     stmt = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC');
     stmt.bind([]);
   }
-  const rows = [];
+  const rows: initSqlJs.ParamsObject[] = [];
   while (stmt.step()) {
     rows.push(stmt.getAsObject());
   }
   stmt.free();
-  return rows.map(deserializeSession);
+  return rows.map((row) => deserializeSession(row));
 }
 
-function deleteSession(id: any) {
+function deleteSession(id: string) {
   const d = ensureDb();
   d.run('DELETE FROM sessions WHERE id = ?', [id]);
   persist();
@@ -178,7 +179,7 @@ function getSessionCount() {
   const d = ensureDb();
   const stmt = d.prepare('SELECT COUNT(*) as count FROM sessions');
   stmt.step();
-  const count = stmt.get()[0];
+  const count = stmt.get()[0] as number;
   stmt.free();
   return count;
 }
@@ -200,24 +201,27 @@ function markStaleRecordingSessionsAsError() {
 
 // ── Deserialization ───────────────────────────────────────────────────────────
 
-function deserializeSession(row: any) {
+function deserializeSession(row: initSqlJs.ParamsObject): Session;
+function deserializeSession(row: null | undefined): null;
+function deserializeSession(row: initSqlJs.ParamsObject | null | undefined): Session | null {
   if (!row) return null;
+  // The columns are Session's fields (transcript and notes stored as JSON text).
   return {
     ...row,
     // Type-checked on the way out: a wrongly typed field in an old row must not break the UI.
-    transcript: sanitizeStoredTranscript(safeJsonParse(row.transcript, [])),
-    notes:      sanitizeNotes(safeJsonParse(row.notes, null)),
-  };
+    transcript: sanitizeStoredTranscript(safeJsonParse<unknown>(row.transcript, [])),
+    notes:      sanitizeNotes(safeJsonParse<Notes | null>(row.notes, null)),
+  } as unknown as Session;
 }
 
-function sanitizeStoredTranscript(transcript: any) {
+function sanitizeStoredTranscript(transcript: unknown) {
   return Array.isArray(transcript) ? sanitizeTranscript(transcript) : transcript;
 }
 
-function safeJsonParse(value: any, fallback: any) {
+function safeJsonParse<T>(value: SqlValue | undefined, fallback: T): T {
   if (!value) return fallback;
   try {
-    return JSON.parse(value);
+    return JSON.parse(String(value)) as T;
   } catch {
     return fallback;
   }
@@ -225,7 +229,7 @@ function safeJsonParse(value: any, fallback: any) {
 
 // ── Duration calculation ──────────────────────────────────────────────────────
 
-function computeDuration(session: any) {
+function computeDuration(session: Pick<Session, 'started_at' | 'ended_at'>) {
   if (!session.started_at || !session.ended_at) return null;
   const start = new Date(session.started_at).getTime();
   const end   = new Date(session.ended_at).getTime();

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { ReactElement } from 'react';
 import { stripDuplicateTitle, parseInlineMarkdown } from '../renderer/components/note/markdown';
 
 describe('stripDuplicateTitle', () => {
@@ -13,16 +14,22 @@ describe('stripDuplicateTitle', () => {
   });
 });
 
+interface ElementProps {
+  children?: unknown;
+  href?: string;
+}
+type Part = string | ReactElement<ElementProps>;
+
 describe('parseInlineMarkdown', () => {
   it('returns plain text unchanged', () => {
     expect(parseInlineMarkdown('just text')).toBe('just text');
   });
 
   it('splits inline code, bold and links into elements', () => {
-    const parts = parseInlineMarkdown('Run `pnpm test` then **ship** via [docs](https://x.dev)');
-    const types = parts.map((p: any) => (typeof p === 'string' ? 'text' : p.type));
+    const parts = parseInlineMarkdown('Run `pnpm test` then **ship** via [docs](https://x.dev)') as Part[];
+    const types = parts.map((p) => (typeof p === 'string' ? 'text' : p.type));
     expect(types).toEqual(['text', 'code', 'text', 'strong', 'text', 'a']);
-    expect(parts[1].props.children).toBe('pnpm test');
-    expect(parts[5].props.href).toBe('https://x.dev');
+    expect((parts[1] as ReactElement<ElementProps>).props.children).toBe('pnpm test');
+    expect((parts[5] as ReactElement<ElementProps>).props.href).toBe('https://x.dev');
   });
 });

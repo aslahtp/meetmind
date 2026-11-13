@@ -1,6 +1,6 @@
 // Pinned FFmpeg downloads: the single source of truth for every FFmpeg MeetMind ships or installs.
-// Used by the in-app installer (`ffmpeg:install`, electron/services/ffmpeg-installer.js) and by
-// scripts/fetch-ffmpeg.js, which stages the binaries for CI and release builds. Pure: no
+// Used by the in-app installer (`ffmpeg:install`, electron/services/ffmpeg-installer.ts) and by
+// scripts/fetch-ffmpeg.ts, which stages the binaries for CI and release builds. Pure: no
 // electron import.
 //
 // Every archive is verified against the SHA-256 below before it is unpacked. To bump a build:
@@ -25,7 +25,14 @@ const BTBN = 'https://github.com/BtbN/FFmpeg-Builds/releases/download';
 
 // `${platform}-${arch}` → the archives (.zip or .tar.xz) that together provide ffmpeg and
 // ffprobe. `tools` names the executables (without .exe) found anywhere inside each archive.
-const SOURCES = {
+interface FfmpegDownload {
+  url: string;
+  sha256: string;
+  /** Executables (without .exe) found anywhere inside the archive. */
+  tools: string[];
+}
+
+const SOURCES: Record<string, FfmpegDownload[]> = {
   'win32-x64': [
     {
       url: `${GYAN}/9.0.2/ffmpeg-9.0.2-essentials_build.zip`,
@@ -70,8 +77,8 @@ const SOURCES = {
  * The pinned downloads ({ url, sha256, tools }[]) for a platform/arch, or null when there is
  * no pinned build for it.
  */
-function ffmpegDownloads(platform: any, arch: any) {
-  return (SOURCES as any)[`${platform}-${arch}`] || null;
+function ffmpegDownloads(platform: string, arch: string): FfmpegDownload[] | null {
+  return SOURCES[`${platform}-${arch}`] || null;
 }
 
 /** Every platform/arch with a pinned build, as `${platform}-${arch}` keys. */
@@ -79,4 +86,5 @@ function pinnedTargets() {
   return Object.keys(SOURCES);
 }
 
+export type { FfmpegDownload };
 export { FFMPEG_VERSION, ffmpegDownloads, pinnedTargets };

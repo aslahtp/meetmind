@@ -1,16 +1,24 @@
 import React, { useId, useRef, useState } from 'react';
 import { Eye, EyeOff, Loader2, Check } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { sessionStatus } from '../../lib/status';
 import { highlightParts } from '../../lib/meetingSearch';
 
 export { default as Dialog } from './Dialog';
 export { useConfirmDialog } from './ConfirmDialog';
 export { default as Menu, MenuItem, MenuRadioItem, MenuLabel } from './Menu';
+export type { MenuTriggerProps } from './Menu';
 
 // ── HighlightedText — wraps matches in <mark> ─────────────────────────────────
 // `query` marks literal substrings; `terms` (search keys from searchSessions) marks whole
 // words that match, including stemmed forms, synonyms and corrected typos.
-export function HighlightedText({ text, query, terms }: { text?: any; query?: any; terms?: any }) {
+export interface HighlightedTextProps {
+  text?: string | null;
+  query?: string;
+  terms?: ReadonlySet<string>;
+}
+
+export function HighlightedText({ text, query, terms }: HighlightedTextProps) {
   if (!text) return null;
   if (terms) {
     return highlightParts(text, terms).map((part, i) =>
@@ -19,7 +27,7 @@ export function HighlightedText({ text, query, terms }: { text?: any; query?: an
   }
   if (!query) return text;
   const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-  return parts.map((part: any, i: any) =>
+  return parts.map((part, i) =>
     part.toLowerCase() === query.toLowerCase()
       ? <mark key={i}>{part}</mark>
       : <React.Fragment key={i}>{part}</React.Fragment>
@@ -28,7 +36,12 @@ export function HighlightedText({ text, query, terms }: { text?: any; query?: an
 
 // ── ExpandingButton — icon at rest, labelled pill on hover/focus ──────────────
 // The label stays in the DOM (only clipped), so it's still the accessible name.
-export function ExpandingButton({ icon, label, className = '', ...rest }: { icon?: any; label?: any; className?: any; [key: string]: any }) {
+export interface ExpandingButtonProps extends React.ComponentPropsWithoutRef<'button'> {
+  icon: React.ReactNode;
+  label: React.ReactNode;
+}
+
+export function ExpandingButton({ icon, label, className = '', ...rest }: ExpandingButtonProps) {
   return (
     <button type="button" className={`icon-pill ${className}`} {...rest}>
       {icon}
@@ -38,9 +51,18 @@ export function ExpandingButton({ icon, label, className = '', ...rest }: { icon
 }
 
 // ── IconButton — icon-only buttons must carry an accessible label ─────────────
-export function IconButton({ label, children, className = '', pressed, ...rest }: { label?: any; children?: any; className?: any; pressed?: any; [key: string]: any }) {
+export interface IconButtonProps extends React.ComponentPropsWithoutRef<'button'> {
+  label: string;
+  pressed?: boolean;
+}
+
+export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  { label, children, className = '', pressed, ...rest },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type="button"
       aria-label={label}
       title={label}
@@ -51,10 +73,19 @@ export function IconButton({ label, children, className = '', pressed, ...rest }
       {children}
     </button>
   );
-}
+});
 
 // ── Switch ───────────────────────────────────────────────────────────────────
-export function Switch({ checked, onChange, label, id, disabled }: { checked?: any; onChange?: any; label?: any; id?: any; disabled?: any }) {
+export interface SwitchProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  /** The accessible name. */
+  label: string;
+  id?: string;
+  disabled?: boolean;
+}
+
+export function Switch({ checked, onChange, label, id, disabled }: SwitchProps) {
   return (
     <button
       type="button"
@@ -81,14 +112,34 @@ export function Switch({ checked, onChange, label, id, disabled }: { checked?: a
 // ── SegmentedControl / Tabs — role="tablist" with arrow-key navigation ────────
 // `revealIcon`: show each option's icon only while it is selected, animating it in and out.
 // `iconOnly`: icons without text; each label becomes the button's accessible name and tooltip.
-export function SegmentedControl({
+export interface SegmentedOption<T extends string | number> {
+  value: T;
+  label: string;
+  icon?: LucideIcon;
+  count?: number | null;
+}
+
+export interface SegmentedControlProps<T extends string | number> {
+  options: Array<SegmentedOption<T>>;
+  value: T;
+  onChange: (value: T) => void;
+  label: string;
+  role?: 'tablist' | 'radiogroup';
+  size?: 'sm' | 'md';
+  revealIcon?: boolean;
+  iconOnly?: boolean;
+  disabled?: boolean;
+  className?: string;
+}
+
+export function SegmentedControl<T extends string | number>({
   options, value, onChange, label, role = 'tablist', size = 'md',
   revealIcon = false, iconOnly = false, disabled = false, className = '',
-}: { options?: any; value?: any; onChange?: any; label?: any; role?: any; size?: any; revealIcon?: any; iconOnly?: any; disabled?: any; className?: any }) {
-  const refs = useRef<any[]>([]);
+}: SegmentedControlProps<T>) {
+  const refs = useRef<Array<HTMLButtonElement | null>>([]);
   const isTabs = role === 'tablist';
 
-  const onKeyDown = (e: any, idx: any) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, idx: number) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return;
     e.preventDefault();
     let next = idx;
@@ -106,7 +157,7 @@ export function SegmentedControl({
       aria-label={label}
       className={`inline-flex items-center gap-4 rounded-full border border-ink p-4 ${className}`}
     >
-      {options.map((opt: any, idx: any) => {
+      {options.map((opt, idx) => {
         const selected = opt.value === value;
         const Icon = opt.icon;
         return (
@@ -157,21 +208,48 @@ export function SegmentedControl({
 }
 
 // ── TextField / PasswordField — label is always tied to its input ────────────
-export function TextField({ label, hint, id, className = '', multiline = false, ...rest }: { label?: any; hint?: any; id?: any; className?: any; multiline?: any; [key: string]: any }) {
+interface FieldChromeProps {
+  label?: React.ReactNode;
+  hint?: React.ReactNode;
+}
+
+export type TextFieldProps =
+  | (FieldChromeProps & { multiline?: false } & React.ComponentPropsWithoutRef<'input'>)
+  | (FieldChromeProps & { multiline: true } & React.ComponentPropsWithoutRef<'textarea'>);
+
+export function TextField({ label, hint, id, className = '', multiline = false, ...rest }: TextFieldProps) {
   const autoId = useId();
   const fieldId = id || autoId;
   const hintId = hint ? `${fieldId}-hint` : undefined;
-  const Tag = multiline ? 'textarea' : 'input';
   return (
     <div className={className}>
       {label && <label htmlFor={fieldId} className="label">{label}</label>}
-      <Tag id={fieldId} aria-describedby={hintId} className="input" {...rest} />
+      {multiline ? (
+        <textarea
+          id={fieldId}
+          aria-describedby={hintId}
+          className="input"
+          {...(rest as React.ComponentPropsWithoutRef<'textarea'>)}
+        />
+      ) : (
+        <input
+          id={fieldId}
+          aria-describedby={hintId}
+          className="input"
+          {...(rest as React.ComponentPropsWithoutRef<'input'>)}
+        />
+      )}
       {hint && <p id={hintId} className="hint mt-8">{hint}</p>}
     </div>
   );
 }
 
-export function PasswordField({ label, hint, id, className = '', ...rest }: { label?: any; hint?: any; id?: any; className?: any; [key: string]: any }) {
+export interface PasswordFieldProps extends React.ComponentPropsWithoutRef<'input'> {
+  label?: React.ReactNode;
+  hint?: React.ReactNode;
+}
+
+export function PasswordField({ label, hint, id, className = '', ...rest }: PasswordFieldProps) {
   const autoId = useId();
   const fieldId = id || autoId;
   const hintId = hint ? `${fieldId}-hint` : undefined;
@@ -205,22 +283,26 @@ export function PasswordField({ label, hint, id, className = '', ...rest }: { la
 }
 
 // ── Status visuals ───────────────────────────────────────────────────────────
-export function StatusDot({ tone, className = '' }: { tone?: any; className?: any }) {
+export type DotTone = 'live' | 'busy' | 'ok' | 'error' | 'neutral' | 'warning' | 'ink';
+
+const DOT_CLASS: Record<Exclude<DotTone, 'busy'>, string> = {
+  live: 'dot-signal dot-live',
+  error: 'dot-signal',
+  ok: 'dot-mint',
+  neutral: 'dot-graphite',
+  warning: 'dot-sunshine',
+  ink: 'dot-ink',
+};
+
+export function StatusDot({ tone, className = '' }: { tone?: DotTone; className?: string }) {
   if (tone === 'busy') {
     return <Loader2 size={14} strokeWidth={2} className={`spinner text-graphite flex-shrink-0 ${className}`} aria-hidden="true" />;
   }
-  const cls = ({
-    live: 'dot-signal dot-live',
-    error: 'dot-signal',
-    ok: 'dot-mint',
-    neutral: 'dot-graphite',
-    warning: 'dot-sunshine',
-    ink: 'dot-ink',
-  } as any)[tone] || 'dot-graphite';
+  const cls = (tone && DOT_CLASS[tone]) || 'dot-graphite';
   return <span className={`dot ${cls} ${className}`} aria-hidden="true" />;
 }
 
-export function StatusPill({ status, label, tone }: { status?: any; label?: any; tone?: any }) {
+export function StatusPill({ status, label, tone }: { status?: string | null; label?: string; tone?: DotTone }) {
   const info = status ? sessionStatus(status) : { label, tone };
   return (
     <span className="pill">
@@ -232,7 +314,17 @@ export function StatusPill({ status, label, tone }: { status?: any; label?: any;
 
 // ── Save bar — sticky "Unsaved changes · Discard · Save" ─────────────────────
 // Render it while there are unsaved edits (and briefly after a save, with `saved`).
-export function SaveBar({ dirty, saving, saved, onSave, onDiscard, saveLabel = 'Save changes', className = '' }: { dirty?: any; saving?: any; saved?: any; onSave?: any; onDiscard?: any; saveLabel?: any; className?: any }) {
+export interface SaveBarProps {
+  dirty: boolean;
+  saving: boolean;
+  saved: boolean;
+  onSave: () => void;
+  onDiscard: () => void;
+  saveLabel?: string;
+  className?: string;
+}
+
+export function SaveBar({ dirty, saving, saved, onSave, onDiscard, saveLabel = 'Save changes', className = '' }: SaveBarProps) {
   return (
     <div
       className={`sticky bottom-24 floating rounded-card px-24 py-16 flex flex-wrap items-center justify-between gap-16 fade-in ${className}`}
@@ -272,7 +364,15 @@ export function SaveBar({ dirty, saving, saved, onSave, onDiscard, saveLabel = '
 }
 
 // ── Numbered Step Badge ──────────────────────────────────────────────────────
-export function StepBadge({ n, children, done = false, as: Tag = 'span', className = '' }: { n?: any; children?: any; done?: any; as?: any; className?: any }) {
+export interface StepBadgeProps {
+  n: number;
+  children?: React.ReactNode;
+  done?: boolean;
+  as?: React.ElementType;
+  className?: string;
+}
+
+export function StepBadge({ n, children, done = false, as: Tag = 'span', className = '' }: StepBadgeProps) {
   return (
     <Tag className={`step-badge ${done ? 'step-badge-done' : ''} ${className}`}>
       <span className="step-badge-num" aria-hidden={done ? 'true' : undefined}>
@@ -285,7 +385,14 @@ export function StepBadge({ n, children, done = false, as: Tag = 'span', classNa
 }
 
 // ── Page header ──────────────────────────────────────────────────────────────
-export function PageHeader({ title, subtitle, actions, eyebrow }: { title?: any; subtitle?: any; actions?: any; eyebrow?: any }) {
+export interface PageHeaderProps {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  actions?: React.ReactNode;
+  eyebrow?: React.ReactNode;
+}
+
+export function PageHeader({ title, subtitle, actions, eyebrow }: PageHeaderProps) {
   return (
     <header className="flex flex-wrap items-end justify-between gap-16 mb-48">
       <div className="min-w-0">
@@ -299,7 +406,7 @@ export function PageHeader({ title, subtitle, actions, eyebrow }: { title?: any;
 }
 
 // ── Bordered Avatar Tile ─────────────────────────────────────────────────────
-export function AvatarTile({ children, size = 48, className = '' }: { children?: any; size?: any; className?: any }) {
+export function AvatarTile({ children, size = 48, className = '' }: { children?: React.ReactNode; size?: number; className?: string }) {
   return (
     <span
       className={`tile inline-flex items-center justify-center flex-shrink-0 text-ink font-medium ${className}`}
@@ -311,7 +418,15 @@ export function AvatarTile({ children, size = 48, className = '' }: { children?:
 }
 
 // ── CTA Block / empty state ──────────────────────────────────────────────────
-export function EmptyState({ icon, title, message, action, compact = false }: { icon?: any; title?: any; message?: any; action?: any; compact?: any }) {
+export interface EmptyStateProps {
+  icon?: React.ReactNode;
+  title: React.ReactNode;
+  message?: React.ReactNode;
+  action?: React.ReactNode;
+  compact?: boolean;
+}
+
+export function EmptyState({ icon, title, message, action, compact = false }: EmptyStateProps) {
   return (
     <div className={`flex flex-col items-center text-center fade-in ${compact ? 'py-48' : 'py-64'}`}>
       {icon && <AvatarTile size={compact ? 48 : 64}>{icon}</AvatarTile>}
@@ -328,12 +443,12 @@ export function EmptyState({ icon, title, message, action, compact = false }: { 
 }
 
 // ── Skeleton ─────────────────────────────────────────────────────────────────
-export function Skeleton({ className = '' }: { className?: any }) {
+export function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`bg-ink/[0.07] animate-pulse rounded-input ${className}`} aria-hidden="true" />;
 }
 
 // ── ProgressBar ──────────────────────────────────────────────────────────────
-export function ProgressBar({ value, label }: { value?: any; label?: any }) {
+export function ProgressBar({ value, label }: { value?: number; label: string }) {
   const pct = Math.max(0, Math.min(100, Math.round(value || 0)));
   return (
     <div
@@ -350,7 +465,14 @@ export function ProgressBar({ value, label }: { value?: any; label?: any }) {
 }
 
 // ── Checkbox (visual) ────────────────────────────────────────────────────────
-export function CheckBox({ checked, onChange, label, children }: { checked?: any; onChange?: any; label?: any; children?: any }) {
+export interface CheckBoxProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label?: string;
+  children?: React.ReactNode;
+}
+
+export function CheckBox({ checked, onChange, label, children }: CheckBoxProps) {
   return (
     <button
       type="button"

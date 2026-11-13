@@ -15,13 +15,14 @@ import {
   reduceTick,
   dismissMeeting,
 } from '../electron/detection/meeting-rules';
+import type { DetectorEvent, TickInput } from '../electron/detection/meeting-rules';
 
 const MEET_WINDOW = { exe: 'chrome.exe', title: 'Meet - abc-defg-hij - Camera or microphone recording - Google Chrome', bounds: { x: 0, y: 0, width: 1200, height: 800 } };
 const OTHER_CHROME = { exe: 'chrome.exe', title: 'Inbox - Gmail - Google Chrome' };
 
 // Runs ticks `stepMs` apart, returning the final state and every event emitted.
-function run(ticks: any, { start = 0, stepMs = 1500, state = createDetectorState() } = {}) {
-  const events = [];
+function run(ticks: TickInput[], { start = 0, stepMs = 1500, state = createDetectorState() } = {}) {
+  const events: DetectorEvent[] = [];
   let now = start;
   for (const tick of ticks) {
     const result = reduceTick(state, { now, ...tick });

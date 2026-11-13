@@ -4,9 +4,22 @@ import GoogleCalendarIcon from '../../GoogleCalendarIcon';
 import { AvatarTile, Dialog, PasswordField, SegmentedControl, StatusDot, TextField } from '../../ui/index';
 import { GuideSteps, KeyGuide, RadioCardGroup } from '../SettingsParts';
 import { ICS_GUIDES } from '../data';
+import { errorMessage } from '../../../lib/errors';
+import type { CalendarAdded } from '../types';
 import type { CalendarAddInput } from '@shared';
 
-const TYPES = [
+type CalendarKind = 'ics' | 'google';
+type Step = 'type' | CalendarKind;
+
+interface CalendarTypeOption {
+  id: CalendarKind;
+  name: string;
+  badge: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+const TYPES: CalendarTypeOption[] = [
   {
     id: 'ics',
     name: 'Calendar link (ICS)',
@@ -28,16 +41,24 @@ const TYPES = [
  * link (or signs in) before anything is saved, so a calendar in the list always worked once.
  * `googleClient` ({ clientId, name }) prefills the client ID from a Google account already added.
  */
-export default function AddCalendarDialog({ open, onClose, onAdded, googleClient, syncPhrase = 'every 5 minutes' }: { open?: any; onClose?: any; onAdded?: any; googleClient?: any; syncPhrase?: any }) {
-  const [step, setStep] = useState('type');
-  const [type, setType] = useState('ics');
+interface AddCalendarDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onAdded: (result: CalendarAdded) => void;
+  googleClient?: { clientId: string; name: string } | null;
+  syncPhrase?: string;
+}
+
+export default function AddCalendarDialog({ open, onClose, onAdded, googleClient, syncPhrase = 'every 5 minutes' }: AddCalendarDialogProps) {
+  const [step, setStep] = useState<Step>('type');
+  const [type, setType] = useState<CalendarKind>('ics');
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [guide, setGuide] = useState(ICS_GUIDES[0].id);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Start fresh each time it opens.
   useEffect(() => {
@@ -72,8 +93,8 @@ export default function AddCalendarDialog({ open, onClose, onAdded, googleClient
       } else if (!result.cancelled) {
         setError(result.error || 'Couldn’t add the calendar.');
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -136,19 +157,19 @@ export default function AddCalendarDialog({ open, onClose, onAdded, googleClient
     );
   }
 
-  const titles = {
+  const titles: Record<Step, string> = {
     type: 'Add a calendar',
     ics: 'Add a calendar link',
     google: 'Connect a Google account',
   };
-  const descriptions = {
+  const descriptions: Record<Step, string> = {
     type: 'Upcoming meetings show on your Dashboard, with a prompt to record when one starts.',
     ics: `MeetMind checks the link now, then refreshes it ${syncPhrase}.`,
     google: 'Sign-in opens in your browser. MeetMind only asks to read your calendar.',
   };
 
   return (
-    <Dialog open={open} onClose={close} title={(titles as any)[step]} description={(descriptions as any)[step]} footer={footer} dismissible={!busy || step === 'google'}>
+    <Dialog open={open} onClose={close} title={titles[step]} description={descriptions[step]} footer={footer} dismissible={!busy || step === 'google'}>
       {step === 'type' && (
         <RadioCardGroup
           label="Calendar type"
@@ -156,7 +177,7 @@ export default function AddCalendarDialog({ open, onClose, onAdded, googleClient
           value={type}
           onChange={setType}
           className="space-y-16"
-          renderOption={(t: any) => (
+          renderOption={(t) => (
             <span className="flex items-start gap-16">
               <AvatarTile size={40}>{t.icon}</AvatarTile>
               <span className="flex-1 min-w-0 block">
@@ -177,7 +198,7 @@ export default function AddCalendarDialog({ open, onClose, onAdded, googleClient
             id="calendar-ics-url"
             label="Calendar link"
             value={url}
-            onChange={(e: any) => setUrl(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUrl(e.target.value)}
             placeholder="https://… or webcal://…"
             hint="Keep it private: anyone with this link can see the calendar’s events."
             disabled={busy}
@@ -186,7 +207,7 @@ export default function AddCalendarDialog({ open, onClose, onAdded, googleClient
             id="calendar-ics-name"
             label="Name (optional)"
             value={name}
-            onChange={(e: any) => setName(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
             placeholder="Taken from the calendar if left empty"
             maxLength={60}
             disabled={busy}
@@ -216,7 +237,7 @@ export default function AddCalendarDialog({ open, onClose, onAdded, googleClient
               id="calendar-google-client-id"
               label="OAuth client ID"
               value={clientId}
-              onChange={(e: any) => setClientId(e.target.value.trim())}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setClientId(e.target.value.trim())}
               placeholder="xxxxxxxxx.apps.googleusercontent.com"
               disabled={busy}
             />
@@ -224,7 +245,7 @@ export default function AddCalendarDialog({ open, onClose, onAdded, googleClient
               id="calendar-google-secret"
               label="OAuth client secret"
               value={clientSecret}
-              onChange={(e: any) => setClientSecret(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setClientSecret(e.target.value)}
               placeholder={reusesSecret ? 'Saved' : 'GOCSPX-...'}
               hint={reusesSecret ? `Leave empty to reuse the secret saved with ${googleClient.name}.` : undefined}
               disabled={busy}
@@ -235,7 +256,7 @@ export default function AddCalendarDialog({ open, onClose, onAdded, googleClient
             id="calendar-google-name"
             label="Name (optional)"
             value={name}
-            onChange={(e: any) => setName(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
             placeholder="Your Google email if left empty"
             maxLength={60}
             disabled={busy}

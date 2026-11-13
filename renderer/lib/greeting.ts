@@ -1,5 +1,5 @@
 /** Pick one random element from an array. */
-function pick(arr: any) {
+function pick(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
@@ -83,7 +83,7 @@ export function greeting() {
   ];
 
   // ── Build the candidate pool ───────────────────────────────────────
-  let pool;
+  let pool: string[];
   if (hour < 6) pool = [...lateNight];
   else if (hour < 9) pool = [...earlyMorning, ...morning];
   else if (hour < 12) pool = [...morning];

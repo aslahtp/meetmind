@@ -5,8 +5,17 @@ import { SettingsGroup, ExternalLink } from './SettingsParts';
 import { isMac, isLinux } from '../../lib/os';
 import MacPermissions from './MacPermissions';
 import LinuxAudio from './LinuxAudio';
+import { errorMessage } from '../../lib/errors';
+import type { FfmpegBinaryInfo, FfmpegInstallProgress, UpdaterState, UpdaterStatus } from '@shared';
 
-const BINARIES = [
+/** What the System tab shows of each FFmpeg binary; the fields a failed check lacks are optional. */
+interface FfmpegStatus {
+  ffmpeg: Partial<FfmpegBinaryInfo>;
+  ffprobe: Partial<FfmpegBinaryInfo>;
+  error?: string;
+}
+
+const BINARIES: { key: 'ffmpeg' | 'ffprobe'; label: string; desc: string }[] = [
   { key: 'ffmpeg', label: 'ffmpeg', desc: 'Audio capture & conversion' },
   { key: 'ffprobe', label: 'ffprobe', desc: 'Media duration detection' },
 ];
@@ -14,7 +23,10 @@ const BINARIES = [
 // Opening the System tab re-checks for updates, but not more than once a minute.
 const UPDATE_RECHECK_MS = 60 * 1000;
 
-const INSTALL_STAGE_HINT = {
+// While one of these is going on, a new check would hide its Download / Restart button.
+const UPDATE_IN_PROGRESS: UpdaterStatus[] = ['checking', 'available', 'downloading', 'downloaded'];
+
+const INSTALL_STAGE_HINT: Record<string, string> = {
   download: `Downloading FFmpeg (~${isLinux ? 150 : 80} MB)…`,
   extract: 'Extracting archive…',
   copy: 'Installing…',
@@ -27,9 +39,15 @@ const PACKAGE_MANAGER = isMac
     ? { title: 'Or install with your package manager', command: 'sudo apt install ffmpeg', hint: 'Run in a terminal (Fedora: sudo dnf install ffmpeg; Arch: sudo pacman -S ffmpeg), then check again.' }
     : { title: 'Or install with Windows Package Manager', command: 'winget install Gyan.FFmpeg', hint: 'Run in PowerShell or Command Prompt, then restart MeetMind and check again.' };
 
-const SOURCE_LABEL = { bundled: '(bundled)', installed: '(installed)', system: '(system)' };
+const SOURCE_LABEL: Record<string, string> = { bundled: '(bundled)', installed: '(installed)', system: '(system)' };
 
-function StatusLine({ tone, children, className = '' }: { tone?: any; children?: any; className?: any }) {
+interface StatusLineProps {
+  tone: React.ComponentProps<typeof StatusDot>['tone'];
+  children?: React.ReactNode;
+  className?: string;
+}
+
+function StatusLine({ tone, children, className = '' }: StatusLineProps) {
   return (
     <p className={`flex items-start gap-8 text-caption ${tone === 'error' ? 'text-signal' : 'text-ink'} ${className}`}>
       <StatusDot tone={tone} className="mt-4" />
@@ -38,15 +56,20 @@ function StatusLine({ tone, children, className = '' }: { tone?: any; children?:
   );
 }
 
-export default function SystemSection({ active }: { active?: any }) {
+interface SystemSectionProps {
+  /** Whether the System tab is showing. */
+  active: boolean;
+}
+
+export default function SystemSection({ active }: SystemSectionProps) {
   const [appVersion, setAppVersion] = useState(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '');
-  const [updaterStatus, setUpdaterStatus] = useState<any>(null);
+  const [updaterStatus, setUpdaterStatus] = useState<UpdaterState | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [downloadingUpdate, setDownloadingUpdate] = useState(false);
-  const [ffmpegStatus, setFfmpegStatus] = useState<any>(null); // null | { ffmpeg, ffprobe }
+  const [ffmpegStatus, setFfmpegStatus] = useState<FfmpegStatus | null>(null);
   const [checkingFfmpeg, setCheckingFfmpeg] = useState(false);
   const [installingFfmpeg, setInstallingFfmpeg] = useState(false);
-  const [ffmpegInstallProgress, setFfmpegInstallProgress] = useState<any>(null); // { stage, percent, message }
+  const [ffmpegInstallProgress, setFfmpegInstallProgress] = useState<FfmpegInstallProgress | null>(null);
   const autoCheckedRef = useRef(false);
 
   useEffect(() => {
@@ -94,8 +117,8 @@ export default function SystemSection({ active }: { active?: any }) {
     try {
       const result = await window.meetmind.ffmpeg.check();
       setFfmpegStatus(result);
-    } catch (err: any) {
-      setFfmpegStatus({ ffmpeg: { found: false }, ffprobe: { found: false }, error: err.message });
+    } catch (err) {
+      setFfmpegStatus({ ffmpeg: { found: false }, ffprobe: { found: false }, error: errorMessage(err) });
     } finally {
       setCheckingFfmpeg(false);
     }
@@ -120,8 +143,8 @@ export default function SystemSection({ active }: { active?: any }) {
         const checked = await window.meetmind.ffmpeg.check();
         setFfmpegStatus(checked);
       }
-    } catch (err: any) {
-      setFfmpegInstallProgress({ stage: 'error', percent: 0, message: err.message });
+    } catch (err) {
+      setFfmpegInstallProgress({ stage: 'error', percent: 0, message: errorMessage(err) });
     } finally {
       setInstallingFfmpeg(false);
     }
@@ -145,13 +168,13 @@ export default function SystemSection({ active }: { active?: any }) {
     if (!active || !window.meetmind?.updater) return;
     let cancelled = false;
     (async () => {
-      let status = null;
+      let status: UpdaterState | null = null;
       try {
         status = await window.meetmind.updater.getStatus();
       } catch {}
       if (cancelled) return;
       if (status) setUpdaterStatus(status);
-      if (['checking', 'available', 'downloading', 'downloaded'].includes(status?.status as string)) return;
+      if (status && UPDATE_IN_PROGRESS.includes(status.status)) return;
       const last = status?.lastCheckTime ? new Date(status.lastCheckTime).getTime() : 0;
       if (Date.now() - last < UPDATE_RECHECK_MS) return;
       handleCheckUpdates();
@@ -165,7 +188,7 @@ export default function SystemSection({ active }: { active?: any }) {
     try {
       const result = await window.meetmind.updater.download();
       if (result && result.success === false) {
-        setUpdaterStatus((prev: any) => ({ ...prev, status: 'error', errorMessage: result.error }));
+        setUpdaterStatus((prev) => (prev ? { ...prev, status: 'error', errorMessage: result.error ?? null } : prev));
       }
     } finally {
       setDownloadingUpdate(false);
@@ -223,7 +246,7 @@ export default function SystemSection({ active }: { active?: any }) {
                     </div>
                     <span className="text-caption text-graphite tabular flex-shrink-0">
                       {stat?.found
-                        ? `${stat.version && stat.version !== 'unknown' ? `${stat.version} ` : ''}${(SOURCE_LABEL as any)[stat.source] || '(system)'}`
+                        ? `${stat.version && stat.version !== 'unknown' ? `${stat.version} ` : ''}${(stat.source && SOURCE_LABEL[stat.source]) || '(system)'}`
                         : 'Not found'}
                     </span>
                   </div>
@@ -266,8 +289,8 @@ export default function SystemSection({ active }: { active?: any }) {
                       <span className="text-caption text-graphite tabular">{ffmpegInstallProgress?.percent ?? 0}%</span>
                     </div>
                     <ProgressBar value={ffmpegInstallProgress?.percent ?? 0} label="FFmpeg install progress" />
-                    {(INSTALL_STAGE_HINT as any)[ffmpegInstallProgress?.stage] && (
-                      <p className="hint">{(INSTALL_STAGE_HINT as any)[ffmpegInstallProgress.stage]}</p>
+                    {ffmpegInstallProgress && INSTALL_STAGE_HINT[ffmpegInstallProgress.stage] && (
+                      <p className="hint">{INSTALL_STAGE_HINT[ffmpegInstallProgress.stage]}</p>
                     )}
                   </>
                 )}
@@ -381,7 +404,7 @@ export default function SystemSection({ active }: { active?: any }) {
               <span className="text-caption text-graphite tabular">{progress?.percent ?? 0}%</span>
             </div>
             <ProgressBar value={progress?.percent ?? 0} label="Update download progress" />
-            {progress?.total > 0 && (
+            {progress && progress.total > 0 && (
               <p className="hint tabular">
                 {(progress.transferred / 1024 / 1024).toFixed(1)} MB / {(progress.total / 1024 / 1024).toFixed(1)} MB
                 {progress.bytesPerSecond > 0 && ` · ${(progress.bytesPerSecond / 1024 / 1024).toFixed(1)} MB/s`}

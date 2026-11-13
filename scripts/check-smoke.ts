@@ -12,20 +12,36 @@ import fs from 'fs';
 
 const MARKER = 'MEETMIND_SMOKE ';
 
-function parseReport(text: any) {
-  const line = text.split(/\r?\n/).find((l: any) => l.startsWith(MARKER));
-  if (!line) return null;
-  return JSON.parse(line.slice(MARKER.length));
+/** One entry of the report electron/smoke.ts prints. */
+type SmokeCheck =
+  | { name: string; ok: true; detail: unknown }
+  | { name: string; ok: false; error?: string };
+
+/** The JSON after `MEETMIND_SMOKE ` in the app's output (written by electron/smoke.ts). */
+interface SmokeReport {
+  ok: boolean;
+  version: string;
+  platform: string;
+  arch: string;
+  packaged: boolean;
+  checks: SmokeCheck[];
 }
 
-function detailOf(check: any) {
+function parseReport(text: string): SmokeReport | null {
+  const line = text.split(/\r?\n/).find((l) => l.startsWith(MARKER));
+  if (!line) return null;
+  // The app's own output, produced by electron/smoke.ts, so its shape is not re-validated.
+  return JSON.parse(line.slice(MARKER.length)) as SmokeReport;
+}
+
+function detailOf(check: SmokeCheck) {
   if (!check.ok) return check.error || 'failed';
   if (check.detail == null) return '';
   return JSON.stringify(check.detail).replace(/\|/g, '\\|');
 }
 
-function summaryMarkdown(report: any, label: any) {
-  const rows = report.checks.map((c: any) => `| ${c.ok ? '✅' : '❌'} | ${c.name} | ${detailOf(c)} |`);
+function summaryMarkdown(report: SmokeReport, label?: string) {
+  const rows = report.checks.map((c) => `| ${c.ok ? '✅' : '❌'} | ${c.name} | ${detailOf(c)} |`);
   return [
     `### Smoke test${label ? `: ${label}` : ''} — ${report.ok ? 'passed' : 'FAILED'}`,
     '',
@@ -53,7 +69,7 @@ function main() {
   }
 
   if (!report.ok) {
-    const failed = report.checks.filter((c: any) => !c.ok).map((c: any) => c.name).join(', ');
+    const failed = report.checks.filter((c) => !c.ok).map((c) => c.name).join(', ');
     console.error(`::error::Smoke test failed: ${failed}`);
     process.exit(1);
   }

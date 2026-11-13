@@ -1,6 +1,6 @@
 // User-facing hints for recordings that come out silent, per OS. Pure (no electron import).
 
-const HINTS = {
+const HINTS: Record<string, string[]> & { win32: string[] } = {
   win32: [
     'Allow microphone access: Windows Settings → Privacy & security → Microphone → turn on "Let desktop apps access your microphone".',
     'Check the microphone level: Windows Sound → Recording → your microphone → Properties → Levels, set to 80–100 and unmute.',
@@ -21,8 +21,8 @@ const HINTS = {
 const TEST_HINT = 'To test capture, play a video while recording for a few seconds.';
 
 /** Hints for a silent recording on `platform` (defaults to the Windows wording). */
-function silenceHints(platform: any) {
-  return [...((HINTS as any)[platform] || HINTS.win32), TEST_HINT];
+function silenceHints(platform: string): string[] {
+  return [...(HINTS[platform] || HINTS.win32), TEST_HINT];
 }
 
 export { silenceHints };

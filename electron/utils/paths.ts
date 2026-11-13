@@ -11,7 +11,7 @@
 import fs from 'fs';
 import path from 'path';
 
-function findAppRoot(startDir: any) {
+function findAppRoot(startDir: string) {
   let dir = startDir;
   for (;;) {
     if (fs.existsSync(path.join(dir, 'package.json'))) return dir;

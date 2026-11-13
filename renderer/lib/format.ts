@@ -1,6 +1,9 @@
 // Shared date / time / duration formatting for the renderer.
 
-export function formatDate(isoString: any, { year = true } = {}) {
+/** Anything `new Date()` accepts: an ISO string, a timestamp or a Date. */
+type DateInput = string | number | Date;
+
+export function formatDate(isoString: DateInput | null | undefined, { year = true }: { year?: boolean } = {}) {
   if (!isoString) return '';
   const d = new Date(isoString);
   return d.toLocaleDateString('en-US', {
@@ -11,14 +14,14 @@ export function formatDate(isoString: any, { year = true } = {}) {
   });
 }
 
-export function formatTime(isoString: any) {
+export function formatTime(isoString: DateInput | null | undefined) {
   if (!isoString) return '';
   const d = new Date(isoString);
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
 // 75 → "1m 15s", 4000 → "1h 6m"
-export function formatDurationSeconds(secs: any) {
+export function formatDurationSeconds(secs: number | null | undefined) {
   if (secs == null) return null;
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
@@ -28,7 +31,7 @@ export function formatDurationSeconds(secs: any) {
 }
 
 // Input in minutes: 75 → "1h 15m", 42 → "42m"
-export function formatMinutes(totalMinutes: any) {
+export function formatMinutes(totalMinutes: number | null | undefined) {
   const mins = Math.round(totalMinutes || 0);
   const h = Math.floor(mins / 60);
   const m = mins % 60;
@@ -36,7 +39,7 @@ export function formatMinutes(totalMinutes: any) {
 }
 
 // Stopwatch style: 75 → "01:15", 3725 → "1:02:05"
-export function formatClock(totalSeconds: any) {
+export function formatClock(totalSeconds: number | null | undefined) {
   const secs = Math.max(0, Math.floor(totalSeconds || 0));
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -46,11 +49,11 @@ export function formatClock(totalSeconds: any) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-export function isSameDay(a: any, b: any) {
+export function isSameDay(a: DateInput, b: DateInput) {
   return new Date(a).toDateString() === new Date(b).toDateString();
 }
 
-export function dayLabel(isoString: any) {
+export function dayLabel(isoString: DateInput) {
   const today = new Date();
   const tomorrow = new Date();
   tomorrow.setDate(today.getDate() + 1);
@@ -59,7 +62,14 @@ export function dayLabel(isoString: any) {
   return formatDate(isoString, { year: false });
 }
 
-export function getSessionDuration(session: any) {
+/** The session fields a duration is read from. */
+export interface SessionTiming {
+  duration_seconds?: number | null;
+  started_at?: string | null;
+  ended_at?: string | null;
+}
+
+export function getSessionDuration(session: SessionTiming): number | null {
   if (session.duration_seconds != null) return session.duration_seconds;
   if (session.started_at && session.ended_at) {
     const start = new Date(session.started_at).getTime();
@@ -69,7 +79,7 @@ export function getSessionDuration(session: any) {
   return null;
 }
 
-export function sessionDisplayTitle(session: any) {
+export function sessionDisplayTitle(session: { title?: string | null; started_at?: string | null }) {
   const title = session.title?.trim();
   if (title && title !== 'Untitled Meeting') return title;
   const d = session.started_at ? new Date(session.started_at) : null;
@@ -77,7 +87,7 @@ export function sessionDisplayTitle(session: any) {
   return 'Untitled Meeting';
 }
 
-export function initials(name: any) {
+export function initials(name: unknown) {
   if (!name) return '?';
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
@@ -87,7 +97,7 @@ export function initials(name: any) {
 
 // STT services can label speakers with a bare letter or number (AssemblyAI uses "A", "B");
 // older sessions stored those as-is, so normalize them to "Speaker A" for display.
-export function speakerName(raw: any) {
+export function speakerName(raw: unknown) {
   const label = raw != null ? String(raw).trim() : '';
   if (!label) return 'Speaker';
   if (/^([A-Z]|\d+)$/.test(label)) return `Speaker ${label}`;
@@ -95,7 +105,7 @@ export function speakerName(raw: any) {
 }
 
 // File sizes in binary units: 0 → "0 B", 839680 → "820 KB", 1503238554 → "1.4 GB"
-export function formatBytes(bytes: any) {
+export function formatBytes(bytes: unknown) {
   const n = Number(bytes);
   if (!Number.isFinite(n) || n <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -110,6 +120,6 @@ export function formatBytes(bytes: any) {
 }
 
 // "1 recording" / "3 recordings"
-export function plural(count: any, word: any) {
+export function plural(count: number, word: string) {
   return `${count} ${word}${count === 1 ? '' : 's'}`;
 }

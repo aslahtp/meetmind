@@ -1,4 +1,5 @@
-import { Sparkles } from 'lucide-react';
+import type { ComponentType } from 'react';
+import { Sparkles, type LucideIcon } from 'lucide-react';
 import { useApp } from '../../../lib/app-context';
 import GoogleCloudIcon from '../../GoogleCloudIcon';
 import SarvamIcon from '../../SarvamIcon';
@@ -9,7 +10,10 @@ import ClaudeIcon from '../../ClaudeIcon';
 
 // Maps a provider descriptor's `icon` id to a component. Unknown ids get a generic icon,
 // so a new provider works before its artwork is added.
-const ICONS = {
+/** A provider's icon: its own artwork, or the generic Lucide one. Both take `size`. */
+export type ProviderIcon = ComponentType<{ size?: number }> | LucideIcon;
+
+const ICONS: Record<string, ProviderIcon> = {
   'google-cloud': GoogleCloudIcon,
   sarvam: SarvamIcon,
   assemblyai: AssemblyAiIcon,
@@ -18,8 +22,8 @@ const ICONS = {
   claude: ClaudeIcon,
 };
 
-export function providerIcon(iconId: any) {
-  return (ICONS as any)[iconId] || Sparkles;
+export function providerIcon(iconId: string | undefined): ProviderIcon {
+  return (iconId && ICONS[iconId]) || Sparkles;
 }
 
 /** Icon of the note-generation provider selected in Settings (generic until providers load). */

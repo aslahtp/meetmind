@@ -1,6 +1,6 @@
 // Downloads, verifies and unpacks the pinned FFmpeg build for a platform/arch
-// (electron/audio/ffmpeg-sources.js) into a folder. Shared by the in-app installer and by
-// scripts/fetch-ffmpeg.js (CI and release builds), so both always get the same checksum-verified
+// (electron/audio/ffmpeg-sources.ts) into a folder. Shared by the in-app installer and by
+// scripts/fetch-ffmpeg.ts (CI and release builds), so both always get the same checksum-verified
 // files. No electron import.
 
 import fs from 'fs';
@@ -11,12 +11,21 @@ import { ffmpegDownloads } from './ffmpeg-sources';
 import { binaryName } from './ffmpeg-path';
 
 /** How a pinned download is packed, from its URL: 'tar.xz' or 'zip'. */
-function archiveType(url: any) {
+/** What `fetchPinnedFfmpeg` reports through `onProgress`. */
+interface FetchProgress {
+  stage: 'download' | 'extract' | 'copy';
+  index: number;
+  count: number;
+  downloaded?: number;
+  total?: number;
+}
+
+function archiveType(url: string): 'tar.xz' | 'zip' {
   return /\.tar\.xz$/i.test(new URL(url).pathname) ? 'tar.xz' : 'zip';
 }
 
 // Unpacks with a tool the host OS ships: PowerShell on Windows, ditto on macOS, unzip elsewhere.
-function unzip(zipPath: any, destDir: any) {
+function unzip(zipPath: string, destDir: string) {
   if (process.platform === 'win32') {
     execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
       `Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${destDir}" -Force`], { timeout: 300_000 });
@@ -29,7 +38,7 @@ function unzip(zipPath: any, destDir: any) {
 
 // tar ships with Linux, macOS and Windows 10+. On Windows, call System32's bsdtar (which detects
 // xz itself) by path: a GNU tar from Git or MSYS earlier on PATH reads `C:` as a remote host.
-function untarXz(archivePath: any, destDir: any) {
+function untarXz(archivePath: string, destDir: string) {
   if (process.platform === 'win32') {
     const tar = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
     execFileSync(tar, ['-xf', archivePath, '-C', destDir], { timeout: 300_000 });
@@ -39,11 +48,11 @@ function untarXz(archivePath: any, destDir: any) {
 }
 
 // First file named `name` (case-insensitive) anywhere under `dir`.
-function findFile(dir: any, name: any) {
+function findFile(dir: string, name: string): string | null {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      const hit: any = findFile(full, name);
+      const hit = findFile(full, name);
       if (hit) return hit;
     } else if (entry.name.toLowerCase() === name.toLowerCase()) {
       return full;
@@ -58,13 +67,13 @@ function findFile(dir: any, name: any) {
  * before it is unpacked. `onProgress({ stage: 'download' | 'extract' | 'copy', index, count,
  * downloaded, total })` reports progress. Resolves with { ffmpeg, ffprobe } paths.
  */
-async function fetchPinnedFfmpeg({ platform, arch, outDir, tmpDir, onProgress, userAgent }: { platform: string; arch: string; outDir: string; tmpDir: string; onProgress?: (p: any) => void; userAgent?: string }) {
+async function fetchPinnedFfmpeg({ platform, arch, outDir, tmpDir, onProgress, userAgent }: { platform: string; arch: string; outDir: string; tmpDir: string; onProgress?: (progress: FetchProgress) => void; userAgent?: string }): Promise<Record<string, string>> {
   const downloads = ffmpegDownloads(platform, arch);
   if (!downloads) throw new Error(`No pinned FFmpeg build for ${platform} ${arch}`);
   fs.mkdirSync(tmpDir, { recursive: true });
   fs.mkdirSync(outDir, { recursive: true });
 
-  const installed = {};
+  const installed: Record<string, string> = {};
   for (const [index, { url, sha256, tools }] of downloads.entries()) {
     const type = archiveType(url);
     const archivePath = path.join(tmpDir, `download-${index}.${type}`);
@@ -88,10 +97,11 @@ async function fetchPinnedFfmpeg({ platform, arch, outDir, tmpDir, onProgress, u
       const dest = path.join(outDir, name);
       fs.copyFileSync(found, dest);
       if (platform !== 'win32') fs.chmodSync(dest, 0o755);
-      (installed as any)[tool] = dest;
+      installed[tool] = dest;
     }
   }
   return installed;
 }
 
+export type { FetchProgress };
 export { fetchPinnedFfmpeg, archiveType };

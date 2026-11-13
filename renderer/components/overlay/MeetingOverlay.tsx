@@ -4,6 +4,8 @@ import { IconButton, ProgressBar } from '../ui/index';
 import { formatClock } from '../../lib/format';
 import { useNow } from '../../lib/hooks';
 import { STAGE_LABELS } from '../../lib/status';
+import { errorMessage } from '../../lib/errors';
+import type { Outcome, OverlayMode, OverlayState, ProcessingProgressStage } from '@shared';
 
 // The floating meeting overlay: one compact row (brand tile, two-line status, one action, close).
 // Main owns all state and pushes it on overlay:state; this component only renders it, animates it
@@ -12,10 +14,13 @@ import { STAGE_LABELS } from '../../lib/status';
 // the window.
 
 const api = window.meetmindOverlay;
-const VISIBLE_MODES = new Set(['prompt', 'recording', 'ended', 'processing', 'complete', 'error']);
+const VISIBLE_MODES = new Set<OverlayMode>(['prompt', 'recording', 'ended', 'processing', 'complete', 'error']);
 const OPEN_CONTENT_DELAY_MS = 420;   // the row's content waits for the bar to unfold
 
-function applyTheme(theme: any) {
+/** open: showing; closing: the collapse animation is playing; closed: unmounted. */
+type Phase = 'open' | 'closing' | 'closed';
+
+function applyTheme(theme: 'light' | 'dark') {
   const root = document.documentElement;
   root.classList.toggle('dark', theme === 'dark');
   root.classList.toggle('light', theme !== 'dark');
@@ -23,7 +28,13 @@ function applyTheme(theme: any) {
 
 // The mic tile carries the state as a corner Status Dot (DESIGN.md), ringed in paper so it
 // reads against the tile's hairline; while processing, the mic becomes a spinner instead.
-function BrandMark({ dot, busy }: { dot?: any; busy?: any }) {
+interface BrandMarkProps {
+  /** Class of the corner Status Dot, e.g. 'dot-mint'. */
+  dot?: string;
+  busy: boolean;
+}
+
+function BrandMark({ dot, busy }: BrandMarkProps) {
   return (
     <span className="tile relative inline-flex items-center justify-center flex-shrink-0 w-32 h-32 text-ink" aria-hidden="true">
       {busy
@@ -39,7 +50,13 @@ function BrandMark({ dot, busy }: { dot?: any; busy?: any }) {
 }
 
 // Two short lines: the status, and a graphite detail line (or any node).
-function Status({ label, detail, title }: { label?: any; detail?: any; title?: any }) {
+interface StatusProps {
+  label: React.ReactNode;
+  detail?: React.ReactNode;
+  title?: string;
+}
+
+function Status({ label, detail, title }: StatusProps) {
   return (
     <div className="flex-1 min-w-0 leading-tight" title={title}>
       <p className="text-caption leading-tight font-medium text-ink whitespace-nowrap">{label}</p>
@@ -50,7 +67,12 @@ function Status({ label, detail, title }: { label?: any; detail?: any; title?: a
   );
 }
 
-function Close({ label = 'Hide', onClick }: { label?: any; onClick?: any }) {
+interface CloseProps {
+  label?: string;
+  onClick: () => void;
+}
+
+function Close({ label = 'Hide', onClick }: CloseProps) {
   return (
     <IconButton label={label} onClick={onClick}>
       <X size={14} strokeWidth={2} />
@@ -58,14 +80,19 @@ function Close({ label = 'Hide', onClick }: { label?: any; onClick?: any }) {
   );
 }
 
-function Elapsed({ startedAt }: { startedAt?: any }) {
+function Elapsed({ startedAt }: { startedAt?: number }) {
   const now = useNow(1000);
   return <span className="tabular">{formatClock(startedAt ? (now - startedAt) / 1000 : 0)}</span>;
 }
 
 // The row's content after the tile. Keyed by mode, so each state slides in; only the content
 // mounted as the bar opens waits for it to unfold.
-function Reveal({ opening, children }: { opening?: any; children?: any }) {
+interface RevealProps {
+  opening: boolean;
+  children?: React.ReactNode;
+}
+
+function Reveal({ opening, children }: RevealProps) {
   const [delay] = useState(() => (opening ? OPEN_CONTENT_DELAY_MS : 0));
   return (
     <div className="overlay-rest flex-1 min-w-0 flex items-center gap-8" style={{ animationDelay: `${delay}ms` }}>
@@ -77,26 +104,26 @@ function Reveal({ opening, children }: { opening?: any; children?: any }) {
 const Spinner = () => <Loader2 size={14} strokeWidth={2} className="spinner" aria-hidden="true" />;
 
 export default function MeetingOverlay() {
-  const [state, setState] = useState<any>(null);       // last visible state, kept while the bar collapses
-  const [phase, setPhase] = useState('closed');   // open | closing | closed
+  const [state, setState] = useState<OverlayState | null>(null);       // last visible state, kept while the bar collapses
+  const [phase, setPhase] = useState<Phase>('closed');
   const [openKey, setOpenKey] = useState(0);      // remounts the bar so the opening animation replays
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const cardRef = useRef<any>(null);
-  const phaseRef = useRef('closed');
+  const cardRef = useRef<HTMLElement>(null);
+  const phaseRef = useRef<Phase>('closed');
   const openedAtRef = useRef(0);
 
   // Horizontal drag state — the bar is centred by default; dragging sends deltas to main.
   const dragRef = useRef({ active: false, startX: 0 });
 
-  const onPointerDown = useCallback((e: any) => {
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
     // Let buttons / interactive children handle their own clicks.
-    if (e.target.closest('button, [role="button"]')) return;
+    if ((e.target as Element).closest('button, [role="button"]')) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = { active: true, startX: e.screenX };
   }, []);
 
-  const onPointerMove = useCallback((e: any) => {
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
     const d = dragRef.current;
     if (!d.active) return;
     const delta = e.screenX - d.startX;
@@ -106,19 +133,19 @@ export default function MeetingOverlay() {
     }
   }, []);
 
-  const onPointerUp = useCallback((e: any) => {
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
     if (!dragRef.current.active) return;
     dragRef.current.active = false;
     e.currentTarget.releasePointerCapture(e.pointerId);
   }, []);
 
-  const goTo = (next: any) => { phaseRef.current = next; setPhase(next); };
+  const goTo = (next: Phase) => { phaseRef.current = next; setPhase(next); };
 
   const close = useCallback(() => {
     if (phaseRef.current === 'open') goTo('closing');
   }, []);
 
-  const apply = useCallback((next: any) => {
+  const apply = useCallback((next: OverlayState | null) => {
     if (next && VISIBLE_MODES.has(next.mode)) {
       setState(next);
       if (phaseRef.current !== 'open') {
@@ -140,7 +167,7 @@ export default function MeetingOverlay() {
   }, [apply]);
 
   // The last closing animation has finished: unmount, and let main close the window.
-  const onAnimationEnd = (e: any) => {
+  const onAnimationEnd = (e: React.AnimationEvent<HTMLElement>) => {
     if (e.target !== cardRef.current || e.animationName !== 'overlayBarLift') return;
     if (phaseRef.current !== 'closing') return;
     goTo('closed');
@@ -159,13 +186,13 @@ export default function MeetingOverlay() {
     if (!el || !api) return undefined;
     const observer = new ResizeObserver(() => {
       api.resize(el.offsetHeight);
-      if (el.offsetHeight > 0) api.shown(mode);
+      if (el.offsetHeight > 0 && mode) api.shown(mode);
     });
     observer.observe(el);
     return () => observer.disconnect();
   }, [mode, openKey]);
 
-  const run = async (action: any) => {
+  const run = async (action: () => Promise<Outcome>) => {
     setBusy(true);
     setError('');
     try {
@@ -174,8 +201,8 @@ export default function MeetingOverlay() {
         setError(result.error || 'Something went wrong.');
         setBusy(false);
       }
-    } catch (err: any) {
-      setError(err?.message || 'Something went wrong.');
+    } catch (err) {
+      setError(errorMessage(err) || 'Something went wrong.');
       setBusy(false);
     }
   };
@@ -187,7 +214,7 @@ export default function MeetingOverlay() {
   const dismiss = () => { close(); api.dismiss(); };
   const meetingName = meeting?.title || meeting?.platformLabel || '';
 
-  const BADGES = {
+  const BADGES: Partial<Record<OverlayMode, string>> = {
     prompt: 'dot-mint',
     recording: 'dot-signal dot-live',
     ended: 'dot-graphite',
@@ -195,7 +222,7 @@ export default function MeetingOverlay() {
     error: 'dot-signal',
   };
 
-  let row;
+  let row: React.ReactNode;
   if (mode === 'prompt') {
     row = (
       <>
@@ -240,11 +267,12 @@ export default function MeetingOverlay() {
       </>
     );
   } else if (mode === 'processing') {
+    // OverlayState.stage is a plain string; main sends a ProcessingProgressStage.
     const pct = Math.max(0, Math.min(100, Math.round(state.percent || 0)));
     row = (
       <>
         <Status
-          label={<>{(STAGE_LABELS as any)[state.stage] || 'Processing'} · <span className="tabular text-graphite">{pct}%</span></>}
+          label={<>{(state.stage && STAGE_LABELS[state.stage as ProcessingProgressStage]) || 'Processing'} · <span className="tabular text-graphite">{pct}%</span></>}
           detail={<div className="mt-4"><ProgressBar value={pct} label="Processing progress" /></div>}
         />
         <Close onClick={dismiss} />
@@ -254,7 +282,7 @@ export default function MeetingOverlay() {
     row = (
       <>
         <Status label="Notes ready" detail={meetingName} />
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.openSession(sessionId)}>Open</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => sessionId && api.openSession(sessionId)}>Open</button>
         <Close onClick={dismiss} />
       </>
     );
@@ -266,7 +294,7 @@ export default function MeetingOverlay() {
           detail={state.error || 'Couldn’t write notes for this meeting.'}
           title={state.error}
         />
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.openSession(sessionId)}>Open</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => sessionId && api.openSession(sessionId)}>Open</button>
         <Close onClick={dismiss} />
       </>
     );
@@ -285,7 +313,7 @@ export default function MeetingOverlay() {
       className={`overlay-bar overlay-draggable floating rounded-card p-8 select-none ${phase === 'closing' ? 'is-closing' : 'is-opening'}`}
     >
       <div className="overlay-row flex items-center gap-8">
-        <BrandMark dot={(BADGES as any)[mode]} busy={mode === 'processing'} />
+        <BrandMark dot={mode && BADGES[mode]} busy={mode === 'processing'} />
         <Reveal key={mode} opening={Date.now() - openedAtRef.current < OPEN_CONTENT_DELAY_MS}>{row}</Reveal>
       </div>
     </section>

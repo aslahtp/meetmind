@@ -3,12 +3,13 @@ import os from 'os';
 import path from 'path';
 import { app, BrowserWindow } from 'electron';
 import logger from '../utils/logger';
+import { errorCode, errorMessage } from '../utils/errors';
 
 const MAX_TITLE_LENGTH = 80;
 
 // Windows-safe file name part: drops reserved and control characters, turns whitespace
 // into hyphens and collapses repeats, e.g. "Q4: roadmap / sync?" → "Q4-roadmap-sync".
-function sanitizeFileNamePart(text: any) {
+function sanitizeFileNamePart(text: unknown) {
   const cleaned = String(text || '')
     // eslint-disable-next-line no-control-regex
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ')
@@ -21,10 +22,10 @@ function sanitizeFileNamePart(text: any) {
   return cleaned || 'Meeting';
 }
 
-const pad = (n: any) => String(n).padStart(2, '0');
+const pad = (n: number) => String(n).padStart(2, '0');
 
 // "date-time-title.pdf" in local time: 2026-09-25-1430-Q4-roadmap-sync.pdf
-function buildPdfFileName(startedAt: any, title: any) {
+function buildPdfFileName(startedAt: string | number | Date | null | undefined, title: unknown) {
   const d = startedAt ? new Date(startedAt) : new Date();
   const date = Number.isNaN(d.getTime()) ? new Date() : d;
   const stamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
@@ -32,7 +33,7 @@ function buildPdfFileName(startedAt: any, title: any) {
 }
 
 // Never overwrite an earlier export: "name.pdf" → "name (2).pdf", "name (3).pdf", …
-function uniquePath(dir: any, fileName: any) {
+function uniquePath(dir: string, fileName: string) {
   const ext = path.extname(fileName);
   const base = fileName.slice(0, -ext.length);
   let candidate = path.join(dir, fileName);
@@ -42,7 +43,7 @@ function uniquePath(dir: any, fileName: any) {
   return candidate;
 }
 
-function resolveExportDir(configuredDir: any) {
+function resolveExportDir(configuredDir: string | null | undefined) {
   return configuredDir && configuredDir.trim() ? configuredDir.trim() : app.getPath('downloads');
 }
 
@@ -57,9 +58,17 @@ const FOOTER_TEMPLATE = `
  * Rendering happens in a hidden, sandboxed window with JavaScript disabled.
  * Returns { success: true, path } or { success: false, error }.
  */
-async function exportPdf({ html, fileName, dir }: any) {
+async function exportPdf({
+  html,
+  fileName,
+  dir,
+}: {
+  html: string;
+  fileName: string;
+  dir?: string | null;
+}): Promise<{ success: true; path: string } | { success: false; error: string }> {
   const targetDir = resolveExportDir(dir);
-  let win = null;
+  let win: BrowserWindow | null = null;
   const tmpFile = path.join(os.tmpdir(), `meetmind-pdf-${process.pid}-${Date.now()}.html`);
 
   try {
@@ -97,12 +106,13 @@ async function exportPdf({ html, fileName, dir }: any) {
     fs.writeFileSync(outPath, pdf);
     logger.info('Exported meeting PDF', { path: outPath, bytes: pdf.length });
     return { success: true, path: outPath };
-  } catch (err: any) {
-    logger.error('PDF export failed', { dir: targetDir, error: err.message });
-    const folderProblem = ['EACCES', 'EPERM', 'ENOENT', 'EROFS', 'ENOTDIR', 'EINVAL'].includes(err.code);
+  } catch (err) {
+    logger.error('PDF export failed', { dir: targetDir, error: errorMessage(err) });
+    const code = errorCode(err);
+    const folderProblem = code !== undefined && ['EACCES', 'EPERM', 'ENOENT', 'EROFS', 'ENOTDIR', 'EINVAL'].includes(code);
     const reason = folderProblem
       ? `MeetMind can't save to ${targetDir}. Choose another folder in Settings → Notes → PDF export.`
-      : err.message;
+      : errorMessage(err);
     return { success: false, error: reason };
   } finally {
     if (win && !win.isDestroyed()) win.destroy();

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { buildNotesPreview, estimateNotesProgress } from '../electron/services/notes-normalize';
 import { llmRegistry } from '../electron/providers/index';
 import { generateNotes } from '../electron/services/notes';
+import type { NotesPreviewUpdate } from '../electron/services/notes';
 
 const FULL_JSON = JSON.stringify({
   title: 'Q4 roadmap sync',
@@ -21,7 +22,7 @@ describe('buildNotesPreview (Markdown)', () => {
     expect(buildNotesPreview('```markdown\n# Sync\n\n- **Ow', true)).toEqual({
       _rawMarkdown: '# Sync\n\n- **Ow', title: 'Sync', meeting_title: 'Sync',
     });
-    expect(buildNotesPreview('```markdown\n# Sync\n\nBody\n``', true)._rawMarkdown).toBe('# Sync\n\nBody');
+    expect(buildNotesPreview('```markdown\n# Sync\n\nBody\n``', true)?._rawMarkdown).toBe('# Sync\n\nBody');
   });
 });
 
@@ -42,19 +43,19 @@ describe('buildNotesPreview (JSON)', () => {
   });
 
   it('shows a half-written title, topic and task as they stream', () => {
-    const cut = (marker: any) => FULL_JSON.slice(0, FULL_JSON.indexOf(marker) + marker.length);
-    expect(buildNotesPreview(cut('Q4 road'), false).title).toBe('Q4 road');
-    expect(buildNotesPreview(cut('We **agr'), false).topics).toEqual([
+    const cut = (marker: string) => FULL_JSON.slice(0, FULL_JSON.indexOf(marker) + marker.length);
+    expect(buildNotesPreview(cut('Q4 road'), false)?.title).toBe('Q4 road');
+    expect(buildNotesPreview(cut('We **agr'), false)?.topics).toEqual([
       expect.objectContaining({ heading: 'Budget', content: 'We **agr' }),
     ]);
-    expect(buildNotesPreview(cut('Ship the'), false).action_items).toEqual([
+    expect(buildNotesPreview(cut('Ship the'), false)?.action_items).toEqual([
       { task: 'Ship the', owner: 'Ana', priority: null, due: null },
     ]);
   });
 
   it('drops a topic that has only just opened', () => {
     const notes = buildNotesPreview(FULL_JSON.slice(0, FULL_JSON.indexOf('"heading"')), false);
-    expect(notes.topics).toEqual([]);
+    expect(notes?.topics).toEqual([]);
   });
 });
 
@@ -105,14 +106,15 @@ describe('generateNotes onPreview', () => {
       vi.advanceTimersByTime(50);
       return '# Title\n\nBody';
     });
-    const previews: any = [];
+    const previews: NotesPreviewUpdate[] = [];
     await generateNotes(transcript, config, { onPreview: (p) => previews.push(p) });
-    expect(previews.map((p: any) => p.notes?._rawMarkdown ?? null)).toEqual([null, '# Ti', '# Title\n\nBody']);
+    expect(previews.map((p) => p.notes?._rawMarkdown ?? null)).toEqual([null, '# Ti', '# Title\n\nBody']);
     expect(previews[0]).toMatchObject({ attempt: 0, provider: 'groq', model: 'llama-3.3-70b-versatile' });
     // Each snapshot carries a growing progress estimate.
-    expect(previews[1].progress).toBeGreaterThan(0);
-    expect(previews[2].progress).toBeGreaterThan(previews[1].progress);
-    expect(previews[2].progress).toBeLessThan(1);
+    const progress = previews.map((p) => p.progress ?? 0);
+    expect(progress[1]).toBeGreaterThan(0);
+    expect(progress[2]).toBeGreaterThan(progress[1] ?? 0);
+    expect(progress[2]).toBeLessThan(1);
   });
 
   it('applies the meeting title to the preview', async () => {
@@ -122,9 +124,9 @@ describe('generateNotes onPreview', () => {
       vi.advanceTimersByTime(0);
       return '# Invented\n\nBody';
     });
-    const previews: any = [];
+    const previews: NotesPreviewUpdate[] = [];
     await generateNotes(transcript, config, { meetingTitle: 'Weekly Sync', onPreview: (p) => previews.push(p) });
-    expect(previews[1].notes._rawMarkdown).toBe('# Weekly Sync\n\nBody');
+    expect(previews[1]?.notes?._rawMarkdown).toBe('# Weekly Sync\n\nBody');
   });
 
   it('starts the fallback with a clean preview and drops the failed attempt\'s pending update', async () => {
@@ -140,11 +142,11 @@ describe('generateNotes onPreview', () => {
       vi.advanceTimersByTime(0);
       return '# Fallback';
     });
-    const previews: any = [];
+    const previews: NotesPreviewUpdate[] = [];
     const res = await generateNotes(transcript, config, { onPreview: (p) => previews.push(p) });
     vi.runAllTimers();
     expect(res.provider).toBe('gemini');
-    expect(previews.map((p: any) => [p.attempt, p.notes?._rawMarkdown ?? null])).toEqual([
+    expect(previews.map((p) => [p.attempt, p.notes?._rawMarkdown ?? null])).toEqual([
       [0, null], [0, '# Half'], [1, null], [1, '# Fallback'],
     ]);
   });

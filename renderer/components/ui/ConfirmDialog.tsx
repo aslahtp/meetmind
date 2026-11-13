@@ -1,15 +1,28 @@
 import React, { useState, useCallback, useRef } from 'react';
 import Dialog from './Dialog';
 
+/** What `confirm()` shows. Anything left out takes the default of a plain "Are you sure?". */
+export interface ConfirmOptions {
+  title?: string;
+  message?: React.ReactNode;
+  confirmLabel?: string;
+  /** `null` hides the Cancel button. */
+  cancelLabel?: string | null;
+  destructive?: boolean;
+}
+
+/** Resolves true when the user confirms, false when they cancel or dismiss. */
+export type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
+
 // Promise-based confirmation: `const ok = await confirm({ title, message })`.
 // Replaces window.confirm / window.alert across the renderer.
-export function useConfirmDialog() {
-  const [state, setState] = useState<any>(null);
-  const resolverRef = useRef<any>(null);
-  const confirmBtnRef = useRef<any>(null);
+export function useConfirmDialog(): { confirm: ConfirmFn; element: React.ReactElement } {
+  const [state, setState] = useState<ConfirmOptions | null>(null);
+  const resolverRef = useRef<((value: boolean) => void) | null>(null);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
 
-  const confirm = useCallback((opts: any) => {
-    return new Promise((resolve) => {
+  const confirm = useCallback<ConfirmFn>((opts) => {
+    return new Promise<boolean>((resolve) => {
       resolverRef.current = resolve;
       setState({
         title: 'Are you sure?',
@@ -21,7 +34,7 @@ export function useConfirmDialog() {
     });
   }, []);
 
-  const settle = useCallback((value: any) => {
+  const settle = useCallback((value: boolean) => {
     resolverRef.current?.(value);
     resolverRef.current = null;
     setState(null);

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import assemblyai from '../electron/providers/stt/assemblyai';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -6,6 +6,7 @@ import path from 'node:path';
 
 import { sttRegistry, llmRegistry, describeProviders, providerConfigKeys } from '../electron/providers/index';
 import { createRegistry, type Registry } from '../electron/providers/registry';
+import type { Config, ProviderDescriptor } from '../electron/shared';
 import * as wav from '../electron/providers/shared/wav';
 import groqStt from '../electron/providers/stt/groq';
 import groqLlm from '../electron/providers/llm/groq';
@@ -15,22 +16,30 @@ import { readEvents } from '../electron/providers/shared/sse';
 import { generateNotes } from '../electron/services/notes';
 import { migrateLegacyModels } from '../electron/utils/configMigration';
 
-function fakeResponse(status: any, body: any, headers = {}) {
+type FetchMock = Mock<typeof fetch>;
+
+function fakeResponse(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     statusText: 'x',
-    headers: { get: (k: any) => (headers as any)[k.toLowerCase()] ?? null },
+    headers: { get: (k: string) => headers[k.toLowerCase()] ?? null },
     text: async () => (typeof body === 'string' ? body : JSON.stringify(body)),
-  };
+  } as unknown as Response;
 }
+
+/** The init argument of a mocked fetch's n-th call. */
+const initOf = (fetchImpl: FetchMock, n = 0): RequestInit => fetchImpl.mock.calls[n]?.[1] ?? {};
+
+/** The parsed JSON body of a mocked fetch's n-th call. */
+const bodyOf = (fetchImpl: FetchMock, n = 0) => JSON.parse(String(initOf(fetchImpl, n).body));
 
 /**
  * A 200 server-sent-events response, split across chunks to exercise buffering.
  * `done` ends it with the OpenAI-style `data: [DONE]` sentinel.
  */
-function fakeStream(events: any, { done = false } = {}) {
-  const sse = events.map((e: any) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('')
+function fakeStream(events: Array<Record<string, unknown>>, { done = false } = {}): Response {
+  const sse = events.map((e) => `event: ${String(e.type)}\ndata: ${JSON.stringify(e)}\n\n`).join('')
     + (done ? 'data: [DONE]\n\n' : '');
   const bytes = new TextEncoder().encode(sse);
   const mid = Math.floor(bytes.length / 2);
@@ -45,14 +54,14 @@ function fakeStream(events: any, { done = false } = {}) {
         controller.close();
       },
     }),
-  };
+  } as unknown as Response;
 }
 
 /** Stream events for a Claude reply made of the given content blocks. */
-function claudeEvents(blocks: any, stopReason = 'end_turn', stopDetails: any = null) {
+function claudeEvents(blocks: Array<{ type: string; text?: string }>, stopReason = 'end_turn', stopDetails: unknown = null): Array<Record<string, unknown>> {
   return [
     { type: 'message_start', message: { content: [] } },
-    ...blocks.flatMap((b: any, index: any) => b.type === 'text'
+    ...blocks.flatMap((b, index): Array<Record<string, unknown>> => b.type === 'text'
       ? [
         { type: 'content_block_start', index, content_block: { type: 'text', text: '' } },
         { type: 'content_block_delta', index, delta: { type: 'text_delta', text: b.text } },
@@ -69,23 +78,23 @@ function claudeEvents(blocks: any, stopReason = 'end_turn', stopDetails: any = n
 }
 
 describe('provider registry contract', () => {
-  for (const [kind, registry] of [['stt', sttRegistry], ['llm', llmRegistry]] as Array<[string, Registry<any>]>) {
+  for (const [kind, registry] of [['stt', sttRegistry], ['llm', llmRegistry]] as Array<[string, Registry]>) {
     describe(kind, () => {
       it('has unique ids and a valid default model for every provider', () => {
         const ids = registry.list().map((p) => p.id);
         expect(new Set(ids).size).toBe(ids.length);
         for (const p of registry.list()) {
-          expect(p.models.some((m: any) => m.id === p.defaultModel)).toBe(true);
-          expect(p.credentials.some((f: any) => f.required)).toBe(true);
+          expect(p.models.some((m) => m.id === p.defaultModel)).toBe(true);
+          expect(p.credentials.some((f) => f.required)).toBe(true);
           for (const f of p.credentials) expect(f.configKey).toBeTruthy();
         }
       });
 
       it('keeps latest-model aliases unique and separate from the pinned models', () => {
         for (const p of registry.list()) {
-          const latest = (p.latestModels || []).map((m: any) => m.id);
+          const latest = (p.latestModels || []).map((m) => m.id);
           expect(new Set(latest).size).toBe(latest.length);
-          for (const id of latest) expect(p.models.some((m: any) => m.id === id)).toBe(false);
+          for (const id of latest) expect(p.models.some((m) => m.id === id)).toBe(false);
         }
       });
     });
@@ -115,8 +124,8 @@ describe('provider registry contract', () => {
   });
 
   it('rejects incomplete and duplicate providers', () => {
-    const reg = createRegistry<any>('llm', ['generate', 'test']);
-    expect(() => reg.register({ id: 'x' })).toThrow(/missing/);
+    const reg = createRegistry('llm', ['generate', 'test']);
+    expect(() => reg.register({ id: 'x' } as ProviderDescriptor)).toThrow(/missing/);
     const ok = { id: 'x', name: 'X', credentials: [], models: [], defaultModel: 'm', generate() {}, test() {} };
     reg.register(ok);
     expect(() => reg.register(ok)).toThrow(/Duplicate/);
@@ -137,9 +146,9 @@ describe('provider registry contract', () => {
   });
 
   it('accepts a latest alias even when custom IDs are not allowed', () => {
-    const reg = createRegistry<any>('llm', ['generate', 'test']);
+    const reg = createRegistry('llm', ['generate', 'test']);
     const p = reg.register({
-      id: 'x', name: 'X', credentials: [], models: [{ id: 'm1' }], latestModels: [{ id: 'x-latest' }],
+      id: 'x', name: 'X', credentials: [], models: [{ id: 'm1', name: 'm1' }], latestModels: [{ id: 'x-latest', name: 'x-latest' }],
       defaultModel: 'm1', generate() {}, test() {},
     });
     expect(reg.resolveModel(p, 'x-latest')).toBe('x-latest');
@@ -172,7 +181,7 @@ describe('Groq STT', () => {
       fakeResponse(200, { segments: [{ start: 0, end: 5, text: 'first' }] }),
       fakeResponse(200, { segments: [{ start: 0, end: 5, text: 'second' }] }),
     ];
-    const fetchImpl: any = vi.fn(async () => responses.shift());
+    const fetchImpl = vi.fn<typeof fetch>(async () => responses.shift()!);
     const sleepImpl = vi.fn(async () => {});
 
     try {
@@ -183,9 +192,9 @@ describe('Groq STT', () => {
       expect(segments.map((s) => s.text)).toEqual(['first', 'second']);
       expect(segments[1].startTime).toBeCloseTo(598); // second chunk starts at 600 - 2s overlap
       expect(sleepImpl).toHaveBeenCalledWith(1000);
-      const [, init] = fetchImpl.mock.calls[0];
-      expect(init.headers.Authorization).toBe('Bearer gsk_x');
-      expect(init.body.get('model')).toBe('whisper-large-v3-turbo');
+      const init = initOf(fetchImpl);
+      expect((init.headers as Record<string, string>).Authorization).toBe('Bearer gsk_x');
+      expect((init.body as FormData).get('model')).toBe('whisper-large-v3-turbo');
     } finally {
       fs.unlinkSync(file);
     }
@@ -197,18 +206,18 @@ describe('Groq STT', () => {
 });
 
 /** OpenAI-compatible chat-completion chunks streaming the given text pieces. */
-function groqChunks(pieces: any) {
+function groqChunks(pieces: string[]) {
   return [
     { choices: [{ index: 0, delta: { role: 'assistant', content: '' } }] },
-    ...pieces.map((content: any) => ({ choices: [{ index: 0, delta: { content } }] })),
+    ...pieces.map((content) => ({ choices: [{ index: 0, delta: { content } }] })),
     { choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] },
   ];
 }
 
 describe('SSE reader', () => {
   it('yields JSON events across chunk boundaries and stops at [DONE]', async () => {
-    const events = [];
-    for await (const e of readEvents(fakeStream([{ type: 'a', n: 1 }, { type: 'b', n: 2 }], { done: true }).body)) {
+    const events: unknown[] = [];
+    for await (const e of readEvents(fakeStream([{ type: 'a', n: 1 }, { type: 'b', n: 2 }], { done: true }).body!)) {
       events.push(e);
     }
     expect(events).toEqual([{ type: 'a', n: 1 }, { type: 'b', n: 2 }]);
@@ -216,7 +225,7 @@ describe('SSE reader', () => {
 });
 
 describe('AssemblyAI STT', () => {
-  const options = (model: any, prompt?: any) => assemblyai._requestOptions!({ wavPath: 'a.wav', model, prompt });
+  const options = (model: string, prompt?: string) => assemblyai._requestOptions!({ wavPath: 'a.wav', model, prompt });
 
   it('defaults to Universal-3.5 Pro, including for a saved Universal-3 Pro', () => {
     expect(assemblyai.defaultModel).toBe('universal-3-5-pro');
@@ -248,20 +257,20 @@ describe('Groq LLM', () => {
   const base = { systemPrompt: 's', userPrompt: 'u', model: 'llama-3.3-70b-versatile', config: { groqApiKey: 'k' } };
 
   it('streams deltas to onText and returns the trimmed text', async () => {
-    const fetchImpl: any = vi.fn(async () => fakeStream(groqChunks([' # No', 'tes\n\nBody ']), { done: true }));
-    const deltas: any = [];
+    const fetchImpl = vi.fn<typeof fetch>(async () => fakeStream(groqChunks([' # No', 'tes\n\nBody ']), { done: true }));
+    const deltas: string[] = [];
     const text = await groqLlm.generate({ ...base, onText: (d) => deltas.push(d) }, { fetchImpl });
     expect(text).toBe('# Notes\n\nBody');
     expect(deltas).toEqual([' # No', 'tes\n\nBody ']);
-    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).stream).toBe(true);
+    expect(bodyOf(fetchImpl).stream).toBe(true);
   });
 
   it('asks again without streaming when a model refuses to stream JSON', async () => {
-    const fetchImpl: any = vi.fn()
+    const fetchImpl = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(fakeResponse(400, { error: { message: 'response_format does not support streaming' } }))
       .mockResolvedValueOnce(fakeResponse(200, { choices: [{ message: { content: '{"a":1}' } }] }));
     expect(await groqLlm.generate({ ...base, json: true }, { fetchImpl })).toBe('{"a":1}');
-    expect(JSON.parse(fetchImpl.mock.calls[1][1].body).stream).toBeUndefined();
+    expect(bodyOf(fetchImpl, 1).stream).toBeUndefined();
   });
 
   it('throws an error sent mid-stream', async () => {
@@ -270,13 +279,13 @@ describe('Groq LLM', () => {
   });
 
   it('sends json_object only in JSON mode', async () => {
-    const fetchImpl: any = vi.fn(async () => fakeStream(groqChunks([' {"a":1} ']), { done: true }));
+    const fetchImpl = vi.fn<typeof fetch>(async () => fakeStream(groqChunks([' {"a":1} ']), { done: true }));
 
     expect(await groqLlm.generate({ ...base, json: true }, { fetchImpl })).toBe('{"a":1}');
-    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).response_format).toEqual({ type: 'json_object' });
+    expect(bodyOf(fetchImpl, 0).response_format).toEqual({ type: 'json_object' });
 
     await groqLlm.generate({ ...base, json: false }, { fetchImpl });
-    expect(JSON.parse(fetchImpl.mock.calls[1][1].body).response_format).toBeUndefined();
+    expect(bodyOf(fetchImpl, 1).response_format).toBeUndefined();
   });
 
   it('maps token-limit errors to an actionable message', async () => {
@@ -288,31 +297,40 @@ describe('Groq LLM', () => {
 });
 
 describe('Gemini LLM', () => {
-  /** Stand-in for @google/generative-ai streaming the given text pieces. */
-  function fakeSdk(pieces: any, calls: any) {
+  /** Stand-in for @google/genai streaming the given text pieces. */
+  interface SdkCalls {
+    apiKey?: string;
+    opts?: unknown;
+    prompt?: unknown;
+  }
+
+  interface StreamParams {
+    model: string;
+    contents: unknown;
+    config?: { systemInstruction?: unknown };
+  }
+
+  function fakeSdk(pieces: string[], calls: SdkCalls, last: object = {}) {
     return {
-      GoogleGenerativeAI: class {
-        constructor(apiKey: any) { calls.apiKey = apiKey; }
-        getGenerativeModel(opts: any) {
-          calls.opts = opts;
-          return {
-            async generateContentStream(prompt: any) {
-              calls.prompt = prompt;
-              return {
-                stream: (async function* () {
-                  for (const p of pieces) yield { text: () => p };
-                })(),
-              };
-            },
-          };
-        }
+      GoogleGenAI: class {
+        constructor({ apiKey }: { apiKey: string }) { calls.apiKey = apiKey; }
+        models = {
+          async generateContentStream({ model, contents, config }: StreamParams) {
+            calls.prompt = contents;
+            calls.opts = { model, systemInstruction: config?.systemInstruction };
+            return (async function* () {
+              for (const p of pieces) yield { text: p };
+              if (!pieces.length) yield { text: undefined, ...last };
+            })();
+          },
+        };
       },
     };
   }
 
   it('streams deltas to onText and returns the trimmed text', async () => {
-    const calls = {};
-    const deltas: any = [];
+    const calls: SdkCalls = {};
+    const deltas: string[] = [];
     const text = await geminiLlm.generate(
       { systemPrompt: 's', userPrompt: 'u', model: 'gemini-3.8-flash', config: { geminiApiKey: 'g' }, onText: (d) => deltas.push(d) },
       { sdk: fakeSdk(['# Notes', '', '\n\nBody '], calls) }
@@ -325,11 +343,37 @@ describe('Gemini LLM', () => {
   it('requires an API key', async () => {
     await expect(geminiLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: {} })).rejects.toThrow(/API key/);
   });
+
+  it("turns the SDK's nested JSON error into a readable message with its status", async () => {
+    const body = JSON.stringify({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT' } });
+    const failing = {
+      GoogleGenAI: class {
+        models = {
+          async generateContentStream(): Promise<never> {
+            throw new Error(JSON.stringify({ error: { message: body } })); // streaming nests the body once more
+          },
+        };
+      },
+    };
+    const err = await geminiLlm
+      .generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: { geminiApiKey: 'g' } }, { sdk: failing })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe('Gemini API error (400): API key not valid. Please pass a valid API key.');
+    expect((err as Error & { status?: number }).status).toBe(400);
+  });
+
+  it('throws on an empty answer, naming why, so the fallback model runs', async () => {
+    const blocked = fakeSdk([], {}, { promptFeedback: { blockReason: 'SAFETY' } });
+    await expect(
+      geminiLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'm', config: { geminiApiKey: 'g' } }, { sdk: blocked })
+    ).rejects.toThrow('Gemini returned no text (SAFETY)');
+  });
 });
 
 describe('Claude LLM', () => {
   it('streams /v1/messages and returns trimmed text', async () => {
-    const fetchImpl: any = vi.fn(async () =>
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
       fakeStream(claudeEvents([{ type: 'text', text: '  # Notes\n\nBody  ' }]))
     );
     const result = await claudeLlm.generate(
@@ -337,10 +381,10 @@ describe('Claude LLM', () => {
       { fetchImpl }
     );
     expect(result).toBe('# Notes\n\nBody');
-    const [url, init] = fetchImpl.mock.calls[0];
-    expect(url).toContain('/v1/messages');
-    expect(init.headers['x-api-key']).toBe('sk-ant-x');
-    const body = JSON.parse(init.body);
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(String(url)).toContain('/v1/messages');
+    expect((init?.headers as Record<string, string>)['x-api-key']).toBe('sk-ant-x');
+    const body = bodyOf(fetchImpl);
     expect(body.system).toBe('s');
     expect(body.stream).toBe(true);
     expect(body.max_tokens).toBeGreaterThan(8192);
@@ -348,29 +392,29 @@ describe('Claude LLM', () => {
   });
 
   it('omits temperature for Claude 5.x and includes it for legacy Claude 3.x', async () => {
-    const fetchImpl: any = vi.fn(async () => fakeStream(claudeEvents([{ type: 'text', text: 'ok' }])));
+    const fetchImpl = vi.fn<typeof fetch>(async () => fakeStream(claudeEvents([{ type: 'text', text: 'ok' }])));
     await claudeLlm.generate(
       { systemPrompt: 's', userPrompt: 'u', model: 'claude-3-5-sonnet-20241022', config: { claudeApiKey: 'sk-ant-x' } },
       { fetchImpl }
     );
-    const bodyLegacy = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    const bodyLegacy = bodyOf(fetchImpl, 0);
     expect(bodyLegacy.temperature).toBe(0.3);
 
     await claudeLlm.generate(
       { systemPrompt: 's', userPrompt: 'u', model: 'claude-opus-5-5', config: { claudeApiKey: 'sk-ant-x' } },
       { fetchImpl }
     );
-    const body5 = JSON.parse(fetchImpl.mock.calls[1][1].body);
+    const body5 = bodyOf(fetchImpl, 1);
     expect(body5.temperature).toBeUndefined();
   });
 
-  const generateWith = (fetchImpl: any) =>
+  const generateWith = (fetchImpl: typeof fetch) =>
     claudeLlm.generate({ systemPrompt: 's', userPrompt: 'u', model: 'claude-opus-5-5', config: { claudeApiKey: 'k' } }, { fetchImpl });
 
   it('passes text deltas, not thinking, to onText', async () => {
     const fetchImpl = async () =>
       fakeStream(claudeEvents([{ type: 'thinking' }, { type: 'text', text: '# Notes' }]));
-    const deltas: any = [];
+    const deltas: string[] = [];
     await claudeLlm.generate(
       { systemPrompt: 's', userPrompt: 'u', model: 'claude-opus-5-5', config: { claudeApiKey: 'k' }, onText: (d) => deltas.push(d) },
       { fetchImpl }
@@ -422,7 +466,7 @@ describe('Claude LLM', () => {
 
 describe('generateNotes fallback', () => {
   const transcript = [{ speaker: 'Speaker 1', text: 'hello', startTime: 0 }];
-  const baseConfig = {
+  const baseConfig: Partial<Config> = {
     geminiApiKey: 'g', groqApiKey: 'k', noteOutputMode: 'markdown',
     llmProvider: 'groq', llmModels: {}, llmFallback: { provider: 'gemini', model: 'gemini-3.7-flash' },
   };
@@ -447,10 +491,10 @@ describe('generateNotes fallback', () => {
 
   it('prompts with the meeting title and keeps it over the LLM title', async () => {
     const groq = llmRegistry.get('groq');
-    const spy: any = vi.spyOn(groq, 'generate').mockResolvedValue('# Invented\n\nBody');
+    const spy = vi.spyOn(groq, 'generate').mockResolvedValue('# Invented\n\nBody');
     try {
       const res = await generateNotes(transcript, baseConfig, { meetingTitle: 'Weekly Sync' });
-      expect(spy.mock.calls[0][0].userPrompt).toContain('"Weekly Sync"');
+      expect(spy.mock.calls[0]?.[0].userPrompt).toContain('"Weekly Sync"');
       expect(res.notes.title).toBe('Weekly Sync');
       expect(res.notes._rawMarkdown).toBe('# Weekly Sync\n\nBody');
     } finally {
@@ -460,7 +504,7 @@ describe('generateNotes fallback', () => {
 
   it('does not use a fallback when the primary succeeds', async () => {
     const groq = llmRegistry.get('groq');
-    const spy: any = vi.spyOn(groq, 'generate').mockResolvedValue('# Ok');
+    const spy = vi.spyOn(groq, 'generate').mockResolvedValue('# Ok');
     try {
       const res = await generateNotes(transcript, baseConfig);
       expect(res.provider).toBe('groq');
@@ -500,6 +544,6 @@ describe('config migration', () => {
 
   it('remaps retired Gemini IDs saved under the new key', () => {
     const { set } = migrateLegacyModels({ llmModels: { gemini: 'gemini-3.5-flash' } }, deprecated);
-    expect(set.llmModels.gemini).toBe('gemini-3.8-flash');
+    expect(set.llmModels?.gemini).toBe('gemini-3.8-flash');
   });
 });

@@ -1,5 +1,26 @@
 // Rules for how long recordings are kept (Settings › Storage). Pure (no electron import) so they
-// are unit-tested; electron/services/recordings-storage.js applies them to the recordings folder.
+// are unit-tested; electron/services/recordings-storage.ts applies them to the recordings folder.
+
+/** A file in the recordings folder. */
+export interface RecordingFile {
+  name: string;
+  size: number;
+  mtimeMs: number;
+}
+
+/** One meeting's audio files (its id plus .wav/.webm). */
+export interface Recording {
+  id: string;
+  files: string[];
+  bytes: number;
+  mtimeMs: number;
+}
+
+/** Meeting id -> when it started (ISO), to date its recording. */
+export type StartedAtById = Record<string, string | null | undefined>;
+
+/** Meetings being recorded or processed, whose audio must be left alone. */
+export type BusyIds = Iterable<string> | null | undefined;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -9,18 +30,16 @@ const DEFAULT_RETENTION_DAYS = 0;
 
 const AUDIO_EXTENSIONS = ['.wav', '.webm'];
 
-function normalizeRetentionDays(value: any) {
+function normalizeRetentionDays(value: unknown) {
   const n = Number(value);
   return RETENTION_DAYS.includes(n) ? n : DEFAULT_RETENTION_DAYS;
 }
 
 /**
  * Groups the recordings folder's files by meeting id (the file's basename), keeping only audio.
- * @param {{ name: string, size: number, mtimeMs: number }[]} entries
- * @returns {{ id: string, files: string[], bytes: number, mtimeMs: number }[]}
  */
-function groupRecordingFiles(entries: any) {
-  const byId = new Map();
+function groupRecordingFiles(entries: RecordingFile[] | null | undefined): Recording[] {
+  const byId = new Map<string, Recording>();
   for (const entry of entries || []) {
     if (!entry || typeof entry.name !== 'string') continue;
     const lower = entry.name.toLowerCase();
@@ -46,7 +65,7 @@ function groupRecordingFiles(entries: any) {
  * Whether a meeting id from the renderer can name files in the recordings folder: no path
  * separators or dot segments, so it can't reach outside it.
  */
-function isRecordingId(id: any) {
+function isRecordingId(id: unknown): id is string {
   return typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id);
 }
 
@@ -54,7 +73,7 @@ function isRecordingId(id: any) {
  * When a recording was made: its meeting's start, or for a file with no meeting, the file's
  * modified time.
  */
-function recordingTime(recording: any, startedAtById: any) {
+function recordingTime(recording: Recording, startedAtById?: StartedAtById | null) {
   const startedAt = startedAtById?.[recording.id];
   if (startedAt) {
     const t = new Date(startedAt).getTime();
@@ -63,41 +82,49 @@ function recordingTime(recording: any, startedAtById: any) {
   return recording.mtimeMs || 0;
 }
 
-function totals(recordings: any) {
+function totals(recordings: Recording[]) {
   return {
-    ids: recordings.map((r: any) => r.id),
+    ids: recordings.map((r) => r.id),
     count: recordings.length,
-    bytes: recordings.reduce((sum: any, r: any) => sum + (r.bytes || 0), 0),
+    bytes: recordings.reduce((sum, r) => sum + (r.bytes || 0), 0),
   };
 }
 
-function notBusy(busyIds: any) {
+function notBusy(busyIds: BusyIds) {
   const busy = busyIds instanceof Set ? busyIds : new Set(busyIds || []);
-  return (r: any) => !busy.has(r.id);
+  return (r: Recording) => !busy.has(r.id);
 }
 
 /**
  * The recordings older than the retention period, except the busy ones (being recorded or
  * processed right now). Nothing when recordings are kept forever.
  */
-function planCleanup({ recordings, startedAtById, retentionDays, now = Date.now(), busyIds }: any) {
+interface PlanInput {
+  recordings?: Recording[];
+  startedAtById?: StartedAtById | null;
+  retentionDays?: unknown;
+  now?: number;
+  busyIds?: BusyIds;
+}
+
+function planCleanup({ recordings, startedAtById, retentionDays, now = Date.now(), busyIds }: PlanInput) {
   const days = normalizeRetentionDays(retentionDays);
   if (!days) return totals([]);
   const cutoff = now - days * DAY_MS;
   const expired = (recordings || [])
     .filter(notBusy(busyIds))
-    .filter((r: any) => recordingTime(r, startedAtById) < cutoff);
+    .filter((r) => recordingTime(r, startedAtById) < cutoff);
   return totals(expired);
 }
 
 /** Every recording but the busy ones, for "Delete all recordings". */
-function planDeleteAll({ recordings, busyIds }: any) {
+function planDeleteAll({ recordings, busyIds }: { recordings?: Recording[]; busyIds?: BusyIds }) {
   const all = recordings || [];
   const deletable = all.filter(notBusy(busyIds));
   return { ...totals(deletable), skipped: all.length - deletable.length };
 }
 
-function summarize({ recordings, startedAtById, retentionDays, now = Date.now(), busyIds }: any) {
+function summarize({ recordings, startedAtById, retentionDays, now = Date.now(), busyIds }: PlanInput) {
   const { count, bytes } = totals(recordings || []);
   const expiring = planCleanup({ recordings, startedAtById, retentionDays, now, busyIds });
   return {

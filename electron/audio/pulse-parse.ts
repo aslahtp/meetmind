@@ -1,13 +1,36 @@
 // Parsers for `pactl` output (PulseAudio, and PipeWire through pipewire-pulse). Pure: no electron
-// import, unit-tested in tests/pulseParse.test.js. pactl is always run with LC_ALL=C (see
-// pulse.js), so field names are in English.
+// import, unit-tested in tests/pulseParse.test.ts. pactl is always run with LC_ALL=C (see
+// pulse.ts), so field names are in English.
 
 /**
  * `pactl info` → { serverName, defaultSink, defaultSource }. Missing fields are null; the
  * default sink or source is "@DEFAULT_SINK@"-style or empty when there is none.
  */
-function parsePactlInfo(text: any) {
-  const field = (name: any) => {
+interface PactlInfo {
+  serverName: string | null;
+  defaultSink: string | null;
+  defaultSource: string | null;
+}
+
+interface PulseSource {
+  name: string;
+  isMonitor: boolean;
+}
+
+interface SourceOutput {
+  id: number;
+  binary: string | null;
+  pid: number | null;
+  appName: string | null;
+}
+
+interface PickedPulseSources {
+  system: string | null;
+  mic: string | null;
+}
+
+function parsePactlInfo(text: string | null | undefined): PactlInfo {
+  const field = (name: string) => {
     const match = (text || '').match(new RegExp(`^${name}:[ \\t]*(.*)$`, 'm'));
     const value = match ? match[1].trim() : '';
     return value && value !== 'n/a' ? value : null;
@@ -24,12 +47,12 @@ function parsePactlInfo(text: any) {
  * index, name, driver, sample spec, state. A monitor source (`<sink>.monitor`) carries what
  * that output device plays, which is how Linux records system audio.
  */
-function parseShortSources(text: any) {
+function parseShortSources(text: string | null | undefined): PulseSource[] {
   return (text || '')
     .split(/\r?\n/)
-    .map((line: any) => line.split('\t'))
-    .filter((cols: any) => cols.length >= 2 && /^\d+$/.test(cols[0].trim()) && cols[1].trim())
-    .map((cols: any) => {
+    .map((line) => line.split('\t'))
+    .filter((cols) => cols.length >= 2 && /^\d+$/.test(cols[0].trim()) && cols[1].trim())
+    .map((cols) => {
       const name = cols[1].trim();
       return { name, isMonitor: name.endsWith('.monitor') };
     });
@@ -40,9 +63,9 @@ function parseShortSources(text: any) {
  * a source (a microphone, or a monitor). binary is the lowercase process name pipewire-pulse
  * or PulseAudio reports (`application.process.binary`), or null when the client didn't say.
  */
-function parseSourceOutputs(text: any) {
-  const outputs: any[] = [];
-  let current: any = null;
+function parseSourceOutputs(text: string | null | undefined): SourceOutput[] {
+  const outputs: SourceOutput[] = [];
+  let current: SourceOutput | null = null;
   for (const line of (text || '').split(/\r?\n/)) {
     const header = line.match(/^Source Output #(\d+)/);
     if (header) {
@@ -66,8 +89,11 @@ function parseSourceOutputs(text: any) {
  * the default input (microphone), each null when there is none. A default source that is itself
  * a monitor isn't a microphone.
  */
-function pickPulseSources(info: any, sources: any = []) {
-  const names = new Set(sources.map((s: any) => s.name));
+function pickPulseSources(
+  info: Partial<PactlInfo> | null | undefined,
+  sources: Pick<PulseSource, 'name'>[] = [],
+): PickedPulseSources {
+  const names = new Set(sources.map((s) => s.name));
   const monitor = info?.defaultSink ? `${info.defaultSink}.monitor` : null;
   const system = monitor && (names.size === 0 || names.has(monitor)) ? monitor : null;
   const defaultSource = info?.defaultSource || null;
@@ -75,4 +101,5 @@ function pickPulseSources(info: any, sources: any = []) {
   return { system, mic };
 }
 
+export type { PactlInfo, PulseSource, SourceOutput, PickedPulseSources };
 export { parsePactlInfo, parseShortSources, parseSourceOutputs, pickPulseSources };

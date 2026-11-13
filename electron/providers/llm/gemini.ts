@@ -1,31 +1,83 @@
-import type { LLMGenerateArgs, LLMProvider, ProviderDeps } from '../../shared';
+import type { LLMGenerateArgs, LLMProvider, ProviderDeps, ProviderTestArgs } from '../../shared';
+
+// @google/genai's type declarations are ESM; the main process is CommonJS and loads its CJS build.
+import type { GenerateContentResponse } from '@google/genai' with { 'resolution-mode': 'require' };
+
+type GeminiSdk = typeof import('@google/genai', { with: { 'resolution-mode': 'require' } });
+
+// Google's Gen AI SDK (@google/genai), loaded on first use; tests pass a stand-in as `deps.sdk`.
+function loadSdk(deps: ProviderDeps): GeminiSdk {
+  return (deps.sdk as GeminiSdk | undefined) || (require('@google/genai') as GeminiSdk);
+}
+
+// Why a response carried no text: a blocked prompt, or the reason generation stopped.
+function noTextReason(response: GenerateContentResponse | undefined) {
+  return response?.promptFeedback?.blockReason || response?.candidates?.[0]?.finishReason || '';
+}
+
+// The SDK puts Google's JSON error body in the message (nested once more while streaming). Unwrap
+// it into the "<label> error (status): detail" form the other providers use (providers/shared/http.ts).
+function readableError(err: unknown): unknown {
+  if (!(err instanceof Error)) return err;
+  let detail = err.message;
+  let status = (err as { status?: unknown }).status;
+  for (let depth = 0; depth < 3; depth++) {
+    let inner: { message?: unknown; code?: unknown } | undefined;
+    try { inner = (JSON.parse(detail) as { error?: typeof inner }).error; } catch { break; }
+    if (typeof inner?.message !== 'string') break;
+    detail = inner.message;
+    if (typeof status !== 'number' && typeof inner.code === 'number') status = inner.code;
+  }
+  if (detail === err.message) return err;
+  const readable: Error & { status?: number } = new Error(`Gemini API error${typeof status === 'number' ? ` (${status})` : ''}: ${detail}`);
+  if (typeof status === 'number') readable.status = status;
+  return readable;
+}
+
 async function generate({ systemPrompt, userPrompt, model, config, onText }: LLMGenerateArgs, deps: ProviderDeps = {}) {
   const apiKey = config.geminiApiKey;
   if (!apiKey) throw new Error('Gemini API key is required');
 
-  const { GoogleGenerativeAI } = deps.sdk || require('@google/generative-ai');
-  const genModel = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-    model,
-    systemInstruction: systemPrompt,
-  });
-  const result = await genModel.generateContentStream(userPrompt);
+  const { GoogleGenAI } = loadSdk(deps);
+  const ai = new GoogleGenAI({ apiKey });
   let text = '';
-  for await (const chunk of result.stream) {
-    const delta = chunk.text();
-    text += delta;
-    if (delta) onText?.(delta);
+  let last: GenerateContentResponse | undefined;
+  try {
+    const stream = await ai.models.generateContentStream({
+      model,
+      contents: userPrompt,
+      config: { systemInstruction: systemPrompt },
+    });
+    for await (const chunk of stream) {
+      last = chunk;
+      const delta = chunk.text ?? '';
+      text += delta;
+      if (delta) onText?.(delta);
+    }
+  } catch (err) {
+    throw readableError(err);
+  }
+  // An empty answer (e.g. a blocked prompt) is an error, so the fallback model can take over.
+  if (!text.trim()) {
+    const reason = noTextReason(last);
+    throw new Error(`Gemini returned no text${reason ? ` (${reason})` : ''}`);
   }
   return text.trim();
 }
 
-async function test({ config, model }: any) {
+async function test({ config, model }: ProviderTestArgs, deps: ProviderDeps = {}) {
   const apiKey = config.geminiApiKey;
   if (!apiKey) throw new Error('Gemini API key is required');
 
-  const { GoogleGenerativeAI } = require('@google/generative-ai');
-  const genModel = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model });
-  const result = await genModel.generateContent('Reply with "OK" only.');
-  if (!result.response.text()) throw new Error('No response from Gemini API');
+  const { GoogleGenAI } = loadSdk(deps);
+  const ai = new GoogleGenAI({ apiKey });
+  let result: GenerateContentResponse;
+  try {
+    result = await ai.models.generateContent({ model, contents: 'Reply with "OK" only.' });
+  } catch (err) {
+    throw readableError(err);
+  }
+  if (!result.text) throw new Error('No response from Gemini API');
 }
 
 const provider: LLMProvider = {

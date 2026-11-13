@@ -4,12 +4,16 @@ import { StatusDot } from '../ui/index';
 import { SettingsGroup, SettingRow, RowList } from './SettingsParts';
 import { useApp } from '../../lib/app-context';
 import { CAPTURE_STRATEGIES, CAPTURE_TEST_SECONDS as TEST_SECONDS, describeAudioTest, runCaptureTest } from '../../lib/audioTest';
+import type { MacCaptureStrategy, PermissionKind, PermissionState, PermissionStatus } from '@shared';
+
+type CaptureTestResult = Awaited<ReturnType<typeof runCaptureTest>>;
+type StatusTone = React.ComponentProps<typeof StatusDot>['tone'];
 
 // macOS only (rendered by SystemSection): the privacy permissions MeetMind needs, and a test that
 // records 3 seconds of system audio with each capture method so a tester can see which one works
 // on their Mac and switch to it.
 
-const PERMISSIONS = [
+const PERMISSIONS: { kind: PermissionKind; label: string; description: string }[] = [
   {
     kind: 'microphone',
     label: 'Microphone',
@@ -22,7 +26,7 @@ const PERMISSIONS = [
   },
 ];
 
-const STATUS = {
+const STATUS: Partial<Record<PermissionState, { tone: StatusTone; text: string }>> = {
   granted: { tone: 'ok', text: 'Allowed' },
   denied: { tone: 'error', text: 'Denied' },
   restricted: { tone: 'error', text: 'Blocked by a profile' },
@@ -31,9 +35,9 @@ const STATUS = {
 
 export default function MacPermissions() {
   const { config, updateConfig, isRecording } = useApp();
-  const [status, setStatus] = useState<any>(null);
-  const [results, setResults] = useState<any>({});     // strategy id → test result
-  const [testing, setTesting] = useState<any>(null);   // strategy id being tested
+  const [status, setStatus] = useState<PermissionStatus | null>(null);
+  const [results, setResults] = useState<Partial<Record<MacCaptureStrategy, CaptureTestResult | null>>>({});     // strategy id → test result
+  const [testing, setTesting] = useState<MacCaptureStrategy | null>(null);   // strategy id being tested
 
   const refresh = useCallback(async () => {
     try { setStatus(await window.meetmind.permissions.status()); } catch { /* keep the last status */ }
@@ -46,7 +50,7 @@ export default function MacPermissions() {
     return () => window.removeEventListener('focus', refresh);
   }, [refresh]);
 
-  const handlePermission = async (kind: any) => {
+  const handlePermission = async (kind: PermissionKind) => {
     if (status?.[kind] === 'not-determined') {
       await window.meetmind.permissions.request(kind);
       await refresh();
@@ -55,11 +59,11 @@ export default function MacPermissions() {
     }
   };
 
-  const handleTest = async (strategy: any) => {
+  const handleTest = async (strategy: MacCaptureStrategy) => {
     setTesting(strategy);
-    setResults((prev: any) => ({ ...prev, [strategy]: null }));
+    setResults((prev) => ({ ...prev, [strategy]: null }));
     const result = await runCaptureTest(strategy);
-    setResults((prev: any) => ({ ...prev, [strategy]: result }));
+    setResults((prev) => ({ ...prev, [strategy]: result }));
     setTesting(null);
     refresh();
   };
@@ -75,7 +79,7 @@ export default function MacPermissions() {
       >
         <RowList>
           {PERMISSIONS.map(({ kind, label, description }) => {
-            const s = (STATUS as any)[status?.[kind]] || { tone: 'neutral', text: 'Unknown' };
+            const s = (status && STATUS[status[kind]]) || { tone: 'neutral' as const, text: 'Unknown' };
             const allowed = status?.[kind] === 'granted';
             return (
               <SettingRow key={kind} label={label} description={description}>
@@ -108,7 +112,7 @@ export default function MacPermissions() {
       >
         <RowList>
           {CAPTURE_STRATEGIES.map(({ id, label, description }) => {
-            const verdict = describeAudioTest((results as any)[id]);
+            const verdict = describeAudioTest(results[id]);
             const inUse = current === id;
             return (
               <div key={id} className="space-y-8">
@@ -127,7 +131,7 @@ export default function MacPermissions() {
                         </>
                       ) : 'Test'}
                     </button>
-                    {!inUse && (results as any)[id] && verdict?.tone === 'ok' && (
+                    {!inUse && results[id] && verdict?.tone === 'ok' && (
                       <button type="button" onClick={() => updateConfig('macCaptureStrategy', id)} className="btn-ink btn-sm">
                         Use this method
                       </button>

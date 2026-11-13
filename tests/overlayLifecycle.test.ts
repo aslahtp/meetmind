@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 
 import { MAX_RETRIES, createLifecycle, reduceOverlay } from '../electron/overlay/overlay-lifecycle';
+import type { LifecycleAction, LifecycleEvent } from '../electron/overlay/overlay-lifecycle';
 
 // Feeds events in order; returns the final state and every action, flattened.
-function play(events: any, start = createLifecycle()) {
+function play(events: LifecycleEvent[], start = createLifecycle()) {
   let state = start;
-  const actions = [];
+  const actions: LifecycleAction[] = [];
   for (const event of events) {
     const result = reduceOverlay(state, event);
     state = result.state;
@@ -14,7 +15,7 @@ function play(events: any, start = createLifecycle()) {
   return { state, actions };
 }
 
-const types = (actions: any) => actions.map((a: any) => a.type);
+const types = (actions: LifecycleAction[]) => actions.map((a) => a.type);
 
 // A prompt that loads, is acknowledged and verified.
 function shownPrompt() {

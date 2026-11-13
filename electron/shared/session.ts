@@ -1,8 +1,8 @@
 // Types for meetings (sessions) and their notes. Types only: no runtime code lives in electron/shared/.
-// Sources: electron/db/sessions.js (columns), renderer/lib/status.js (statuses), electron/services/prompts.js
-// (the JSON notes schema) and electron/services/notes-normalize.js.
+// Sources: electron/db/sessions.ts (columns), renderer/lib/status.ts (statuses), electron/services/prompts.ts
+// (the JSON notes schema) and electron/services/notes-normalize.ts.
 
-/** Where a meeting is in its life. See `SESSION_STATUS` in renderer/lib/status.js. */
+/** Where a meeting is in its life. See `SESSION_STATUS` in renderer/lib/status.ts. */
 export type SessionStatus =
   | 'recording'
   | 'recorded'
@@ -30,33 +30,84 @@ export interface TranscriptSegment {
   [key: string]: unknown;
 }
 
-export interface NotesAttendee {
-  label: string;
+/**
+ * A person in the meeting. `normalizeNotes()` always fills `label`, `name`, `role` and
+ * `identity_confidence`; a participant parsed back from edited Markdown (or an older row) has only some.
+ * `sanitizeNotes()` turns a value that is not text into null.
+ */
+export interface NotesParticipant {
+  label?: string | null;
   name?: string | null;
   role?: string | null;
-}
-
-export interface NotesSection {
-  heading: string;
-  content: string;
-}
-
-export interface NotesActionItem {
-  owner: string;
-  tasks: string[];
+  identity_confidence?: string | null;
 }
 
 /**
- * Meeting notes as stored in `sessions.notes`. JSON mode fills `title`…`action_items`; Markdown mode
- * stores the text in `_rawMarkdown`. `_llm*` / `_stt*` record which engines wrote them.
+ * One topic of the meeting. The prompt asks for `heading` and `content`; `normalizeNotes()` copies
+ * `content` into `summary` and adds the other fields.
+ */
+export interface NotesTopic {
+  heading?: string | null;
+  content?: string | null;
+  summary?: string | null;
+  options_discussed?: string[];
+  decision?: string | null;
+  open_questions?: string[];
+}
+
+/**
+ * One thing to do. `normalizeNotes()` flattens the prompt's `{ owner, tasks }` into one item per task, so
+ * `tasks` only remains in rows saved before that.
+ */
+export interface NotesActionItem {
+  task?: string | null;
+  description?: string | null;
+  action?: string | null;
+  owner?: string | null;
+  due?: string | null;
+  priority?: string | null;
+  /** Set when ticked (`- [x]`) in the Markdown. */
+  done?: boolean;
+  tasks?: string[];
+}
+
+export interface NotesStatusUpdate {
+  completion_estimate?: string | null;
+  remaining_scope?: string[];
+}
+
+/**
+ * Meeting notes as stored in `sessions.notes`: what the LLM returned after `normalizeNotes()` and
+ * `sanitizeNotes()` (electron/services/notes-normalize.ts, notes-sanitize.ts), the Markdown text, or the
+ * result of editing the Markdown in the app. Every field is optional because Markdown-mode notes
+ * (`_rawMarkdown` and the titles), older rows and a live preview that is still streaming have only some.
+ * There is no index signature: any other key the LLM returns is stored as it came and read by nothing.
  */
 export interface Notes {
-  title?: string;
-  meeting_title?: string;
+  title?: string | null;
+  meeting_title?: string | null;
   duration?: string | null;
-  attendees?: NotesAttendee[];
-  sections?: NotesSection[];
+  sentiment?: string | null;
+  participants?: NotesParticipant[];
+  /** Names (or labels) of the participants. */
+  attendees?: string[];
+  status_update?: string | NotesStatusUpdate | null;
   action_items?: NotesActionItem[];
+  /** The same topics under three names (older versions used `topics` and `key_points`). */
+  sections?: NotesTopic[];
+  topics?: NotesTopic[];
+  key_points?: NotesTopic[];
+  notable_mentions?: string[];
+  /** Left by older or custom prompts; stored as the LLM returned them, so only searched or type-checked where read. */
+  summary?: unknown;
+  decisions?: unknown;
+  questions_unresolved?: unknown;
+  duration_seconds?: unknown;
+  next_meeting?: string | null;
+  /** Only the notes `parseNotesResponse()` falls back to when the LLM's JSON can't be parsed. */
+  date?: string;
+  _rawResponse?: string;
+  /** Markdown mode: the notes are this text. */
   _rawMarkdown?: string;
   _llmProvider?: string;
   _llmModel?: string;
@@ -64,7 +115,8 @@ export interface Notes {
   _geminiModel?: string;
   _sttService?: string;
   _sttModel?: string;
-  [key: string]: unknown;
+  /** ISO time of the last edit in the app. */
+  _editedAt?: string;
 }
 
 /** A meeting row as returned by `sessions:list` / `session:get` (transcript and notes already JSON-parsed). */
@@ -135,10 +187,10 @@ export interface SessionAudioStatus {
   available: boolean;
   deletedAt: string | null;
   source: string | null;
-  /** Size of the recording file in bytes, when there is one. */
-  bytes?: number;
-  /** File format of the recording, e.g. 'wav'. */
-  format?: string | null;
+  /** Size of the recording file in bytes; null when there is no file. */
+  bytes: number | null;
+  /** File format of the recording, e.g. 'wav'; null when there is no file. */
+  format: string | null;
   /** The meeting is being recorded or processed, so its audio can't be deleted now. */
-  busy?: boolean;
+  busy: boolean;
 }

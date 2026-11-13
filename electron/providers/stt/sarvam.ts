@@ -1,4 +1,4 @@
-import type { STTProvider } from '../../shared';
+import type { STTProvider, TranscriptSegment } from '../../shared';
 import fs from 'fs';
 import path from 'path';
 import * as logger from '../shared/log';
@@ -9,35 +9,59 @@ const SARVAM_API_BASE = 'https://api.sarvam.ai';
 const SARVAM_POLL_INTERVAL_MS = 5000;
 const SARVAM_POLL_TIMEOUT_MS = 30 * 60 * 1000;
 
-function sarvamHeaders(apiKey: any) {
+/** The fields of Sarvam's JSON responses (jobs, downloads, transcripts) that are read here. */
+interface SarvamJson {
+  error?: { message?: string; code?: string };
+  job_id?: string;
+  job_state?: string;
+  error_message?: string;
+  storage_container_type?: string;
+  job_details?: Array<{ outputs?: Array<{ file_name?: string }> }>;
+  upload_urls?: Record<string, { file_url?: string }>;
+  download_urls?: Record<string, { file_url?: string }>;
+  diarized_transcript?: {
+    entries?: Array<{
+      transcript?: string;
+      speaker_id?: string | number;
+      start_time_seconds?: number;
+      end_time_seconds?: number;
+    }>;
+  };
+  timestamps?: { chunks?: string[]; start_time_seconds?: number[]; end_time_seconds?: number[] };
+  transcript?: string;
+  language_code?: string;
+}
+
+function sarvamHeaders(apiKey: string) {
   return { 'api-subscription-key': apiKey.trim() };
 }
 
-function throwIfSarvamError(result: any, fallbackMessage: any) {
-  if (!result || typeof result !== 'object') return;
+function throwIfSarvamError(response: unknown, fallbackMessage: string) {
+  if (!response || typeof response !== 'object') return;
+  const result = response as SarvamJson;
   if (result.error) {
     const message = result.error.message || result.error.code || fallbackMessage;
     throw new Error(message);
   }
 }
 
-async function sarvamPost(path: any, apiKey: any, body: any) {
+async function sarvamPost(path: string, apiKey: string, body: unknown) {
   const result = await httpsPost(
     `${SARVAM_API_BASE}${path}`,
     body,
     { ...sarvamHeaders(apiKey), 'Content-Type': 'application/json' }
   );
   throwIfSarvamError(result, 'Sarvam AI request failed');
-  return result;
+  return result as SarvamJson;
 }
 
-async function sarvamGet(path: any, apiKey: any) {
+async function sarvamGet(path: string, apiKey: string) {
   const result = await httpsGet(`${SARVAM_API_BASE}${path}`, sarvamHeaders(apiKey));
   throwIfSarvamError(result, 'Sarvam AI request failed');
-  return result;
+  return result as SarvamJson;
 }
 
-function formatSarvamSpeaker(speakerId: any) {
+function formatSarvamSpeaker(speakerId: string | number | null | undefined) {
   const raw = speakerId != null ? String(speakerId).trim() : '0';
   if (/^\d+$/.test(raw)) {
     return `Speaker ${Number(raw) + 1}`;
@@ -45,8 +69,8 @@ function formatSarvamSpeaker(speakerId: any) {
   return raw;
 }
 
-function parseSarvamTranscriptResponse(response: any, durationFallback = 0) {
-  const segments = [];
+function parseSarvamTranscriptResponse(response: SarvamJson | null | undefined, durationFallback = 0) {
+  const segments: TranscriptSegment[] = [];
 
   if (Array.isArray(response?.diarized_transcript?.entries) && response.diarized_transcript.entries.length > 0) {
     for (const entry of response.diarized_transcript.entries) {
@@ -84,7 +108,7 @@ function parseSarvamTranscriptResponse(response: any, durationFallback = 0) {
   return segments;
 }
 
-async function pollSarvamJob(jobId: any, apiKey: any, onProgress: any) {
+async function pollSarvamJob(jobId: string, apiKey: string, onProgress?: (percent: number) => void) {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < SARVAM_POLL_TIMEOUT_MS) {
@@ -107,8 +131,8 @@ async function pollSarvamJob(jobId: any, apiKey: any, onProgress: any) {
   throw new Error('Sarvam AI transcription timed out after 30 minutes');
 }
 
-async function downloadSarvamJobResult(jobId: any, apiKey: any, status: any) {
-  const outputFiles = [];
+async function downloadSarvamJobResult(jobId: string, apiKey: string, status: SarvamJson) {
+  const outputFiles: string[] = [];
   for (const task of status.job_details || []) {
     for (const output of task.outputs || []) {
       if (output?.file_name) outputFiles.push(output.file_name);
@@ -130,10 +154,15 @@ async function downloadSarvamJobResult(jobId: any, apiKey: any, status: any) {
     throw new Error('Sarvam AI did not return a download URL for the transcript');
   }
 
-  return httpsGet(downloadUrls[firstFile].file_url);
+  return (await httpsGet(downloadUrls[firstFile].file_url!)) as SarvamJson;
 }
 
-async function transcribeWithSarvam(wavFilePath: any, apiKey: any, model: any, onProgress: any) {
+async function transcribeWithSarvam(
+  wavFilePath: string,
+  apiKey: string | undefined,
+  model: string,
+  onProgress?: (percent: number) => void
+) {
   if (!apiKey || !apiKey.trim()) {
     throw new Error('Sarvam AI API key is required for transcription');
   }
@@ -175,10 +204,10 @@ async function transcribeWithSarvam(wavFilePath: any, apiKey: any, model: any, o
     throw new Error(`Sarvam AI did not return an upload URL for ${fileName}`);
   }
 
-  const uploadHeaders = { 'Content-Type': 'audio/wav' };
+  const uploadHeaders: Record<string, string> = { 'Content-Type': 'audio/wav' };
   const storageType = uploadResponse.storage_container_type || createResponse.storage_container_type;
   if (storageType === 'Azure' || storageType === 'Azure_V1') {
-    (uploadHeaders as any)['x-ms-blob-type'] = 'BlockBlob';
+    uploadHeaders['x-ms-blob-type'] = 'BlockBlob';
   }
 
   await httpsPut(uploadDetails.file_url, audioBuffer, uploadHeaders);
@@ -205,7 +234,7 @@ async function transcribeWithSarvam(wavFilePath: any, apiKey: any, model: any, o
   return segments;
 }
 
-async function testSarvam(apiKey: any) {
+async function testSarvam(apiKey: string | undefined) {
   if (!apiKey || !apiKey.trim()) {
     throw new Error('Sarvam AI API key is required');
   }

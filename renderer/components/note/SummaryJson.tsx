@@ -4,10 +4,11 @@ import { StepBadge, AvatarTile, CheckBox, StatusDot } from '../ui/index';
 import { initials } from '../../lib/format';
 import { parseInlineMarkdown, FormattedText } from './markdown';
 import { getTopics, topicBody, actionItemText } from './copyMarkdown';
+import type { Notes, NotesActionItem, NotesParticipant, NotesStatusUpdate, NotesTopic } from '@shared';
 
-const PRIORITY_LABELS = { high: 'High', medium: 'Medium', low: 'Low' };
+const PRIORITY_LABELS: Record<string, string> = { high: 'High', medium: 'Medium', low: 'Low' };
 
-function SectionHeading({ n, children, aside }: { n?: any; children?: any; aside?: any }) {
+function SectionHeading({ n, children, aside }: { n: number; children?: React.ReactNode; aside?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-16 mb-24">
       <h2><StepBadge n={n}>{children}</StepBadge></h2>
@@ -16,9 +17,9 @@ function SectionHeading({ n, children, aside }: { n?: any; children?: any; aside
   );
 }
 
-function PriorityTag({ priority }: { priority?: any }) {
+function PriorityTag({ priority }: { priority?: string | null }) {
   const key = (priority || 'medium').toLowerCase();
-  const label = (PRIORITY_LABELS as any)[key] || priority;
+  const label = PRIORITY_LABELS[key] || priority;
   if (key === 'high') {
     return (
       <span className="highlight uppercase" style={{ letterSpacing: 'var(--tracking-badge)' }}>
@@ -29,11 +30,11 @@ function PriorityTag({ priority }: { priority?: any }) {
   return <span className="eyebrow">{label}</span>;
 }
 
-function ActionItemsList({ items, n, streaming }: { items?: any; n?: any; streaming?: any }) {
+function ActionItemsList({ items, n, streaming }: { items: NotesActionItem[]; n: number; streaming: boolean }) {
   // Ticks start from the saved `done` flag (`- [x]` in the Markdown); clicks here are local.
-  const [checked, setChecked] = useState(() => ({}));
-  const isChecked = (idx: any) => (checked as any)[idx] ?? !!items[idx]?.done;
-  const doneCount = items.reduce((count: any, _: any, idx: any) => count + (isChecked(idx) ? 1 : 0), 0);
+  const [checked, setChecked] = useState<Record<number, boolean>>({});
+  const isChecked = (idx: number) => checked[idx] ?? !!items[idx]?.done;
+  const doneCount = items.reduce((count, _, idx) => count + (isChecked(idx) ? 1 : 0), 0);
 
   return (
     <section>
@@ -58,13 +59,13 @@ function ActionItemsList({ items, n, streaming }: { items?: any; n?: any; stream
         </div>
       ) : (
         <ul className="border border-ink rounded-card divide-y divide-graphite/40">
-          {items.map((item: any, idx: any) => {
+          {items.map((item, idx) => {
             const isDone = isChecked(idx);
             return (
               <li key={idx} className={`px-24 py-16 ${streaming ? 'fade-in' : ''}`}>
                 <CheckBox
                   checked={isDone}
-                  onChange={(value: any) => setChecked((prev) => ({ ...prev, [idx]: value }))}
+                  onChange={(value) => setChecked((prev) => ({ ...prev, [idx]: value }))}
                 >
                   <span className="flex-1 min-w-0">
                     <span className={`block text-body-sm font-medium ${isDone ? 'text-graphite line-through' : 'text-ink'}`}>
@@ -98,10 +99,10 @@ function ActionItemsList({ items, n, streaming }: { items?: any; n?: any; stream
   );
 }
 
-function Participants({ participants }: { participants?: any }) {
+function Participants({ participants }: { participants: NotesParticipant[] }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-      {participants.map((p: any, idx: any) => {
+      {participants.map((p, idx) => {
         const name = p.name || p.label;
         return (
           <div key={idx} className="tile flex items-center gap-16 p-16">
@@ -132,7 +133,7 @@ function Participants({ participants }: { participants?: any }) {
   );
 }
 
-function StatusUpdateCard({ statusUpdate }: { statusUpdate?: any }) {
+function StatusUpdateCard({ statusUpdate }: { statusUpdate: NotesStatusUpdate }) {
   return (
     <div className="card-compact">
       <div className="flex items-center gap-8 flex-wrap">
@@ -142,11 +143,11 @@ function StatusUpdateCard({ statusUpdate }: { statusUpdate?: any }) {
           <span className="pill ml-auto">{statusUpdate.completion_estimate}</span>
         )}
       </div>
-      {statusUpdate.remaining_scope?.length > 0 && (
+      {!!statusUpdate.remaining_scope?.length && (
         <div className="mt-16">
           <p className="eyebrow mb-8">Remaining scope</p>
           <ul className="list-disc pl-24 marker:text-ink space-y-4 text-body-sm text-graphite">
-            {statusUpdate.remaining_scope.map((item: any, i: any) => (
+            {statusUpdate.remaining_scope.map((item, i) => (
               <li key={i}>{parseInlineMarkdown(item)}</li>
             ))}
           </ul>
@@ -156,7 +157,7 @@ function StatusUpdateCard({ statusUpdate }: { statusUpdate?: any }) {
   );
 }
 
-function TopicCard({ topic, idx, streaming }: { topic?: any; idx?: any; streaming?: any }) {
+function TopicCard({ topic, idx, streaming }: { topic: NotesTopic; idx: number; streaming: boolean }) {
   const body = topicBody(topic);
   return (
     <article className={`card space-y-24 ${streaming ? 'fade-in' : ''}`}>
@@ -167,11 +168,11 @@ function TopicCard({ topic, idx, streaming }: { topic?: any; idx?: any; streamin
 
       {body && <FormattedText content={body} />}
 
-      {topic.options_discussed?.length > 0 && (
+      {!!topic.options_discussed?.length && (
         <div className="border-l border-ink pl-16">
           <p className="eyebrow mb-8">Options discussed</p>
           <ul className="list-disc pl-24 marker:text-ink space-y-4 text-body-sm text-graphite">
-            {topic.options_discussed.map((opt: any, i: any) => (
+            {topic.options_discussed.map((opt, i) => (
               <li key={i}>{parseInlineMarkdown(opt)}</li>
             ))}
           </ul>
@@ -188,14 +189,14 @@ function TopicCard({ topic, idx, streaming }: { topic?: any; idx?: any; streamin
         </div>
       )}
 
-      {topic.open_questions?.length > 0 && (
+      {!!topic.open_questions?.length && (
         <div className="tile p-16">
           <p className="flex items-center gap-8 eyebrow mb-8">
             <HelpCircle size={14} strokeWidth={1.75} aria-hidden="true" />
             Open questions
           </p>
           <ul className="list-disc pl-24 marker:text-ink space-y-4 text-body-sm text-graphite">
-            {topic.open_questions.map((q: any, i: any) => (
+            {topic.open_questions.map((q, i) => (
               <li key={i}>{parseInlineMarkdown(q)}</li>
             ))}
           </ul>
@@ -207,12 +208,13 @@ function TopicCard({ topic, idx, streaming }: { topic?: any; idx?: any; streamin
 
 // Structured (JSON-mode) notes. Each section is indexed with a numbered step badge.
 // `streaming` marks a live preview of notes the LLM is still writing.
-export default function SummaryJson({ notes, streaming = false }: { notes?: any; streaming?: any }) {
+export default function SummaryJson({ notes, streaming = false }: { notes: Notes; streaming?: boolean }) {
   const actionItems = notes.action_items || [];
   const topics = getTopics(notes);
   const participants = notes.participants || [];
   const statusUpdate = notes.status_update;
-  const hasStatus = statusUpdate && (statusUpdate.completion_estimate || statusUpdate.remaining_scope?.length > 0);
+  const statusObject = statusUpdate && typeof statusUpdate === 'object' ? statusUpdate : null;
+  const hasStatus = !!statusObject && !!(statusObject.completion_estimate || (statusObject.remaining_scope?.length ?? 0) > 0);
   const notableMentions = notes.notable_mentions || [];
   const hasOverview = participants.length > 0 || hasStatus;
 
@@ -225,7 +227,7 @@ export default function SummaryJson({ notes, streaming = false }: { notes?: any;
         <section>
           <SectionHeading n={next()}>Overview</SectionHeading>
           <div className="space-y-24">
-            {hasStatus && <StatusUpdateCard statusUpdate={statusUpdate} />}
+            {statusObject && hasStatus && <StatusUpdateCard statusUpdate={statusObject} />}
             {participants.length > 0 && <Participants participants={participants} />}
           </div>
         </section>
@@ -242,7 +244,7 @@ export default function SummaryJson({ notes, streaming = false }: { notes?: any;
             Key topics
           </SectionHeading>
           <div className="space-y-24">
-            {topics.map((topic: any, idx: any) => (
+            {topics.map((topic, idx) => (
               <TopicCard key={idx} topic={topic} idx={idx} streaming={streaming} />
             ))}
           </div>
@@ -254,7 +256,7 @@ export default function SummaryJson({ notes, streaming = false }: { notes?: any;
           <SectionHeading n={next()}>Mentions &amp; risks</SectionHeading>
           <div className="card-compact">
             <ul className="list-disc pl-24 marker:text-ink space-y-8 text-body-sm text-graphite">
-              {notableMentions.map((item: any, idx: any) => (
+              {notableMentions.map((item, idx) => (
                 <li key={idx}>{parseInlineMarkdown(item)}</li>
               ))}
             </ul>

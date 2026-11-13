@@ -1,6 +1,7 @@
-import type { STTProvider, STTTranscribeArgs } from '../../shared';
+import type { ProviderTestArgs, STTProvider, STTTranscribeArgs, TranscriptSegment } from '../../shared';
 import fs from 'fs';
 import path from 'path';
+import { errorMessage } from '../../utils/errors';
 import * as logger from '../shared/log';
 import { httpsPost, httpsGet, sleep } from '../shared/http';
 import { SAMPLE_RATE, getWavDurationSeconds, extractWavChunk, planChunks, mergeTranscriptSegments } from '../shared/wav';
@@ -15,17 +16,79 @@ const V1_MAX_INLINE_SECONDS = 160;
 const GCS_TEMP_PREFIX = 'meetmind-temp/';
 const V1_MODEL = 'latest_long';
 
+// The fields of Google's Speech-to-Text JSON that are read here.
+interface GoogleApiError {
+  code?: number;
+  message?: string;
+}
+
+/** v1 gives a string ("1.5s"), v2 an object. */
+type TimeOffset = string | { seconds?: string | number; nanos?: number } | null | undefined;
+
+interface GoogleWord {
+  word?: string;
+  speakerTag?: string | number;
+  speakerLabel?: string | number;
+  startTime?: TimeOffset;
+  endTime?: TimeOffset;
+  startOffset?: TimeOffset;
+  endOffset?: TimeOffset;
+}
+
+interface GoogleRecognizeResponse {
+  results?: Array<{ alternatives?: Array<{ transcript?: string; words?: GoogleWord[] }> }>;
+}
+
+interface GoogleBatchResponse {
+  results?: Record<
+    string,
+    {
+      error?: GoogleApiError;
+      inlineResult?: { transcript?: GoogleRecognizeResponse };
+      transcript?: GoogleRecognizeResponse;
+    }
+  >;
+}
+
+/** What a synchronous recognize returns: the results, or an error. */
+type RecognizeReply = GoogleRecognizeResponse & { error?: GoogleApiError };
+
+/** A long-running operation. */
+interface GoogleOperation<R = GoogleRecognizeResponse> {
+  error?: GoogleApiError;
+  name?: string;
+  done?: boolean;
+  response?: R;
+}
+
+type Segment = { speaker: string; text: string; startTime: number; endTime: number };
+
+// httpsPost/httpsGet return the parsed JSON (or raw text) as `unknown`; these cast it once.
+async function postJson<R = GoogleOperation>(url: string, body: unknown, headers?: Record<string, string>) {
+  return (await httpsPost(url, body, headers)) as R;
+}
+
+async function getJson<R = GoogleOperation>(url: string, headers?: Record<string, string>) {
+  return (await httpsGet(url, headers)) as R;
+}
+
 /**
  * Obtain a short-lived OAuth2 access token from a service account JSON key.
  * Used for Speech-to-Text v2, which does not accept API keys.
  */
-async function getServiceAccountAccessToken(keyFilePath: any) {
-  const { GoogleAuth } = require('google-auth-library');
-  const auth = new GoogleAuth({
-    keyFile: keyFilePath,
+async function getServiceAccountAccessToken(keyFilePath: string) {
+  // Only a service-account key is accepted: the auth library no longer loads arbitrary credential
+  // files (other credential types can make it call out to commands or URLs named in the file).
+  const key = JSON.parse(fs.readFileSync(keyFilePath, 'utf8')) as { type?: unknown; client_email?: unknown; private_key?: unknown };
+  if (key.type !== 'service_account' || typeof key.client_email !== 'string' || typeof key.private_key !== 'string') {
+    throw new Error('The Google key file isn’t a service account key. Create a JSON key for a service account in Google Cloud.');
+  }
+  const { JWT } = require('google-auth-library') as typeof import('google-auth-library');
+  const client = new JWT({
+    email: key.client_email,
+    key: key.private_key,
     scopes: ['https://www.googleapis.com/auth/cloud-platform'],
   });
-  const client = await auth.getClient();
   const tokenResponse = await client.getAccessToken();
   return tokenResponse.token;
 }
@@ -33,7 +96,7 @@ async function getServiceAccountAccessToken(keyFilePath: any) {
 // ── Speech-to-Text v2 (fastest: sync recognize + chirp_3) ──────────────────────
 // https://cloud.google.com/speech-to-text/v2/docs/reference/rest/v2/projects.locations.recognizers/recognize
 
-async function recognizeChunkV2(base64Audio: any, apiKey: any, projectId: any, model: any) {
+async function recognizeChunkV2(base64Audio: string, apiKey: string, projectId: string, model: string) {
   const recognizer = `projects/${encodeURIComponent(projectId)}/locations/global/recognizers/_`;
   const url = `https://speech.googleapis.com/v2/${recognizer}:recognize?key=${apiKey}`;
 
@@ -54,7 +117,7 @@ async function recognizeChunkV2(base64Audio: any, apiKey: any, projectId: any, m
     content: base64Audio,
   };
 
-  const response = await httpsPost(url, body);
+  const response = await postJson<RecognizeReply>(url, body);
 
   if (response.error) {
     throw new Error(`Speech-to-Text v2 error: ${response.error.message}`);
@@ -64,14 +127,14 @@ async function recognizeChunkV2(base64Audio: any, apiKey: any, projectId: any, m
 }
 // ── GCS upload (for v2 BatchRecognize; BatchRecognize only accepts gs:// URIs) ─
 
-function normalizeKeyPath(keyFilePath: any) {
+function normalizeKeyPath(keyFilePath: string | undefined) {
   if (!keyFilePath || !keyFilePath.trim()) return null;
   const s = keyFilePath.trim().replace(/^["']|["']$/g, '');
   return s ? path.resolve(s) : null;
 }
 
-async function uploadWavToGcs(wavFilePath: any, bucketName: any, keyFilePath: any) {
-  const { Storage } = require('@google-cloud/storage');
+async function uploadWavToGcs(wavFilePath: string, bucketName: string, keyFilePath: string | undefined) {
+  const { Storage } = require('@google-cloud/storage') as typeof import('@google-cloud/storage');
   const keyPath = normalizeKeyPath(keyFilePath);
   const options = keyPath ? { keyFilename: keyPath } : {};
   const storage = new Storage(options);
@@ -92,9 +155,9 @@ async function uploadWavToGcs(wavFilePath: any, bucketName: any, keyFilePath: an
   return gsUri;
 }
 
-async function deleteGcsObject(gsUri: any, keyFilePath: any) {
+async function deleteGcsObject(gsUri: string, keyFilePath: string | undefined) {
   try {
-    const { Storage } = require('@google-cloud/storage');
+    const { Storage } = require('@google-cloud/storage') as typeof import('@google-cloud/storage');
     const match = gsUri.match(/^gs:\/\/([^/]+)\/(.+)$/);
     if (!match) return;
     const [, bucketName, objectName] = match;
@@ -102,8 +165,8 @@ async function deleteGcsObject(gsUri: any, keyFilePath: any) {
     const options = keyPath ? { keyFilename: keyPath } : {};
     const storage = new Storage(options);
     await storage.bucket(bucketName).file(objectName).delete();
-  } catch (err: any) {
-    logger.warn('Failed to delete temp GCS object', { gsUri, error: err.message });
+  } catch (err) {
+    logger.warn('Failed to delete temp GCS object', { gsUri, error: errorMessage(err) });
   }
 }
 
@@ -118,7 +181,7 @@ const STT_V2_ENDPOINT = `https://${STT_V2_LOCATION}-speech.googleapis.com`;
 // BatchRecognize enforces a 20-minute limit when enableWordTimeOffsets is true.
 const BATCH_WORD_OFFSET_MAX_SECONDS = 20 * 60;
 
-async function batchRecognizeV2(projectId: any, accessToken: any, gcsUri: any, enableWordOffsets: any, model: any) {
+async function batchRecognizeV2(projectId: string, accessToken: string | null | undefined, gcsUri: string, enableWordOffsets: boolean, model: string) {
   const recognizer = `projects/${encodeURIComponent(projectId)}/locations/${STT_V2_LOCATION}/recognizers/_`;
   const url = `${STT_V2_ENDPOINT}/v2/${recognizer}:batchRecognize`;
 
@@ -146,7 +209,7 @@ async function batchRecognizeV2(projectId: any, accessToken: any, gcsUri: any, e
     },
   };
 
-  const response = await httpsPost(url, body, { Authorization: `Bearer ${accessToken}` });
+  const response = await postJson<GoogleOperation>(url, body, { Authorization: `Bearer ${accessToken}` });
   if (response.error) {
     throw new Error(`Speech-to-Text v2 BatchRecognize error: ${response.error.message}`);
   }
@@ -156,11 +219,11 @@ async function batchRecognizeV2(projectId: any, accessToken: any, gcsUri: any, e
   return response.name;
 }
 
-async function pollOperationV2(operationName: any, accessToken: any, maxAttempts = 300) {
+async function pollOperationV2(operationName: string, accessToken: string | null | undefined, maxAttempts = 300) {
   const pollUrl = `${STT_V2_ENDPOINT}/v2/${operationName}`;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await sleep(3000);
-    const result = await httpsGet(pollUrl, { Authorization: `Bearer ${accessToken}` });
+    const result = await getJson<GoogleOperation<GoogleBatchResponse>>(pollUrl, { Authorization: `Bearer ${accessToken}` });
     if (result.error) {
       throw new Error(`BatchRecognize operation error: ${result.error.message}`);
     }
@@ -174,7 +237,7 @@ async function pollOperationV2(operationName: any, accessToken: any, maxAttempts
 }
 // ── Speech-to-Text v1 (long-running, fallback when no project ID) ──────────────
 
-async function recognizeChunkV1(base64Audio: any, apiKey: any) {
+async function recognizeChunkV1(base64Audio: string, apiKey: string) {
   const url = `https://speech.googleapis.com/v1/speech:longrunningrecognize?key=${apiKey}`;
 
   const body = {
@@ -195,7 +258,7 @@ async function recognizeChunkV1(base64Audio: any, apiKey: any) {
     audio: { content: base64Audio },
   };
 
-  const response = await httpsPost(url, body);
+  const response = await postJson<GoogleOperation>(url, body);
 
   if (response.error) {
     throw new Error(`STT API error: ${response.error.message}`);
@@ -209,13 +272,13 @@ async function recognizeChunkV1(base64Audio: any, apiKey: any) {
   return pollOperation(operationName, apiKey);
 }
 
-async function pollOperation(operationName: any, apiKey: any, maxAttempts = 180) {
+async function pollOperation(operationName: string, apiKey: string, maxAttempts = 180): Promise<GoogleRecognizeResponse | undefined> {
   const pollUrl = `https://speech.googleapis.com/v1/operations/${operationName}?key=${apiKey}`;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await sleep(5000);
 
-    const result = await httpsGet(pollUrl);
+    const result = await getJson(pollUrl);
 
     if (result.error) {
       throw new Error(`STT operation error: ${result.error.message}`);
@@ -240,7 +303,7 @@ async function pollOperation(operationName: any, apiKey: any, maxAttempts = 180)
  * distribute timestamps proportionally to character count.
  * Handles both Latin punctuation (. ? !) and the Indic danda (।).
  */
-function splitTextIntoSegments(text: any, startTime: any, endTime: any) {
+function splitTextIntoSegments(text: string, startTime: number, endTime: number): Segment[] {
   const MAX_CHARS = 280;
   if (!text) return [];
   if (text.length <= MAX_CHARS) {
@@ -251,7 +314,7 @@ function splitTextIntoSegments(text: any, startTime: any, endTime: any) {
   // Split after sentence-ending punctuation followed by whitespace
   const sentences = text.split(/(?<=[.?!।])\s+/u).filter(Boolean);
 
-  const segments = [];
+  const segments: Segment[] = [];
   let buffer = '';
   let bufferCharStart = 0;
   let charPos = 0;
@@ -283,9 +346,9 @@ function splitTextIntoSegments(text: any, startTime: any, endTime: any) {
   return segments.length ? segments : [{ speaker: 'Speaker 1', text, startTime, endTime }];
 }
 
-function parseTranscriptResponse(response: any, timeOffsetSeconds = 0) {
+function parseTranscriptResponse(response: GoogleRecognizeResponse | null | undefined, timeOffsetSeconds = 0): Segment[] {
   const results = response?.results || [];
-  const segments = [];
+  const segments: Segment[] = [];
 
   for (const result of results) {
     const alternative = result?.alternatives?.[0];
@@ -300,8 +363,8 @@ function parseTranscriptResponse(response: any, timeOffsetSeconds = 0) {
       continue;
     }
 
-    let currentSpeaker = null;
-    let currentWords = [];
+    let currentSpeaker: string | null = null;
+    let currentWords: Array<string | undefined> = [];
     let segStartTime = timeOffsetSeconds;
     let segEndTime = timeOffsetSeconds;
 
@@ -313,7 +376,7 @@ function parseTranscriptResponse(response: any, timeOffsetSeconds = 0) {
 
       if (currentSpeaker !== speaker && currentWords.length > 0) {
         segments.push({
-          speaker: currentSpeaker,
+          speaker: currentSpeaker!,
           text: currentWords.join(' '),
           startTime: segStartTime,
           endTime: segEndTime,
@@ -330,7 +393,7 @@ function parseTranscriptResponse(response: any, timeOffsetSeconds = 0) {
 
     if (currentWords.length > 0) {
       segments.push({
-        speaker: currentSpeaker,
+        speaker: currentSpeaker!,
         text: currentWords.join(' '),
         startTime: segStartTime,
         endTime: segEndTime,
@@ -341,28 +404,28 @@ function parseTranscriptResponse(response: any, timeOffsetSeconds = 0) {
   return segments;
 }
 
-function parseTimeOffset(offset: any) {
+function parseTimeOffset(offset: TimeOffset) {
   if (!offset) return 0;
   if (typeof offset === 'string') {
     return parseFloat(offset.replace('s', ''));
   }
   if (typeof offset === 'object') {
-    return (parseInt(offset.seconds || 0)) + (offset.nanos || 0) / 1e9;
+    return (parseInt(String(offset.seconds || 0))) + (offset.nanos || 0) / 1e9;
   }
   return 0;
 }
 
-function normalizeSpeakerLabel(tag: any) {
+function normalizeSpeakerLabel(tag: string | number | null | undefined): string {
   if (tag == null) return 'Speaker 1';
-  const n = parseInt(tag, 10);
+  const n = parseInt(String(tag), 10);
   if (!Number.isNaN(n)) return `Speaker ${n}`;
   if (typeof tag === 'string' && /^\d+$/.test(tag.trim())) return `Speaker ${tag.trim()}`;
-  return tag;
+  return String(tag);
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-async function transcribe({ wavPath, model, config, onProgress }: STTTranscribeArgs) {
+async function transcribe({ wavPath, model, config, onProgress }: STTTranscribeArgs): Promise<TranscriptSegment[]> {
   const apiKey = config.googleApiKey;
   const projectId = (config.googleCloudProjectId || '').trim();
   const gcsBucket = (config.googleCloudStorageBucket || '').trim();
@@ -424,8 +487,8 @@ async function transcribe({ wavPath, model, config, onProgress }: STTTranscribeA
 
   // v1: one longrunningrecognize. v2 without bucket: sync for short, chunk for long.
   const recognizeChunk = useV2
-    ? (base64: any) => recognizeChunkV2(base64, apiKey, projectId, v2Model)
-    : (base64: any) => recognizeChunkV1(base64, apiKey);
+    ? (base64: string) => recognizeChunkV2(base64, apiKey, projectId, v2Model)
+    : (base64: string) => recognizeChunkV1(base64, apiKey);
 
   const maxSingleSecs = useV2 ? V2_MAX_SYNC_SECONDS : V1_MAX_INLINE_SECONDS;
 
@@ -439,7 +502,7 @@ async function transcribe({ wavPath, model, config, onProgress }: STTTranscribeA
   const chunks = planChunks(durationSeconds, CHUNK_DURATION_SECONDS, OVERLAP_SECONDS);
   logger.info('Splitting audio into chunks', { chunkCount: chunks.length, useV2 });
 
-  const segmentGroups = [];
+  const segmentGroups: Segment[][] = [];
   for (let i = 0; i < chunks.length; i++) {
     const { start, end } = chunks[i];
     const response = await recognizeChunk(extractWavChunk(wavPath, start, end));
@@ -450,14 +513,14 @@ async function transcribe({ wavPath, model, config, onProgress }: STTTranscribeA
   return mergeTranscriptSegments(segmentGroups, OVERLAP_SECONDS);
 }
 
-async function test({ config }: any) {
+async function test({ config }: ProviderTestArgs) {
   // Minimal test: an empty recognize request. 400 means the key is valid and the API is enabled.
   const url = `https://speech.googleapis.com/v1/speech:recognize?key=${config.googleApiKey}`;
   const body = {
     config: { encoding: 'LINEAR16', sampleRateHertz: SAMPLE_RATE, languageCode: 'en-US' },
     audio: { content: '' },
   };
-  const result = await httpsPost(url, body);
+  const result = await postJson<GoogleOperation>(url, body);
   if (result.error && result.error.code !== 400) {
     throw new Error(result.error.message);
   }

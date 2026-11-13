@@ -1,7 +1,11 @@
-import type { STTProvider } from '../../shared';
+import type { TranscribeParams } from 'assemblyai';
+import type { STTProvider, TranscriptSegment } from '../../shared';
 import fs from 'fs';
 import { httpsGet } from '../shared/http';
 import { getWavDurationSeconds } from '../shared/wav';
+
+// The SDK's types lag the API: `language_codes` is accepted by the service but not declared.
+type RequestOptions = TranscribeParams & { language_codes?: string[] };
 
 /**
  * Request options for a transcription. Universal-3.5 Pro detects the language itself, code-switching
@@ -9,8 +13,8 @@ import { getWavDurationSeconds } from '../shared/wav';
  * second entry). `language_detection` can't be combined with `language_codes`, so only
  * Universal-2 keeps the fixed language list.
  */
-function requestOptions({ wavPath, model, prompt }: any) {
-  const options: any = { audio: wavPath, speaker_labels: true };
+function requestOptions({ wavPath, model, prompt }: { wavPath: string; model: string; prompt?: unknown }) {
+  const options: RequestOptions = { audio: wavPath, speaker_labels: true };
   if (model === 'universal-2') {
     options.speech_models = ['universal-2'];
     options.language_codes = ['en', 'ml'];
@@ -22,7 +26,13 @@ function requestOptions({ wavPath, model, prompt }: any) {
   return options;
 }
 
-async function transcribeWithAssemblyAI(wavFilePath: any, apiKey: any, prompt: any, model: any, onProgress: any) {
+async function transcribeWithAssemblyAI(
+  wavFilePath: string,
+  apiKey: string | undefined,
+  prompt: string | undefined,
+  model: string,
+  onProgress?: (percent: number) => void
+) {
   if (!apiKey || !apiKey.trim()) {
     throw new Error('AssemblyAI API key is required for transcription');
   }
@@ -30,7 +40,7 @@ async function transcribeWithAssemblyAI(wavFilePath: any, apiKey: any, prompt: a
     throw new Error(`Audio file not found: ${wavFilePath}`);
   }
 
-  const { AssemblyAI } = require('assemblyai');
+  const { AssemblyAI } = require('assemblyai') as typeof import('assemblyai');
   const client = new AssemblyAI({ apiKey: apiKey.trim() });
 
   onProgress?.(0);
@@ -39,7 +49,7 @@ async function transcribeWithAssemblyAI(wavFilePath: any, apiKey: any, prompt: a
 
   onProgress?.(1);
 
-  const segments = [];
+  const segments: TranscriptSegment[] = [];
 
   if (Array.isArray(transcript.utterances) && transcript.utterances.length > 0) {
     for (const utt of transcript.utterances) {
@@ -73,13 +83,13 @@ async function transcribeWithAssemblyAI(wavFilePath: any, apiKey: any, prompt: a
   return segments;
 }
 
-async function testAssemblyAI(apiKey: any) {
+async function testAssemblyAI(apiKey: string | undefined) {
   if (!apiKey || !apiKey.trim()) {
     throw new Error('AssemblyAI API key is required');
   }
   const url = 'https://api.assemblyai.com/v2/account';
-  const result = await httpsGet(url, { Authorization: apiKey.trim() });
-  if (result && result.error) {
+  const result = (await httpsGet(url, { Authorization: apiKey.trim() })) as { error?: string } | string | null;
+  if (result && typeof result === 'object' && result.error) {
     throw new Error(result.error);
   }
 }

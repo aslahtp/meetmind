@@ -2,13 +2,23 @@ import React, { useRef } from 'react';
 import { Check, ChevronRight, ExternalLink as ExternalLinkIcon, Loader2 } from 'lucide-react';
 import { StatusDot } from '../ui/index';
 import { KEY_GUIDES } from './data';
+import type { Outcome } from '@shared';
+import type { GuideStepItem } from './types';
 
-export function openExternal(url: any) {
+export function openExternal(url: string) {
   window.meetmind?.shell?.openExternal(url);
 }
 
 // ── Group card: a titled section of settings ──────────────────────────────────
-export function SettingsGroup({ title, description, icon, aside, children }: { title?: any; description?: any; icon?: any; aside?: any; children?: any }) {
+interface SettingsGroupProps {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  icon?: React.ReactNode;
+  aside?: React.ReactNode;
+  children?: React.ReactNode;
+}
+
+export function SettingsGroup({ title, description, icon, aside, children }: SettingsGroupProps) {
   return (
     <section className="card">
       <header className="flex items-start justify-between gap-16">
@@ -27,7 +37,15 @@ export function SettingsGroup({ title, description, icon, aside, children }: { t
 }
 
 // ── Row: label + description on the left, control on the right ────────────────
-export function SettingRow({ label, description, htmlFor, children }: { label?: any; description?: any; htmlFor?: any; children?: any }) {
+interface SettingRowProps {
+  label: React.ReactNode;
+  description?: React.ReactNode;
+  /** Id of the control the label belongs to. */
+  htmlFor?: string;
+  children?: React.ReactNode;
+}
+
+export function SettingRow({ label, description, htmlFor, children }: SettingRowProps) {
   return (
     <div className="flex items-center justify-between gap-24">
       <div className="min-w-0">
@@ -43,12 +61,17 @@ export function SettingRow({ label, description, htmlFor, children }: { label?: 
   );
 }
 
-export function RowList({ children }: { children?: any }) {
+export function RowList({ children }: { children?: React.ReactNode }) {
   return <div className="divide-y divide-graphite/40 [&>*]:py-16 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">{children}</div>;
 }
 
 // ── Quiet external link ───────────────────────────────────────────────────────
-export function ExternalLink({ href, children }: { href?: any; children?: any }) {
+interface ExternalLinkProps {
+  href: string;
+  children?: React.ReactNode;
+}
+
+export function ExternalLink({ href, children }: ExternalLinkProps) {
   return (
     <button
       type="button"
@@ -63,9 +86,15 @@ export function ExternalLink({ href, children }: { href?: any; children?: any })
 }
 
 // ── "How to get a key" disclosure with numbered steps ─────────────────────────
-// `steps` (from a provider descriptor) wins; `provider` looks up the static guides in data.js.
-export function KeyGuide({ steps: stepsProp, provider, title = 'How to get a key' }: { steps?: any; provider?: any; title?: any }) {
-  const steps = stepsProp || (KEY_GUIDES as any)[provider];
+// `steps` (from a provider descriptor) wins; `provider` looks up the static guides in data.ts.
+interface KeyGuideProps {
+  steps?: GuideStepItem[];
+  provider?: keyof typeof KEY_GUIDES;
+  title?: string;
+}
+
+export function KeyGuide({ steps: stepsProp, provider, title = 'How to get a key' }: KeyGuideProps) {
+  const steps: GuideStepItem[] | undefined = stepsProp || (provider ? KEY_GUIDES[provider] : undefined);
   if (!steps?.length) return null;
   return (
     <details className="group">
@@ -79,10 +108,15 @@ export function KeyGuide({ steps: stepsProp, provider, title = 'How to get a key
 }
 
 // Numbered steps: { text, url?, hint? }.
-export function GuideSteps({ steps, className = '' }: { steps?: any; className?: any }) {
+interface GuideStepsProps {
+  steps: GuideStepItem[];
+  className?: string;
+}
+
+export function GuideSteps({ steps, className = '' }: GuideStepsProps) {
   return (
     <ol className={`space-y-16 ${className}`}>
-      {steps.map((s: any, idx: any) => (
+      {steps.map((s, idx) => (
         <li key={idx} className="flex items-start gap-16">
           <span className="step-badge-num border border-ink flex-shrink-0" aria-hidden="true">{idx + 1}</span>
           <div className="min-w-0 text-caption text-graphite">
@@ -102,7 +136,12 @@ export function GuideSteps({ steps, className = '' }: { steps?: any; className?:
 }
 
 // ── Test button + inline result ───────────────────────────────────────────────
-export function TestResult({ result, successLabel = 'Connected' }: { result?: any; successLabel?: any }) {
+interface TestResultProps {
+  result: Outcome | null;
+  successLabel?: string;
+}
+
+export function TestResult({ result, successLabel = 'Connected' }: TestResultProps) {
   if (!result) return null;
   return result.success ? (
     <span className="inline-flex items-center gap-8 text-caption text-ink" role="status">
@@ -117,7 +156,15 @@ export function TestResult({ result, successLabel = 'Connected' }: { result?: an
   );
 }
 
-export function TestAction({ onClick, testing, label, result, successLabel }: { onClick?: any; testing?: any; label?: any; result?: any; successLabel?: any }) {
+interface TestActionProps {
+  onClick: () => void;
+  testing: boolean;
+  label: React.ReactNode;
+  result: Outcome | null;
+  successLabel?: string;
+}
+
+export function TestAction({ onClick, testing, label, result, successLabel }: TestActionProps) {
   return (
     <div className="flex flex-wrap items-center gap-16">
       <button type="button" onClick={onClick} disabled={testing} className="btn-ghost btn-sm">
@@ -136,11 +183,20 @@ export function TestAction({ onClick, testing, label, result, successLabel }: { 
 }
 
 // ── Radio card group — keyboard operable (arrows move + select) ───────────────
-export function RadioCardGroup({ label, options, value, onChange, renderOption, className = '' }: { label?: any; options?: any; value?: any; onChange?: any; renderOption?: any; className?: any }) {
-  const refs = useRef<any[]>([]);
-  const selectedIdx = Math.max(0, options.findIndex((o: any) => o.id === value));
+interface RadioCardGroupProps<T extends { id: string }> {
+  label: string;
+  options: T[];
+  value?: T['id'];
+  onChange: (id: T['id']) => void;
+  renderOption: (option: T, selected: boolean) => React.ReactNode;
+  className?: string;
+}
 
-  const onKeyDown = (e: any, idx: any) => {
+export function RadioCardGroup<T extends { id: string }>({ label, options, value, onChange, renderOption, className = '' }: RadioCardGroupProps<T>) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const selectedIdx = Math.max(0, options.findIndex((o) => o.id === value));
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, idx: number) => {
     const keys = ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'];
     if (!keys.includes(e.key)) return;
     e.preventDefault();
@@ -152,7 +208,7 @@ export function RadioCardGroup({ label, options, value, onChange, renderOption, 
 
   return (
     <div role="radiogroup" aria-label={label} className={className}>
-      {options.map((opt: any, idx: any) => {
+      {options.map((opt, idx) => {
         const selected = opt.id === value;
         return (
           <button

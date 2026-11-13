@@ -6,7 +6,18 @@ import {
   CalendarDays,
   Settings as SettingsIcon,
   ScrollText,
+  type LucideIcon,
 } from 'lucide-react';
+import type {
+  ConfigKey,
+  EffectiveTheme,
+  NotesPreview,
+  ProviderDescriptors,
+  RendererConfig,
+  Session,
+  ThemeSetting,
+  UpdaterState,
+} from '@shared';
 
 import Dashboard from './components/Dashboard';
 import Meetings from './components/Meetings';
@@ -14,7 +25,19 @@ import NoteViewer from './components/NoteViewer';
 import Settings from './components/Settings';
 import ProcessingIndicator from './components/ProcessingIndicator';
 import UpdateIndicator from './components/UpdateIndicator';
-import { AppContext, useApp } from './lib/app-context';
+import {
+  AppContext,
+  useApp,
+  type AppContextValue,
+  type AppView,
+  type NavGuard,
+  type OpenSession,
+  type ProcessingState,
+  type RecordingRequest,
+  type ToastAction,
+  type ToastType,
+} from './lib/app-context';
+import { errorMessage } from './lib/errors';
 import { getSetupState } from './lib/providers';
 import { markScrollRestore, cancelScrollRestore } from './lib/scrollMemory';
 import LogsViewer from './components/LogsViewer';
@@ -27,14 +50,25 @@ import WindowControls from './components/WindowControls';
 
 // ── Toast System ──────────────────────────────────────────────────────────────
 
-const TOAST_TONE = {
+interface ToastItem {
+  id: string;
+  message: string;
+  type: ToastType;
+  action?: ToastAction;
+}
+
+const TOAST_TONE: Record<ToastType, React.ComponentProps<typeof StatusDot>['tone']> = {
   warning: 'warning',
   info:    'ink',
   success: 'ok',
   error:   'error',
 };
 
-function Toast({ id, message, type = 'info', action, onDismiss }: { id?: any; message?: any; type?: any; action?: any; onDismiss?: any }) {
+interface ToastProps extends ToastItem {
+  onDismiss: (id: string) => void;
+}
+
+function Toast({ id, message, type = 'info', action, onDismiss }: ToastProps) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -58,7 +92,7 @@ function Toast({ id, message, type = 'info', action, onDismiss }: { id?: any; me
       }`}
       role={type === 'error' ? 'alert' : 'status'}
     >
-      <StatusDot tone={(TOAST_TONE as any)[type] || 'ink'} className="mt-4" />
+      <StatusDot tone={TOAST_TONE[type] || 'ink'} className="mt-4" />
       <div className="flex-1 min-w-0">
         <p className="text-caption text-ink">{message}</p>
         {action && (
@@ -78,10 +112,15 @@ function Toast({ id, message, type = 'info', action, onDismiss }: { id?: any; me
   );
 }
 
-function ToastContainer({ toasts, onDismiss }: { toasts?: any; onDismiss?: any }) {
+interface ToastContainerProps {
+  toasts: ToastItem[];
+  onDismiss: (id: string) => void;
+}
+
+function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
   return (
     <div className="fixed bottom-24 right-24 z-[90] flex flex-col gap-8 pointer-events-none" aria-live="polite">
-      {toasts.map((t: any) => (
+      {toasts.map((t) => (
         <div key={t.id} className="pointer-events-auto">
           <Toast {...t} onDismiss={onDismiss} />
         </div>
@@ -92,13 +131,21 @@ function ToastContainer({ toasts, onDismiss }: { toasts?: any; onDismiss?: any }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const THEMES = ['light', 'dark', 'system'];
+const THEMES: ThemeSetting[] = ['light', 'dark', 'system'];
 
-function normalizeTheme(value: any) {
-  return THEMES.includes(value) ? value : 'light';
+// The pages a window can reopen on, and the ones the app menu can open.
+const RESTORABLE_VIEWS = ['meetings', 'settings', 'logs'] as const;
+const NAVIGABLE_VIEWS = ['dashboard', 'meetings', 'settings', 'logs'] as const;
+
+function isOneOf<T extends string>(list: readonly T[], value: string | undefined): value is T {
+  return list.some((item) => item === value);
 }
 
-function getEffectiveTheme(themeSetting: any) {
+function normalizeTheme(value: unknown): ThemeSetting {
+  return THEMES.find((theme) => theme === value) ?? 'light';
+}
+
+function getEffectiveTheme(themeSetting: ThemeSetting): EffectiveTheme {
   if (themeSetting === 'system') {
     if (typeof window !== 'undefined' && window.matchMedia) {
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -108,7 +155,7 @@ function getEffectiveTheme(themeSetting: any) {
   return themeSetting === 'dark' ? 'dark' : 'light';
 }
 
-function applyTheme(themeSetting: any) {
+function applyTheme(themeSetting: ThemeSetting) {
   if (typeof document === 'undefined') return;
   const effective = getEffectiveTheme(themeSetting);
   document.documentElement.classList.toggle('dark', effective === 'dark');
@@ -118,50 +165,50 @@ function applyTheme(themeSetting: any) {
 // ── Root App ──────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [view, rawSetView] = useState('dashboard');        // 'dashboard' | 'meetings' | 'session' | 'settings' | 'logs'
-  const [selectedSession, setSelectedSession] = useState<any>(null);
-  const [sessionOrigin, setSessionOrigin] = useState('dashboard');
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [view, rawSetView] = useState<AppView>('dashboard');
+  const [selectedSession, setSelectedSession] = useState<OpenSession | null>(null);
+  const [sessionOrigin, setSessionOrigin] = useState<'dashboard' | 'meetings'>('dashboard');
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sessionsError, setSessionsError] = useState<any>(null);
-  const [config, setConfigState] = useState<any>(null);
-  const [providers, setProviders] = useState<any>(null);      // STT/LLM provider descriptors from main
-  const [theme, setThemeState] = useState('light');
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [config, setConfigState] = useState<RendererConfig | null>(null);
+  const [providers, setProviders] = useState<ProviderDescriptors | null>(null);      // STT/LLM provider descriptors from main
+  const [theme, setThemeState] = useState<ThemeSetting>('light');
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingSessionId, setRecordingSessionId] = useState<any>(null);
-  const [recordingStartedAt, setRecordingStartedAt] = useState<any>(null);
-  const [processing, setProcessing] = useState<any>(null);      // { sessionId, stage, percent } | null
-  const [notesPreview, setNotesPreview] = useState<any>(null);  // { sessionId, attempt, provider, model, notes } | null
-  const [updaterState, setUpdaterState] = useState<any>(null);
-  const [toasts, setToasts] = useState<any[]>([]);
+  const [recordingSessionId, setRecordingSessionId] = useState<string | null>(null);
+  const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(null);
+  const [processing, setProcessing] = useState<ProcessingState | null>(null);
+  const [notesPreview, setNotesPreview] = useState<NotesPreview | null>(null);  // the notes written so far, while the model streams
+  const [updaterState, setUpdaterState] = useState<UpdaterState | null>(null);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
   // True once the state main holds (recording, processing, last page) has been applied.
   const [hydrated, setHydrated] = useState(false);
 
-  const navGuardRef = useRef<any>(null);
-  const processingSessionRef = useRef<any>(null);
+  const navGuardRef = useRef<NavGuard | null>(null);
+  const processingSessionRef = useRef<string | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
 
   const { confirm, element: confirmElement } = useConfirmDialog();
 
-  const addToast = useCallback((message: any, type = 'info', action?: any) => {
+  const addToast = useCallback((message: string, type: ToastType = 'info', action?: ToastAction) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setToasts((prev) => [...prev.slice(-2), { id, message, type, action }]); // max 3 visible
   }, []);
 
-  const dismissToast = useCallback((id: any) => {
+  const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   // Views that hold unsaved state (Settings) register a guard; every navigation
   // goes through it so edits are never discarded silently.
   // Main is told too: a window with unsaved edits is kept when hidden to the tray, not closed.
-  const setNavGuard = useCallback((guard: any) => {
+  const setNavGuard = useCallback((guard: NavGuard | null) => {
     navGuardRef.current = guard;
     window.meetmind?.window?.setDirty?.(!!guard);
   }, []);
 
-  const requestNavigate = useCallback(async (nextView: any) => {
+  const requestNavigate = useCallback(async (nextView: AppView) => {
     if (nextView === viewRef.current) return true;
     if (navGuardRef.current) {
       const ok = await navGuardRef.current();
@@ -171,12 +218,12 @@ export default function App() {
     return true;
   }, []);
 
-  const trackProcessing = useCallback((sessionId: any) => {
+  const trackProcessing = useCallback((sessionId: string) => {
     processingSessionRef.current = sessionId;
-    setNotesPreview((prev: any) => (prev?.sessionId === sessionId ? prev : null));
+    setNotesPreview((prev) => (prev?.sessionId === sessionId ? prev : null));
     // A progress event can arrive before the caller learns the session id
     // (e.g. pasted transcripts start at "generating") — keep any stage we have.
-    setProcessing((prev: any) => ({
+    setProcessing((prev) => ({
       sessionId,
       stage: prev?.stage || 'transcribing',
       percent: prev?.percent || 0,
@@ -197,7 +244,7 @@ export default function App() {
   }, []);
 
   // Live audio levels for the RecordingBar's meters. Recordings are captured in a separate hidden
-  // window (electron/audio/capture-window.js), which measures them; main relays them here.
+  // window (electron/audio/capture-window.ts), which measures them; main relays them here.
   useEffect(() => {
     if (!window.meetmind?.on) return undefined;
     const unsub = window.meetmind.on('recording:levels', (levels) => {
@@ -210,7 +257,7 @@ export default function App() {
   }, []);
 
   // The database revision the current `sessions` list was read at (see sessions:revision).
-  const sessionsRevisionRef = useRef<any>(null);
+  const sessionsRevisionRef = useRef<number | null>(null);
   // Refreshes can overlap (sessions:changed arrives at every write); only the latest one applies,
   // so a slow, older read never overwrites a newer list.
   const refreshSeqRef = useRef(0);
@@ -219,7 +266,7 @@ export default function App() {
   // the open meeting with it. With { ifChanged: true }, as sessions:changed and the Dashboard and
   // Meetings pages use, it first asks main whether anything was written since the last read and
   // stops there if not, so switching tabs doesn't copy and re-render the whole list for nothing.
-  const refreshSessions = useCallback(async ({ ifChanged = false } = {}) => {
+  const refreshSessions = useCallback(async ({ ifChanged = false }: { ifChanged?: boolean } = {}) => {
     if (!window.meetmind) return;
     const seq = ++refreshSeqRef.current;
     try {
@@ -231,7 +278,7 @@ export default function App() {
       sessionsRevisionRef.current = revision ?? null;
       setSessions(list);
       setSessionsError(null);
-      setSelectedSession((prev: any) => {
+      setSelectedSession((prev) => {
         if (!prev?.id) return prev;
         const next = list.find((s) => s.id === prev.id);
         if (!next) return prev;
@@ -240,9 +287,9 @@ export default function App() {
           ? { ...next, _processingError: prev._processingError }
           : next;
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to load sessions:', err);
-      setSessionsError(err.message || 'Failed to load meetings');
+      setSessionsError(errorMessage(err) || 'Failed to load meetings');
     }
   }, []);
 
@@ -276,10 +323,10 @@ export default function App() {
             setSelectedSession(session);
             rawSetView('session');
           }
-        } else if (['meetings', 'settings', 'logs'].includes(last?.view as string)) {
-          rawSetView(last!.view);
+        } else if (isOneOf(RESTORABLE_VIEWS, last?.view)) {
+          rawSetView(last.view);
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('App state load failed:', err);
       }
       setHydrated(true);
@@ -299,7 +346,7 @@ export default function App() {
         const initialTheme = normalizeTheme(cfg?.theme);
         setThemeState(initialTheme);
         applyTheme(initialTheme);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Config load failed:', err);
       }
       await refreshSessions();
@@ -348,7 +395,7 @@ export default function App() {
 
   // Opens a finished session — unless the current view holds unsaved state, in
   // which case the user gets a toast with an "Open" action instead.
-  const showFinishedSession = useCallback(async (session: any) => {
+  const showFinishedSession = useCallback(async (session: OpenSession) => {
     if (navGuardRef.current) {
       addToast(`Notes are ready for “${session.title || 'your meeting'}”.`, 'success', {
         label: 'Open notes',
@@ -369,12 +416,13 @@ export default function App() {
     const unsubRecordingStarted = window.meetmind.on('recording:started', ({ sessionId }) => {
       setIsRecording(true);
       setRecordingSessionId(sessionId);
-      setRecordingStartedAt((prev: any) => prev || Date.now());
+      setRecordingStartedAt((prev) => prev || Date.now());
     });
 
     // Stops can come from the button, the tray, the meeting overlay or the extension — the pipeline
     // always follows, so start tracking its progress here.
-    const unsubRecordingStopped = window.meetmind.on('recording:stopped', ({ sessionId } = {} as any) => {
+    const unsubRecordingStopped = window.meetmind.on('recording:stopped', (payload) => {
+      const sessionId = payload?.sessionId;
       setIsRecording(false);
       setRecordingStartedAt(null);
       audioMeter.reset();
@@ -382,8 +430,8 @@ export default function App() {
     });
 
     // e.g. recording the microphone only because system audio is unavailable.
-    const unsubRecordingWarning = window.meetmind.on('recording:warning', ({ message } = {} as any) => {
-      if (message) addToast(message, 'warning');
+    const unsubRecordingWarning = window.meetmind.on('recording:warning', (payload) => {
+      if (payload?.message) addToast(payload.message, 'warning');
     });
 
     const unsubProgress = window.meetmind.on('processing:progress', ({ stage, percent }) => {
@@ -396,8 +444,8 @@ export default function App() {
       setNotesPreview(preview);
     });
     // Cleared only once the finished session is loaded, so old notes don't flash back in between.
-    const clearPreview = (sessionId: any) => {
-      setNotesPreview((prev: any) => (!sessionId || prev?.sessionId === sessionId ? null : prev));
+    const clearPreview = (sessionId: string | undefined) => {
+      setNotesPreview((prev) => (!sessionId || prev?.sessionId === sessionId ? null : prev));
     };
 
     const unsubComplete = window.meetmind.on('processing:complete', async ({ sessionId }) => {
@@ -423,9 +471,9 @@ export default function App() {
     });
 
     // Pipeline was cancelled because the session was deleted mid-flight.
-    const unsubCancelled = window.meetmind.on('processing:cancelled', ({ sessionId } = {} as any) => {
+    const unsubCancelled = window.meetmind.on('processing:cancelled', (payload) => {
       setProcessing(null);
-      clearPreview(sessionId);
+      clearPreview(payload?.sessionId);
       processingSessionRef.current = null;
       refreshSessions();
     });
@@ -467,7 +515,7 @@ export default function App() {
     };
   }, [addToast, refreshSessions, showFinishedSession, trackProcessing]);
 
-  const openSession = useCallback(async (session: any) => {
+  const openSession = useCallback(async (session: Session) => {
     const origin = viewRef.current === 'meetings' ? 'meetings' : 'dashboard';
     // requestNavigate skips the guard for the current view, so switching from one
     // meeting to another (e.g. from the processing pill) checks for unsaved edits here.
@@ -477,7 +525,7 @@ export default function App() {
     setSelectedSession(session);
   }, [requestNavigate]);
 
-  const openSessionById = useCallback(async (sessionId: any) => {
+  const openSessionById = useCallback(async (sessionId?: string) => {
     if (!sessionId) return;
     const session = await window.meetmind.sessions.get(sessionId);
     if (session) openSession(session);
@@ -486,20 +534,20 @@ export default function App() {
   // "Open notes" on the desktop meeting overlay.
   useEffect(() => {
     if (!window.meetmind) return undefined;
-    return window.meetmind.on('app:open-session', ({ sessionId } = {} as any) => openSessionById(sessionId));
+    return window.meetmind.on('app:open-session', (payload) => { openSessionById(payload?.sessionId); });
   }, [openSessionById]);
 
   // macOS app menu (e.g. Settings… ⌘,).
   useEffect(() => {
     if (!window.meetmind) return undefined;
     return window.meetmind.on('app:navigate', (nextView) => {
-      if (['dashboard', 'meetings', 'settings', 'logs'].includes(nextView)) requestNavigate(nextView);
+      if (isOneOf(NAVIGABLE_VIEWS, nextView)) requestNavigate(nextView);
     });
   }, [requestNavigate]);
 
-  const updateConfig = async (key: any, value: any) => {
+  const updateConfig = async <K extends keyof RendererConfig>(key: K, value: RendererConfig[K]) => {
     await window.meetmind.config.set(key, value);
-    setConfigState((prev: any) => ({ ...prev, [key]: value }));
+    setConfigState((prev) => (prev ? { ...prev, [key]: value } : prev));
     if (key === 'theme') {
       const t = normalizeTheme(value);
       setThemeState(t);
@@ -507,16 +555,16 @@ export default function App() {
     }
   };
 
-  const updateMultipleConfig = async (updates: any) => {
+  const updateMultipleConfig = async (updates: Partial<RendererConfig>) => {
     if (window.meetmind?.config?.setMultiple) {
       await window.meetmind.config.setMultiple(updates);
     } else {
       for (const [k, v] of Object.entries(updates)) {
-        await window.meetmind.config.set(k as any, v);
+        await window.meetmind.config.set(k as ConfigKey, v);
       }
     }
     const fresh = await window.meetmind.config.get();
-    setConfigState(fresh || ((prev: any) => ({ ...prev, ...updates })));
+    setConfigState((prev) => fresh || (prev ? { ...prev, ...updates } : prev));
     if ('theme' in updates) {
       const t = normalizeTheme(updates.theme);
       setThemeState(t);
@@ -524,7 +572,7 @@ export default function App() {
     }
   };
 
-  const setTheme = async (newTheme: any) => {
+  const setTheme = async (newTheme: ThemeSetting) => {
     const validTheme = normalizeTheme(newTheme);
     setThemeState(validTheme);
     applyTheme(validTheme);
@@ -533,10 +581,10 @@ export default function App() {
 
   // `meeting` ({ meetingUrl, meetingTitle }) names the session after a calendar event; buttons
   // that call this as a click handler pass an event object, which is ignored.
-  const startRecording = async (meeting: any) => {
-    const fromCalendar = typeof meeting?.meetingTitle === 'string';
-    const result = fromCalendar
-      ? await window.meetmind.recording.start(undefined, meeting.meetingUrl || undefined, meeting.meetingTitle)
+  const startRecording = async (meeting?: RecordingRequest | React.SyntheticEvent) => {
+    const request = meeting && 'meetingTitle' in meeting ? meeting : undefined;
+    const result = typeof request?.meetingTitle === 'string'
+      ? await window.meetmind.recording.start(undefined, request.meetingUrl || undefined, request.meetingTitle)
       : await window.meetmind.recording.start();
     if (result?.success) {
       setIsRecording(true);
@@ -560,7 +608,7 @@ export default function App() {
     return result;
   };
 
-  const ctx = {
+  const ctx: AppContextValue = {
     view,
     setView: requestNavigate,
     selectedSession, setSelectedSession,
@@ -637,7 +685,7 @@ export default function App() {
 
 // ── Top bar (wordmark + navigation + window controls) ────────────────────────
 
-const NAV_ITEMS = [
+const NAV_ITEMS: { view: AppView; label: string; icon: LucideIcon }[] = [
   { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { view: 'meetings',  label: 'Meetings',  icon: CalendarDays },
   { view: 'settings',  label: 'Settings',  icon: SettingsIcon },
@@ -653,10 +701,10 @@ function TopBar() {
   const items = NAV_ITEMS.filter((item) => item.view !== 'logs' || !config?.hideLogsInSidebar);
   const activeView = view === 'session' ? null : view;
   // The processing pill sizes itself to the free space this spacer represents.
-  const spacerRef = useRef<any>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
 
   return (
-    // macOS keeps its native traffic lights (inset by main.js at x 24); the bar starts after them
+    // macOS keeps its native traffic lights (inset by main.ts at x 24); the bar starts after them
     // and has no custom window buttons on the right.
     <header className={`titlebar-drag flex-shrink-0 h-64 flex items-center gap-16 lg:gap-24 ${isMac ? 'pl-[96px] pr-24' : 'pl-24'} border-b border-ink bg-paper select-none`}>
       {/* Wordmark */}

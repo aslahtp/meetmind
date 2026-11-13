@@ -5,9 +5,9 @@ import { resamplePeaks, timeAtOffset } from '../renderer/components/note/wavefor
 // which is fine because the helpers under test never touch the Electron API.
 import { createRmsAccumulator, reducePeaks, normalizePeaks } from '../electron/audio/waveform';
 
-function pcm(samples: any) {
+function pcm(samples: number[]) {
   const buf = Buffer.alloc(samples.length * 2);
-  samples.forEach((s: any, i: any) => buf.writeInt16LE(s, i * 2));
+  samples.forEach((s, i) => buf.writeInt16LE(s, i * 2));
   return buf;
 }
 

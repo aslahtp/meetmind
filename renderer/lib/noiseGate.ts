@@ -9,8 +9,8 @@ const RISE_PER_SAMPLE = 0.0005;   // at ~15 samples a second the floor takes min
 const MARGIN = 1.6;               // the background wobbles; ignore that much above its floor
 
 export function createNoiseGate({ rise = RISE_PER_SAMPLE, margin = MARGIN } = {}) {
-  let floor: any = null;
-  return (level: any) => {
+  let floor: number | null = null;
+  return (level: number) => {
     if (floor === null || level < floor) floor = level;
     else floor += (level - floor) * rise;
     return Math.max(0, level - floor * margin);

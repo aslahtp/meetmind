@@ -45,7 +45,7 @@ async function main() {
     fs.writeFileSync(src, resized);
   }
 
-  const kb = (n: any) => Math.round(n / 1024);
+  const kb = (n: number) => Math.round(n / 1024);
   console.log(`Site images: ${shots.length} screenshots, ${kb(before)} KB of PNG -> ${kb(after)} KB of full-size AVIF`);
 }
 

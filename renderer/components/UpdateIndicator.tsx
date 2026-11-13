@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUpCircle, Download, ExternalLink, RotateCcw, X } from 'lucide-react';
+import type { UpdaterState } from '@shared';
 import { IconButton, ProgressBar, StatusDot } from './ui/index';
 
 // App update status for the top bar: a pill that slides out (the processing pill's motion, see
@@ -12,7 +13,18 @@ import { IconButton, ProgressBar, StatusDot } from './ui/index';
 
 const MB = 1024 * 1024;
 
-function pillFor(state: any) {
+type PillKind = 'available' | 'downloading' | 'ready' | 'error';
+
+interface UpdatePill {
+  kind: PillKind;
+  label: string;
+  /** How much of the pill is filled, 0 to 1. */
+  fill: number;
+  /** Download percent, while downloading. */
+  pct?: number;
+}
+
+function pillFor(state: UpdaterState | null | undefined): UpdatePill | null {
   if (!state?.isPackaged || !state.updateInfo?.version) return null;
   switch (state.status) {
     case 'available': return { kind: 'available', label: 'Update available', fill: 0 };
@@ -26,15 +38,23 @@ function pillFor(state: any) {
   }
 }
 
-function PillIcon({ kind }: { kind?: any }) {
+function PillIcon({ kind }: { kind: PillKind }) {
   if (kind === 'ready') return <StatusDot key="ready" tone="ok" className="proc-pop" />;
   if (kind === 'error') return <StatusDot key="error" tone="error" className="proc-pop" />;
   return <ArrowUpCircle size={14} strokeWidth={1.75} aria-hidden="true" />;
 }
 
-function UpdatePanel({ id, state, pill, onClose, triggerRef }: { id?: any; state?: any; pill?: any; onClose?: any; triggerRef?: any }) {
+interface UpdatePanelProps {
+  id: string;
+  state: UpdaterState;
+  pill: UpdatePill;
+  onClose: () => void;
+  triggerRef: React.RefObject<HTMLButtonElement>;
+}
+
+function UpdatePanel({ id, state, pill, onClose, triggerRef }: UpdatePanelProps) {
   const titleId = useId();
-  const panelRef = useRef<any>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const updater = window.meetmind?.updater;
   const version = state.updateInfo?.version;
   const progress = state.downloadProgress;
@@ -42,15 +62,16 @@ function UpdatePanel({ id, state, pill, onClose, triggerRef }: { id?: any; state
 
   // Focus the panel's first action when it opens.
   useEffect(() => {
-    panelRef.current?.querySelector('[data-autofocus]')?.focus();
+    panelRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
   }, []);
 
   // Escape or a click outside closes it.
   useEffect(() => {
-    const onPointerDown = (e: any) => {
-      if (!panelRef.current?.contains(e.target) && !triggerRef.current?.contains(e.target)) onClose();
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!panelRef.current?.contains(target) && !triggerRef.current?.contains(target)) onClose();
     };
-    const onKeyDown = (e: any) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
       onClose();
@@ -64,7 +85,7 @@ function UpdatePanel({ id, state, pill, onClose, triggerRef }: { id?: any; state
     };
   }, [onClose, triggerRef]);
 
-  const run = async (action: any) => {
+  const run = async (action: () => Promise<unknown> | undefined) => {
     setBusy(true);
     try {
       await action();
@@ -73,8 +94,8 @@ function UpdatePanel({ id, state, pill, onClose, triggerRef }: { id?: any; state
     }
   };
 
-  let body;
-  let primary = null;
+  let body: React.ReactNode;
+  let primary: React.ReactNode = null;
   if (pill.kind === 'available') {
     body = state.canSelfUpdate === false
       ? 'Download the new version from GitHub.'
@@ -93,7 +114,7 @@ function UpdatePanel({ id, state, pill, onClose, triggerRef }: { id?: any; state
           <span className="text-caption text-graphite tabular">{pill.pct}%</span>
         </div>
         <ProgressBar value={pill.pct} label="Update download progress" />
-        {progress?.total > 0 && (
+        {(progress?.total ?? 0) > 0 && (
           <p className="hint tabular">
             {(progress.transferred / MB).toFixed(1)} MB of {(progress.total / MB).toFixed(1)} MB
             {progress.bytesPerSecond > 0 && ` · ${(progress.bytesPerSecond / MB).toFixed(1)} MB/s`}
@@ -159,11 +180,11 @@ function UpdatePanel({ id, state, pill, onClose, triggerRef }: { id?: any; state
   );
 }
 
-export default function UpdateIndicator({ state }: { state?: any }) {
+export default function UpdateIndicator({ state }: { state?: UpdaterState | null }) {
   const pill = pillFor(state);
   const [expanded, setExpanded] = useState(false);
-  const lastPillRef = useRef<any>(null);
-  const triggerRef = useRef<any>(null);
+  const lastPillRef = useRef<UpdatePill | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const close = useCallback(() => setExpanded(false), []);
 
@@ -209,7 +230,7 @@ export default function UpdateIndicator({ state }: { state?: any }) {
           )}
         </div>
       </div>
-      {expanded && pill && (
+      {expanded && pill && state && (
         <UpdatePanel id={panelId} state={state} pill={pill} onClose={close} triggerRef={triggerRef} />
       )}
     </div>

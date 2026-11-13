@@ -6,6 +6,29 @@ updated: 2026-11-13
 
 Chronological log of notable changes to the project. Newest first. This is a human-curated log — not a mirror of `git log`.
 
+## [4.19.3] - 2026-11-13
+
+### Changed
+
+- **Performance**: MeetMind opens about twice as fast and uses about a quarter less memory; the Google Calendar and Notion libraries now load only when they are used.
+- **Gemini**: Notes are written through Google's current Gen AI SDK, and Gemini errors now read like the other providers' (e.g. "Gemini API error (400): API key not valid").
+- **Google STT**: Speech-to-Text v2 now accepts only a service-account JSON key file and says so if given another kind, following Google's auth library, which deprecates loading other credential files.
+
+### Fixed
+
+- **Chrome extension**: The meeting overlay now only accepts messages from the Meet or Zoom tab it is shown in, and "Open in Notion" only opens Notion page links.
+- **Chrome extension**: A page is treated as a meeting only when it is really on meet.google.com or zoom.us, not when that text merely appears in its address, and logged addresses can no longer add fake log lines.
+
+## [4.19.2] - 2026-11-13
+
+### Changed
+
+- **Internal**: Every value in the codebase now has a real type, and the linter rejects `any`.
+
+### Fixed
+
+- **Notion**: Notes whose status update is plain text, such as notes edited as Markdown, no longer upload an empty "Status Update" callout.
+
 ## [4.19.1] - 2026-11-13
 
 ### Changed

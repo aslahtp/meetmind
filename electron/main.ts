@@ -1,14 +1,18 @@
 import { app, ipcMain, Tray, Menu, nativeImage, shell, protocol, desktopCapturer, dialog, nativeTheme, Notification, powerMonitor, session } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { spawnSync } from 'child_process';
 import { Readable } from 'stream';
 import { appRoot } from './utils/paths';
 
 import { getConfig, setConfig, setMultipleConfig } from './utils/config';
 import logger from './utils/logger';
+import { errorMessage } from './utils/errors';
 import { startWebSocketServer, stopWebSocketServer, broadcastToExtension } from './websocket-server';
 import { startRecording, stopRecording, listAudioDevices, probeAudioDevice, ffmpegSupportsPulse, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } from './audio/recorder';
 import { pulseInfo } from './audio/pulse';
+import { locate } from './audio/ffmpeg-path';
+import { silenceHints } from './audio/audio-hints';
 import { getSessionWaveform, deleteSessionWaveform } from './audio/waveform';
 import { createRecordingsStorage } from './services/recordings-storage';
 import { transcribe } from './services/transcription';
@@ -30,19 +34,59 @@ import { createAutoLaunch, HIDDEN_ARG } from './services/auto-launch';
 import { registerMainWindowIpc, openMainWindow, getMainWindow, isMainWindowVisible, sendToMainWindow, recheckMainWindow, getViewState } from './window/main-window';
 import { registerCaptureIpc, startCapture, stopCapture, destroyCapture } from './audio/capture-window';
 
-import type { IpcMainInvokeEvent } from 'electron';
-import type { IpcInvokeMap, RecordingResult } from './shared';
+import type { DisplayMediaRequestHandlerHandlerRequest, IpcMainEvent, IpcMainInvokeEvent, MenuItemConstructorOptions, OpenDialogOptions, Streams } from 'electron';
+import type {
+  AppState, CalendarAddInput, CalendarOutcome, CalendarUpdatePatch, Config, FfmpegBinaryInfo, DetectedMeeting, EffectiveTheme, IpcInvokeMap, IpcSendMap, MacCaptureStrategy, Notes,
+  NotesPreview, OverlayState, ProcessingProgressStage, RecordingResult, RendererErrorReport, Session, SessionUpdate, TranscriptSegment,
+  UpdaterStatus,
+} from './shared';
+import type { ExtensionBroadcast } from './websocket-server';
 
-// `ipcMain` with `handle` checked against the channel map in electron/shared/ipc.ts: a handler's
-// arguments and result must match what the renderer's window.meetmind promises. Same object at
-// runtime, only the type differs.
+// `ipcMain` with `handle` and `on` checked against the channel maps in electron/shared/ipc.ts: a
+// handler's arguments and result must match what the renderer's window.meetmind promises. Same
+// object at runtime, only the type differs.
 type TypedIpcMain = {
   handle<C extends keyof IpcInvokeMap>(
     channel: C,
     listener: (event: IpcMainInvokeEvent, ...args: IpcInvokeMap[C]['args']) => IpcInvokeMap[C]['result'] | Promise<IpcInvokeMap[C]['result']>,
   ): void;
+  on<C extends keyof IpcSendMap>(
+    channel: C,
+    listener: (event: IpcMainEvent, ...args: IpcSendMap[C]) => void,
+  ): void;
 };
 const ipc = ipcMain as unknown as TypedIpcMain;
+
+// A fresh meeting ID. Loaded on first use, like the rest of the recording path.
+function newSessionId(): string {
+  const { v4 }: { v4: () => string } = require('uuid');
+  return v4();
+}
+
+// A recording or processing status, for the Chrome extension and the meeting overlay.
+interface StatusMessage extends ExtensionBroadcast {
+  type: 'RECORDING_STARTED' | 'RECORDING_STOPPED' | 'PROCESSING_PROGRESS' | 'PROCESSING_COMPLETE' | 'PROCESSING_ERROR' | 'PROCESSING_CANCELLED';
+  sessionId?: string;
+  stage?: string;
+  percent?: number;
+  notionUrl?: string | null;
+  error?: string;
+}
+
+// The "meeting detected" fallback notification, tagged with the meeting it offers.
+type MeetingToast = Notification & { meetingKey?: string };
+
+type SendProgress = (stage: ProcessingProgressStage, percent: number) => void;
+
+// A processing run aborted because its meeting was deleted (see abortIfCancelled).
+function isPipelineCancelled(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && '_cancelled' in err && !!err._cancelled;
+}
+
+// A calendar action the user cancelled (closing the Google sign-in).
+function isActionCancelled(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'cancelled' in err && !!err.cancelled;
+}
 
 const isDev = process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
@@ -55,11 +99,11 @@ if (isLinux && process.env.DISPLAY) app.commandLine.appendSwitch('ozone-platform
 
 // Windows: Chromium stops drawing a window it believes is covered or hidden ("native window
 // occlusion"), and a window shown again after a long time in the tray can stay blank. The main
-// window is also health-checked whenever it is shown (window/main-window.js); this removes one
+// window is also health-checked whenever it is shown (window/main-window.ts); this removes one
 // known cause. Must be set before the app is ready.
 if (process.platform === 'win32') app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 
-// Launch at login (services/auto-launch.js). A login launch on Windows and Linux passes --hidden,
+// Launch at login (services/auto-launch.ts). A login launch on Windows and Linux passes --hidden,
 // so the app starts in the tray and only meeting detection and the overlay show up. Only the
 // packaged app registers: an unpackaged run (pnpm run dev, the run-meetmind driver) would point
 // the entry at the bare dev electron binary.
@@ -69,7 +113,7 @@ const launchedHidden = !isMac && process.argv.includes(HIDDEN_ARG);
 // Uploads a session's notes to Notion. If the session already has a page (re-sync or
 // regenerated notes), the new page is created first and the old one is then moved to Notion's
 // trash, so each meeting keeps a single page and a failed upload never loses the old one.
-async function uploadSessionToNotion(sessionId: any, notes: any, transcript: any, config: any) {
+async function uploadSessionToNotion(sessionId: string, notes: Notes, transcript: TranscriptSegment[], config: Config) {
   const previousUrl = db.getSession(sessionId)?.notion_page_url || null;
   const url = await uploadToNotion(notes, transcript, config.notionPageId, config.notionToken, {
     includeTranscript: config.notionUploadTranscript !== false,
@@ -83,7 +127,7 @@ async function uploadSessionToNotion(sessionId: any, notes: any, transcript: any
 // Top-level crash guards for main process
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught Exception in main process', {
-    error: err?.message || String(err),
+    error: errorMessage(err) || String(err),
     stack: err?.stack,
   });
 });
@@ -101,9 +145,9 @@ const NOTES_PROGRESS_END = 84;
 
 // Map the estimated share of the notes written onto the notes stage's band. Only moves
 // forward, so a fallback starting over doesn't send the bar backwards.
-function notesProgressReporter(sendProgress: any) {
+function notesProgressReporter(sendProgress: SendProgress) {
   let last = NOTES_PROGRESS_START;
-  return (fraction: any) => {
+  return (fraction: number) => {
     const span = NOTES_PROGRESS_END - NOTES_PROGRESS_START + 1;
     const pct = Math.min(NOTES_PROGRESS_END, NOTES_PROGRESS_START + Math.floor(fraction * span));
     if (pct <= last) return;
@@ -115,7 +159,14 @@ function notesProgressReporter(sendProgress: any) {
 // Runs the notes stage: generate with the configured LLM (and fallback), streaming a live
 // preview to the renderer and advancing the progress bar as the notes arrive, stamp
 // provenance into the notes blob for the renderer, and announce a fallback if one was used.
-async function generateAndStampNotes(sessionId: any, transcript: any, config: any, sttInfo: any, meetingTitle: any, sendProgress: any) {
+async function generateAndStampNotes(
+  sessionId: string,
+  transcript: TranscriptSegment[],
+  config: Config,
+  sttInfo: { provider: string; model: string },
+  meetingTitle: string | null | undefined,
+  sendProgress?: SendProgress,
+) {
   const reportProgress = sendProgress ? notesProgressReporter(sendProgress) : null;
   const result = await generateNotes(transcript, config, {
     meetingTitle: meetingTitle || '',
@@ -187,7 +238,7 @@ protocol.registerSchemesAsPrivileged([{
   },
 }]);
 
-let tray: any = null;
+let tray: Tray | null = null;
 let isRecording = false;
 
 // Where every meeting's audio lives: <sessionId>.wav, or .webm while recording.
@@ -199,7 +250,7 @@ function getRecordingsDir() {
 // the duration backfill, is sent once), so the Dashboard, Meetings and an open meeting show each
 // status change the moment it is saved: recording → transcribing → writing notes → complete.
 const SESSIONS_CHANGED_DELAY_MS = 30;
-let sessionsChangedTimer: any = null;
+let sessionsChangedTimer: ReturnType<typeof setTimeout> | null = null;
 db.onChange(() => {
   if (sessionsChangedTimer) return;
   sessionsChangedTimer = setTimeout(() => {
@@ -208,16 +259,16 @@ db.onChange(() => {
   }, SESSIONS_CHANGED_DELAY_MS);
 });
 
-// The main window is disposable (window/main-window.js): there may be none, or one still
+// The main window is disposable (window/main-window.ts): there may be none, or one still
 // loading. A message for a missing window is dropped, which is right for status events: a new
 // window reads the current state through app:state.
-function sendToRenderer(channel: any, ...args: any[]) {
+function sendToRenderer(channel: string, ...args: unknown[]) {
   return sendToMainWindow(channel, args);
 }
 
 // For the few events that must survive the window not being up yet ("open this meeting", a
 // meeting starting): kept for a few minutes and delivered once the renderer is ready.
-function sendToRendererQueued(channel: any, ...args: any[]) {
+function sendToRendererQueued(channel: string, ...args: unknown[]) {
   return sendToMainWindow(channel, args, { queue: true });
 }
 
@@ -228,7 +279,7 @@ function focusMainWindow() {
 // ── Window ──────────────────────────────────────────────────────────────────
 
 // The theme actually shown ('light' | 'dark') for a theme setting, resolving 'system'.
-function resolveEffectiveTheme(themeSetting: any) {
+function resolveEffectiveTheme(themeSetting: unknown): EffectiveTheme {
   return themeSetting === 'system'
     ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
     : (themeSetting === 'dark' ? 'dark' : 'light');
@@ -236,7 +287,7 @@ function resolveEffectiveTheme(themeSetting: any) {
 
 // Window background painted before the renderer's first frame — must match the
 // theme the renderer is about to apply, otherwise the window flashes.
-function resolveStartupBackgroundColor(themeSetting: any) {
+function resolveStartupBackgroundColor(themeSetting: unknown) {
   return resolveEffectiveTheme(themeSetting) === 'light' ? '#f8f5ed' : '#1a1813';  // matches --color-paper
 }
 
@@ -245,22 +296,22 @@ function resolveStartupBackgroundColor(themeSetting: any) {
 // picker and asks Electron for 'loopback' audio. On Windows that is Chromium's WASAPI loopback,
 // which captures all system audio (speakers, headphones, USB, Bluetooth). On macOS 14.2+ it is
 // the CoreAudio Tap API; how the required video source is supplied is configurable there (see
-// electron/audio/mac-capture.js), and Settings' "Test system audio" can try each strategy.
+// electron/audio/mac-capture.ts), and Settings' "Test system audio" can try each strategy.
 
 // Strategy for the test capture currently running, overriding config.macCaptureStrategy.
-let testCaptureStrategy: any = null;
+let testCaptureStrategy: MacCaptureStrategy | null = null;
 
-function screenLoopbackHandler(_request: any, callback: any) {
+function screenLoopbackHandler(_request: DisplayMediaRequestHandlerHandlerRequest, callback: (streams: Streams | null) => void) {
   desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-    if (sources.length === 0) { callback(); return; }
+    if (sources.length === 0) { callback(null); return; }
     callback({ video: sources[0], audio: 'loopback' });
   }).catch(() => {
-    callback();
+    callback(null);
   });
 }
 
 // Own window frame as the video source (macOS 'frame' strategy); a screen if there's no frame.
-function frameLoopbackHandler(request: any, callback: any) {
+function frameLoopbackHandler(request: DisplayMediaRequestHandlerHandlerRequest, callback: (streams: Streams | null) => void) {
   if (request.frame) callback({ video: request.frame, audio: 'loopback' });
   else screenLoopbackHandler(request, callback);
 }
@@ -289,7 +340,7 @@ function installDisplayMediaHandler() {
   }
 }
 
-function resolveIconPath(...candidates: any[]) {
+function resolveIconPath(...candidates: Array<string | null | undefined>) {
   for (const candidate of candidates) {
     if (candidate && fs.existsSync(candidate)) return candidate;
   }
@@ -344,7 +395,7 @@ function getTrayIcon() {
 
 function createAppMenu() {
   if (!isMac) return;
-  const template: any[] = [
+  const template: MenuItemConstructorOptions[] = [
     {
       label: app.name,
       submenu: [
@@ -387,13 +438,13 @@ function createTray() {
   });
 }
 
-let lastTrayUpdaterStatus: any = null;
+let lastTrayUpdaterStatus: UpdaterStatus | null = null;
 
 function updateTrayMenu() {
   if (!tray) return;
   const updaterState = getUpdaterState();
 
-  const menuItems: any[] = [
+  const menuItems: MenuItemConstructorOptions[] = [
     {
       label: 'Open MeetMind',
       click: () => { focusMainWindow(); },
@@ -450,17 +501,17 @@ function updateTrayMenu() {
 
 // ── Recording helpers ────────────────────────────────────────────────────────
 
-let currentSessionId: any = null;
-let recordingStartedAt: any = null;   // ms; lets a newly opened window show the right elapsed time
-let captureMode = 'none'; // 'none' | 'renderer' | 'ffmpeg'
-let rendererWriteStream: any = null; // WriteStream for incremental renderer capture
-let rendererWebmPath: any = null;    // Path to the in-progress .webm file
+let currentSessionId: string | null = null;
+let recordingStartedAt: number | null = null;   // ms; lets a newly opened window show the right elapsed time
+let captureMode: 'none' | 'renderer' | 'ffmpeg' = 'none';
+let rendererWriteStream: fs.WriteStream | null = null; // WriteStream for incremental renderer capture
+let rendererWebmPath: string | null = null; // Path to the in-progress .webm file
 let rendererChunkCount = 0;     // Number of chunks flushed to disk
 let rendererBytesWritten = 0;   // Total bytes flushed to disk
 
 // Sessions deleted while the processing pipeline is still in flight. The
 // pipeline checks this set before each expensive stage and aborts early.
-const cancelledSessions = new Set();
+const cancelledSessions = new Set<string>();
 
 // ── Renderer capture IPC helpers ─────────────────────────────────────────────
 
@@ -479,7 +530,7 @@ async function canRecordSystemAudioWithFfmpeg() {
   }
 }
 
-// Starts the capture window (audio/capture-window.js). True once audio is flowing.
+// Starts the capture window (audio/capture-window.ts). True once audio is flowing.
 async function requestRendererCaptureStart() {
   const requireSystemAudio = await canRecordSystemAudioWithFfmpeg();
   // macOS may show permission prompts (screen & system audio, microphone) on the first
@@ -502,7 +553,7 @@ async function requestRendererCaptureStart() {
 
 // The capture window died mid-recording (its renderer crashed). Everything it sent is already
 // on disk, so stop the recording there and process what was captured.
-function handleCaptureLost(reason: any) {
+function handleCaptureLost(reason: string) {
   if (!isRecording || captureMode !== 'renderer') return;
   logger.error('Recording stopped: the capture window was lost', { reason, sessionId: currentSessionId });
   sendToRenderer('recording:warning', {
@@ -524,11 +575,15 @@ function detectedMeeting() {
 // (Google Meet, Zoom, Teams) but rarely the link. Without a link or platform (the app's Record
 // button, the tray), the meeting detection sees supplies them (resolveMeetingSource), unless the
 // beta setting recordUsesDetectedMeeting is off.
-async function handleStartRecording(sessionId?: any, rawUrl?: any, rawTitle?: any, rawPlatform?: any): Promise<RecordingResult> {
+async function handleStartRecording(
+  sessionId?: string | null,
+  rawUrl?: string | null,
+  rawTitle?: string | null,
+  rawPlatform?: string | null,
+): Promise<RecordingResult> {
   if (isRecording) return { success: false, error: 'Already recording' };
 
-  const { v4: uuidv4 } = require('uuid');
-  currentSessionId = sessionId || uuidv4();
+  currentSessionId = sessionId || newSessionId();
   const detected = getConfig().recordUsesDetectedMeeting !== false ? detectedMeeting() : null;
   const { url: meetingUrl, title: meetingTitle, platform: meetingPlatform } = resolveMeetingSource(
     { meetingUrl: rawUrl, meetingTitle: rawTitle, meetingPlatform: rawPlatform },
@@ -596,21 +651,22 @@ async function handleStartRecording(sessionId?: any, rawUrl?: any, rawTitle?: an
     broadcastStatus({ type: 'RECORDING_STARTED', sessionId: currentSessionId });
     logger.info('Recording started (FFmpeg fallback)', { sessionId: currentSessionId });
     return { success: true, sessionId: currentSessionId };
-  } catch (err: any) {
-    logger.error('Failed to start recording', { error: err.message });
+  } catch (err) {
+    logger.error('Failed to start recording', { error: errorMessage(err) });
     captureMode = 'none';
     destroyCapture();
-    db.updateSession(currentSessionId, { status: 'error', last_error: err.message });
-    sendToRenderer('recording:error', { error: err.message });
-    return { success: false, error: err.message };
+    db.updateSession(currentSessionId, { status: 'error', last_error: errorMessage(err) });
+    sendToRenderer('recording:error', { error: errorMessage(err) });
+    return { success: false, error: errorMessage(err) };
   }
 }
 
 async function handleStopRecording(): Promise<RecordingResult> {
-  if (!isRecording) return { success: false, error: 'Not recording' };
+  const sessionId = currentSessionId;
+  if (!isRecording || !sessionId) return { success: false, error: 'Not recording' };
 
   try {
-    let audioPath;
+    let audioPath: string | undefined;
     const endedAt = new Date().toISOString();
     const recordingsDir = getRecordingsDir();
     if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
@@ -620,13 +676,14 @@ async function handleStopRecording(): Promise<RecordingResult> {
       await stopCapture();
 
       // Close the write stream that has been accumulating chunks
-      if (rendererWriteStream) {
-        await new Promise((res) => rendererWriteStream.end(res));
+      const stream = rendererWriteStream;
+      if (stream) {
+        await new Promise<void>((res) => stream.end(res));
         rendererWriteStream = null;
       }
 
-      const webmPath: any = rendererWebmPath || path.join(recordingsDir, `${currentSessionId}.webm`);
-      const wavPath: any = path.join(recordingsDir, `${currentSessionId}.wav`);
+      const webmPath = rendererWebmPath || path.join(recordingsDir, `${sessionId}.webm`);
+      const wavPath = path.join(recordingsDir, `${sessionId}.wav`);
 
       logger.info('Renderer audio saved incrementally, converting to WAV', {
         webmPath,
@@ -656,20 +713,20 @@ async function handleStopRecording(): Promise<RecordingResult> {
     isRecording = false;
     recordingStartedAt = null;
 
-    let durationSeconds = null;
+    let durationSeconds: number | null = null;
     try {
       if (audioPath) {
         durationSeconds = probeDurationSeconds(audioPath);
       }
-    } catch (err: any) {
+    } catch (err) {
       logger.warn('Failed to compute audio duration from file', {
-        sessionId: currentSessionId,
+        sessionId,
         audioPath,
-        error: err.message,
+        error: errorMessage(err),
       });
     }
 
-    db.updateSession(currentSessionId, {
+    db.updateSession(sessionId, {
       ended_at: endedAt,
       audio_path: audioPath,
       duration_seconds: durationSeconds,
@@ -677,15 +734,15 @@ async function handleStopRecording(): Promise<RecordingResult> {
     });
 
     updateTrayMenu();
-    sendToRenderer('recording:stopped', { sessionId: currentSessionId, audioPath });
-    broadcastStatus({ type: 'RECORDING_STOPPED', sessionId: currentSessionId });
-    logger.info('Recording stopped', { sessionId: currentSessionId, audioPath });
+    sendToRenderer('recording:stopped', { sessionId, audioPath });
+    broadcastStatus({ type: 'RECORDING_STOPPED', sessionId });
+    logger.info('Recording stopped', { sessionId, audioPath });
 
-    runProcessingPipeline(currentSessionId, audioPath);
+    runProcessingPipeline(sessionId, audioPath);
 
-    return { success: true, sessionId: currentSessionId };
-  } catch (err: any) {
-    logger.error('Failed to stop recording', { error: err.message });
+    return { success: true, sessionId };
+  } catch (err) {
+    logger.error('Failed to stop recording', { error: errorMessage(err) });
     if (rendererWriteStream) {
       try { rendererWriteStream.end(); } catch { /* ignore */ }
       rendererWriteStream = null;
@@ -697,20 +754,18 @@ async function handleStopRecording(): Promise<RecordingResult> {
     isRecording = false;
     recordingStartedAt = null;
     destroyCapture();
-    if (currentSessionId) {
-      db.updateSession(currentSessionId, {
-        status: 'error',
-        last_error: err.message,
-        ended_at: new Date().toISOString(),
-      });
-    }
-    return { success: false, error: err.message };
+    db.updateSession(sessionId, {
+      status: 'error',
+      last_error: errorMessage(err),
+      ended_at: new Date().toISOString(),
+    });
+    return { success: false, error: errorMessage(err) };
   }
 }
 
 // True when the session already has a non-empty transcript the pipeline can reuse
 // instead of paying for speech-to-text again.
-function hasReusableTranscript(session: any) {
+function hasReusableTranscript(session: Session | null) {
   if (!session?.transcript) return false;
   try {
     const parsed = typeof session.transcript === 'string' ? JSON.parse(session.transcript) : session.transcript;
@@ -722,17 +777,22 @@ function hasReusableTranscript(session: any) {
 
 let activePipelines = 0;   // processing runs in flight; an automatic update install waits for them
 // The latest progress and notes preview, so a window opened mid-run shows them (app:state).
-let currentProcessing: any = null;   // { sessionId, stage, percent } | null
-let currentNotesPreview: any = null; // the last notes:preview payload | null
+let currentProcessing: AppState['processing'] = null;
+let currentNotesPreview: NotesPreview | null = null; // the last notes:preview payload
 
-function clearProcessingState(sessionId: any) {
+function clearProcessingState(sessionId: string) {
   if (currentProcessing?.sessionId === sessionId) currentProcessing = null;
   if (currentNotesPreview?.sessionId === sessionId) currentNotesPreview = null;
 }
 // Sessions being processed right now; Settings › Storage never deletes their audio.
-const processingSessionIds = new Map(); // sessionId → runs in flight
+const processingSessionIds = new Map<string, number>(); // sessionId → runs in flight
 
-async function runProcessingPipeline(sessionId: any, audioPath: any, options: any = {}) {
+interface ProcessOptions {
+  /** Transcribe again even when the meeting already has a transcript. */
+  forceRetranscribe?: boolean;
+}
+
+async function runProcessingPipeline(sessionId: string, audioPath: string | null | undefined, options: ProcessOptions = {}) {
   activePipelines += 1;
   processingSessionIds.set(sessionId, (processingSessionIds.get(sessionId) || 0) + 1);
   try {
@@ -756,13 +816,13 @@ function busySessionIds() {
 const recordingsStorage = createRecordingsStorage({ getRecordingsDir, db, deleteSessionWaveform, logger });
 
 /** Deletes recordings older than the "Keep recordings" setting. Runs at startup and on request. */
-function runRetentionCleanup(reason: any) {
+function runRetentionCleanup(reason: string) {
   const { recordingRetentionDays } = getConfig();
   return recordingsStorage.cleanup({ retentionDays: recordingRetentionDays, busyIds: busySessionIds(), reason });
 }
 
-async function processSession(sessionId: any, audioPath: any, options: any = {}) {
-  const sendProgress = (stage: any, percent: any) => {
+async function processSession(sessionId: string, audioPath: string | null | undefined, options: ProcessOptions = {}) {
+  const sendProgress: SendProgress = (stage, percent) => {
     if (stage !== 'complete') currentProcessing = { sessionId, stage, percent };
     sendToRenderer('processing:progress', { stage, percent });
     broadcastStatus({ type: 'PROCESSING_PROGRESS', stage, percent, sessionId });
@@ -787,8 +847,8 @@ async function processSession(sessionId: any, audioPath: any, options: any = {})
 
     const config = getConfig();
     const session = db.getSession(sessionId);
-    let transcript = null;
-    let sttInfo = { provider: config.sttService || 'google', model: (config.sttModels as any)?.[config.sttService] || '' };
+    let transcript: TranscriptSegment[] | null = null;
+    let sttInfo = { provider: config.sttService || 'google', model: config.sttModels?.[config.sttService] || '' };
 
     // Check if transcript already exists for this session unless forceRetranscribe is true
     if (!options?.forceRetranscribe && session && session.transcript) {
@@ -798,23 +858,22 @@ async function processSession(sessionId: any, audioPath: any, options: any = {})
           transcript = parsed;
           logger.info('Reusing existing transcript for session', { sessionId, segments: transcript.length });
         }
-      } catch (e: any) {
-        logger.warn('Failed to parse existing transcript, will re-transcribe', { sessionId, error: e.message });
+      } catch (e) {
+        logger.warn('Failed to parse existing transcript, will re-transcribe', { sessionId, error: errorMessage(e) });
       }
     }
 
     if (!transcript) {
       // Stage 1: Transcription (0–60%)
       sendProgress('transcribing', 0);
-      const onTranscriptionProgress = (pct: any) => sendProgress('transcribing', Math.round(pct * 0.6));
-      const stt = await transcribe(audioPath, config, onTranscriptionProgress);
+      const onTranscriptionProgress = (pct: number) => sendProgress('transcribing', Math.round(pct * 0.6));
+      const stt = await transcribe(String(audioPath), config, onTranscriptionProgress);
       transcript = stt.segments;
       sttInfo = { provider: stt.provider, model: stt.model };
 
       // transcribe() throws for silent files; if we get here but with empty results,
       // treat it the same way (STT may return empty for near-silence)
       if (!transcript || transcript.length === 0) {
-        const { silenceHints } = require('./audio/audio-hints');
         throw new Error(`No speech detected in the recording. ${silenceHints(process.platform).join(' ')}`);
       }
 
@@ -845,7 +904,7 @@ async function processSession(sessionId: any, audioPath: any, options: any = {})
     sendProgress('complete', 85);
 
     // Stage 3: Notion upload (85–100%) — optional, only if configured
-    let notionUrl = null;
+    let notionUrl: string | null = null;
     if (config.notionToken && config.notionPageId) {
       abortIfCancelled();
       sendProgress('uploading', 85);
@@ -860,10 +919,10 @@ async function processSession(sessionId: any, audioPath: any, options: any = {})
     sendToRenderer('processing:complete', { sessionId, notionUrl });
     broadcastStatus({ type: 'PROCESSING_COMPLETE', notionUrl, sessionId });
     logger.info('Processing pipeline complete', { sessionId, notionUrl });
-  } catch (err: any) {
+  } catch (err) {
     // If the session was deleted, silently drop the pipeline — no error toast,
     // no status update (the row is already gone).
-    if (err._cancelled || cancelledSessions.has(sessionId) || !db.getSession(sessionId)) {
+    if (isPipelineCancelled(err) || cancelledSessions.has(sessionId) || !db.getSession(sessionId)) {
       cancelledSessions.delete(sessionId);
       logger.info('Processing pipeline cancelled (session deleted)', { sessionId });
       clearProcessingState(sessionId);
@@ -871,30 +930,30 @@ async function processSession(sessionId: any, audioPath: any, options: any = {})
       syncOverlayWithStatus({ type: 'PROCESSING_CANCELLED', sessionId });
       return;
     }
-    logger.error('Processing pipeline error', { sessionId, error: err.message });
-    db.updateSession(sessionId, { status: 'error', last_error: err.message });
+    logger.error('Processing pipeline error', { sessionId, error: errorMessage(err) });
+    db.updateSession(sessionId, { status: 'error', last_error: errorMessage(err) });
     clearProcessingState(sessionId);
-    sendToRenderer('processing:error', { sessionId, error: err.message });
-    broadcastStatus({ type: 'PROCESSING_ERROR', error: err.message, sessionId });
+    sendToRenderer('processing:error', { sessionId, error: errorMessage(err) });
+    broadcastStatus({ type: 'PROCESSING_ERROR', error: errorMessage(err), sessionId });
   }
 }
 
 // ── Meeting overlay ──────────────────────────────────────────────────────────
-// One state object drives the floating overlay (electron/overlay/overlay-window.js). Native
+// One state object drives the floating overlay (electron/overlay/overlay-window.ts). Native
 // meeting detection opens it with a "Start recording" prompt; recording and processing status
 // keep it in step, whichever surface (overlay, app, tray or extension) started the recording.
 
-let overlayState: any = { mode: 'hidden' };   // prompt | recording | ended | processing | complete | error | hidden
-let overlayHideTimer: any = null;
+let overlayState: OverlayState = { mode: 'hidden' };
+let overlayHideTimer: ReturnType<typeof setTimeout> | undefined;
 const PROMPT_TIMEOUT_MS = 2 * 60 * 1000;   // an unanswered "Meeting detected" prompt counts as "Not now"
-let meetingToast: any = null;   // the fallback notification for a prompt the overlay couldn't show
+let meetingToast: MeetingToast | null = null;   // the fallback notification for a prompt the overlay couldn't show
 
 function isMeetingDetectionEnabled() {
   return getConfig().meetingDetection !== false;
 }
 
 // `onAutoHide` replaces the default hide when `autoHideMs` runs out.
-function setOverlay(next: any, { autoHideMs, onAutoHide }: { autoHideMs?: number; onAutoHide?: () => void } = {}) {
+function setOverlay(next: OverlayState, { autoHideMs, onAutoHide }: { autoHideMs?: number; onAutoHide?: () => void } = {}) {
   clearTimeout(overlayHideTimer);
   overlayState = next;
   if (meetingToast && (next.mode !== 'prompt' || next.meeting?.key !== meetingToast.meetingKey)) closeMeetingToast();
@@ -913,7 +972,7 @@ function setOverlay(next: any, { autoHideMs, onAutoHide }: { autoHideMs?: number
 
 // Mirrors a recording/processing status message onto the overlay. Processing updates only
 // apply to the session the overlay is following, so retrying an old meeting never pops it up.
-function syncOverlayWithStatus(message: any) {
+function syncOverlayWithStatus(message: StatusMessage) {
   const following = message.sessionId && message.sessionId === overlayState.sessionId;
   switch (message.type) {
     case 'RECORDING_STARTED':
@@ -951,12 +1010,12 @@ function syncOverlayWithStatus(message: any) {
 }
 
 // Sends a status message to the Chrome extension and mirrors it on the desktop overlay.
-function broadcastStatus(message: any) {
+function broadcastStatus(message: StatusMessage) {
   broadcastToExtension(message);
   syncOverlayWithStatus(message);
 }
 
-function handleMeetingDetected(meeting: any) {
+function handleMeetingDetected(meeting: DetectedMeeting) {
   if (isRecording) {
     // Already recording (started some other way): just label the overlay with the meeting.
     if (!overlayState.meeting) setOverlay({ ...overlayState, meeting });
@@ -978,7 +1037,7 @@ function dismissPrompt() {
 }
 
 // Never stops on its own: while recording, ask; while only prompting, withdraw the prompt.
-function handleMeetingEnded(meeting: any) {
+function handleMeetingEnded(meeting: DetectedMeeting) {
   if (isRecording) {
     setOverlay({ ...overlayState, mode: 'ended' });
   } else if (overlayState.mode === 'prompt' && overlayState.meeting?.key === meeting.key) {
@@ -987,25 +1046,25 @@ function handleMeetingEnded(meeting: any) {
 }
 
 function closeMeetingToast() {
-  const toast: any = meetingToast;
+  const toast = meetingToast;
   meetingToast = null;
   toast?.close();
 }
 
 // The overlay couldn't be shown even after a retry: offer the recording as a system notification
 // instead, so a detected meeting is never silently missed. Clicking it does what Record does.
-function showMeetingToast(meeting: any) {
+function showMeetingToast(meeting: DetectedMeeting) {
   closeMeetingToast();
   if (!Notification.isSupported()) {
     logger.warn('Meeting overlay failed and notifications are unsupported; no prompt shown', { key: meeting.key });
     return;
   }
-  const toast = new Notification({
+  const toast: MeetingToast = new Notification({
     title: 'Meeting detected',
     body: `${meeting.title || meeting.platformLabel || 'A meeting'} · Click to start recording`,
     icon: nativeImage.createFromPath(path.join(appRoot, 'assets/icons/icon.png')),
   });
-  (toast as any).meetingKey = meeting.key;
+  toast.meetingKey = meeting.key;
   toast.on('click', () => {
     if (meetingToast === toast) meetingToast = null;
     if (isRecording || overlayState.mode !== 'prompt' || overlayState.meeting?.key !== meeting.key) {
@@ -1021,7 +1080,7 @@ function showMeetingToast(meeting: any) {
   logger.info('Meeting overlay unavailable; showed a notification instead', { key: meeting.key });
 }
 
-function handleOverlayFailure(state: any, reason: any) {
+function handleOverlayFailure(state: OverlayState, reason: string) {
   if (state.mode === 'prompt' && state.meeting && isMeetingDetectionEnabled()) {
     showMeetingToast(state.meeting);
   } else {
@@ -1029,7 +1088,7 @@ function handleOverlayFailure(state: any, reason: any) {
   }
 }
 
-function applyMeetingDetection(enabled: any) {
+function applyMeetingDetection(enabled: boolean) {
   if (enabled) {
     meetingDetector.start({ onDetected: handleMeetingDetected, onEnded: handleMeetingEnded });
   } else {
@@ -1047,7 +1106,7 @@ const RENDERER_ERRORS_PER_MINUTE = 20;
 let rendererErrorWindowStart = 0;
 let rendererErrorCount = 0;
 
-function logRendererError(report: any) {
+function logRendererError(report: RendererErrorReport) {
   const now = Date.now();
   if (now - rendererErrorWindowStart > 60000) {
     rendererErrorWindowStart = now;
@@ -1055,8 +1114,8 @@ function logRendererError(report: any) {
   }
   rendererErrorCount += 1;
   if (rendererErrorCount > RENDERER_ERRORS_PER_MINUTE) return;
-  const text = (value: any) => (typeof value === 'string' ? value.slice(0, 4000) : undefined);
-  const r = report && typeof report === 'object' ? report : {};
+  const text = (value: unknown) => (typeof value === 'string' ? value.slice(0, 4000) : undefined);
+  const r: RendererErrorReport = report && typeof report === 'object' ? report : {};
   logger.error('Renderer error', {
     kind: text(r.kind),
     message: text(r.message),
@@ -1072,7 +1131,7 @@ function logRendererError(report: any) {
 
 // The window could not be repaired by a reload or by replacing it. Say so instead of leaving a
 // blank window; a recording runs in its own window and is not affected.
-async function handleMainWindowGiveUp(reason: any) {
+async function handleMainWindowGiveUp(reason: string) {
   logger.error('Main window could not be repaired', { reason, recording: isRecording });
   const canRestart = !isRecording && activePipelines === 0;
   const { response } = await dialog.showMessageBox({
@@ -1095,8 +1154,14 @@ async function handleMainWindowGiveUp(reason: any) {
 
 // ── IPC Handlers ─────────────────────────────────────────────────────────────
 
+// A file or folder picker, attached to the main window when there is one.
+function showOpenDialog(options: OpenDialogOptions) {
+  const win = getMainWindow();
+  return win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options);
+}
+
 function registerIpcHandlers() {
-  // ── Main window (window:* IPC lives in window/main-window.js) ─────────────
+  // ── Main window (window:* IPC lives in window/main-window.ts) ─────────────
   registerMainWindowIpc({
     getTheme: () => getConfig().theme || 'light',
     getBackgroundColor: resolveStartupBackgroundColor,
@@ -1107,7 +1172,7 @@ function registerIpcHandlers() {
 
   // What a newly created (or reloaded) window needs to pick up where things are: the recording
   // and processing run in main, and the page it last showed.
-  ipcMain.handle('app:state', () => ({
+  ipc.handle('app:state', () => ({
     recording: isRecording ? { sessionId: currentSessionId, startedAt: recordingStartedAt } : null,
     processing: currentProcessing,
     notesPreview: currentNotesPreview,
@@ -1116,7 +1181,7 @@ function registerIpcHandlers() {
 
   // Errors from the renderer (render errors caught by a boundary, uncaught errors, unhandled
   // rejections) go to the log file; they used to be visible only in DevTools.
-  ipcMain.on('renderer:error', (_e, report) => logRendererError(report));
+  ipc.on('renderer:error', (_e, report) => logRendererError(report));
 
   // Open a URL in the OS default browser (safe: only http/https allowed)
   ipc.handle('shell:open-external', (_e, url) => {
@@ -1126,21 +1191,21 @@ function registerIpcHandlers() {
   });
 
   // ── Logs ──────────────────────────────────────────────────────────────────
-  ipcMain.handle('logs:get', (_e, { limit } = {}) => logger.readLogs(limit));
-  ipcMain.handle('logs:clear', () => logger.clearLogs());
-  ipcMain.handle('logs:openFolder', () => shell.openPath(logger.getLogsDir()));
+  ipc.handle('logs:get', (_e, { limit } = {}) => logger.readLogs(limit));
+  ipc.handle('logs:clear', () => logger.clearLogs());
+  ipc.handle('logs:openFolder', () => shell.openPath(logger.getLogsDir()));
   // Live log lines are pushed only while the Logs page is listening for them.
-  ipcMain.on('logs:subscribe', (event) => {
+  ipc.on('logs:subscribe', (event) => {
     if (event.sender === getMainWindow()?.webContents) logSubscribed = true;
   });
-  ipcMain.on('logs:unsubscribe', () => { logSubscribed = false; });
-  logger.setLogEmitter((entry: any) => {
+  ipc.on('logs:unsubscribe', () => { logSubscribed = false; });
+  logger.setLogEmitter((entry) => {
     if (logSubscribed) sendToRenderer('log:entry', entry);
   });
 
   // Calendar sources hold credentials (ICS links, OAuth secrets and tokens); the renderer reads
   // them redacted through calendar:list and changes them only through the calendar:* handlers.
-  ipcMain.handle('config:get', () => { // TODO(strict): typed loosely, see the note at TypedIpcMain
+  ipc.handle('config:get', () => {
     const { calendars: _calendars, ...config } = getConfig();
     return config;
   });
@@ -1174,7 +1239,7 @@ function registerIpcHandlers() {
   });
 
   // ── macOS permissions + system-audio test (Settings › System) ─────────────
-  ipcMain.handle('permissions:status', () => getPermissionStatus()); // TODO(strict): typed loosely, see the note at TypedIpcMain
+  ipc.handle('permissions:status', () => getPermissionStatus());
   ipc.handle('permissions:request', (_e, kind) => requestPermission(kind));
   ipc.handle('permissions:open-settings', (_e, kind) => openPermissionSettings(kind));
 
@@ -1199,13 +1264,13 @@ function registerIpcHandlers() {
   ipc.handle('recording:stop', () => handleStopRecording());
 
   // ── Meeting overlay ───────────────────────────────────────────────────────
-  // overlay:ready / shown / closed / resize / move belong to the window itself (overlay-window.js).
+  // overlay:ready / shown / closed / resize / move belong to the window itself (overlay-window.ts).
   registerOverlayIpc({ onFailure: handleOverlayFailure });
 
   ipc.handle('overlay:start', () => {
     if (overlayState.mode !== 'prompt') return { success: false, error: 'Nothing to record' };
-    const meeting = overlayState.meeting || {};
-    return handleStartRecording(null, meeting.url || '', meeting.title || '', meeting.platform);
+    const meeting = overlayState.meeting;
+    return handleStartRecording(null, meeting?.url || '', meeting?.title || '', meeting?.platform);
   });
 
   ipc.handle('overlay:stop', () => handleStopRecording());
@@ -1227,22 +1292,22 @@ function registerIpcHandlers() {
     return true;
   });
 
-  // ── Capture window (audio/capture-window.js) ──────────────────────────────
+  // ── Capture window (audio/capture-window.ts) ──────────────────────────────
   registerCaptureIpc({
     // Each chunk is appended to the in-progress .webm as it arrives.
-    onChunk: (buffer: any) => {
+    onChunk: (buffer) => {
       if (!rendererWriteStream) return;   // a chunk still in flight after the recording stopped
       try {
-        const chunk = Buffer.from(buffer);
+        const chunk = buffer instanceof ArrayBuffer ? Buffer.from(buffer) : Buffer.from(buffer);
         rendererWriteStream.write(chunk);
         rendererChunkCount++;
         rendererBytesWritten += chunk.length;
-      } catch (err: any) {
-        logger.error('Failed to write audio chunk to disk', { error: err.message });
+      } catch (err) {
+        logger.error('Failed to write audio chunk to disk', { error: errorMessage(err) });
       }
     },
     // Live meters: only worth sending while someone can see them.
-    onLevels: (levels: any) => {
+    onLevels: (levels) => {
       if (isMainWindowVisible()) sendToRenderer('recording:levels', levels);
     },
     onLost: handleCaptureLost,
@@ -1250,17 +1315,17 @@ function registerIpcHandlers() {
 
   // FFmpeg device capture (the recording fallback) uses Windows or Linux (PulseAudio) devices.
   const FFMPEG_DEVICES_UNSUPPORTED = 'FFmpeg device capture is only available on Windows and Linux';
-  ipc.handle('audio:list-devices', () => (isMac ? { all: [], error: FFMPEG_DEVICES_UNSUPPORTED } : listAudioDevices()));
+  ipc.handle('audio:list-devices', () => (isMac ? { all: [], system: null, mic: null, error: FFMPEG_DEVICES_UNSUPPORTED } : listAudioDevices()));
 
-  ipc.handle('audio:probe-device', (_e, device) => (isMac ? { error: FFMPEG_DEVICES_UNSUPPORTED } : probeAudioDevice(device)));
+  ipc.handle('audio:probe-device', (_e, device) => (isMac ? { device, peak: 0, isSilent: true, error: FFMPEG_DEVICES_UNSUPPORTED } : probeAudioDevice(device)));
 
   // Settings › System › System audio (Linux): the audio server MeetMind records from, and whether
   // the FFmpeg fallback can record from it.
   ipc.handle('audio:linux-status', async () => {
     if (!isLinux) return { error: 'Linux only' };
-    let info = null;
-    let error = null;
-    try { info = await pulseInfo(); } catch (err: any) { error = err.message; }
+    let info: Awaited<ReturnType<typeof pulseInfo>> | null = null;
+    let error: string | null = null;
+    try { info = await pulseInfo(); } catch (err) { error = errorMessage(err); }
     return {
       server: info?.serverName || null,
       defaultSink: info?.defaultSink || null,
@@ -1270,9 +1335,8 @@ function registerIpcHandlers() {
     };
   });
 
-  ipcMain.handle('audio:import-file', async () => {
-    const parentWin = getMainWindow() || undefined;
-    const { canceled, filePaths } = await dialog.showOpenDialog(parentWin, {
+  ipc.handle('audio:import-file', async () => {
+    const { canceled, filePaths } = await showOpenDialog({
       title: 'Select audio file',
       properties: ['openFile'],
       filters: [
@@ -1290,8 +1354,7 @@ function registerIpcHandlers() {
     const srcPath = filePaths[0];
 
     try {
-      const { v4: uuidv4 } = require('uuid');
-      const sessionId = uuidv4();
+      const sessionId = newSessionId();
 
       const recordingsDir = getRecordingsDir();
       if (!fs.existsSync(recordingsDir)) {
@@ -1307,14 +1370,14 @@ function registerIpcHandlers() {
         await convertFileToWav(srcPath, destPath);
       }
 
-      let durationSeconds = null;
+      let durationSeconds: number | null = null;
       try {
         durationSeconds = probeDurationSeconds(destPath);
-      } catch (err: any) {
+      } catch (err) {
         logger.warn('Failed to compute duration for imported audio', {
           srcPath,
           destPath,
-          error: err.message,
+          error: errorMessage(err),
         });
       }
 
@@ -1331,9 +1394,9 @@ function registerIpcHandlers() {
       runProcessingPipeline(sessionId, destPath);
 
       return { success: true, sessionId };
-    } catch (err: any) {
-      logger.error('Audio import failed', { error: err.message });
-      return { success: false, error: err.message };
+    } catch (err) {
+      logger.error('Audio import failed', { error: errorMessage(err) });
+      return { success: false, error: errorMessage(err) };
     }
   });
 
@@ -1358,8 +1421,8 @@ function registerIpcHandlers() {
         const fp = path.join(recordingsDir, `${id}${ext}`);
         if (fs.existsSync(fp)) fs.unlinkSync(fp);
       }
-    } catch (err: any) {
-      logger.warn('Failed to clean up audio files for deleted session', { sessionId: id, error: err.message });
+    } catch (err) {
+      logger.warn('Failed to clean up audio files for deleted session', { sessionId: id, error: errorMessage(err) });
     }
 
     return true;
@@ -1378,10 +1441,12 @@ function registerIpcHandlers() {
         title: notes.meeting_title || notes.title || session.title,
       });
       logger.info('Notes edited', { sessionId: id });
-      return { success: true, session: db.getSession(id) };
-    } catch (err: any) {
-      logger.error('Failed to save edited notes', { sessionId: id, error: err.message });
-      return { success: false, error: err.message || 'Failed to save notes.' };
+      const updated = db.getSession(id);
+      if (!updated) return { success: false, error: 'Meeting not found.' };
+      return { success: true, session: updated };
+    } catch (err) {
+      logger.error('Failed to save edited notes', { sessionId: id, error: errorMessage(err) });
+      return { success: false, error: errorMessage(err) || 'Failed to save notes.' };
     }
   });
 
@@ -1393,16 +1458,18 @@ function registerIpcHandlers() {
     const title = cleanTitle(rawTitle);
     if (!title) return { success: false, error: 'The title can’t be empty.' };
     try {
-      const updates: any = { title, meeting_title: title };
+      const updates: SessionUpdate = { title, meeting_title: title };
       if (session.notes && typeof session.notes === 'object') {
         updates.notes = JSON.stringify(applyMeetingTitle(session.notes, title));
       }
       db.updateSession(id, updates);
       logger.info('Meeting renamed', { sessionId: id });
-      return { success: true, session: db.getSession(id) };
-    } catch (err: any) {
-      logger.error('Failed to rename meeting', { sessionId: id, error: err.message });
-      return { success: false, error: err.message || 'Failed to rename the meeting.' };
+      const updated = db.getSession(id);
+      if (!updated) return { success: false, error: 'Meeting not found.' };
+      return { success: true, session: updated };
+    } catch (err) {
+      logger.error('Failed to rename meeting', { sessionId: id, error: errorMessage(err) });
+      return { success: false, error: errorMessage(err) || 'Failed to rename the meeting.' };
     }
   });
 
@@ -1414,9 +1481,9 @@ function registerIpcHandlers() {
     try {
       shell.showItemInFolder(audioPath);
       return { success: true, path: audioPath };
-    } catch (err: any) {
-      logger.error('Failed to open recording file', { sessionId, audioPath, error: err.message });
-      return { success: false, error: err.message || 'Failed to open recording file.' };
+    } catch (err) {
+      logger.error('Failed to open recording file', { sessionId, audioPath, error: errorMessage(err) });
+      return { success: false, error: errorMessage(err) || 'Failed to open recording file.' };
     }
   });
 
@@ -1429,19 +1496,19 @@ function registerIpcHandlers() {
     try {
       const { peaks, duration } = await getSessionWaveform(sessionId, audioPath);
       return { success: true, peaks, duration };
-    } catch (err: any) {
-      logger.warn('Failed to compute waveform', { sessionId, audioPath, error: err.message });
-      return { success: false, error: err.message || 'Failed to compute waveform.' };
+    } catch (err) {
+      logger.warn('Failed to compute waveform', { sessionId, audioPath, error: errorMessage(err) });
+      return { success: false, error: errorMessage(err) || 'Failed to compute waveform.' };
     }
   });
 
   // Whether a meeting's Audio tab can play something, and if not, why.
   // bytes/format describe the file that plays; busy is true while it's being recorded or processed.
-  ipcMain.handle('session:audio-status', (_e, sessionId) => {
+  ipc.handle('session:audio-status', (_e, sessionId) => {
     const session = db.getSession(sessionId);
     if (!session) return { available: false, deletedAt: null, source: null, bytes: null, format: null, busy: false };
     const audioPath = resolveSessionAudioPath(sessionId);
-    let bytes = null;
+    let bytes: number | null = null;
     if (audioPath) {
       try {
         bytes = fs.statSync(audioPath).size;
@@ -1460,12 +1527,12 @@ function registerIpcHandlers() {
   });
 
   // Deletes one meeting's recording from its Audio tab, keeping its notes and transcript.
-  ipcMain.handle('session:delete-recording', (_e, sessionId) => {
+  ipc.handle('session:delete-recording', (_e, sessionId) => {
     try {
       return recordingsStorage.deleteOne({ id: sessionId, busyIds: busySessionIds() });
-    } catch (err: any) {
-      logger.error('Deleting a recording failed', { sessionId, error: err.message });
-      return { success: false, error: err.message || 'Couldn’t delete the recording.' };
+    } catch (err) {
+      logger.error('Deleting a recording failed', { sessionId, error: errorMessage(err) });
+      return { success: false, error: errorMessage(err) || 'Couldn’t delete the recording.' };
     }
   });
 
@@ -1479,18 +1546,18 @@ function registerIpcHandlers() {
   ipc.handle('storage:cleanup', () => {
     try {
       return { success: true, ...runRetentionCleanup('manual') };
-    } catch (err: any) {
-      logger.error('Recording cleanup failed', { error: err.message });
-      return { success: false, error: err.message };
+    } catch (err) {
+      logger.error('Recording cleanup failed', { error: errorMessage(err) });
+      return { success: false, error: errorMessage(err) };
     }
   });
 
   ipc.handle('storage:delete-all', () => {
     try {
       return { success: true, ...recordingsStorage.deleteAll({ busyIds: busySessionIds() }) };
-    } catch (err: any) {
-      logger.error('Deleting all recordings failed', { error: err.message });
-      return { success: false, error: err.message };
+    } catch (err) {
+      logger.error('Deleting all recordings failed', { error: errorMessage(err) });
+      return { success: false, error: errorMessage(err) };
     }
   });
 
@@ -1500,14 +1567,14 @@ function registerIpcHandlers() {
       fs.mkdirSync(dir, { recursive: true });
       const error = await shell.openPath(dir);
       return error ? { success: false, error } : { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message };
+    } catch (err) {
+      return { success: false, error: errorMessage(err) };
     }
   });
 
   // ── Folder picker (shared) ─────────────────────────────────────────────────
-  ipcMain.handle('dialog:choose-folder', async (_e, opts = {}) => {
-    const result = await dialog.showOpenDialog(getMainWindow() || undefined, {
+  ipc.handle('dialog:choose-folder', async (_e, opts = {}) => {
+    const result = await showOpenDialog({
       title: typeof opts.title === 'string' ? opts.title : 'Choose a folder',
       defaultPath: typeof opts.defaultPath === 'string' ? opts.defaultPath : undefined,
       properties: ['openDirectory', 'createDirectory'],
@@ -1521,12 +1588,12 @@ function registerIpcHandlers() {
 
   // The renderer builds the HTML (so notes render exactly as in the app); the file name
   // and folder are decided here so they have one source of truth.
-  ipcMain.handle('pdf:export', async (_e, sessionId, html) => { // TODO(strict): typed loosely, see the note at TypedIpcMain
+  ipc.handle('pdf:export', async (_e, sessionId, html) => {
     const session = db.getSession(sessionId);
     if (!session) return { success: false, error: 'Session not found' };
     if (typeof html !== 'string' || !html.trim()) return { success: false, error: 'Nothing to export yet.' };
 
-    let notes: any = {};
+    let notes: Notes = {};
     try {
       notes = typeof session.notes === 'string' ? JSON.parse(session.notes || '{}') : (session.notes || {});
     } catch { /* fall back to the session title */ }
@@ -1568,18 +1635,18 @@ function registerIpcHandlers() {
       const url = await uploadSessionToNotion(sessionId, notes, transcript, config);
       db.updateSession(sessionId, { notion_page_url: url });
       return { success: true, url };
-    } catch (err: any) {
-      logger.error('Notion upload failed', { error: err.message });
-      return { success: false, error: err.message };
+    } catch (err) {
+      logger.error('Notion upload failed', { error: errorMessage(err) });
+      return { success: false, error: errorMessage(err) };
     }
   });
 
-  ipcMain.handle('notion:test', async (_e, token, pageId) => { // TODO(strict): typed loosely, see the note at TypedIpcMain
+  ipc.handle('notion:test', async (_e, token, pageId) => {
     try {
       const res = await testNotionConnection(pageId, token);
-      return { success: true, ...((res || {}) as any) };
-    } catch (err: any) {
-      return { success: false, error: err.message };
+      return { ...res, success: true };
+    } catch (err) {
+      return { success: false, error: errorMessage(err) };
     }
   });
 
@@ -1587,20 +1654,20 @@ function registerIpcHandlers() {
 
   // Generic connection test for any registered provider. `values` are the (possibly unsaved)
   // form values, so credentials can be verified before saving.
-  ipc.handle('providers:test', async (_e, { kind, id, values, model } = {}) => {
+  ipc.handle('providers:test', async (_e, { kind, id, values, model }) => {
     try {
       const registry = registries[kind];
       if (!registry) throw new Error(`Unknown provider kind "${kind}"`);
       const provider = registry.get(id);
       const config = { ...getConfig(), ...(values || {}) };
       if (!registry.isConfigured(provider, config)) {
-        const missing = provider.credentials.find((f) => f.required && !String((config as any)[f.configKey] ?? '').trim());
+        const missing = provider.credentials.find((f) => f.required && !String((config as Record<string, unknown>)[f.configKey] ?? '').trim());
         throw new Error(`${missing?.label || 'Credentials'} is required`);
       }
       await provider.test({ config, model: registry.resolveModel(provider, model) });
       return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message };
+    } catch (err) {
+      return { success: false, error: errorMessage(err) };
     }
   });
 
@@ -1651,8 +1718,8 @@ function registerIpcHandlers() {
         const url = await uploadSessionToNotion(sessionId, notes, transcript, config);
         db.updateSession(sessionId, { notion_page_url: url, status: 'complete' });
         return { success: true, url };
-      } catch (err: any) {
-        return { success: false, error: err.message };
+      } catch (err) {
+        return { success: false, error: errorMessage(err) };
       }
     }
     return { success: false, error: 'Unknown stage' };
@@ -1660,8 +1727,6 @@ function registerIpcHandlers() {
 
   // Create a session from a pasted transcript (skip STT, go straight to note generation)
   ipc.handle('session:create-from-transcript', async (_e, { title, transcriptText }) => {
-    const { v4: uuidv4 } = require('uuid');
-
     if (!transcriptText || !transcriptText.trim()) {
       return { success: false, error: 'Transcript text is empty.' };
     }
@@ -1672,7 +1737,7 @@ function registerIpcHandlers() {
       return { success: false, error: `${llm.name} API key is not configured. Please add it in Settings.` };
     }
 
-    const sessionId = uuidv4();
+    const sessionId = newSessionId();
     const now = new Date().toISOString();
 
     // Convert raw text into the standard segment array expected by generateNotes and NoteViewer.
@@ -1702,7 +1767,7 @@ function registerIpcHandlers() {
     // Run note generation + optional Notion upload asynchronously so the IPC call returns immediately
     // and the renderer can listen on processing:progress / processing:complete as usual.
     (async () => {
-      const sendProgress = (stage: any, percent: any) => {
+      const sendProgress: SendProgress = (stage, percent) => {
         if (stage !== 'complete') currentProcessing = { sessionId, stage, percent };
         sendToRenderer('processing:progress', { stage, percent });
         broadcastToExtension({ type: 'PROCESSING_PROGRESS', stage, percent });
@@ -1725,7 +1790,7 @@ function registerIpcHandlers() {
         sendProgress('complete', 85);
 
         // Optional Notion upload
-        let notionUrl = null;
+        let notionUrl: string | null = null;
         if (config.notionToken && config.notionPageId) {
           sendProgress('uploading', 85);
           db.updateSession(sessionId, { status: 'uploading' });
@@ -1739,12 +1804,12 @@ function registerIpcHandlers() {
         sendToRenderer('processing:complete', { sessionId, notionUrl });
         broadcastToExtension({ type: 'PROCESSING_COMPLETE', notionUrl, sessionId });
         logger.info('Paste-transcript pipeline complete', { sessionId });
-      } catch (err: any) {
-        logger.error('Paste-transcript pipeline error', { sessionId, error: err.message });
-        db.updateSession(sessionId, { status: 'error', last_error: err.message });
+      } catch (err) {
+        logger.error('Paste-transcript pipeline error', { sessionId, error: errorMessage(err) });
+        db.updateSession(sessionId, { status: 'error', last_error: errorMessage(err) });
         clearProcessingState(sessionId);
-        sendToRenderer('processing:error', { sessionId, error: err.message });
-        broadcastToExtension({ type: 'PROCESSING_ERROR', error: err.message });
+        sendToRenderer('processing:error', { sessionId, error: errorMessage(err) });
+        broadcastToExtension({ type: 'PROCESSING_ERROR', error: errorMessage(err) });
       }
     })();
 
@@ -1753,19 +1818,16 @@ function registerIpcHandlers() {
   });
 
   // ── Auto updater ──────────────────────────────────────────────────────────
-  ipcMain.handle('updater:check', (_e) => checkForUpdates(true)); // TODO(strict): typed loosely, see the note at TypedIpcMain
-  ipc.handle('updater:download', (_e) => downloadUpdate());
-  ipc.handle('updater:install', (_e) => quitAndInstall());
-  ipcMain.handle('updater:get-status', (_e) => getUpdaterState()); // TODO(strict): typed loosely, see the note at TypedIpcMain
-  ipc.handle('app:version', (_e) => app.getVersion());
+  ipc.handle('updater:check', () => checkForUpdates(true));
+  ipc.handle('updater:download', () => downloadUpdate());
+  ipc.handle('updater:install', () => quitAndInstall());
+  ipc.handle('updater:get-status', () => getUpdaterState());
+  ipc.handle('app:version', () => app.getVersion());
 
   // ── FFmpeg check ──────────────────────────────────────────────────────────
   ipc.handle('ffmpeg:check', () => {
-    const { locate } = require('./audio/ffmpeg-path');
-    const { spawnSync } = require('child_process');
-
     // Bundled binary first, then the in-app install (macOS), Homebrew, and finally PATH.
-    function probeBinary(tool: any) {
+    function probeBinary(tool: string): FfmpegBinaryInfo {
       const hit = locate(tool);
       if (!hit) return { found: false, source: null, path: null, version: null };
       try {
@@ -1785,9 +1847,9 @@ function registerIpcHandlers() {
   });
 
   // ── FFmpeg install ─────────────────────────────────────────────────────────
-  ipc.handle('ffmpeg:install', () => {
-    const { installFfmpeg } = require('./services/ffmpeg-installer');
-    return installFfmpeg((stage: any, percent: any, message: any) => {
+  ipc.handle('ffmpeg:install', async () => {
+    const { installFfmpeg }: typeof import('./services/ffmpeg-installer') = require('./services/ffmpeg-installer');
+    return installFfmpeg((stage, percent, message) => {
       sendToRenderer('ffmpeg:install-progress', { stage, percent, message });
     });
   });
@@ -1795,24 +1857,30 @@ function registerIpcHandlers() {
   // ── Calendars (Google accounts + ICS links) ──────────────────────────────
   // Each handler resolves { success, ... } or { success: false, error } instead of throwing, so
   // the renderer shows the message as written.
-  const calendarCall = (fn: any) => async (...args: any[]) => {
-    try {
-      return { success: true, ...(await fn(...args)) };
-    } catch (err: any) {
-      if (!err.cancelled) logger.warn('Calendar action failed', { error: err.message });
-      return { success: false, error: err.message, cancelled: !!err.cancelled };
-    }
-  };
-  ipcMain.handle('calendar:list', () => calendar.list()); // TODO(strict): typed loosely, see the note at TypedIpcMain
-  ipc.handle('calendar:add', calendarCall((_e: any, input: any) => calendar.addSource(input)));
-  ipc.handle('calendar:update', calendarCall((_e: any, id: any, patch: any) => calendar.updateSource(id, patch)));
-  ipc.handle('calendar:remove', calendarCall((_e: any, id: any) => calendar.removeSource(id)));
-  ipc.handle('calendar:reconnect', calendarCall((_e: any, id: any) => calendar.reconnect(id)));
+  const calendarCall = <A extends unknown[], T extends object>(fn: (...args: A) => T | Promise<T>) =>
+    async (_e: IpcMainInvokeEvent, ...args: A): Promise<CalendarOutcome<T>> => {
+      try {
+        return { success: true, ...(await fn(...args)) };
+      } catch (err) {
+        if (!isActionCancelled(err)) logger.warn('Calendar action failed', { error: errorMessage(err) });
+        return { success: false, error: errorMessage(err), cancelled: isActionCancelled(err) };
+      }
+    };
+  ipc.handle('calendar:list', () => calendar.list());
+  ipc.handle('calendar:add', calendarCall(async (input: CalendarAddInput) => calendar.addSource(input)));
+  ipc.handle('calendar:update', calendarCall((id: string, patch: CalendarUpdatePatch) => calendar.updateSource(id, patch)));
+  ipc.handle('calendar:remove', calendarCall((id: string) => calendar.removeSource(id)));
+  ipc.handle('calendar:reconnect', calendarCall((id: string) => calendar.reconnect(id)));
   ipc.handle('calendar:cancel-auth', () => calendar.cancelAuth());
-  ipc.handle('calendar:events', calendarCall((_e: any, { force }: { force?: boolean } = {}) => calendar.fetchEvents({ force: !!force })));
+  ipc.handle('calendar:events', calendarCall(({ force }: { force?: boolean } = {}) => calendar.fetchEvents({ force: !!force })));
 }
 
-function resolveSessionAudioPath(sessionId: any) {
+// Node's web ReadableStream and the DOM's (the type `Response` takes) are one and the same at runtime.
+function toResponseBody(stream: Readable): ReadableStream {
+  return Readable.toWeb(stream) as unknown as ReadableStream;
+}
+
+function resolveSessionAudioPath(sessionId: string | null | undefined) {
   if (!sessionId) return null;
   const session = db.getSession(sessionId);
   if (!session) return null;
@@ -1828,15 +1896,15 @@ function resolveSessionAudioPath(sessionId: any) {
   return null;
 }
 
-function probeDurationSeconds(audioPath: any) {
+function probeDurationSeconds(audioPath: string | null | undefined) {
   if (!audioPath) return null;
   try {
     const seconds = getMediaDurationSeconds(audioPath);
     if (seconds == null) return null;
     const rounded = Math.round(seconds);
     return Number.isFinite(rounded) && rounded > 0 ? rounded : null;
-  } catch (err: any) {
-    logger.warn('Failed to probe media duration', { audioPath, error: err.message });
+  } catch (err) {
+    logger.warn('Failed to probe media duration', { audioPath, error: errorMessage(err) });
     return null;
   }
 }
@@ -1933,8 +2001,8 @@ async function recoverOrphanedWebmFiles() {
 
       // Clean up the webm now that we have the wav
       try { fs.unlinkSync(webmPath); } catch { /* ignore */ }
-    } catch (err: any) {
-      logger.error('Failed to recover orphaned webm', { sessionId, error: err.message });
+    } catch (err) {
+      logger.error('Failed to recover orphaned webm', { sessionId, error: errorMessage(err) });
       // Leave the webm in place for manual recovery
     }
   }
@@ -1977,7 +2045,7 @@ app.whenReady().then(async () => {
       }
 
       const ext = path.extname(audioPath).toLowerCase();
-      const mimeTypes = {
+      const mimeTypes: Record<string, string> = {
         '.wav': 'audio/wav',
         '.webm': 'audio/webm',
         '.mp3': 'audio/mpeg',
@@ -1986,7 +2054,7 @@ app.whenReady().then(async () => {
         '.ogg': 'audio/ogg',
         '.flac': 'audio/flac',
       };
-      const mime = (mimeTypes as any)[ext] || 'application/octet-stream';
+      const mime = mimeTypes[ext] || 'application/octet-stream';
       const { size } = fs.statSync(audioPath);
       const rangeHeader = request.headers.get('Range');
 
@@ -2005,7 +2073,7 @@ app.whenReady().then(async () => {
         const chunkEnd = Math.min(end, size - 1);
         const chunkSize = chunkEnd - start + 1;
         const nodeStream = fs.createReadStream(audioPath, { start, end: chunkEnd });
-        return new Response(Readable.toWeb(nodeStream) as any, {
+        return new Response(toResponseBody(nodeStream), {
           status: 206,
           headers: {
             'Content-Type': mime,
@@ -2018,7 +2086,7 @@ app.whenReady().then(async () => {
       }
 
       const nodeStream = fs.createReadStream(audioPath);
-      return new Response(Readable.toWeb(nodeStream) as any, {
+      return new Response(toResponseBody(nodeStream), {
         status: 200,
         headers: {
           'Content-Type': mime,
@@ -2027,7 +2095,7 @@ app.whenReady().then(async () => {
           'Cache-Control': 'no-cache',
         },
       });
-    } catch (err: any) {
+    } catch (err) {
       logger.error('meetmind-audio protocol error', err);
       return new Response(null, { status: 500 });
     }
@@ -2048,7 +2116,7 @@ app.whenReady().then(async () => {
   initializeAutoUpdater({
     sendToRenderer,
     // Download progress changes many times a second; the tray menu only cares about the status.
-    onStatusChange: ({ status }: any) => {
+    onStatusChange: ({ status }) => {
       if (status === lastTrayUpdaterStatus) return;
       lastTrayUpdaterStatus = status;
       updateTrayMenu();
@@ -2078,7 +2146,7 @@ app.whenReady().then(async () => {
 
   const config = getConfig();
   await startWebSocketServer(config.websocketPort, {
-    onStartRecording: (data: any) => handleStartRecording(null, data.meetingUrl, data.meetingTitle),
+    onStartRecording: (data) => handleStartRecording(null, data.meetingUrl, data.meetingTitle),
     onStopRecording: () => handleStopRecording(),
     onShowWindow: () => focusMainWindow(),
     onStatusRequest: () => ({
@@ -2096,13 +2164,13 @@ app.whenReady().then(async () => {
     .finally(() => {
       try {
         backfillSessionDurations();
-      } catch (err: any) {
+      } catch (err) {
         logger.error('Duration backfill failed', err);
       }
       // After crash recovery, so a recovered recording is judged by its meeting's date.
       try {
         runRetentionCleanup('startup');
-      } catch (err: any) {
+      } catch (err) {
         logger.error('Recording cleanup failed', err);
       }
     });
@@ -2157,7 +2225,7 @@ app.on('before-quit', () => {
 // ── Calendar Event Poller ─────────────────────────────────────────────────────
 
 function startCalendarPoller() {
-  calendar.startPoller((event: any) => {
+  calendar.startPoller((event) => {
     logger.info('Calendar meeting starting', { title: event.title, start: event.start, calendar: event.sourceName });
 
     // System notification. macOS (Electron 42+) shows notifications only for signed apps; an

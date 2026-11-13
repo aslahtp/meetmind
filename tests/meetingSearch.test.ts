@@ -6,10 +6,16 @@ import {
   stem,
   editDistance,
 } from '../renderer/lib/meetingSearch';
+import type { SearchableSession, SearchMatch } from '../renderer/lib/meetingSearch';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-function session(overrides = {}) {
+interface FixtureSession extends Omit<SearchableSession, 'transcript'> {
+  status: string;
+  transcript: Array<{ speaker?: unknown; text?: unknown; startTime?: number }>;
+}
+
+function session(overrides: Partial<FixtureSession> = {}): FixtureSession {
   return {
     id: 'sess',
     title: 'Untitled',
@@ -59,7 +65,15 @@ const SESSIONS = [
   }),
 ];
 
-const ids = (results: any) => [...results.keys()];
+type Results = Map<string, SearchMatch> | null;
+
+const ids = (results: Results) => [...results!.keys()];
+
+function found(results: Results, id: string): SearchMatch {
+  const match = results?.get(id);
+  if (!match) throw new Error(`no match for ${id}`);
+  return match;
+}
 
 // ── Text pipeline ─────────────────────────────────────────────────────────────
 
@@ -169,28 +183,28 @@ describe('searchSessions — matching', () => {
 describe('searchSessions — ranking and snippets', () => {
   it('ranks a title match above a transcript mention', () => {
     const result = searchSessions(SESSIONS, 'pricing');
-    expect(result!.get('pricing').score).toBeGreaterThan(result!.get('mentions-pricing').score);
+    expect(found(result, 'pricing').score).toBeGreaterThan(found(result, 'mentions-pricing').score);
   });
 
   it('describes where the match was found', () => {
-    const match = searchSessions(SESSIONS, 'migration')!.get('standup');
+    const match = found(searchSessions(SESSIONS, 'migration'), 'standup');
     expect(match.label).toBe('Transcript · Speaker A');
     expect(match.snippet).toBe('I am stuck on the database migration.');
   });
 
   it('shows an action item with its owner', () => {
-    const match = searchSessions(SESSIONS, 'priya')!.get('pricing');
+    const match = found(searchSessions(SESSIONS, 'priya'), 'pricing');
     expect(match.label).toBe('Action item');
     expect(match.snippet).toBe('Update the plans page (Priya)');
   });
 
   it('finds action items with a due date by "deadline"', () => {
     const s = session({ id: 'due', notes: { action_items: [{ task: 'Ship beta notes', owner: 'Anjali', due: 'Thu' }] } });
-    expect(searchSessions([s], 'deadline')!.get('due').snippet).toBe('Ship beta notes (Anjali, due Thu)');
+    expect(found(searchSessions([s], 'deadline'), 'due').snippet).toBe('Ship beta notes (Anjali, due Thu)');
   });
 
   it('strips Markdown from snippets', () => {
-    expect(searchSessions(SESSIONS, 'raise')!.get('pricing').snippet).not.toContain('**');
+    expect(found(searchSessions(SESSIONS, 'raise'), 'pricing').snippet).not.toContain('**');
   });
 
   it('shows Markdown table rows as cells, under their heading, ignoring header rows', () => {
@@ -198,7 +212,7 @@ describe('searchSessions — ranking and snippets', () => {
       id: 'md',
       notes: { _rawMarkdown: '## Action Items\n\n| Task | Owner | Deadline |\n| :--- | :--- | :--- |\n| Submit build | Rahul | Monday |' },
     });
-    expect(searchSessions([md], 'submit')!.get('md')).toMatchObject({
+    expect(found(searchSessions([md], 'submit'), 'md')).toMatchObject({
       label: 'Notes · Action Items',
       snippet: 'Submit build · Rahul · Monday',
     });
@@ -206,22 +220,23 @@ describe('searchSessions — ranking and snippets', () => {
   });
 
   it('has no snippet for a title-only match', () => {
-    expect(searchSessions(SESSIONS, 'daily')!.get('standup').snippet).toBeNull();
+    expect(found(searchSessions(SESSIONS, 'daily'), 'standup').snippet).toBeNull();
   });
 
   it('trims long passages around the first hit', () => {
     const long = `${'filler words here '.repeat(20)}the kubernetes cluster ${'more filler '.repeat(20)}`;
-    const match = searchSessions([session({ id: 'x', transcript: [{ speaker: 'A', text: long }] })], 'kubernetes')!.get('x');
-    expect(match.snippet.startsWith('…')).toBe(true);
-    expect(match.snippet.endsWith('…')).toBe(true);
-    expect(match.snippet).toContain('kubernetes');
-    expect(match.snippet.length).toBeLessThanOrEqual(170);
+    const match = found(searchSessions([session({ id: 'x', transcript: [{ speaker: 'A', text: long }] })], 'kubernetes'), 'x');
+    const snippet = match.snippet ?? '';
+    expect(snippet.startsWith('…')).toBe(true);
+    expect(snippet.endsWith('…')).toBe(true);
+    expect(snippet).toContain('kubernetes');
+    expect(snippet.length).toBeLessThanOrEqual(170);
   });
 });
 
 describe('highlightParts', () => {
   it('marks every form of a matched word', () => {
-    const { terms } = searchSessions(SESSIONS, 'crash')!.get('standup');
+    const { terms } = found(searchSessions(SESSIONS, 'crash'), 'standup');
     expect(highlightParts('Crashes and crashing', terms)).toEqual([
       { text: 'Crashes', hit: true },
       { text: ' and ', hit: false },

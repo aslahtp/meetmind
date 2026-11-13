@@ -1,7 +1,7 @@
 import React from 'react';
 import geminiSvg from '@assets/icons/services/Google_Gemini_icon_2025.svg';
 
-export default function GeminiIcon({ size = 16, className = '' }: { size?: any; className?: any }) {
+export default function GeminiIcon({ size = 16, className = '' }: { size?: number | string; className?: string }) {
   return (
     <img
       src={geminiSvg}

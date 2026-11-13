@@ -7,13 +7,16 @@
 const WASAPI_LOOPBACK_ID = '__wasapi_loopback__';
 const WASAPI_LOOPBACK_LABEL = 'WASAPI Loopback (All system audio — recommended)';
 
-function isWasapiLoopback(device: any) {
+/** Which FFmpeg input devices a capture uses: DirectShow/WASAPI on Windows, PulseAudio on Linux. */
+type CaptureBackend = 'windows' | 'pulse';
+
+function isWasapiLoopback(device: string | null | undefined): boolean {
   return device === WASAPI_LOOPBACK_ID;
 }
 
 // PulseAudio input (Linux, also PipeWire through pipewire-pulse) for a source name: a monitor
 // (`<sink>.monitor`, what an output device plays) for system audio, or a microphone.
-function pulseInput(source: any) {
+function pulseInput(source: string): string[] {
   return ['-f', 'pulse', '-thread_queue_size', '512', '-i', source];
 }
 
@@ -22,9 +25,13 @@ function pulseInput(source: any) {
  * Returns the filter_complex string and output options. `backend` picks the input devices:
  * 'windows' (WASAPI loopback / DirectShow) or 'pulse' (Linux PulseAudio source names).
  */
-function buildAmixFilter(systemDevice: any, micDevice: any, { backend = 'windows' } = {}) {
-  const inputs = [];
-  const filterParts = [];
+function buildAmixFilter(
+  systemDevice: string | null | undefined,
+  micDevice: string | null | undefined,
+  { backend = 'windows' }: { backend?: CaptureBackend } = {},
+): { inputs: string[]; filterParts: string[]; outputArgs: string[] } {
+  const inputs: string[] = [];
+  const filterParts: string[] = [];
 
   // WASAPI loopback: captures the Windows default audio output (speakers, headphones, USB, BT)
   const wasapiLoopbackInput = () => [
@@ -35,7 +42,7 @@ function buildAmixFilter(systemDevice: any, micDevice: any, { backend = 'windows
   ];
 
   // DirectShow input for a named device (e.g. Stereo Mix, microphone)
-  const dshowInput = (device: any) => [
+  const dshowInput = (device: string) => [
     '-f', 'dshow',
     '-thread_queue_size', '512',
     '-rtbufsize', '30485760',
@@ -44,7 +51,7 @@ function buildAmixFilter(systemDevice: any, micDevice: any, { backend = 'windows
   ];
 
   const pulse = backend === 'pulse';
-  const sysInput = (device: any) => {
+  const sysInput = (device: string) => {
     if (pulse) return pulseInput(device);
     return isWasapiLoopback(device) ? wasapiLoopbackInput() : dshowInput(device);
   };
@@ -88,7 +95,7 @@ const SECTION_HEADERS_TO_SKIP = [
   'alternative directshow audio devices',
 ];
 
-function isSectionHeader(name: any) {
+function isSectionHeader(name: string | null | undefined): boolean {
   return SECTION_HEADERS_TO_SKIP.includes((name || '').toLowerCase().trim());
 }
 
@@ -98,14 +105,14 @@ function isSectionHeader(name: any) {
  * - Newer format: [in#0 @ ...] "Device Name" (audio)
  * - Older format: [dshow @ ...] "Device Name" under "DirectShow audio devices"
  */
-function parseDeviceList(ffmpegOutput: any) {
-  const audioDevices = [];
-  const seen = new Set();
+function parseDeviceList(ffmpegOutput: string | null | undefined): string[] {
+  const audioDevices: string[] = [];
+  const seen = new Set<string>();
   const raw = ffmpegOutput || '';
 
   // Newer FFmpeg (e.g. 2024+): "Device Name" (audio) on the same line
   const audioLineRegex = /"([^"]+)"\s*\(audio\)/g;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = audioLineRegex.exec(raw)) !== null) {
     const name = m[1].trim();
     if (!isSectionHeader(name) && name.toLowerCase() !== 'dummy' && !seen.has(name)) {
@@ -162,7 +169,7 @@ function parseDeviceList(ffmpegOutput: any) {
  * regardless of output device (speakers, headphones, USB, Bluetooth).
  * Falls back to Stereo Mix or virtual cable devices if WASAPI loopback shouldn't be used.
  */
-function detectSystemLoopback(_devices: any) {
+function detectSystemLoopback(_devices?: string[]): string {
   // WASAPI loopback is always the best option on Windows — return it unconditionally
   return WASAPI_LOOPBACK_ID;
 }
@@ -171,7 +178,7 @@ function detectSystemLoopback(_devices: any) {
  * Find dshow-based fallback loopback device (Stereo Mix, virtual cable, etc.)
  * Used as display info in Settings; not used for actual recording (WASAPI preferred).
  */
-function detectDshowLoopback(devices: any) {
+function detectDshowLoopback(devices: string[]): string | null {
   const preferenceOrder = [
     'stereo mix',
     'virtual cable',
@@ -181,7 +188,7 @@ function detectDshowLoopback(devices: any) {
     'what u hear',
   ];
   for (const pref of preferenceOrder) {
-    const found = devices.find((d: any) => d.toLowerCase().includes(pref));
+    const found = devices.find((d) => d.toLowerCase().includes(pref));
     if (found) return found;
   }
   return null;
@@ -190,21 +197,24 @@ function detectDshowLoopback(devices: any) {
 /**
  * Detect default microphone from device list.
  */
-function detectMicrophone(devices: any) {
+function detectMicrophone(devices: string[]): string | null {
   const micKeywords = ['microphone', 'mic', 'headset', 'webcam', 'usb audio'];
   for (const keyword of micKeywords) {
-    const found = devices.find((d: any) => d.toLowerCase().includes(keyword));
+    const found = devices.find((d) => d.toLowerCase().includes(keyword));
     if (found) return found;
   }
   // Fallback: return first device that isn't a loopback
-  return devices.find((d: any) => !d.toLowerCase().includes('loopback') && !d.toLowerCase().includes('stereo mix')) || null;
+  return devices.find((d) => !d.toLowerCase().includes('loopback') && !d.toLowerCase().includes('stereo mix')) || null;
 }
 
 /**
  * Build FFmpeg args for recording a single device (used for device probing).
  */
-function buildSingleDeviceArgs(device: any, { backend = 'windows' } = {}) {
-  let inputs;
+function buildSingleDeviceArgs(
+  device: string,
+  { backend = 'windows' }: { backend?: CaptureBackend } = {},
+): { inputs: string[]; outputArgs: string[] } {
+  let inputs: string[];
   if (backend === 'pulse') inputs = pulseInput(device);
   else if (isWasapiLoopback(device)) inputs = ['-f', 'wasapi', '-thread_queue_size', '512', '-loopback', '-i', ''];
   else inputs = ['-f', 'dshow', '-thread_queue_size', '512', '-rtbufsize', '30485760', '-audio_buffer_size', '80', '-i', `audio=${device}`];
@@ -214,6 +224,7 @@ function buildSingleDeviceArgs(device: any, { backend = 'windows' } = {}) {
   };
 }
 
+export type { CaptureBackend };
 export {
   buildAmixFilter,
   buildSingleDeviceArgs,

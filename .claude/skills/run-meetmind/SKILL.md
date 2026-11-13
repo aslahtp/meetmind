@@ -24,11 +24,13 @@ pnpm install --dir .claude/skills/run-meetmind
 
 ## Build
 
-The driver loads `dist/renderer/index.html`, so rebuild after every renderer change:
+The driver runs the **built** app: the main process from `dist/electron/` (`package.json` `main`) and the renderer from `dist/renderer/`. Neither rebuilds itself, so build both before every run, or the screenshots show an older version:
 
 ```bash
-pnpm exec vite build
+pnpm run compile:electron && pnpm exec vite build
 ```
+
+To confirm the build is current, check that `dist/renderer/index.html` and `dist/electron/main.js` are newer than your last edit, and that Settings › System shows the `package.json` version.
 
 ## Run (agent path)
 
@@ -69,12 +71,14 @@ Screenshots are written to `.claude/skills/run-meetmind/shots/<name>.png` (gitig
 ## Gotchas
 
 - **Single-instance lock.** `app.requestSingleInstanceLock()` makes a second launch against the default profile exit silently and just focus the user's window. `--user-data-dir` gives the driver its own lock, config (electron-store) and DB; the driver refuses to continue if `app.getPath('userData')` isn't the isolated profile.
-- **Don't set `NODE_ENV=development`.** `electron/main.js` then loads `http://localhost:5173` instead of `dist/renderer`. The driver deletes `NODE_ENV` from the child env.
+- **Don't set `NODE_ENV=development`.** `electron/main.ts` then loads `http://localhost:5173` instead of `dist/renderer`. The driver deletes `NODE_ENV` from the child env.
 - **You can't reach main-process modules from `electronApp.evaluate`.** `process.mainModule` is `undefined` there (`Cannot read properties of undefined (reading 'require')`). That's why the driver seeds data by writing `<profile>/meetmind.db` with `sql.js` **before** launch. A seeded profile is reused on later runs; pass `--fresh` to reset it.
 - **Expected console error:** `Failed to load resource: ... 404`. The demo sessions have no audio file, so `meetmind-audio://` 404s and the logs show `meetmind-audio file not found`.
 - **Wheel scrolling needs the pointer over the scroll container.** Over the 64px top bar it does nothing; `scroll` moves the mouse to (550,500) first.
 - **Modal backdrops block clicks underneath.** Plain `click Discard` hits Settings' own save-bar "Discard" behind the dialog and times out; use `dclick`.
 - **Session-card delete** is hidden until hover and sits under the title's stretched-link overlay. `click Delete` times out; use `fclick Delete`.
+- **The demo profile has no API keys.** The top-bar Record button is therefore black (`btn-ink`) and the Dashboard shows "Finish setting up MeetMind"; this is the current design's no-keys state, not an old build. To see the configured state (yellow `btn-sunshine` Record button, no setup card), give the selected providers placeholder keys, then reload:
+  `eval (async()=>{const m=window.meetmind,c=await m.config.get(),p=await m.providers.list();for(const [k,id] of [["stt",c.sttService],["llm",c.llmProvider]])for(const f of p[k].find(x=>x.id===id).credentials.filter(f=>f.required))await m.config.set(f.configKey,"placeholder-key")})()` then `theme light`. `--fresh` removes them again.
 - **Settings only becomes dirty on a real change.** "Reset to default" is a no-op while the prompt already equals the default. Use `focus textarea` + `type x` to trigger the unsaved-changes bar and navigation guard.
 - The main-process log says `AutoUpdater: dev mode detected` even for this production-mode launch, because the app isn't packaged. This is harmless.
 

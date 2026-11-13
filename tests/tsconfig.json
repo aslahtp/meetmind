@@ -6,7 +6,9 @@
     "moduleResolution": "bundler",
     "lib": ["ES2023", "DOM"],
     "jsx": "react-jsx",
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    // Renderer sources `import type` from @shared (erased at runtime, so Vitest needs no alias).
+    "paths": { "@shared": ["../electron/shared"], "@shared/*": ["../electron/shared/*"] }
   },
   "include": ["./**/*", "../renderer/global.d.ts"]
 }
