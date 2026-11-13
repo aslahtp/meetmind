@@ -17,6 +17,7 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 ### Fixed
 
 - **Chrome extension**: The meeting overlay now only accepts messages from the Meet or Zoom tab it is shown in, and "Open in Notion" only opens Notion page links.
+- **Chrome extension**: A page is treated as a meeting only when it is really on meet.google.com or zoom.us, not when that text merely appears in its address, and logged addresses can no longer add fake log lines.
 
 ## [4.19.2] - 2026-11-13
 

@@ -279,12 +279,18 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
 
 // ── Auto-inject if we're on a meeting page ────────────────────────────────────
 
+// A meeting page, decided by the parsed host like the service worker's meetingPlatform() (a
+// substring test would also match e.g. https://example.com/?meet.google.com/).
+function isMeetingPage(location: Location) {
+  if (location.protocol !== 'https:') return false;
+  const host = location.hostname;
+  if (host === 'meet.google.com') return true;
+  return (host === 'zoom.us' || host.endsWith('.zoom.us')) && /^\/(wc|j)\/\d+/.test(location.pathname);
+}
+
 function checkAndInject() {
   const url = window.location.href;
-  if (
-    url.includes('meet.google.com/') ||
-    url.match(/zoom\.us\/(wc|j)\/\d+/)
-  ) {
+  if (isMeetingPage(window.location)) {
     // Wait a bit for meeting UI to load
     setTimeout(() => {
       const request: BackgroundRequest = { type: 'GET_STATUS' };

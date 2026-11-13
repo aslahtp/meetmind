@@ -238,7 +238,7 @@ function closeOpenAppTab() {
 // ── Handle messages from desktop app ─────────────────────────────────────────
 
 function handleDesktopMessage(msg: DesktopToExtensionMessage) {
-  console.log('[MeetMind] Desktop message:', msg.type);
+  console.log('[MeetMind] Desktop message:', forLog(msg.type));
 
   switch (msg.type) {
     case 'APP_STATUS':
@@ -323,18 +323,22 @@ function updateBadge(state: BadgeState) {
 
 // ── Tab detection ─────────────────────────────────────────────────────────────
 
-function isMeetingUrl(url: string | undefined): url is string {
-  if (!url) return false;
-  return (
-    url.includes('meet.google.com/') ||
-    /zoom\.us\/(wc|j)\/\d+/.test(url)
-  );
+// The meeting platform of a tab URL, decided by its parsed host (a substring test would also match
+// e.g. https://example.com/?meet.google.com/), or null when the tab isn't a meeting.
+function meetingPlatform(url: string | undefined): 'Google Meet' | 'Zoom' | null {
+  if (!url) return null;
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return null; }
+  if (parsed.protocol !== 'https:') return null;
+  const host = parsed.hostname;
+  if (host === 'meet.google.com') return 'Google Meet';
+  if ((host === 'zoom.us' || host.endsWith('.zoom.us')) && /^\/(wc|j)\/\d+/.test(parsed.pathname)) return 'Zoom';
+  return null;
 }
 
-function getMeetingPlatform(url: string) {
-  if (url.includes('meet.google.com')) return 'Google Meet';
-  if (url.includes('zoom.us')) return 'Zoom';
-  return 'Meeting';
+// Text from a tab or the desktop app, made safe for one log line (a line break could fake an entry).
+function forLog(value: string) {
+  return value.replace(/[\r\n]+/g, ' ');
 }
 
 function sendToContentScript(tabId: number, message: BackgroundToContentMessage) {
@@ -348,11 +352,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete') return;
 
   const url = tab.url;
-  if (isMeetingUrl(url)) {
+  const platform = meetingPlatform(url);
+  if (url && platform) {
     activeMeetingTabId = tabId;
-    const platform = getMeetingPlatform(url);
 
-    console.log('[MeetMind] Meeting detected:', url);
+    console.log('[MeetMind] Meeting detected:', forLog(url));
     updateBadge(wsConnected ? 'meeting' : 'disconnected');
 
     // Connect to desktop app if not already
