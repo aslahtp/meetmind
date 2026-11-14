@@ -64,6 +64,18 @@ Screenshots are written to `.claude/skills/run-meetmind/shots/<name>.png` (gitig
 | `owait [ms]` / `oss <name>` / `oclick <name>` / `oeval <js>` | Meeting overlay window: wait until it is visible, screenshot it, click one of its buttons, evaluate in it |
 | `send <channel> <json>` | Push a main-to-renderer IPC event to the main window, e.g. `send notes:preview {"sessionId":"demo-3","attempt":0,"notes":{"_rawMarkdown":"# Hi"}}` to fake streamed notes |
 
+## Profile memory and CPU
+
+`profile.cjs` measures the built app's memory and CPU per process in four states (window open, window hidden, a real recording, tray only) and prints a JSON report. It records real microphone and system audio, so always give it a **throwaway copy** of a seeded profile, never `.profile` itself:
+
+```bash
+printf 'quit\n' | node .claude/skills/run-meetmind/driver.cjs repl --fresh
+cp -r .claude/skills/run-meetmind/.profile /tmp/meetmind-perf
+node .claude/skills/run-meetmind/profile.cjs --profile /tmp/meetmind-perf --sample 30 --record 60
+```
+
+`--app <dir>` profiles another build (e.g. an older commit in a `git worktree` under `dist/`). Results and method are in `docs/PERFORMANCE.md`; update it when you remeasure. Recording CPU varies a lot between runs, so compare it only within one run, and run versions one after another, never in parallel.
+
 ## Run (human path)
 
 `pnpm run dev` rebuilds the extension, starts Vite on :5173 and opens Electron against the real profile. It needs a desktop session and is not what the driver uses. It wasn't exercised while writing this skill because the user had it running.
