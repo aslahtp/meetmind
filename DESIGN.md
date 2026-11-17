@@ -117,6 +117,12 @@ Cream (#f8f5ed) surface, 24px radius, 1px #000000 hairline border, 32px padding,
 
 24px radius, #000000 fill, #f8f5ed text, 14px DM Sans 500, with a trailing × dismiss. Contrasts with the light filter tags to show applied state.
 
+### Pill Navigation and Tabs
+
+**Role:** Switching between pages or views (top-bar navigation, a meeting's Summary / Transcript / Audio tabs, the notes view toggle)
+
+Pills at 9999px radius with 14px DM Sans 500 labels. The selected pill is filled #000000 with #f8f5ed text; the others have #707070 text that turns #000000 on hover. **Only the selected pill shows its icon** (14px, stroke 1.75, 8px gap before the label); the unselected pills show their label alone. The icon is never mounted and unmounted: it stays in the DOM and its `max-width` (0 → 14px), `margin-right` (0 → 8px) and `opacity` (0 → 1) animate over 200ms ease-out, so the pills resize smoothly instead of jumping when the selection changes. Use `SegmentedControl` with `revealIcon` (`renderer/components/ui/index.tsx`) for any new tab bar or segmented switch with icons, rather than writing the animation again. The only exception is the compact `iconOnly` variant, which has no labels and so shows every icon.
+
 ### Logo Grid Cell
 
 **Role:** Social proof / customer logos
@@ -170,6 +176,7 @@ Centered stack: avatar tile (12px radius) → 64px display question → 18px #70
 - Keep the cream (#f8f5ed) canvas unbroken across sections — alternate rhythm through spacing and border weight, not background color.
 - Activate DM Sans stylistic alternates 'ss03' and 'ss04' globally; they carry the humanist character that makes the system feel editorial.
 - Reserve #6ece9d (Mint Signal) for status dots and positive state chips; it is a signal, not a brand color.
+- In navigation pills, tab bars and segmented switches, show an icon only on the selected item and animate it in and out (see Pill Navigation and Tabs).
 
 ### Don't
 
