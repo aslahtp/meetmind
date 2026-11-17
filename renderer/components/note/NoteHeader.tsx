@@ -240,6 +240,7 @@ export function NoteToolbar({
           value={activeTab}
           onChange={onTabChange}
           size="sm"
+          revealIcon
         />
 
         <div className="flex items-center justify-end gap-4 min-w-0">
