@@ -9,7 +9,7 @@ import { getConfig, setConfig, setMultipleConfig } from './utils/config';
 import logger from './utils/logger';
 import { errorMessage } from './utils/errors';
 import { startWebSocketServer, stopWebSocketServer, broadcastToExtension } from './websocket-server';
-import { startRecording, stopRecording, listAudioDevices, probeAudioDevice, ffmpegSupportsPulse, convertWebmToWav, convertFileToWav, getMediaDurationSeconds } from './audio/recorder';
+import { startRecording, stopRecording, listAudioDevices, probeAudioDevice, ffmpegSupportsPulse, convertWebmToWav, convertFileToWav, getMediaDurationSeconds, probeMediaDurationSeconds } from './audio/recorder';
 import { pulseInfo } from './audio/pulse';
 import { locate } from './audio/ffmpeg-path';
 import { silenceHints } from './audio/audio-hints';
@@ -1910,36 +1910,33 @@ function probeDurationSeconds(audioPath: string | null | undefined) {
 }
 
 /**
- * Use ffprobe to compute duration for every session that has an audio file.
- * Updates duration_seconds in the DB when a value is found.
+ * Use ffprobe to fill in the duration of sessions that have an audio file but no duration
+ * (every path that saves audio probes it, so this only catches a probe that failed).
+ * Runs ffprobe asynchronously, one file at a time: a synchronous probe of every recording at
+ * startup blocked the main process for ~0.1 s per file, long enough with a few hundred meetings
+ * for the main window to miss its load deadline.
  */
-function backfillSessionDurations() {
-  const sessions = db.listSessions();
+async function backfillSessionDurations() {
+  const missing = db.listSessions().filter((s) => !(typeof s.duration_seconds === 'number' && s.duration_seconds > 0));
+  let probed = 0;
   let updated = 0;
 
-  for (const session of sessions) {
+  for (const session of missing) {
     const audioPath = resolveSessionAudioPath(session.id);
     if (!audioPath) continue;
+    probed += 1;
 
-    const durationSeconds = probeDurationSeconds(audioPath);
-    if (durationSeconds == null) continue;
-    if (session.duration_seconds === durationSeconds) continue;
+    const seconds = await probeMediaDurationSeconds(audioPath);
+    const durationSeconds = seconds == null ? null : Math.round(seconds);
+    if (!durationSeconds || durationSeconds <= 0) continue;
+    // The session may have been deleted while ffprobe ran.
+    if (!db.getSession(session.id)) continue;
 
     db.updateSession(session.id, { duration_seconds: durationSeconds });
     updated += 1;
   }
 
-  if (updated > 0) {
-    logger.info('Backfilled session durations via ffprobe', {
-      updated,
-      total: sessions.length,
-    });
-  } else {
-    logger.info('Session duration backfill complete (no changes)', {
-      total: sessions.length,
-    });
-  }
-
+  logger.info('Session duration backfill complete', { missing: missing.length, probed, updated });
   return updated;
 }
 
@@ -2162,17 +2159,16 @@ app.whenReady().then(async () => {
       logger.error('Orphan recovery failed', err);
     })
     .finally(() => {
-      try {
-        backfillSessionDurations();
-      } catch (err) {
-        logger.error('Duration backfill failed', err);
-      }
       // After crash recovery, so a recovered recording is judged by its meeting's date.
       try {
         runRetentionCleanup('startup');
       } catch (err) {
         logger.error('Recording cleanup failed', err);
       }
+      // After the cleanup, so it doesn't probe audio that is about to be deleted.
+      backfillSessionDurations().catch((err) => {
+        logger.error('Duration backfill failed', err);
+      });
     });
 
   // Windows may have had launch at login disabled from Task Manager; store what it really is.
