@@ -12,6 +12,10 @@ Chronological log of notable changes to the project. Newest first. This is a hum
 
 - **Meeting page**: The Summary, Transcript and Audio tabs now show only the open tab's icon, sliding it in and out like the top navigation.
 
+### Fixed
+
+- **Startup**: With hundreds of recordings, MeetMind no longer freezes for several seconds after launch (sometimes leaving the window blank until it reloaded); it now checks recording lengths only for meetings missing one, without blocking the app.
+
 ## [4.19.3] - 2026-11-13
 
 ### Changed

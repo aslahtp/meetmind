@@ -1,4 +1,4 @@
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'child_process';
+import { execFile, spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
@@ -501,47 +501,74 @@ async function convertFileToWav(inputPath: string, wavPath: string): Promise<str
   });
 }
 
+const DURATION_PROBE_ARGS = ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1'];
+const DURATION_PROBE_TIMEOUT_MS = 30000;
+
+// The ffprobe to run on a file, or null (logged) when there is no file or no ffprobe.
+function durationProbeTarget(filePath: string | null | undefined): string | null {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  const ffprobePath = resolveFfprobePath();
+  if (!ffprobePath) logger.warn('ffprobe not found, cannot probe media duration');
+  return ffprobePath;
+}
+
+function parseProbedDuration(filePath: string, stdout: string, stderr: string): number | null {
+  const raw = stdout.trim();
+  const seconds = parseFloat(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    logger.warn('ffprobe returned invalid duration', { filePath, raw, stderr: stderr.slice(-300) });
+    return null;
+  }
+  return seconds;
+}
+
 /**
  * Probe media duration in seconds via ffprobe (works for wav/webm/mp3/m4a/…).
  * Returns null when the file is missing or duration cannot be read.
+ * Blocks the calling thread for the ffprobe run (~0.1 s); for many files use `probeMediaDurationSeconds`.
  */
 function getMediaDurationSeconds(filePath: string | null | undefined): number | null {
-  if (!filePath || !fs.existsSync(filePath)) return null;
-
-  const ffprobePath = resolveFfprobePath();
-  if (!ffprobePath) {
-    logger.warn('ffprobe not found, cannot probe media duration');
-    return null;
-  }
+  const ffprobePath = durationProbeTarget(filePath);
+  if (!filePath || !ffprobePath) return null;
 
   try {
     const result = spawnSync(
       ffprobePath,
-      [
-        '-v', 'error',
-        '-show_entries', 'format=duration',
-        '-of', 'default=noprint_wrappers=1:nokey=1',
-        filePath,
-      ],
-      { encoding: 'utf8', windowsHide: true, timeout: 30000 }
+      [...DURATION_PROBE_ARGS, filePath],
+      { encoding: 'utf8', windowsHide: true, timeout: DURATION_PROBE_TIMEOUT_MS }
     );
 
     if (result.error) {
       logger.warn('ffprobe failed to start', { filePath, error: result.error.message });
       return null;
     }
-
-    const raw = String(result.stdout || '').trim();
-    const seconds = parseFloat(raw);
-    if (!Number.isFinite(seconds) || seconds <= 0) {
-      logger.warn('ffprobe returned invalid duration', { filePath, raw, stderr: String(result.stderr || '').slice(-300) });
-      return null;
-    }
-    return seconds;
+    return parseProbedDuration(filePath, String(result.stdout || ''), String(result.stderr || ''));
   } catch (err) {
     logger.warn('ffprobe duration probe error', { filePath, error: errorMessage(err) });
     return null;
   }
+}
+
+/** `getMediaDurationSeconds` without blocking: ffprobe runs while the event loop carries on. */
+function probeMediaDurationSeconds(filePath: string | null | undefined): Promise<number | null> {
+  const ffprobePath = durationProbeTarget(filePath);
+  if (!filePath || !ffprobePath) return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    execFile(
+      ffprobePath,
+      [...DURATION_PROBE_ARGS, filePath],
+      { encoding: 'utf8', windowsHide: true, timeout: DURATION_PROBE_TIMEOUT_MS },
+      (err, stdout, stderr) => {
+        if (err) {
+          logger.warn('ffprobe duration probe error', { filePath, error: errorMessage(err) });
+          resolve(null);
+          return;
+        }
+        resolve(parseProbedDuration(filePath, stdout, stderr));
+      }
+    );
+  });
 }
 
 export type { AudioDevice, AudioDeviceList, DeviceProbeResult };
@@ -554,5 +581,6 @@ export {
   convertWebmToWav,
   convertFileToWav,
   getMediaDurationSeconds,
+  probeMediaDurationSeconds,
   recorder,
 };

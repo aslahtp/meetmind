@@ -765,7 +765,9 @@ that recording (`session:delete-recording` → `deleteOne()`, which only accepts
   by its modified time.
 - The meeting being recorded and any meeting being processed (`busySessionIds()`: tracked by
   `runProcessingPipeline`) are never deleted.
-- The retention cleanup runs once at startup, after crash recovery and the duration backfill.
+- The retention cleanup runs once at startup, after crash recovery and before the duration
+  backfill (which probes, with ffprobe run asynchronously, only meetings that have audio but no
+  duration).
   Saving a new period in Settings first asks to confirm if it would delete anything, then runs it
   at once. Like every database write, a deletion reaches the renderer as `sessions:changed`.
 - The pure rules (grouping the folder's files, what a period deletes, totals) are in
