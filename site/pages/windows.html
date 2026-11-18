@@ -1,0 +1,121 @@
+<!--
+{
+  "slug": "windows",
+  "order": 5,
+  "title": "AI Meeting Notes App for Windows 10 & 11, Free | MeetMind",
+  "description": "Free, open-source AI note taker for Windows 10 and 11. Records Teams, Zoom and Google Meet calls with no bot, then writes the minutes and action items.",
+  "crumb": "Windows",
+  "label": "MeetMind for Windows",
+  "summary": "Install, set up and record calls on Windows 10 and 11."
+}
+-->
+    <section class="hero center">
+      <div class="wrap">
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Windows 10 &amp; 11</span></span>
+        <h1 class="display">AI meeting notes for Windows, <span class="mark">free and open source</span></h1>
+        <p class="sub">MeetMind is a Windows app that records any call with system audio and your microphone, notices
+          when Teams, Zoom or Google Meet starts, and turns each meeting into a transcript and minutes.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"
+              aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download for Windows</a>
+          <a class="btn btn-ghost" href="#install">Install steps</a>
+        </div>
+        <p class="caption meta">MeetMind-Setup-__VERSION__.exe · Windows 10 or 11, 64-bit · FFmpeg included</p>
+        <figure class="shot">
+          <div class="frame"><picture>
+              <source type="image/avif"
+                srcset="/meetmind/screenshots/dashboard-750.avif 750w, /meetmind/screenshots/dashboard-1100.avif 1100w, /meetmind/screenshots/dashboard-1500.avif 1500w"
+                sizes="(min-width: 1064px) 1000px, calc(100vw - 32px)">
+              <img src="/meetmind/screenshots/dashboard.png"
+                alt="MeetMind dashboard on Windows with meeting stats and a list of recent recorded meetings"
+                width="1500" height="1000" fetchpriority="high">
+            </picture></div>
+          <figcaption>The MeetMind dashboard: recent meetings, upcoming calendar events and the Record button.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section aria-label="Guide">
+      <div class="wrap prose">
+        <div class="note">
+          <span class="eyebrow">In short</span>
+          <p>MeetMind for Windows records the other participants through Windows loopback audio (WASAPI) and you
+            through your microphone, so it works with any meeting app without a bot. It sits in the tray, offers to
+            record when a call starts, and after the call writes a speaker-labelled transcript and minutes with
+            decisions and action items, stored on your PC.</p>
+        </div>
+
+        <h2 id="install">Install MeetMind on Windows</h2>
+        <ol>
+          <li>Download <code>MeetMind-Setup-__VERSION__.exe</code> from the <a
+              href="https://github.com/aslahtp/meetmind/releases/latest">latest release</a> and run it.</li>
+          <li>The installer isn't code-signed yet, so Windows may show "Windows protected your PC". Click <strong>More
+              info</strong>, then <strong>Run anyway</strong>.</li>
+          <li>Open <strong>Settings › Transcription</strong> and add a speech-to-text key: AssemblyAI (recommended),
+            Google Cloud Speech-to-Text, Sarvam AI or Groq. Every key field links to a guide for getting one.</li>
+          <li>Open <strong>Settings › Notes</strong> and add a Gemini, Groq or Claude key, then pick a model. One free
+            Groq key covers both transcription and notes.</li>
+          <li>Optional: connect Notion and your calendars in <strong>Settings › Integrations</strong>.</li>
+        </ol>
+        <p>FFmpeg, which MeetMind uses to convert recordings, is included in the installer.</p>
+
+        <h2>Recording calls on Windows</h2>
+        <p>MeetMind captures the audio your PC plays together with your microphone, so both sides of the call end up in
+          one recording. That works with Microsoft Teams (new and classic), Zoom, Google Meet in any major browser, Slack,
+          Discord, Webex and anything else that plays sound.</p>
+        <h3>Automatic meeting detection</h3>
+        <p>When Teams, Zoom or a browser with a Meet, Zoom or Teams tab starts using your microphone, a slim overlay
+          unfolds at the top of the screen with a Record button. During the call it shows the timer; when the call ends
+          it asks whether to stop, then shows processing progress. If you ignore the prompt for two minutes, it goes away
+          for that meeting. Turn detection off in <strong>Settings › General</strong>.</p>
+        <h3>Other ways to record</h3>
+        <ul>
+          <li>The Record button in the app, or the tray icon's menu.</li>
+          <li>A reminder when a meeting in one of your calendars (Google, Outlook, iCloud or any ICS link) starts.</li>
+          <li>The optional Chrome extension's button in Meet and Zoom tabs.</li>
+        </ul>
+
+        <h2>Living in the tray</h2>
+        <p>Closing the window keeps MeetMind running in the tray, ready for the next call, and it can start with
+          Windows. With automatic updates turned on in <strong>Settings › General</strong>, new versions download in the
+          background and install while MeetMind is idle; an indicator in the top bar shows when one is ready.</p>
+
+        <h2>Storage and privacy</h2>
+        <p>Recordings, transcripts and notes stay on your PC. Audio is sent only to the speech-to-text provider you chose
+          and the transcript only to your notes model. <strong>Settings › Storage</strong> shows how much space
+          recordings use and can delete old recordings automatically while keeping their notes and transcripts.</p>
+
+        <h2>Frequently asked questions</h2>
+        <div class="faq">
+          <details open>
+            <summary>Why does Windows say it protected my PC?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>The installer isn't code-signed yet, so SmartScreen doesn't recognise it. Every release file carries a
+              signed build attestation; check it with <code>gh attestation verify MeetMind-Setup-x.y.z.exe --repo
+                aslahtp/meetmind</code> to confirm the file was built from the public source code.</p>
+          </details>
+          <details>
+            <summary>Which Windows versions are supported?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Windows 10 and Windows 11, 64-bit.</p>
+          </details>
+          <details>
+            <summary>Does it record my side of the call too?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes. It records your microphone and the system audio together, so the transcript includes everyone.</p>
+          </details>
+          <details>
+            <summary>Is it really free?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes, the app is free and open source (GPL-3.0). You pay only the AI providers you connect, and their free
+              tiers cover moderate use.</p>
+          </details>
+        </div>
+      </div>
+    </section>

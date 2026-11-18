@@ -1,0 +1,154 @@
+<!--
+{
+  "slug": "google-meet-notes",
+  "order": 2,
+  "title": "Google Meet Transcription & AI Notes Without a Bot | MeetMind",
+  "description": "Transcribe Google Meet calls and get AI notes with no bot in the meeting. MeetMind is free, open source and records on your own computer, on any Google plan.",
+  "crumb": "Google Meet",
+  "label": "Google Meet notes",
+  "summary": "Transcripts and minutes from Meet calls, with no bot and no Workspace upgrade."
+}
+-->
+    <section class="hero center">
+      <div class="wrap">
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Google Meet · Free</span></span>
+        <h1 class="display">Google Meet transcription and AI notes, <span class="mark">without a bot</span></h1>
+        <p class="sub">MeetMind records the Meet call on your own computer, then writes a speaker-labelled transcript and
+          minutes with decisions and action items. Nothing joins the call, and it works with any Google account.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="/meetmind/#download"><svg class="icon" aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download MeetMind free</a>
+          <a class="btn btn-ghost" href="#start">How to record a Meet call</a>
+        </div>
+        <figure class="shot">
+          <div class="frame"><picture>
+              <source type="image/avif"
+                srcset="/meetmind/screenshots/markdown-notes-750.avif 750w, /meetmind/screenshots/markdown-notes-1100.avif 1100w, /meetmind/screenshots/markdown-notes-1500.avif 1500w"
+                sizes="(min-width: 1064px) 1000px, calc(100vw - 32px)">
+              <img src="/meetmind/screenshots/markdown-notes.png"
+                alt="Meeting minutes in MeetMind with a meeting header, executive summary and agenda" width="1500"
+                height="1000" fetchpriority="high">
+            </picture></div>
+          <figcaption>Minutes generated from a recorded call: header, executive summary and agenda.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section aria-label="Guide">
+      <div class="wrap prose">
+        <div class="note">
+          <span class="eyebrow">Short answer</span>
+          <p>To get a transcript and notes of a Google Meet call without a bot, run MeetMind on the computer you join
+            from. It captures the Meet tab's audio together with your microphone, so it doesn't depend on Meet's own
+            recording, a paid Workspace edition or the organiser's settings. When the call ends, your chosen
+            speech-to-text engine transcribes it and Gemini, Groq or Claude writes the minutes.</p>
+        </div>
+
+        <h2 id="start">Three ways to start recording a Meet call</h2>
+        <ol>
+          <li><strong>Let MeetMind notice the call</strong> (Windows and Linux). When a browser with a Google Meet tab
+            starts using your microphone, a slim overlay at the top of the screen offers to record. It recognises
+            Chrome, Edge, Brave, Firefox, Opera, Vivaldi and Arc, and needs no extension. On Linux this needs an X11
+            session; on Wayland, use one of the other two ways.</li>
+          <li><strong>Use the Chrome extension.</strong> The optional extension puts a record button and live
+            processing status inside the Meet tab.</li>
+          <li><strong>Press Record</strong> in the app or the tray menu, or accept the reminder MeetMind shows when a
+            meeting from your connected calendar starts.</li>
+        </ol>
+        <p>A recording started while a Meet call is detected is saved with the Google Meet platform and, when the tab
+          shows it, the meeting link, so you can find the meeting later.</p>
+
+        <h2>Why not a Google Meet bot?</h2>
+        <p>Many open-source and commercial note-takers for Google Meet are bots: a server runs a browser that joins the
+          meeting as an extra participant and records what it hears. That works when you aren't in the call, but you
+          have to host the bot (or pay someone who does), the host may have to admit it, and everyone sees it in the
+          participant list.</p>
+        <p>MeetMind is the other approach. It runs on your computer, needs no server, and adds no participant, at the
+          cost of recording only the calls you are in. If you need recordings of meetings you don't attend, a bot is
+          the right tool; for your own calls, a local recorder is simpler and more private.</p>
+
+        <h2>MeetMind or Google Meet's own transcripts?</h2>
+        <p>Meet's built-in transcripts, recordings and Gemini "Take notes for me" are available only on some Google
+          Workspace editions, and the organiser or an admin usually controls whether they are on. MeetMind works in
+          any meeting you can hear, including on a personal Gmail account and in meetings other organisations host,
+          and you choose the transcription and AI models.</p>
+        <div class="table-wrap" role="region" aria-label="MeetMind compared with Google Meet's built-in transcripts">
+          <table>
+            <thead>
+              <tr>
+                <td></td>
+                <th scope="col">MeetMind</th>
+                <th scope="col">Meet's built-in features</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Google plan</th>
+                <td class="us" data-label="MeetMind">Any, including free Gmail</td>
+                <td data-label="Built-in">Some paid Workspace editions</td>
+              </tr>
+              <tr>
+                <th scope="row">Who turns it on</th>
+                <td class="us" data-label="MeetMind">You, on your computer</td>
+                <td data-label="Built-in">Usually the organiser, if an admin allows it</td>
+              </tr>
+              <tr>
+                <th scope="row">Notes</th>
+                <td class="us" data-label="MeetMind">Summary, decisions and action items table with owners and deadlines</td>
+                <td data-label="Built-in">Depends on edition</td>
+              </tr>
+              <tr>
+                <th scope="row">Where it's saved</th>
+                <td class="us" data-label="MeetMind">Your computer, plus PDF, Markdown or Notion</td>
+                <td data-label="Built-in">The organiser's Google Drive</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>What you get after the call</h2>
+        <ul>
+          <li>A transcript with speaker labels (with AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI) that you can
+            search and filter by speaker.</li>
+          <li>Executive-style minutes: summary, agenda, key decisions and an action items table with owners and
+            deadlines, or structured JSON notes if you prefer.</li>
+          <li>Search across every meeting you've recorded, PDF export, Markdown copy and optional Notion sync.</li>
+        </ul>
+
+        <h2>Ask before you record</h2>
+        <p>Because MeetMind adds nothing to the call, Meet doesn't tell anyone it is running. Let the other participants
+          know you are recording, and check the rules that apply to you: some places require everyone's consent.</p>
+
+        <h2>Frequently asked questions</h2>
+        <div class="faq">
+          <details open>
+            <summary>Does MeetMind work with a free Gmail account?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes. MeetMind records the audio on your computer, so it doesn't use any Meet feature that depends on your
+              Google plan.</p>
+          </details>
+          <details>
+            <summary>Will other participants see MeetMind?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>No. Nothing joins the meeting and Meet shows no recording indicator for it, so tell people yourself.</p>
+          </details>
+          <details>
+            <summary>Do I need the Chrome extension?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>No. On Windows and Linux the desktop app detects Meet calls on its own, and on any system you can press
+              Record. The extension only adds a button inside the Meet tab.</p>
+          </details>
+          <details>
+            <summary>Does it work on a Mac?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes, on <a href="/meetmind/mac/">macOS 14.2 or later</a> (beta). Meeting detection isn't available on
+              macOS yet, so start with Record, a calendar reminder or the Chrome extension.</p>
+          </details>
+        </div>
+      </div>
+    </section>

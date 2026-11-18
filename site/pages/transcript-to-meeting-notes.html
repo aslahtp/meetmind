@@ -1,0 +1,116 @@
+<!--
+{
+  "slug": "transcript-to-meeting-notes",
+  "order": 8,
+  "title": "Turn a Transcript or Recording Into Meeting Notes | MeetMind",
+  "description": "Turn a meeting transcript or an audio or video file into a summary, key decisions and an action items table. Free, open-source app; bring your own AI key.",
+  "crumb": "Transcript to notes",
+  "label": "Transcript to meeting notes",
+  "summary": "Extract a summary, decisions and action items from files you already have."
+}
+-->
+    <section class="hero center">
+      <div class="wrap">
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Import · Free</span></span>
+        <h1 class="display">Turn a transcript or recording into <span class="mark">meeting notes and action items</span></h1>
+        <p class="sub">Paste a transcript or import an audio or video file, and MeetMind writes a summary, key decisions
+          and an action items table with owners and deadlines, using the AI model you choose.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="/meetmind/#download"><svg class="icon" aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download MeetMind free</a>
+          <a class="btn btn-ghost" href="#paste">How it works</a>
+        </div>
+        <figure class="shot">
+          <div class="frame"><picture>
+              <source type="image/avif"
+                srcset="/meetmind/screenshots/output-format-750.avif 750w, /meetmind/screenshots/output-format-1100.avif 1100w, /meetmind/screenshots/output-format-1500.avif 1500w"
+                sizes="(min-width: 1064px) 1000px, calc(100vw - 32px)">
+              <img src="/meetmind/screenshots/output-format.png"
+                alt="MeetMind settings for choosing Markdown or JSON notes and editing the notes system prompt"
+                width="1500" height="1000" fetchpriority="high">
+            </picture></div>
+          <figcaption>Choose Markdown minutes or structured JSON, and edit the prompt the notes model uses.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section aria-label="Guide">
+      <div class="wrap prose">
+        <div class="note">
+          <span class="eyebrow">Short answer</span>
+          <p>MeetMind, a free and open-source desktop app, extracts action items, decisions and a summary from meeting
+            transcripts and recordings. Use <strong>Paste transcript</strong> for text you already have (only a notes key
+            is needed: Gemini, Groq or Claude), or <strong>Import audio</strong> for a recording, which is transcribed
+            first. The notes and transcript are saved on your computer.</p>
+        </div>
+
+        <h2 id="paste">From a transcript</h2>
+        <ol>
+          <li>On the dashboard, choose <strong>Paste transcript</strong>.</li>
+          <li>Paste the text from Zoom, Teams, Google Meet, a captioning tool or anywhere else.</li>
+          <li>MeetMind skips speech-to-text and sends the text to your notes model, and the notes stream in as they are
+            written.</li>
+        </ol>
+
+        <h2>From an audio or video file</h2>
+        <p>Choose <strong>Import audio</strong> and pick a WAV, MP3, M4A, AAC, FLAC, OGG, Opus, WebM, MP4, MKV or MOV
+          file. MeetMind converts it with the bundled FFmpeg, transcribes it with AssemblyAI, Google Cloud
+          Speech-to-Text, Sarvam AI or Groq Whisper, and then writes the notes. Every engine except Groq labels the
+          speakers.</p>
+
+        <h2>What the notes contain</h2>
+        <ul>
+          <li><strong>Executive summary</strong>: what the meeting was about and where it landed.</li>
+          <li><strong>Agenda</strong>: the topics covered, in order.</li>
+          <li><strong>Key decisions</strong>, numbered.</li>
+          <li><strong>Action items</strong>: a table with each task's owner, deadline and priority.</li>
+        </ul>
+        <p>Prefer data over prose? Switch to structured JSON notes, with identified speakers and prioritised action
+          items. You can also edit the system prompt to change the format, language or level of detail.</p>
+
+        <h2>Choose the model</h2>
+        <p>Pick Gemini, Groq (Llama 3.3, GPT-OSS) or Claude, and a specific model for each. Set a fallback provider and
+          model, and MeetMind retries with it if the first one fails, for example when a very long transcript is too big
+          for Groq's free tier.</p>
+
+        <h2>Is there a command-line tool?</h2>
+        <p>No. MeetMind is a desktop app for Windows, macOS and Linux, not a CLI. It is open source, though, and each AI
+          provider is a small module, so the pipeline is easy to read and adapt: see the <a
+            href="https://github.com/aslahtp/meetmind/blob/main/docs/ARCHITECTURE.md">architecture overview</a>.</p>
+
+        <h2>Frequently asked questions</h2>
+        <div class="faq">
+          <details open>
+            <summary>Do I need a speech-to-text key to paste a transcript?<span class="pm" aria-hidden="true"><svg
+                  class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>No. A pasted transcript only needs a notes key. The free tiers of Gemini and Groq are enough for most
+              meetings.</p>
+          </details>
+          <details>
+            <summary>Does it run the AI on my computer?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>No. Transcription and notes use the cloud provider you choose, with your own key. What stays local is your
+              data: recordings, transcripts and notes are stored on your computer, and there is no MeetMind server.</p>
+          </details>
+          <details>
+            <summary>Can I export the notes?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes: as a PDF (optionally with the transcript), as Markdown, or as a Notion page with real headings, tables
+              and to-dos.</p>
+          </details>
+          <details>
+            <summary>Can it record new meetings too?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes, that's its main job: it records <a href="/meetmind/zoom-meeting-notes/">Zoom</a>, <a
+                href="/meetmind/google-meet-notes/">Google Meet</a>, <a href="/meetmind/microsoft-teams-recorder/">Teams</a>
+              and any other call with no bot in the meeting.</p>
+          </details>
+        </div>
+      </div>
+    </section>

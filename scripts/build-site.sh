@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Assembles the GitHub Pages site into ${1:-_site} from site/, docs/ and brand assets.
+# Assembles the GitHub Pages site into ${1:-_site} from site/ (the home page and the guide pages in
+# site/pages/), docs/ and brand assets.
 set -euo pipefail
 OUT="${1:-_site}"
 # pages.yml passes the newest published release; package.json can be ahead of it.
@@ -15,7 +16,7 @@ RELEASE_LABEL=$(node -e 'console.log(new Date(process.argv[1] + "T00:00:00Z").to
 
 rm -rf "$OUT"
 mkdir -p "$OUT/brand" "$OUT/screenshots" "$OUT/fonts"
-cp site/index.html site/404.html site/sitemap.xml llms.txt "$OUT/"
+cp site/index.html site/404.html llms.txt "$OUT/"
 cp site/google*.html "$OUT/"
 cp docs/brand/meetmind-wordmark-light.png docs/brand/meetmind-wordmark-dark.png "$OUT/brand/"
 cp docs/brand/social-preview.png "$OUT/og-image.png"
@@ -27,8 +28,9 @@ cp assets/icons/icon256.png "$OUT/icon-256.png"
 touch "$OUT/.nojekyll"
 
 pnpm exec tsx scripts/build-site-images.ts "$OUT"
+# Guide pages (<slug>/index.html) and sitemap.xml; fails if the home page doesn't link to every guide.
+pnpm exec tsx scripts/build-site-pages.ts "$OUT" "$DATE"
 
-sed -i -e "s/__VERSION__/${VERSION}/g" -e "s/__DATE__/${DATE}/g" -e "s/__RELEASE_DATE__/${RELEASE_DATE}/g" \
-  -e "s/__RELEASE_LABEL__/${RELEASE_LABEL}/g" "$OUT/index.html"
-sed -i "s/__DATE__/${DATE}/g" "$OUT/sitemap.xml"
+find "$OUT" -name index.html -exec sed -i -e "s/__VERSION__/${VERSION}/g" -e "s/__DATE__/${DATE}/g" \
+  -e "s/__RELEASE_DATE__/${RELEASE_DATE}/g" -e "s/__RELEASE_LABEL__/${RELEASE_LABEL}/g" {} +
 echo "Built $OUT (v${VERSION}, ${DATE})"

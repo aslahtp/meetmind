@@ -1047,7 +1047,7 @@ published less than 24 hours ago (Dependabot has its own separate 7-day cooldown
 | `renderer/assets/fonts/` and `extension/fonts/` | `DMSans-Variable.woff2` (OFL licensed, see accompanying `OFL.txt`), used identically in the app UI and the injected extension overlay so both match the design system in `DESIGN.md` |
 | `docs/brand/` | Wordmark images (light/dark) used in `README.md` |
 | `docs/screenshots/` | App screenshots (light/dark) used in `README.md` |
-| `site/` | Static marketing site: `index.html`, `404.html` (served by GitHub Pages for any missing path, so its URLs are absolute), `og.html` (Open Graph preview), `sitemap.xml`, and a Google Search Console verification file, published to GitHub Pages by `.github/workflows/pages.yml` |
+| `site/` | Static marketing site: `index.html`, `404.html` (served by GitHub Pages for any missing path, so its URLs are absolute), `og.html` (Open Graph preview), `pages/` (guide pages: a shared `_layout.html` and `_page.css` plus one HTML fragment per guide, built by `scripts/build-site-pages.ts`, which also writes the sitemap), and a Google Search Console verification file, published to GitHub Pages by `.github/workflows/pages.yml` |
 
 ---
 
@@ -1235,8 +1235,9 @@ All workflows share `.github/actions/setup` (pnpm from the `packageManager` fiel
   when `release.yml` calls it after publishing a release. It never runs on a version bump: the
   site links the newest published release (`SITE_VERSION`, read with `gh release view`), not
   `package.json`'s version, so its download links never point at installers that don't exist
-  yet. The sitemap's `lastmod` is the last commit that changed `site/index.html`, or the
-  release date if later. `scripts/build-site-images.ts` (sharp) makes AVIF copies of the
+  yet. `scripts/build-site-pages.ts` builds each guide in `site/pages/` into `/meetmind/<slug>/`
+  and writes `sitemap.xml`; the home page's `lastmod` is the last commit that changed
+  `site/index.html` (a guide's, its own source), or the release date if later. `scripts/build-site-images.ts` (sharp) makes AVIF copies of the
   screenshots at 750, 1100 and 1500 px wide for the page's `<picture>` `srcset`s and shrinks
   the header wordmarks.
 - **`.github/dependabot.yml`**: grouped weekly minor/patch dependency update PRs and monthly

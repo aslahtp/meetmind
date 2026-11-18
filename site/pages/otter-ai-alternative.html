@@ -1,0 +1,189 @@
+<!--
+{
+  "slug": "otter-ai-alternative",
+  "order": 1,
+  "title": "Free Open-Source Otter.ai & Fireflies Alternative | MeetMind",
+  "description": "MeetMind is a free, open-source alternative to Otter.ai and Fireflies.ai. It records calls on your computer with no meeting bot and keeps your notes local.",
+  "crumb": "Otter.ai alternative",
+  "label": "Otter.ai & Fireflies alternative",
+  "summary": "How a free, bot-free desktop app compares with hosted note takers."
+}
+-->
+    <section class="hero center">
+      <div class="wrap">
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Free · Open source</span></span>
+        <h1 class="display">A free, open-source alternative to Otter.ai and Fireflies.ai</h1>
+        <p class="sub">MeetMind records your calls on your own computer, with no bot in the meeting, and writes the
+          summary, decisions and action items with the AI provider you choose.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="/meetmind/#download"><svg class="icon" aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download MeetMind free</a>
+          <a class="btn btn-ghost" href="#compare">See the comparison</a>
+        </div>
+        <figure class="shot">
+          <div class="frame"><picture>
+              <source type="image/avif"
+                srcset="/meetmind/screenshots/markdown-action-items-750.avif 750w, /meetmind/screenshots/markdown-action-items-1100.avif 1100w, /meetmind/screenshots/markdown-action-items-1500.avif 1500w"
+                sizes="(min-width: 1064px) 1000px, calc(100vw - 32px)">
+              <img src="/meetmind/screenshots/markdown-action-items.png"
+                alt="MeetMind meeting notes with numbered key decisions and an action items table with owners and deadlines"
+                width="1500" height="1000" fetchpriority="high">
+            </picture></div>
+          <figcaption>Decisions and action items written by MeetMind from a recorded call.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section aria-label="Guide">
+      <div class="wrap prose">
+        <div class="note">
+          <span class="eyebrow">Short answer</span>
+          <p>Yes, there is a free alternative. MeetMind is a GPL-3.0 desktop app for Windows, macOS and Linux. Instead
+            of sending a bot into the call, it records the call's audio and your microphone on your computer,
+            transcribes them with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, and writes the notes with
+            Google Gemini, Groq or Anthropic Claude using your own API keys. The app costs nothing; the free tiers of
+            Gemini and Groq cover moderate use.</p>
+        </div>
+
+        <h2 id="compare">MeetMind compared with hosted note takers</h2>
+        <p>Otter.ai and Fireflies.ai are hosted services: you sign in to their cloud, and their assistant usually joins
+          your meetings as a participant. MeetMind takes the opposite approach. The table compares MeetMind with how
+          hosted note takers typically work; check each vendor's current plans for details.</p>
+        <div class="table-wrap" role="region" aria-labelledby="compare">
+          <table>
+            <thead>
+              <tr>
+                <td></td>
+                <th scope="col">MeetMind</th>
+                <th scope="col">Hosted note takers (Otter.ai, Fireflies.ai)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Price</th>
+                <td class="us" data-label="MeetMind">Free app; you pay only for your own API usage, often nothing</td>
+                <td data-label="Hosted">Limited free plan, then a monthly subscription per seat</td>
+              </tr>
+              <tr>
+                <th scope="row">How it records</th>
+                <td class="us" data-label="MeetMind">System audio + microphone on your computer; nothing joins the call</td>
+                <td data-label="Hosted">An assistant usually joins the call as an extra participant</td>
+              </tr>
+              <tr>
+                <th scope="row">Where data lives</th>
+                <td class="us" data-label="MeetMind">On your computer (SQLite), optionally synced to your Notion</td>
+                <td data-label="Hosted">The vendor's cloud</td>
+              </tr>
+              <tr>
+                <th scope="row">Speech-to-text</th>
+                <td class="us" data-label="MeetMind">Your choice: AssemblyAI, Google, Sarvam AI or Groq Whisper</td>
+                <td data-label="Hosted">The vendor's engine</td>
+              </tr>
+              <tr>
+                <th scope="row">Notes model</th>
+                <td class="us" data-label="MeetMind">Your choice of Gemini, Groq or Claude model, with a fallback and an editable prompt</td>
+                <td data-label="Hosted">Chosen by the vendor</td>
+              </tr>
+              <tr>
+                <th scope="row">Account</th>
+                <td class="us" data-label="MeetMind">None; there is no MeetMind server</td>
+                <td data-label="Hosted">Required</td>
+              </tr>
+              <tr>
+                <th scope="row">Source code</th>
+                <td class="us" data-label="MeetMind">Open source (GPL-3.0) on GitHub</td>
+                <td data-label="Hosted">Closed source</td>
+              </tr>
+              <tr>
+                <th scope="row">Platforms</th>
+                <td class="us" data-label="MeetMind">Windows 10/11, macOS 14.2+ (beta), Linux x64 (beta)</td>
+                <td data-label="Hosted">Web, mobile and desktop apps</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Why people look for an Otter.ai alternative</h2>
+        <ul>
+          <li><strong>The bot in the call.</strong> A note-taker joining as a participant is visible to everyone, and
+            some hosts remove unknown participants. MeetMind adds nothing to the meeting.</li>
+          <li><strong>Per-seat subscriptions.</strong> MeetMind is free. You connect your own speech-to-text and AI
+            keys, and one free Groq key is enough for both transcription and notes.</li>
+          <li><strong>Data on someone else's servers.</strong> MeetMind keeps recordings, transcripts and notes on
+            your computer. Audio goes only to the speech-to-text provider you pick, and the transcript only to the
+            notes model you pick.</li>
+          <li><strong>Language mix.</strong> Meetings that switch between English and Hindi, Tamil, Malayalam or
+            other Indic languages mid-sentence are transcribed accurately with Sarvam AI's <code>saaras:v3</code>
+            model.</li>
+          <li><strong>Control over the notes.</strong> Choose Markdown minutes or structured JSON, edit the system
+            prompt, and pick the exact model, with automatic fallback to another provider if the first one fails.</li>
+        </ul>
+
+        <h2>How MeetMind works without a bot</h2>
+        <ol>
+          <li><strong>Record.</strong> Press Record, accept the prompt MeetMind shows when Google Meet, Zoom or Teams
+            starts using your microphone (Windows and Linux), or use the optional Chrome extension's button in Meet
+            and Zoom tabs.</li>
+          <li><strong>Transcribe.</strong> When you stop, the recording goes to your speech-to-text engine, which
+            returns a transcript with speaker labels.</li>
+          <li><strong>Summarize.</strong> Your notes model writes an executive summary, agenda, key decisions and an
+            action items table with owners and deadlines. You watch the notes appear as they are written.</li>
+          <li><strong>Share.</strong> Search every meeting, export a PDF, copy Markdown or sync the page to Notion.</li>
+        </ol>
+
+        <h2>When a hosted note taker is still the better choice</h2>
+        <p>MeetMind is not a drop-in clone, and it is not the right tool for everyone. A hosted service such as Otter.ai
+          or Fireflies.ai may suit you better if you need:</p>
+        <ul>
+          <li>a live transcript while the meeting is still running (MeetMind transcribes after you stop);</li>
+          <li>notes from meetings you don't attend yourself (MeetMind records only on the computer it runs on);</li>
+          <li>a phone app, or a shared team workspace with comments and permissions;</li>
+          <li>no API keys to manage at all.</li>
+        </ul>
+        <p>If what you want is accurate minutes from your own calls, no bot, no subscription and your data on your own
+          machine, MeetMind is built for exactly that.</p>
+
+        <h2>Moving your old meetings over</h2>
+        <p>If your current tool lets you export recordings or transcripts, MeetMind can turn them into its own notes:
+          use <strong>Import audio</strong> for WAV, MP3, M4A, MP4, WebM and other files, or <strong>Paste
+            transcript</strong> to skip speech-to-text entirely. See <a href="/meetmind/transcript-to-meeting-notes/">turning a
+            transcript or recording into meeting notes</a>.</p>
+
+        <h2>Frequently asked questions</h2>
+        <div class="faq">
+          <details open>
+            <summary>Is MeetMind really free?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes. The app is free and open source under the GPL-3.0 license, with no paid tier. You pay only the AI
+              providers you connect, and the Gemini and Groq free tiers and AssemblyAI's signup credit cover moderate
+              use at no cost.</p>
+          </details>
+          <details>
+            <summary>Does MeetMind join my Zoom, Google Meet or Teams call?<span class="pm" aria-hidden="true"><svg
+                  class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>No. It records the audio your computer plays plus your microphone, so no extra participant appears.
+              Because nothing announces the recording, tell the other participants that you are taking notes.</p>
+          </details>
+          <details>
+            <summary>Is MeetMind private?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>There is no MeetMind account or server. Recordings, transcripts and notes stay on your computer; audio is
+              sent only to the speech-to-text provider you choose and the transcript only to the notes model you choose,
+              under your own API keys and those providers' terms.</p>
+          </details>
+          <details>
+            <summary>Does it work on Mac and Linux?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes, as betas: <a href="/meetmind/mac/">macOS 14.2 or later</a> on Apple silicon and Intel, and <a
+                href="/meetmind/linux/">Linux x64</a> as an AppImage or .deb. The <a href="/meetmind/windows/">Windows
+                app</a> supports Windows 10 and 11.</p>
+          </details>
+        </div>
+      </div>
+    </section>

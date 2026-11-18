@@ -4,9 +4,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MeetMind — Free open-source AI meeting notes app for Windows, macOS and Linux</title>
+  <title>MeetMind: Free Open-Source AI Note Taker With No Meeting Bot</title>
   <meta name="description"
-    content="Free, open-source AI meeting notes for Windows, macOS and Linux. Records any call with no meeting bot, then transcribes and summarizes it with your own AI keys.">
+    content="Free, open-source AI note taker for Windows, Mac and Linux. Records Zoom, Google Meet and Teams calls with no bot, then writes the summary and action items.">
   <meta name="author" content="Aslah">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="color-scheme" content="light dark">
@@ -20,7 +20,7 @@
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="MeetMind">
-  <meta property="og:title" content="MeetMind — Open-source AI meeting notes for Windows, macOS and Linux">
+  <meta property="og:title" content="MeetMind: Free open-source AI note taker for Windows, Mac and Linux">
   <meta property="og:description"
     content="Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, Groq or Claude, and sync the minutes to Notion. Free, open source, no meeting bot.">
   <meta property="og:url" content="https://aslahtp.github.io/meetmind/">
@@ -29,7 +29,7 @@
   <meta property="og:image:height" content="640">
   <meta property="og:image:alt" content="MeetMind: AI meeting notes for Windows, macOS and Linux, with the app dashboard">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="MeetMind — Open-source AI meeting notes for Windows, macOS and Linux">
+  <meta name="twitter:title" content="MeetMind: Free open-source AI note taker for Windows, Mac and Linux">
   <meta name="twitter:description"
     content="Record Google Meet, Zoom or any call, transcribe it, summarize it with Gemini, Groq or Claude, and sync the minutes to Notion. Free, open source, no meeting bot.">
   <meta name="twitter:image" content="https://aslahtp.github.io/meetmind/og-image.png">
@@ -50,7 +50,7 @@
         "@type": "WebPage",
         "@id": "https://aslahtp.github.io/meetmind/#webpage",
         "url": "https://aslahtp.github.io/meetmind/",
-        "name": "MeetMind — Free open-source AI meeting notes app for Windows, macOS and Linux",
+        "name": "MeetMind: Free Open-Source AI Note Taker With No Meeting Bot",
         "inLanguage": "en",
         "isPartOf": { "@id": "https://aslahtp.github.io/meetmind/#website" },
         "about": { "@id": "https://aslahtp.github.io/meetmind/#app" },
@@ -69,7 +69,8 @@
         "@id": "https://aslahtp.github.io/meetmind/#app",
         "mainEntityOfPage": { "@id": "https://aslahtp.github.io/meetmind/#webpage" },
         "name": "MeetMind",
-        "description": "Open-source AI meeting notes app for Windows, macOS and Linux. Records system audio and microphone, transcribes with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, generates meeting minutes with Google Gemini, Groq or Anthropic Claude, and syncs them to Notion. A Chrome extension adds one-click recording to Google Meet and Zoom.",
+        "alternateName": "MeetMind AI note taker",
+        "description": "Free, open-source AI note taker and meeting notes app for Windows, macOS and Linux. Records system audio and microphone, transcribes with AssemblyAI, Google Cloud Speech-to-Text, Sarvam AI or Groq, generates meeting minutes with Google Gemini, Groq or Anthropic Claude, and syncs them to Notion. A Chrome extension adds one-click recording to Google Meet and Zoom.",
         "url": "https://aslahtp.github.io/meetmind/",
         "applicationCategory": "BusinessApplication",
         "applicationSubCategory": "Meeting notes and transcription",
@@ -105,7 +106,7 @@
         "@id": "https://aslahtp.github.io/meetmind/#source",
         "name": "MeetMind source code",
         "codeRepository": "https://github.com/aslahtp/meetmind",
-        "programmingLanguage": "JavaScript",
+        "programmingLanguage": "TypeScript",
         "runtimePlatform": "Electron",
         "license": "https://www.gnu.org/licenses/gpl-3.0.html",
         "author": { "@id": "https://aslahtp.github.io/meetmind/#author" },
@@ -123,7 +124,8 @@
           { "@type": "Question", "name": "Where is my meeting data stored?", "acceptedAnswer": { "@type": "Answer", "text": "Recordings, transcripts and notes are stored locally on your PC. There is no MeetMind server or account: audio is sent only to the speech-to-text provider you choose, and the transcript only to the note-generation provider you choose (Gemini, Groq or Claude), using your own API keys. Settings › Storage shows how much space recordings take and can delete old recordings automatically, keeping their notes and transcripts." } },
           { "@type": "Question", "name": "Which languages does MeetMind support?", "acceptedAnswer": { "@type": "Answer", "text": "Language support depends on the speech-to-text engine you choose. For meetings that mix English and Indic languages, Sarvam AI's saaras:v3 model handles code-switching within a sentence." } },
           { "@type": "Question", "name": "How is MeetMind different from Otter.ai or Fireflies.ai?", "acceptedAnswer": { "@type": "Answer", "text": "Hosted note takers such as Otter.ai and Fireflies.ai are subscription services that typically join calls as a bot and keep recordings on their servers. MeetMind is an open-source desktop app that records locally without a bot, lets you choose the transcription provider, stores notes on your machine, and costs nothing beyond your own API usage." } },
-          { "@type": "Question", "name": "Can MeetMind make notes from a recording I already have?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript to generate notes without speech-to-text." } }
+          { "@type": "Question", "name": "Does MeetMind run AI models locally or offline?", "acceptedAnswer": { "@type": "Answer", "text": "No. Transcription and notes use the cloud provider you choose (AssemblyAI, Google, Sarvam AI or Groq for speech-to-text; Gemini, Groq or Claude for notes) with your own API key. What stays local is your data: recordings, transcripts and notes are stored on your computer, and there is no MeetMind server or account." } },
+          { "@type": "Question", "name": "Can MeetMind make notes and action items from a recording or transcript I already have?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript from Zoom, Teams, Google Meet or any other tool, and MeetMind writes a summary, key decisions and an action items table. A pasted transcript needs only a notes key." } }
         ]
       }
     ]
@@ -1577,6 +1579,18 @@
       }
     }
 
+    .more-link {
+      margin-top: 24px;
+      font-size: var(--text-body-sm);
+    }
+
+    .more-link a,
+    .faq .answer a,
+    .dl-steps .caption a {
+      color: var(--ink);
+      text-underline-offset: 3px;
+    }
+
     /* ── FAQ ──────────────────────────────────────────────────────────────── */
     .faq {
       max-width: 820px;
@@ -2014,6 +2028,12 @@
       min-height: 44px;
     }
 
+    .foot-guides {
+      flex-basis: 100%;
+      border-top: 1px solid var(--hairline-soft);
+      padding-top: 8px;
+    }
+
     footer nav .logo {
       width: 14px;
       height: 14px;
@@ -2292,7 +2312,7 @@
       <div class="wrap">
         <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Open
             source<span class="hide-xs"> · Windows, macOS &amp; Linux</span></span></span>
-        <h1 class="display">AI meeting notes for Windows, Mac and Linux, <span class="mark">without a
+        <h1 class="display">The open-source AI note taker for Windows, Mac and Linux, <span class="mark">without a
             meeting bot</span></h1>
         <p class="sub">MeetMind records Google Meet, Zoom or any call on your computer,
           transcribes it with AssemblyAI, Google Speech-to-Text, Sarvam AI or Groq, and writes clear meeting minutes with
@@ -2459,7 +2479,7 @@
             </ul>
             <div class="dl-steps">
               <h3>Install on Windows</h3>
-              <p class="caption">Windows 10 or 11, 64-bit. FFmpeg is included.</p>
+              <p class="caption">Windows 10 or 11, 64-bit. FFmpeg is included. <a href="windows/">Windows guide</a></p>
               <ol>
                 <li>Run <strong>MeetMind-Setup.exe</strong>. The installer isn’t code-signed yet, so if Windows shows
                   “Windows protected your PC”, click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
@@ -2496,7 +2516,7 @@
             </ul>
             <div class="dl-steps">
               <h3>Install on macOS</h3>
-              <p class="caption">macOS 14.2 or later. Not signed by Apple yet. FFmpeg is included.</p>
+              <p class="caption">macOS 14.2 or later. Not signed by Apple yet. FFmpeg is included. <a href="mac/">macOS guide</a></p>
               <ol>
                 <li>Open the <strong>.dmg</strong> and drag <strong>MeetMind</strong> to <strong>Applications</strong>.</li>
                 <li>Open MeetMind. When macOS says it can’t verify the developer, click <strong>Done</strong>, then
@@ -2533,7 +2553,7 @@
             <div class="dl-steps">
               <h3>Install on Linux</h3>
               <p class="caption">64-bit, with PulseAudio or PipeWire and <code>pactl</code> (the pulseaudio-utils
-                package, on most desktops already). FFmpeg is included.</p>
+                package, on most desktops already). FFmpeg is included. <a href="linux/">Linux guide</a></p>
               <ol>
                 <li><strong>.deb</strong>: run <code>sudo apt install ./MeetMind-*-amd64.deb</code>. To update,
                   install the new .deb the same way; MeetMind tells you when one is out.</li>
@@ -2987,6 +3007,8 @@
             </tbody>
           </table>
         </div>
+        <p class="sub more-link" data-reveal><a href="otter-ai-alternative/">Read the full comparison with Otter.ai and
+            Fireflies.ai</a>, including when a hosted note taker is still the better choice.</p>
       </div>
     </section>
 
@@ -3022,7 +3044,9 @@
             <div class="answer">
               <p>Any app that plays audio on your computer, including Google Meet, Zoom, Microsoft Teams, Slack, Discord
                 and Webex. On Windows and Linux, for Google Meet, Zoom and Teams, MeetMind detects the call and offers to start
-                recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs.</p>
+                recording; the optional Chrome extension adds a record button inside Meet and Zoom tabs. Guides:
+                <a href="google-meet-notes/">Google Meet</a>, <a href="zoom-meeting-notes/">Zoom</a>,
+                <a href="microsoft-teams-recorder/">Microsoft Teams</a>.</p>
             </div>
           </details>
           <details data-reveal>
@@ -3034,7 +3058,8 @@
                 audio with the Core Audio capture added in macOS 14.2; meeting detection isn't available on macOS yet.
                 Linux: yes, as a beta for x64 (an AppImage and a .deb). It records system audio through PulseAudio or
                 PipeWire and detects meetings like the Windows app; on Wayland-only sessions, browser meetings aren't
-                detected, so use Record or the Chrome extension.</p>
+                detected, so use Record or the Chrome extension. See the <a href="mac/">macOS guide</a> and the
+                <a href="linux/">Linux guide</a>.</p>
             </div>
           </details>
           <details data-reveal>
@@ -3067,17 +3092,32 @@
               <p>Hosted note takers such as Otter.ai and Fireflies.ai are subscription services that typically join
                 calls as a bot and keep recordings on their servers. MeetMind is an open-source desktop app that
                 records locally without a bot, lets you choose the transcription provider, stores notes on your
-                machine, and costs nothing beyond your own API usage.</p>
+                machine, and costs nothing beyond your own API usage. <a href="otter-ai-alternative/">Full comparison
+                  with Otter.ai and Fireflies.ai</a>.</p>
             </div>
           </details>
           <details data-reveal>
-            <summary>Can MeetMind make notes from a recording I already have?<span class="pm" aria-hidden="true"><svg
+            <summary>Does MeetMind run AI models locally or offline?<span class="pm" aria-hidden="true"><svg
                   class="icon">
                   <use href="#i-plus" />
                 </svg></span></summary>
             <div class="answer">
-              <p>Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript to generate
-                notes without speech-to-text.</p>
+              <p>No. Transcription and notes use the cloud provider you choose (AssemblyAI, Google, Sarvam AI or Groq
+                for speech-to-text; Gemini, Groq or Claude for notes) with your own API key. What stays local is your
+                data: recordings, transcripts and notes are stored on your computer, and there is no MeetMind server
+                or account.</p>
+            </div>
+          </details>
+          <details data-reveal>
+            <summary>Can MeetMind make notes and action items from a recording or transcript I already have?<span
+                class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <div class="answer">
+              <p>Yes. Import an existing WAV, MP3, M4A, MP4, WebM or similar file, or paste a transcript from Zoom,
+                Teams, Google Meet or any other tool, and MeetMind writes a summary, key decisions and an action items
+                table. A pasted transcript needs only a notes key. <a href="transcript-to-meeting-notes/">How to turn a
+                  transcript into meeting notes</a>.</p>
             </div>
           </details>
         </div>
@@ -3120,6 +3160,16 @@
         <a href="https://github.com/aslahtp/meetmind/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/aslahtp/meetmind/issues">Issues</a>
         <a href="llms.txt">llms.txt</a>
+      </nav>
+      <nav class="foot-guides" aria-label="Guides">
+        <a href="otter-ai-alternative/">Otter.ai &amp; Fireflies alternative</a>
+        <a href="google-meet-notes/">Google Meet notes</a>
+        <a href="microsoft-teams-recorder/">Microsoft Teams recorder</a>
+        <a href="zoom-meeting-notes/">Zoom meeting notes</a>
+        <a href="transcript-to-meeting-notes/">Transcript to meeting notes</a>
+        <a href="windows/">Windows</a>
+        <a href="mac/">macOS</a>
+        <a href="linux/">Linux</a>
       </nav>
     </div>
   </footer>
