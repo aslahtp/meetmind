@@ -1,0 +1,156 @@
+<!--
+{
+  "slug": "microsoft-teams-recorder",
+  "order": 3,
+  "title": "Record & Transcribe Microsoft Teams Meetings Free | MeetMind",
+  "description": "Free, open-source Microsoft Teams recording software. MeetMind records Teams calls on your PC with no bot, then writes a transcript, summary and action items.",
+  "crumb": "Microsoft Teams",
+  "label": "Microsoft Teams recorder",
+  "summary": "Record and transcribe Teams calls in the desktop app or browser, free."
+}
+-->
+    <section class="hero center">
+      <div class="wrap">
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Microsoft Teams · Free</span></span>
+        <h1 class="display">Record and transcribe Microsoft Teams meetings, <span class="mark">free and open source</span></h1>
+        <p class="sub">MeetMind records Teams calls on your own computer, in the Teams app or a browser, and turns them into
+          a transcript and meeting minutes. No bot joins, and no Teams licence or admin setting is involved.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="/meetmind/#download"><svg class="icon" aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download MeetMind free</a>
+          <a class="btn btn-ghost" href="#how">How it records Teams</a>
+        </div>
+        <figure class="shot">
+          <div class="frame"><picture>
+              <source type="image/avif"
+                srcset="/meetmind/screenshots/transcript-750.avif 750w, /meetmind/screenshots/transcript-1100.avif 1100w, /meetmind/screenshots/transcript-1500.avif 1500w"
+                sizes="(min-width: 1064px) 1000px, calc(100vw - 32px)">
+              <img src="/meetmind/screenshots/transcript.png"
+                alt="Speaker-labelled meeting transcript in MeetMind with search and a speaker filter" width="1500"
+                height="1000" fetchpriority="high">
+            </picture></div>
+          <figcaption>A speaker-labelled transcript you can search and filter by speaker.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section aria-label="Guide">
+      <div class="wrap prose">
+        <div class="note">
+          <span class="eyebrow">Short answer</span>
+          <p>MeetMind is free, open-source software that records Microsoft Teams meetings from your computer's audio
+            output and microphone. On Windows it notices when the Teams app starts using your microphone and offers to
+            record. After the call it transcribes the recording with the engine you choose and writes minutes with
+            decisions and action items, all stored on your computer.</p>
+        </div>
+
+        <h2 id="how">How MeetMind records a Teams call</h2>
+        <p>MeetMind doesn't connect to Teams at all. It captures what your computer plays (Windows loopback audio,
+          Core Audio on macOS, PulseAudio or PipeWire on Linux) together with your microphone, so it hears everyone in
+          the call the way you do. That means it works with:</p>
+        <ul>
+          <li>the new Teams and classic Teams desktop apps on Windows;</li>
+          <li>Teams in Chrome, Edge, Brave, Firefox, Opera, Vivaldi or Arc;</li>
+          <li>work, school and personal Teams accounts, and meetings hosted by other organisations you join as a
+            guest;</li>
+          <li><code>teams-for-linux</code>, the community Teams client, on Linux.</li>
+        </ul>
+
+        <h2>Starting a recording</h2>
+        <ol>
+          <li><strong>Automatically</strong> (Windows and Linux): when Teams starts using your microphone, a small
+            overlay offers to record. The Teams desktop app counts as soon as it uses the microphone; in a browser,
+            MeetMind also looks for a Teams tab. When the call ends, the overlay asks whether to stop.</li>
+          <li><strong>From a calendar reminder</strong>: connect an Outlook or Google calendar with its ICS link, and
+            MeetMind reminds you to record when a meeting starts.</li>
+          <li><strong>By hand</strong>: press Record in the app or the tray menu (the only way on macOS for now).</li>
+        </ol>
+
+        <h2>MeetMind or Teams' built-in recording?</h2>
+        <p>Teams can record and transcribe meetings itself, but whether you can depends on your organisation's licences
+          and policies, the organiser usually starts it, and recordings are saved to the organiser's OneDrive or
+          SharePoint. Teams also announces the recording to everyone. MeetMind is useful when that isn't available to
+          you, or when you want your own notes in a consistent format with your choice of AI model.</p>
+        <div class="table-wrap" role="region" aria-label="MeetMind compared with Teams recording">
+          <table>
+            <thead>
+              <tr>
+                <td></td>
+                <th scope="col">MeetMind</th>
+                <th scope="col">Teams recording</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Needs</th>
+                <td class="us" data-label="MeetMind">Only the app, plus your own speech-to-text and AI keys</td>
+                <td data-label="Teams">A suitable licence and a policy that allows it</td>
+              </tr>
+              <tr>
+                <th scope="row">Started by</th>
+                <td class="us" data-label="MeetMind">You</td>
+                <td data-label="Teams">Usually the organiser</td>
+              </tr>
+              <tr>
+                <th scope="row">Saved to</th>
+                <td class="us" data-label="MeetMind">Your computer, plus PDF, Markdown or Notion</td>
+                <td data-label="Teams">The organiser's OneDrive or SharePoint</td>
+              </tr>
+              <tr>
+                <th scope="row">Notes</th>
+                <td class="us" data-label="MeetMind">Summary, decisions and action items with owners and deadlines</td>
+                <td data-label="Teams">Depends on your licence</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>What you get</h2>
+        <ul>
+          <li>A transcript with speaker labels, from AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI (Groq Whisper
+            is faster and cheaper but doesn't label speakers).</li>
+          <li>Minutes written by Gemini, Groq or Claude: executive summary, agenda, key decisions and an action items
+            table with owners and deadlines.</li>
+          <li>Every meeting searchable in one place, with PDF export, Markdown copy and optional Notion sync.</li>
+        </ul>
+
+        <h2>Ask before you record</h2>
+        <p>Unlike Teams' own recording, MeetMind shows no banner to other participants. Tell them you are recording, and
+          follow your organisation's policy and the law where you and they are: some places require everyone's
+          consent.</p>
+
+        <h2>Frequently asked questions</h2>
+        <div class="faq">
+          <details open>
+            <summary>Is MeetMind a Teams bot?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>No. It never joins the meeting and needs no Teams app, admin approval or Microsoft 365 permission. It
+              records the audio on your computer.</p>
+          </details>
+          <details>
+            <summary>Can I record a Teams meeting I don't organise?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>MeetMind records whatever meeting you are in, but you should still get the organiser's and participants'
+              agreement and follow your organisation's rules.</p>
+          </details>
+          <details>
+            <summary>Does it work on Mac and Linux?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes, as betas. On <a href="/meetmind/mac/">macOS 14.2+</a>, start recordings with Record. On <a
+                href="/meetmind/linux/">Linux</a>, MeetMind detects <code>teams-for-linux</code> and, on X11 sessions,
+              Teams in a browser.</p>
+          </details>
+          <details>
+            <summary>Does it cost anything?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>The app is free and open source. You pay only for your own API usage, and the Gemini and Groq free tiers
+              cover moderate use.</p>
+          </details>
+        </div>
+      </div>
+    </section>

@@ -1,0 +1,142 @@
+<!--
+{
+  "slug": "zoom-meeting-notes",
+  "order": 4,
+  "title": "Free Zoom Transcription & AI Meeting Notes, No Bot | MeetMind",
+  "description": "Get Zoom transcripts and AI meeting notes without a bot or a paid Zoom plan. MeetMind is free, open source and records the call on your own computer.",
+  "crumb": "Zoom",
+  "label": "Zoom meeting notes",
+  "summary": "Transcripts and minutes from Zoom calls without AI Companion or a bot."
+}
+-->
+    <section class="hero center">
+      <div class="wrap">
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Zoom · Free</span></span>
+        <h1 class="display">Zoom transcripts and AI meeting notes, <span class="mark">without a bot</span></h1>
+        <p class="sub">MeetMind records Zoom calls in the Zoom app or a browser on your own computer, then writes a
+          transcript and minutes with decisions and action items. It works on a free Zoom account.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="/meetmind/#download"><svg class="icon" aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download MeetMind free</a>
+          <a class="btn btn-ghost" href="#start">How to record a Zoom call</a>
+        </div>
+        <figure class="shot">
+          <div class="frame"><picture>
+              <source type="image/avif"
+                srcset="/meetmind/screenshots/json-notes-750.avif 750w, /meetmind/screenshots/json-notes-1100.avif 1100w, /meetmind/screenshots/json-notes-1500.avif 1500w"
+                sizes="(min-width: 1064px) 1000px, calc(100vw - 32px)">
+              <img src="/meetmind/screenshots/json-notes.png"
+                alt="Structured meeting notes in MeetMind with identified speakers and prioritised action items"
+                width="1500" height="1000" fetchpriority="high">
+            </picture></div>
+          <figcaption>Structured notes with identified speakers and prioritised action items.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section aria-label="Guide">
+      <div class="wrap prose">
+        <div class="note">
+          <span class="eyebrow">Short answer</span>
+          <p>To get Zoom meeting notes without Zoom's paid AI features or a bot, run MeetMind on the computer you join
+            from. It records the call's audio and your microphone locally, then a speech-to-text engine of your choice
+            writes the transcript and Gemini, Groq or Claude writes the minutes. The app is free and open source.</p>
+        </div>
+
+        <h2 id="start">Starting a recording</h2>
+        <ol>
+          <li><strong>Automatically</strong> (Windows and Linux): when the Zoom desktop app starts using your
+            microphone, MeetMind shows a small overlay with a Record button. Zoom in a browser counts too when a Zoom tab
+            is open (on Linux, browser meetings need an X11 session).</li>
+          <li><strong>With the Chrome extension</strong>: a record button inside Zoom's web client.</li>
+          <li><strong>By hand</strong>: Record in the app or the tray menu, or the reminder for a meeting in your
+            connected calendar.</li>
+        </ol>
+        <p>When the meeting ends, MeetMind asks whether to stop rather than cutting the recording off, then processes it
+          and shows the notes as they are written.</p>
+
+        <h2>MeetMind or Zoom's own transcripts and AI Companion?</h2>
+        <p>Zoom's cloud recording transcripts and AI Companion summaries need a paid Zoom plan, and the host's account
+          settings decide whether they run. MeetMind works in any Zoom meeting you join, on a free account or as a guest
+          in someone else's meeting, and keeps the result on your computer instead of the host's Zoom cloud.</p>
+        <div class="table-wrap" role="region" aria-label="MeetMind compared with Zoom's built-in features">
+          <table>
+            <thead>
+              <tr>
+                <td></td>
+                <th scope="col">MeetMind</th>
+                <th scope="col">Zoom's built-in features</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Zoom plan</th>
+                <td class="us" data-label="MeetMind">Any, including free</td>
+                <td data-label="Built-in">Paid plans</td>
+              </tr>
+              <tr>
+                <th scope="row">Controlled by</th>
+                <td class="us" data-label="MeetMind">You</td>
+                <td data-label="Built-in">The host's account settings</td>
+              </tr>
+              <tr>
+                <th scope="row">Saved to</th>
+                <td class="us" data-label="MeetMind">Your computer, plus PDF, Markdown or Notion</td>
+                <td data-label="Built-in">The host's Zoom cloud</td>
+              </tr>
+              <tr>
+                <th scope="row">AI model</th>
+                <td class="us" data-label="MeetMind">Your choice of Gemini, Groq or Claude, with an editable prompt</td>
+                <td data-label="Built-in">Zoom's</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>What the notes contain</h2>
+        <ul>
+          <li>An executive summary and agenda of what was discussed.</li>
+          <li>Numbered key decisions.</li>
+          <li>An action items table with owners and deadlines.</li>
+          <li>The full transcript with speaker labels (AssemblyAI, Google Cloud Speech-to-Text or Sarvam AI).</li>
+        </ul>
+        <p>Pick Markdown minutes or structured JSON, and edit the system prompt to change the format. For calls that mix
+          English with Indic languages, Sarvam AI's <code>saaras:v3</code> model handles the code-switching.</p>
+
+        <h2>Ask before you record</h2>
+        <p>MeetMind doesn't trigger Zoom's recording notice. Tell the other participants you are recording and follow the
+          law where you and they are.</p>
+
+        <h2>Frequently asked questions</h2>
+        <div class="faq">
+          <details open>
+            <summary>Does MeetMind work with a free Zoom account?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes. It records audio on your computer, so it doesn't rely on any Zoom plan feature.</p>
+          </details>
+          <details>
+            <summary>Does a bot join my Zoom meeting?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>No. MeetMind adds no participant and needs no Zoom app or integration.</p>
+          </details>
+          <details>
+            <summary>Can I get notes from a Zoom recording I already have?<span class="pm" aria-hidden="true"><svg
+                  class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes. Import the MP4 or M4A file, or paste Zoom's transcript, and MeetMind writes the notes. See <a
+                href="/meetmind/transcript-to-meeting-notes/">turning a transcript or recording into notes</a>.</p>
+          </details>
+          <details>
+            <summary>Which systems does it run on?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p><a href="/meetmind/windows/">Windows 10 and 11</a>, and as betas <a href="/meetmind/mac/">macOS 14.2+</a>
+              and <a href="/meetmind/linux/">Linux x64</a>.</p>
+          </details>
+        </div>
+      </div>
+    </section>

@@ -1,0 +1,126 @@
+<!--
+{
+  "slug": "mac",
+  "order": 6,
+  "title": "AI Meeting Notes for Mac (macOS 14.2+), Free | MeetMind",
+  "description": "Free, open-source AI meeting notes for Mac. MeetMind records Zoom, Google Meet and Teams calls on macOS 14.2+ with no bot, then writes the minutes for you.",
+  "crumb": "macOS",
+  "label": "MeetMind for Mac",
+  "summary": "Install the macOS beta, allow audio capture and test it."
+}
+-->
+    <section class="hero center">
+      <div class="wrap">
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">macOS 14.2+ · Beta</span></span>
+        <h1 class="display">AI meeting notes for Mac, <span class="mark">without a meeting bot</span></h1>
+        <p class="sub">MeetMind records your Mac's audio and microphone during any call, then writes a transcript and
+          minutes with decisions and action items. Free and open source, for Apple silicon and Intel Macs.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"
+              aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download for Mac</a>
+          <a class="btn btn-ghost" href="#install">Install steps</a>
+        </div>
+        <p class="caption meta">MeetMind-__VERSION__-arm64.dmg (Apple silicon) or -x64.dmg (Intel) · macOS 14.2 or later</p>
+        <figure class="shot">
+          <div class="frame"><picture>
+              <source type="image/avif"
+                srcset="/meetmind/screenshots/markdown-notes-dark-750.avif 750w, /meetmind/screenshots/markdown-notes-dark-1100.avif 1100w, /meetmind/screenshots/markdown-notes-dark-1500.avif 1500w"
+                sizes="(min-width: 1064px) 1000px, calc(100vw - 32px)">
+              <img src="/meetmind/screenshots/markdown-notes-dark.png"
+                alt="MeetMind meeting minutes in the dark theme with a summary and agenda" width="1500" height="1000"
+                fetchpriority="high">
+            </picture></div>
+          <figcaption>Meeting minutes in MeetMind's dark theme.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section aria-label="Guide">
+      <div class="wrap prose">
+        <div class="note">
+          <span class="eyebrow">In short</span>
+          <p>MeetMind for macOS is a free beta for macOS 14.2 or later. It records the other participants with the
+            system audio capture Apple added in macOS 14.2, and you with your microphone, so it works with Zoom, Google
+            Meet, Teams or any other app without a bot. It isn't signed by Apple yet, so the first launch takes one
+            extra step.</p>
+        </div>
+
+        <h2 id="install">Install MeetMind on a Mac</h2>
+        <ol>
+          <li>From the <a href="https://github.com/aslahtp/meetmind/releases/latest">latest release</a>, download
+            <code>MeetMind-x.y.z-arm64.dmg</code> for Apple silicon (M1 and later) or <code>MeetMind-x.y.z-x64.dmg</code>
+            for Intel Macs. Open it and drag <strong>MeetMind</strong> to <strong>Applications</strong>.</li>
+          <li>Open MeetMind. macOS says it can't verify the developer: click <strong>Done</strong>, open
+            <strong>System Settings › Privacy &amp; Security</strong>, scroll down and click <strong>Open
+              Anyway</strong>. On macOS 15 and later, Control-clicking the app and choosing Open no longer works for
+            unsigned apps.</li>
+          <li>In <strong>Settings › System › Permissions</strong>, allow <strong>Microphone</strong> and
+            <strong>Screen &amp; System Audio Recording</strong>. The second one is what records the other
+            participants.</li>
+          <li>Play a video and use <strong>Settings › System › Test system audio</strong> to check that MeetMind hears
+            your Mac. If the selected capture method stays silent, try the others and keep the one that works.</li>
+          <li>Add a speech-to-text key and a notes key (Gemini, Groq or Claude) in <strong>Settings</strong>. FFmpeg is
+            already included.</li>
+        </ol>
+
+        <h2>Recording a call</h2>
+        <p>Automatic meeting detection isn't available on macOS yet, so start a recording in one of these ways:</p>
+        <ul>
+          <li>the Record button in the app or the menu bar icon;</li>
+          <li>the reminder MeetMind shows when a meeting in your connected calendar (Google, Outlook, iCloud or any ICS
+            link) starts;</li>
+          <li>the optional Chrome extension's button inside Google Meet and Zoom tabs.</li>
+        </ul>
+        <p>After you stop, the recording is transcribed and the notes stream in as the model writes them: an executive
+          summary, agenda, key decisions and an action items table with owners and deadlines.</p>
+
+        <h2>What "beta" means on macOS</h2>
+        <ul>
+          <li>The app is ad-hoc signed, not notarised by Apple, so macOS asks you to approve it on first launch.</li>
+          <li>Because it isn't signed with a Developer ID, macOS forgets its permissions after each update; allow them
+            again in Settings › System.</li>
+          <li>MeetMind tells you when an update is out and opens the release page; you install it by downloading the new
+            DMG.</li>
+          <li>Meeting detection is planned but not available yet.</li>
+        </ul>
+        <p>Found something that doesn't work on your Mac? <a
+            href="https://github.com/aslahtp/meetmind/issues/new?template=bug_report.yml">Report it on GitHub</a>; there
+          is no maintainer Mac, so tester reports shape the beta.</p>
+
+        <h2>Frequently asked questions</h2>
+        <div class="faq">
+          <details open>
+            <summary>Why does it need macOS 14.2?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>macOS 14.2 added the Core Audio API that lets an app record system audio without a virtual audio driver
+              such as BlackHole. Earlier versions don't have it.</p>
+          </details>
+          <details>
+            <summary>Why does it ask for Screen &amp; System Audio Recording?<span class="pm" aria-hidden="true"><svg
+                  class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>macOS puts system audio capture under that permission. MeetMind keeps only the audio and discards the
+              video track.</p>
+          </details>
+          <details>
+            <summary>Does it work on Apple silicon and Intel?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes. There is a separate download for each: <code>arm64</code> for M-series Macs and <code>x64</code> for
+              Intel.</p>
+          </details>
+          <details>
+            <summary>How do I know the download is genuine?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Every release file has a signed build attestation. Run <code>gh attestation verify
+                MeetMind-x.y.z-arm64.dmg --repo aslahtp/meetmind</code> with the GitHub CLI to confirm it was built
+              from the public source.</p>
+          </details>
+        </div>
+      </div>
+    </section>

@@ -27,6 +27,15 @@ Key facts:
 - [Latest release](https://github.com/aslahtp/meetmind/releases/latest): Windows installer (`MeetMind-Setup-x.y.z.exe`), macOS disk images (`MeetMind-x.y.z-arm64.dmg` for Apple silicon, `MeetMind-x.y.z-x64.dmg` for Intel), Linux packages (`MeetMind-x.y.z-x86_64.AppImage`, `MeetMind-x.y.z-amd64.deb`) and Chrome extension (`meetmind-extension.zip`)
 - [Source code](https://github.com/aslahtp/meetmind)
 
+## Guides
+
+- [Open-source alternative to Otter.ai and Fireflies.ai](https://aslahtp.github.io/meetmind/otter-ai-alternative/): how MeetMind compares with hosted note takers, and when a hosted one is the better choice
+- [Google Meet transcription and notes without a bot](https://aslahtp.github.io/meetmind/google-meet-notes/)
+- [Record and transcribe Microsoft Teams meetings](https://aslahtp.github.io/meetmind/microsoft-teams-recorder/)
+- [Zoom transcripts and AI meeting notes without a bot](https://aslahtp.github.io/meetmind/zoom-meeting-notes/)
+- [Turn a transcript or recording into meeting notes](https://aslahtp.github.io/meetmind/transcript-to-meeting-notes/): import audio or video files, or paste a transcript
+- [MeetMind for Windows](https://aslahtp.github.io/meetmind/windows/), [macOS](https://aslahtp.github.io/meetmind/mac/) and [Linux](https://aslahtp.github.io/meetmind/linux/): install, permissions, audio capture and meeting detection per system
+
 ## Optional
 
 - [Website](https://aslahtp.github.io/meetmind/)

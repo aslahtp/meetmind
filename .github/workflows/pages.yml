@@ -13,6 +13,8 @@ on:
       - 'llms.txt'
       - 'scripts/build-site.sh'
       - 'scripts/build-site-images.ts'
+      - 'scripts/build-site-pages.ts'
+      - 'scripts/site-pages.ts'
       - '.github/workflows/pages.yml'
   workflow_call:
   workflow_dispatch:

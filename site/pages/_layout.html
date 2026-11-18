@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  <meta name="author" content="Aslah">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f8f5ed" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1813" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="{{url}}">
+  <link rel="icon" href="/meetmind/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/meetmind/icon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="/meetmind/icon-256.png">
+  <link rel="preload" href="/meetmind/fonts/DMSans-Variable.woff2" as="font" type="font/woff2" crossorigin>
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="MeetMind">
+  <meta property="og:title" content="{{title}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:url" content="{{url}}">
+  <meta property="og:image" content="https://aslahtp.github.io/meetmind/og-image.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="MeetMind: AI meeting notes for Windows, macOS and Linux, with the app dashboard">
+  <meta property="article:modified_time" content="{{dateModified}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{title}}">
+  <meta name="twitter:description" content="{{description}}">
+  <meta name="twitter:image" content="https://aslahtp.github.io/meetmind/og-image.png">
+
+  <script type="application/ld+json">
+{{jsonLd}}
+  </script>
+
+  <script>
+    // Same saved theme as the home page (no toggle here; it follows the visitor's last choice).
+    (function () {
+      try {
+        var t = localStorage.getItem('meetmind-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { }
+    })();
+  </script>
+
+  <style>
+{{css}}
+  </style>
+</head>
+
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-download" viewBox="0 0 24 24">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M12 15V3" />
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24">
+      <path d="M5 12h14" />
+      <path d="M12 5v14" />
+    </symbol>
+    <symbol id="i-meetmind" viewBox="0 0 128 128">
+      <rect x="2.5" y="2.5" width="123" height="123" rx="46" fill="#1a1813" stroke="#f8f5ed" stroke-width="5" />
+      <g transform="translate(32 32) scale(2.6667)" fill="none" stroke="#f8f5ed" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 19v3" />
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <rect x="9" y="2" width="6" height="13" rx="3" />
+      </g>
+    </symbol>
+    <!-- GitHub mark (Octicons, MIT) -->
+    <symbol id="l-github" viewBox="0 0 16 16">
+      <path
+        d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" />
+    </symbol>
+  </svg>
+
+  <a class="skip" href="#main">Skip to content</a>
+
+  <div class="site-header" id="site-header">
+    <div class="wrap">
+      <header class="top">
+        <a class="brand" href="/meetmind/" aria-label="MeetMind home">
+          <img class="only-light" src="/meetmind/brand/meetmind-wordmark-light.png" alt="MeetMind" width="102" height="32">
+          <img class="only-dark" src="/meetmind/brand/meetmind-wordmark-dark.png" alt="MeetMind" width="102" height="32">
+        </a>
+        <nav class="top-nav" aria-label="Primary">
+          <a class="link hide-sm" href="/meetmind/#features">Features</a>
+          <a class="link hide-sm" href="/meetmind/#faq">FAQ</a>
+          <a class="link nav-github" href="https://github.com/aslahtp/meetmind"><svg class="logo" aria-hidden="true">
+              <use href="#l-github" />
+            </svg><span class="label">GitHub</span></a>
+          <a class="btn btn-ghost nav-cta" href="/meetmind/#download"><svg class="icon" aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download</a>
+        </nav>
+      </header>
+    </div>
+  </div>
+
+  <main id="main">
+    <nav class="crumbs wrap" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="/meetmind/">MeetMind</a></li>
+        <li aria-current="page">{{crumb}}</li>
+      </ol>
+    </nav>
+
+{{content}}
+
+    <section class="related" aria-labelledby="related-h">
+      <div class="wrap">
+        <h2 id="related-h">More MeetMind guides</h2>
+        <ul class="guide-grid">
+{{related}}
+        </ul>
+      </div>
+    </section>
+
+    <section class="cta center" aria-labelledby="cta-h">
+      <div class="wrap">
+        <h2 id="cta-h">Free AI meeting notes, without a bot in the call</h2>
+        <p class="sub">MeetMind is free and open source for Windows, macOS and Linux. Add a speech-to-text key and a
+          notes key, and your next call becomes searchable minutes.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="/meetmind/#download"><svg class="icon" aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download MeetMind</a>
+          <a class="btn btn-ghost" href="https://github.com/aslahtp/meetmind"><svg class="logo" aria-hidden="true">
+              <use href="#l-github" />
+            </svg>View source on GitHub</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span class="foot-brand"><svg viewBox="0 0 128 128" aria-hidden="true">
+          <use href="#i-meetmind" />
+        </svg><span>MeetMind · GPL-3.0 license · Built by <a href="https://github.com/aslahtp">Aslah</a></span></span>
+      <nav aria-label="Footer">
+        <a href="/meetmind/">Home</a>
+{{footerGuides}}
+        <a href="https://github.com/aslahtp/meetmind">GitHub</a>
+        <a href="https://github.com/aslahtp/meetmind/releases">Releases</a>
+        <a href="https://github.com/aslahtp/meetmind/blob/main/CHANGELOG.md">Changelog</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    // Hairline under the sticky header once the page scrolls.
+    (function () {
+      var header = document.getElementById('site-header');
+      var scrolled = false;
+      function onScroll() {
+        var s = window.scrollY > 8;
+        if (s !== scrolled) {
+          scrolled = s;
+          header.classList.toggle('scrolled', s);
+        }
+      }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    })();
+  </script>
+</body>
+
+</html>

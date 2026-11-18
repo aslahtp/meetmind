@@ -1,0 +1,124 @@
+<!--
+{
+  "slug": "linux",
+  "order": 7,
+  "title": "AI Meeting Notes for Linux (AppImage & .deb), Free | MeetMind",
+  "description": "Free, open-source AI meeting notes for Linux. Records Zoom, Google Meet and Teams calls through PulseAudio or PipeWire with no bot, then writes the minutes.",
+  "crumb": "Linux",
+  "label": "MeetMind for Linux",
+  "summary": "AppImage or .deb, PulseAudio or PipeWire, X11 or Wayland."
+}
+-->
+    <section class="hero center">
+      <div class="wrap">
+        <span class="badge"><span class="dot" aria-hidden="true"></span><span class="label">Linux x64 · Beta</span></span>
+        <h1 class="display">AI meeting notes for Linux, <span class="mark">free and open source</span></h1>
+        <p class="sub">MeetMind records any call through PulseAudio or PipeWire, notices when Zoom, Google Meet or Teams
+          starts, and writes a transcript and minutes with decisions and action items. AppImage and .deb.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://github.com/aslahtp/meetmind/releases/latest"><svg class="icon"
+              aria-hidden="true">
+              <use href="#i-download" />
+            </svg>Download for Linux</a>
+          <a class="btn btn-ghost" href="#install">Install steps</a>
+        </div>
+        <p class="caption meta">MeetMind-__VERSION__-x86_64.AppImage or MeetMind-__VERSION__-amd64.deb · x64</p>
+        <figure class="shot">
+          <div class="frame"><picture>
+              <source type="image/avif"
+                srcset="/meetmind/screenshots/dashboard-dark-750.avif 750w, /meetmind/screenshots/dashboard-dark-1100.avif 1100w, /meetmind/screenshots/dashboard-dark-1500.avif 1500w"
+                sizes="(min-width: 1064px) 1000px, calc(100vw - 32px)">
+              <img src="/meetmind/screenshots/dashboard-dark.png"
+                alt="MeetMind dashboard in the dark theme with recent meetings" width="1500" height="1000"
+                fetchpriority="high">
+            </picture></div>
+          <figcaption>The MeetMind dashboard in the dark theme.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section aria-label="Guide">
+      <div class="wrap prose">
+        <div class="note">
+          <span class="eyebrow">In short</span>
+          <p>MeetMind for Linux is a free beta for x64 desktops such as Ubuntu 22.04, Debian 12, Fedora 38 or newer. It
+            records what your default output device plays (the other participants) and your default microphone through
+            PulseAudio or PipeWire, so it works with any meeting app and no bot. It needs <code>pactl</code> from the
+            <code>pulseaudio-utils</code> package, which most desktops already have.</p>
+        </div>
+
+        <h2 id="install">Install MeetMind on Linux</h2>
+        <h3>.deb (Ubuntu, Debian and derivatives)</h3>
+        <ol>
+          <li>Download <code>MeetMind-x.y.z-amd64.deb</code> from the <a
+              href="https://github.com/aslahtp/meetmind/releases/latest">latest release</a>.</li>
+          <li>Install it with <code>sudo apt install ./MeetMind-x.y.z-amd64.deb</code>.</li>
+          <li>To update, install the new .deb the same way; MeetMind tells you when one is out.</li>
+        </ol>
+        <h3>AppImage (any distribution)</h3>
+        <ol>
+          <li>Download <code>MeetMind-x.y.z-x86_64.AppImage</code>.</li>
+          <li>Make it executable with <code>chmod +x MeetMind-*.AppImage</code> and run it.</li>
+          <li>AppImages need FUSE 2: on Ubuntu 24.04 and later, <code>sudo apt install libfuse2t64</code>.</li>
+          <li>The AppImage updates itself.</li>
+        </ol>
+        <h3>Then</h3>
+        <p>Play a video and use <strong>Settings › System › System audio › Test</strong> to check that MeetMind hears
+          your computer; the same card shows whether <code>pactl</code> found your audio server. Add your speech-to-text
+          and notes keys in <strong>Settings</strong>. FFmpeg is included.</p>
+
+        <h2>Meeting detection on Linux</h2>
+        <p>MeetMind reads which apps are using the microphone from PulseAudio or PipeWire and offers to record when a
+          meeting starts:</p>
+        <ul>
+          <li><strong>Zoom desktop app</strong> and <strong><code>teams-for-linux</code></strong> count as soon as they
+            use the microphone, on X11 and Wayland.</li>
+          <li><strong>Browser meetings</strong> (Google Meet, Zoom or Teams in Chrome, Edge, Brave, Firefox, Opera or
+            Vivaldi) are recognised from window titles, which only X11 exposes. MeetMind runs through XWayland when it
+            can; on a Wayland-only session, press Record or use the Chrome extension.</li>
+        </ul>
+        <p>The prompt is a slim overlay at the top of the screen; if it can't be shown, a desktop notification offers to
+          record instead.</p>
+
+        <h2>Other details</h2>
+        <ul>
+          <li><strong>Start at login</strong> adds an XDG autostart entry
+            (<code>~/.config/autostart/meetmind.desktop</code>).</li>
+          <li>If the normal capture can't start, MeetMind falls back to recording the default output's monitor and the
+            default input with FFmpeg's PulseAudio input.</li>
+          <li><code>meetmind://</code> links open the app when it is installed from the .deb.</li>
+        </ul>
+
+        <h2>Frequently asked questions</h2>
+        <div class="faq">
+          <details open>
+            <summary>Does it work with PipeWire?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Yes, through PipeWire's PulseAudio compatibility layer (<code>pipewire-pulse</code>), which most
+              PipeWire desktops run by default. <code>pactl</code> must be installed.</p>
+          </details>
+          <details>
+            <summary>Does it work on Wayland?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Recording works on Wayland. Detecting browser meetings needs window titles, which Wayland hides, so on a
+              Wayland-only session MeetMind detects the Zoom and teams-for-linux apps but not browser tabs.</p>
+          </details>
+          <details>
+            <summary>Is there an ARM build?<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Not yet; the Linux beta is x64 only.</p>
+          </details>
+          <details>
+            <summary>Something doesn't work on my distribution.<span class="pm" aria-hidden="true"><svg class="icon">
+                  <use href="#i-plus" />
+                </svg></span></summary>
+            <p>Please <a href="https://github.com/aslahtp/meetmind/issues/new?template=bug_report.yml">open an issue</a>
+              with your distribution, desktop and the result of the system audio test. The beta is shaped by tester
+              reports.</p>
+          </details>
+        </div>
+      </div>
+    </section>
